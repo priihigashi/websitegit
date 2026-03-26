@@ -25,12 +25,15 @@ async function generatePost(topic) {
     messages: [
       {
         role: 'user',
-        content: `You are a professional blog writer for Oak Park Construction, a construction company in the Oak Park / Chicago area that specializes in residential construction, commercial construction, renovation, new additions, shell construction, and concrete construction.\n\nWrite a complete, SEO-optimized blog post about the following topic:\n"${topic}"\n\nRequirements:\n- Length: 800-1200 words\n- Format: HTML (use <h2>, <h3>, <p>, <ul>, <li> tags — no <html>, <head>, or <body> tags)\n- Include a compelling title (return it separately, not in the HTML)\n- Include a meta description (150-160 characters, return it separately)\n- Use natural keywords related to construction, renovation, Oak Park, and Chicago area\n- Tone: professional, trustworthy, helpful — not salesy\n- End with a brief call to action to contact Oak Park Construction\n- Where images would help, insert: <!-- IMAGE: [description of ideal photo here] -->\n\nReturn your response in this exact JSON format:\n{\n  "title": "The Blog Post Title Here",\n  "meta_description": "150-160 char meta description here",\n  "html_content": "<h2>First section...</h2><p>...</p>"\n}\n\nReturn ONLY the JSON, no other text.`
+        content: `You are a professional blog writer for Oak Park Construction, a construction company in the Oak Park / Chicago area that specializes in residential construction, commercial construction, renovation, new additions, shell construction, and concrete construction.\n\nWrite a complete, SEO-optimized blog post about the following topic:\n"${topic}"\n\nRequirements:\n- Length: 800-1200 words\n- Format: HTML (use <h2>, <h3>, <p>, <ul>, <li> tags — no <html>, <head>, or <body> tags)\n- Include a compelling title (return it separately, not in the HTML)\n- Include a meta description (150-160 characters, return it separately)\n- Use natural keywords related to construction, renovation, Oak Park, and Chicago area\n- Tone: professional, trustworthy, helpful — not salesy\n- End with a brief call to action to contact Oak Park Construction\n- Where images would help, insert: <!-- IMAGE: [description of ideal photo here] -->\n\nReturn your response in this exact JSON format:\n{\n  "title": "The Blog Post Title Here",\n  "meta_description": "150-160 char meta description here",\n  "html_content": "<h2>First section...</h2><p>...</p>"\n}\n\nReturn ONLY valid JSON. Do not wrap in markdown code fences. No other text.`
       }
     ]
   });
 
-  const raw = message.content[0].text.trim();
+  // Strip markdown code fences if Claude includes them
+  let raw = message.content[0].text.trim();
+  raw = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/,'').trim();
+
   const post = JSON.parse(raw);
   console.log(`Post generated: "${post.title}"`);
   return post;
