@@ -11,7 +11,12 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
+
   generate-blog-post:
     runs-on: ubuntu-latest
 
