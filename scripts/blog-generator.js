@@ -25,34 +25,36 @@ async function generatePost(topic) {
     messages: [
       {
         role: 'user',
-        content: `You are an expert SEO content writer for Oak Park Construction, a licensed general contractor serving Oak Park, Chicago, and the greater Chicagoland area. They specialize in residential construction, commercial construction, renovation, new additions, shell construction, and concrete construction.
+        content: `You are an expert SEO content writer for Oak Park Construction, a licensed general contractor based in South Florida serving Broward County and surrounding areas including Fort Lauderdale, Hollywood, Pompano Beach, Dania Beach, and Miramar. Despite the name, Oak Park Construction is NOT in Oak Park Illinois — they are a South Florida company. They specialize in residential construction, commercial construction, renovation, new additions, shell construction, and concrete construction.
 
-Write a complete, highly SEO-optimized blog post about this topic:
-"${topic}"
+The user suggested this topic as a direction: "${topic}"
+Use it as inspiration but write the best possible SEO post for our South Florida audience. You can adjust the angle, title, and focus to maximize SEO value — don't follow the topic wording exactly if a better version exists.
 
-SEO REQUIREMENTS:
-- Primary keyword: naturally use the main topic phrase 4-6 times throughout
-- Secondary keywords: weave in terms like "Oak Park contractor", "Chicago construction company", "general contractor Oak Park IL", "home renovation Chicago", "licensed contractor Chicagoland" naturally — never forced
-- Title: compelling, includes primary keyword, under 60 characters
-- Meta description: exactly 150-160 characters, includes primary keyword and a call to action
-- Headers: use H2 for main sections, H3 for subsections — include keywords naturally in at least 2 headers
-- First paragraph: include the primary keyword in the first 100 words
-- Content length: 1000-1200 words
-- Lists: use bullet points or numbered lists for at least one section (helps with Google featured snippets)
-- Local SEO: mention Oak Park, Chicago, or Illinois at least 3 times naturally
-- Also return a short image_search_query (3-5 words) that describes the ideal featured photo for this post
+SEO REQUIREMENTS (target score 80+ on AIOSEO):
+- Choose ONE clear focus keyword phrase (3-5 words) that people in South Florida actually search
+- Use that focus keyword in: the title, first paragraph (within first 100 words), at least 2 H2/H3 headers, meta description, and 4-6 times naturally in body
+- Title: under 60 characters, focus keyword near the beginning, compelling and clickable
+- Meta description: EXACTLY 150-160 characters — count carefully. Must include focus keyword and end with a call to action like "Call Oak Park Construction today" or "Get a free estimate"
+- Headers: H2 for main sections (3-4 of them), H3 for subsections — keywords in at least 2 headers
+- Content length: 1100-1300 words (longer = better ranking)
+- Include at least one bulleted or numbered list (boosts featured snippet chances)
+- Local SEO: mention South Florida, Broward County, and at least 2 specific cities (Fort Lauderdale, Hollywood, Pompano Beach, Dania Beach, or Miramar) naturally throughout
+- Internal link opportunity: mention "contact Oak Park Construction" with context at least twice
+- Also return a focus_keyword field with the exact keyword phrase you chose
+- Also return image_search_query (3-5 words) for the ideal featured photo
 
 CONTENT REQUIREMENTS:
-- Format: HTML only (h2, h3, p, ul, ol, li tags — NO html/head/body tags)
-- Tone: professional, trustworthy, expert — like advice from a knowledgeable contractor
-- Structure: intro → 3-4 main sections → conclusion with strong CTA
-- End with a call to action to contact Oak Park Construction for a free consultation
+- Format: HTML only — h2, h3, p, ul, ol, li tags. NO html/head/body tags
+- Tone: professional, trustworthy, knowledgeable — like expert advice from a seasoned South Florida contractor
+- Structure: strong intro with keyword → 3-4 detailed sections → conclusion with clear CTA
+- End with a strong call to action paragraph to contact Oak Park Construction for a free consultation
 
-Return ONLY this exact JSON (no markdown fences, no extra text):
+Return ONLY this exact JSON (no markdown fences, no other text):
 {
-  "title": "SEO title under 60 chars",
-  "meta_description": "Exactly 150-160 char description with keyword and CTA",
-  "image_search_query": "3-5 word photo search term",
+  "title": "Under 60 char title with focus keyword",
+  "focus_keyword": "the exact 3-5 word focus keyword phrase",
+  "meta_description": "EXACTLY 150-160 characters including focus keyword and CTA",
+  "image_search_query": "3-5 word photo search",
   "html_content": "<h2>...</h2><p>...</p>"
 }`
       }
@@ -65,6 +67,7 @@ Return ONLY this exact JSON (no markdown fences, no extra text):
   const post = JSON.parse(raw);
   console.log(`Post generated: "${post.title}"`);
   console.log(`Meta description: ${post.meta_description.length} chars`);
+  console.log(`Focus keyword: "${post.focus_keyword}"`);
   console.log(`Image search query: "${post.image_search_query}"`);
   return post;
 }
