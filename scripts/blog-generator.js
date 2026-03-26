@@ -1,5 +1,4 @@
 const Anthropic = require('@anthropic-ai/sdk');
-const fetch = require('node-fetch');
 const fs = require('fs');
 const { getRandomTopic } = require('./topics.js');
 
@@ -30,9 +29,9 @@ async function generatePost(topic) {
     ]
   });
 
-  // Strip markdown code fences if Claude includes them
+  // Strip markdown code fences if present
   let raw = message.content[0].text.trim();
-  raw = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/,'').trim();
+  raw = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/, '').trim();
 
   const post = JSON.parse(raw);
   console.log(`Post generated: "${post.title}"`);
@@ -68,7 +67,7 @@ async function postToWordPress(post) {
 
   const result = await response.json();
   console.log(`Draft created! ID: ${result.id}`);
-  console.log(`Edit link: ${result.link}`);
+  console.log(`Edit link: ${result.editLink}`);
 
   return {
     id: result.id,

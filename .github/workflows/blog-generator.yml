@@ -25,7 +25,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install @anthropic-ai/sdk node-fetch
+        run: npm install @anthropic-ai/sdk
 
       - name: Generate and post blog draft
         env:
