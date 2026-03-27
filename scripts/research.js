@@ -180,13 +180,24 @@ HOLD AS IDEA (don't approve) if:
 - Pure DIY with no contractor value
 - Ambiguous or could embarrass the company
 
-For each approved idea generate these fields:
+For EVERY idea (both Approved and Idea), generate ALL of these fields — no exceptions:
 topic_direction, focus_keyword, secondary_keyword, hook_professional, hook_emotional, hook_genz, master_hook, reader_payoff, ideal_for (Both/Blog Only/Reels Only), target_audience (Homeowner/Investor/Commercial/All), image_direction, social_one_liner, status (✅ Approved or 🆕 Idea)
+
+Only skip an item entirely if it is completely unrelated to construction, real estate, or South Florida business (e.g. celebrity gossip, sports scores, cooking recipes).
+
+IMPORTANT — Content neutrality rule:
+If a topic involves political, immigration, or social issues (e.g. ICE raids, labor policy, housing regulations):
+- Write from the contractor/business-owner perspective ONLY
+- Report facts and practical impact on construction clients — do not editorialize
+- Do NOT frame one political side as correct or the other as wrong
+- Do NOT use language that promotes or defends government enforcement actions
+- A hook like "Here's what to expect and how to protect your project timeline" is fine
+- A hook like "ICE is just doing their job — here's why it's actually good" is NOT fine
 
 Raw ideas:
 ${items.map((item, i) => `${offset+i+1}. [${item.source}] "${item.rawIdea}" — ${item.description || ''}`).join('\n')}
 
-Return ONLY a valid JSON array, no markdown fences, no extra text. Use the original index numbers. Skip completely irrelevant items.
+Return ONLY a valid JSON array, no markdown fences, no extra text. Use the original index numbers.
 Example: [{"index":1,"status":"✅ Approved","topic_direction":"...","focus_keyword":"...","secondary_keyword":"...","hook_professional":"...","hook_emotional":"...","hook_genz":"...","master_hook":"...","reader_payoff":"...","ideal_for":"Both","target_audience":"Homeowner","image_direction":"...","social_one_liner":"..."}]`
     }]
   });

@@ -85,7 +85,7 @@ function createContentSheet() {
   dataRange(2).setDataValidation(dropdown(['AI', 'Manual']));
 
   // Source (col 3)
-  dataRange(3).setDataValidation(dropdown(['Reddit', 'YouTube', 'Google Trends', 'News', 'Manual']));
+  dataRange(3).setDataValidation(dropdown(['Reddit', 'YouTube', 'Google Trends', 'News', 'SerpAPI', 'Manual']));
 
   // Cross-Signal? (col 7)
   dataRange(7).setDataValidation(dropdown(['✅ Yes — multiple sources', '— No']));

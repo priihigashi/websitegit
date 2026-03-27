@@ -110,6 +110,14 @@ never in a way that confuses service location.`,
 3. No advice that sends customers to hire a specific competing trade
 4. Content is relevant to Oak Park Construction's actual services
 5. No handyman-only content that doesn't lead to a real construction project`,
+    politicalNeutrality: `When writing about topics that involve politics, immigration, labor, or social issues:
+- Write ONLY from the contractor/business-owner perspective
+- Report facts and practical impact — never editorialize or take a political side
+- Do NOT frame any government enforcement action, policy, or political party as "right" or "good"
+- Do NOT use language that defends, promotes, or dismisses a political position
+- Acceptable: "Here is how ICE raids at construction sites affect your project timeline and what to ask your contractor"
+- Not acceptable: "ICE is protecting communities" or "ICE is terrorizing workers" — neither framing belongs in our content
+- If a topic cannot be written about without taking a political side, mark it as 🆕 Idea and do not auto-approve`,
   },
 
   cta: {
