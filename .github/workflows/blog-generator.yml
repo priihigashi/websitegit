@@ -40,6 +40,8 @@ jobs:
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           MANUAL_TOPIC: ${{ github.event.inputs.topic }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
         run: node scripts/blog-generator.js
 
       - name: Read output
