@@ -1,0 +1,21 @@
+name: Add GSC Headers to Sheet
+
+on:
+  workflow_dispatch:  # run once manually — safe to re-run
+
+permissions:
+  contents: read
+
+jobs:
+  add-headers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Add GSC column headers
+        env:
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SA_KEY:   ${{ secrets.GOOGLE_SA_KEY }}
+        run: node scripts/add-gsc-headers.js

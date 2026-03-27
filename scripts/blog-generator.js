@@ -105,15 +105,23 @@ function buildSheetData(row, i, token, originalStatus) {
     sheetRow: i + 2,
     token,
     originalStatus,
+    // Pass every researched column so Claude has full context
+    source:           row[COL.source]           || '',
+    sourceLink:       row[COL.sourceLink]       || '',
     rawIdea:          row[COL.rawIdea]          || '',
     topicDirection:   row[COL.topicDirection]   || row[COL.rawIdea] || '',
     focusKeyword:     row[COL.focusKeyword]     || '',
     secondaryKeyword: row[COL.secondaryKeyword] || '',
+    hookProfessional: row[COL.hookProfessional] || '',
+    hookEmotional:    row[COL.hookEmotional]    || '',
+    hookGenZ:         row[COL.hookGenZ]         || '',
     masterHook:       row[COL.masterHook]       || '',
     readerPayoff:     row[COL.readerPayoff]     || '',
+    idealFor:         row[COL.idealFor]         || 'Both',
     targetAudience:   row[COL.targetAudience]   || 'Homeowner',
     imageDirection:   row[COL.imageDirection]   || '',
     wpCategoryId:     row[COL.wpCategoryId]     || '',
+    socialOneLiner:   row[COL.socialOneLiner]   || '',
   };
 }
 
@@ -152,24 +160,28 @@ async function generatePost(topic, sheetData = null) {
 
   // If we have pre-researched sheet data, give Claude the full context
   const keywordInstructions = sheetData && sheetData.focusKeyword
-    ? `KEYWORD RESEARCH (pre-done — follow exactly):
-- Focus keyword: "${sheetData.focusKeyword}"
+    ? `PRE-RESEARCHED CONTENT BRIEF (use this — don't ignore it):
+- Original source: ${sheetData.source || 'research'} ${sheetData.sourceLink ? `(${sheetData.sourceLink})` : ''}
+- Raw idea: "${sheetData.rawIdea}"
+- Topic direction: "${sheetData.topicDirection}"
+- Focus keyword: "${sheetData.focusKeyword}" ← use this in title, intro, 2+ subheadings, meta, and 4-6x in body
 - Secondary keyword: "${sheetData.secondaryKeyword || ''}"
 - Target audience: ${sheetData.targetAudience || 'Homeowner'}
-- Reader payoff: "${sheetData.readerPayoff || ''}"
-- Suggested image: "${sheetData.imageDirection || topic}"
+- Reader payoff: "${sheetData.readerPayoff || ''}" ← this is what the reader walks away knowing — make sure the post delivers it
+- Ideal format: ${sheetData.idealFor || 'Both'}
+- Featured image concept: "${sheetData.imageDirection || ''}"
 
-TITLE (most important for SEO score):
-- Start with the pre-researched angle: "${sheetData.masterHook || topic}"
-- Adapt it into a 50-60 character title that naturally includes the focus keyword
-- NEVER use the raw focus keyword as the title — it must read like a human wrote it
-- Put the focus keyword in the first 3-5 words of the title
-- Good formats: "Concrete Slab Contractors Broward: Why DIY Cracks in Florida" / "Home Addition Cost South Florida: Full Budget Breakdown" / "Manufactured Homes in Florida: What Contractors Won't Tell You"
-- Include a number OR a power word (Cost, Guide, Why, How, What, Complete, Full) when natural
+TITLE — choose the strongest option from these pre-written hooks, or combine them:
+  Hook A (professional): "${sheetData.hookProfessional || ''}"
+  Hook B (emotional):    "${sheetData.hookEmotional || ''}"
+  Hook C (Gen Z/casual): "${sheetData.hookGenZ || ''}"
+  Master hook:           "${sheetData.masterHook || ''}"
 
-KEYWORD PLACEMENT:
-- Use focus keyword in: title, first 100 words, at least 2 H2/H3 subheadings, meta description, and 4-6x naturally in body
-- Do NOT stuff — use it naturally, vary with synonyms between uses`
+Adapt the best hook into a 50-60 character SEO title that:
+- Includes the focus keyword naturally within the first 5 words
+- Reads like a human wrote it — NOT like a keyword list
+- Has a power word (Cost, Guide, Why, How, What, Full, Real, Honest) when natural
+- Example: "Concrete Slab Contractors Broward: Why DIY Fails in Florida's Heat"`
     : `KEYWORD: Choose ONE clear focus keyword (3-5 words) with HIRE intent for South Florida (e.g. "home addition contractor Broward County"). Craft a compelling human title around it — do NOT use the raw keyword as the title. Use keyword in title, first 100 words, 2+ subheadings, meta description, and 4-6x in body.`;
 
   const message = await client.messages.create({
