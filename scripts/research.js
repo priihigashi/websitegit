@@ -155,20 +155,17 @@ async function fetchSerp() {
   return results;
 }
 
-// ─── Claude: Score + enrich each idea ────────────────────────────────────────
-async function enrichWithClaude(items) {
-  if (items.length === 0) return [];
-
-  console.log(`\nSending ${items.length} raw ideas to Claude for scoring...`);
+// ─── Claude: Score + enrich a batch of ideas ─────────────────────────────────
+async function enrichBatch(items, offset) {
+  const SYSTEM = `You are a content strategist for ${COMPANY.name}, a licensed general contractor in ${COMPANY.location.headquarters} serving ${COMPANY.location.primaryMarket}. Services: ${COMPANY.services.core.slice(0,5).join(', ')}.`;
 
   const message = await client.messages.create({
     model: 'claude-opus-4-6',
-    max_tokens: 4000,
+    max_tokens: 8000,
+    system: SYSTEM,
     messages: [{
       role: 'user',
-      content: `You are a content strategist for ${COMPANY.name}, a licensed general contractor in ${COMPANY.location.headquarters} serving ${COMPANY.location.primaryMarket}. Services: ${COMPANY.services.core.slice(0,5).join(', ')}.
-
-Review these raw content ideas collected from Reddit, YouTube, News, and Google.
+      content: `Review these raw content ideas collected from Reddit, YouTube, News, and Google.
 For each idea, decide if it's relevant enough to write a blog post about.
 
 AUTO-APPROVE if the idea:
@@ -183,52 +180,39 @@ HOLD AS IDEA (don't approve) if:
 - Pure DIY with no contractor value
 - Ambiguous or could embarrass the company
 
-For each approved idea, generate:
-- topic_direction: cleaned up blog topic angle
-- focus_keyword: 3-5 word hire-intent keyword for South Florida
-- secondary_keyword: supporting search term
-- hook_professional: professional blog title
-- hook_emotional: fear/pain/aspiration angle
-- hook_genz: punchy casual version for Reels
-- master_hook: best single hook combining curiosity + value
-- reader_payoff: what reader walks away knowing/feeling/able to do
-- ideal_for: "Both" / "Blog Only" / "Reels Only"
-- target_audience: "Homeowner" / "Investor" / "Commercial" / "All"
-- image_direction: what the featured photo should show
-- social_one_liner: short caption for Instagram/Facebook
-- status: "✅ Approved" or "🆕 Idea"
+For each approved idea generate these fields:
+topic_direction, focus_keyword, secondary_keyword, hook_professional, hook_emotional, hook_genz, master_hook, reader_payoff, ideal_for (Both/Blog Only/Reels Only), target_audience (Homeowner/Investor/Commercial/All), image_direction, social_one_liner, status (✅ Approved or 🆕 Idea)
 
 Raw ideas:
-${items.map((item, i) => `${i+1}. [${item.source}] "${item.rawIdea}" — ${item.description || ''} (link: ${item.sourceLink})`).join('\n')}
+${items.map((item, i) => `${offset+i+1}. [${item.source}] "${item.rawIdea}" — ${item.description || ''}`).join('\n')}
 
-Return ONLY a JSON array (no markdown fences):
-[
-  {
-    "index": 1,
-    "status": "✅ Approved",
-    "topic_direction": "...",
-    "focus_keyword": "...",
-    "secondary_keyword": "...",
-    "hook_professional": "...",
-    "hook_emotional": "...",
-    "hook_genz": "...",
-    "master_hook": "...",
-    "reader_payoff": "...",
-    "ideal_for": "Both",
-    "target_audience": "Homeowner",
-    "image_direction": "...",
-    "social_one_liner": "..."
-  }
-]
-Only include items worth keeping. Skip completely irrelevant ones entirely.`
+Return ONLY a valid JSON array, no markdown fences, no extra text. Use the original index numbers. Skip completely irrelevant items.
+Example: [{"index":1,"status":"✅ Approved","topic_direction":"...","focus_keyword":"...","secondary_keyword":"...","hook_professional":"...","hook_emotional":"...","hook_genz":"...","master_hook":"...","reader_payoff":"...","ideal_for":"Both","target_audience":"Homeowner","image_direction":"...","social_one_liner":"..."}]`
     }]
   });
 
   let raw = message.content[0].text.trim();
   raw = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/, '').trim();
-  const enriched = JSON.parse(raw);
-  console.log(`Claude approved/enriched ${enriched.length} ideas`);
-  return enriched;
+  return JSON.parse(raw);
+}
+
+async function enrichWithClaude(items) {
+  if (items.length === 0) return [];
+
+  console.log(`\nSending ${items.length} raw ideas to Claude for scoring...`);
+
+  const BATCH_SIZE = 10;
+  const all = [];
+
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const batch = items.slice(i, i + BATCH_SIZE);
+    console.log(`Processing batch ${Math.floor(i/BATCH_SIZE)+1} (ideas ${i+1}–${i+batch.length})...`);
+    const result = await enrichBatch(batch, i);
+    all.push(...result);
+  }
+
+  console.log(`Claude approved/enriched ${all.length} ideas`);
+  return all;
 }
 
 // ─── Write to Google Sheet ────────────────────────────────────────────────────
