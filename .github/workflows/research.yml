@@ -1,0 +1,50 @@
+name: Content Research
+
+on:
+  schedule:
+    - cron: '0 12 * * *'   # 7am EST (UTC-5)
+    - cron: '0 19 * * *'   # 2pm EST (UTC-5)
+  workflow_dispatch:        # manual trigger
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install @anthropic-ai/sdk
+
+      - name: Run research script
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          YOUTUBE_API_KEY:   ${{ secrets.YOUTUBE_API_KEY }}
+          NEWS_API_KEY:      ${{ secrets.NEWS_API_KEY }}
+          SERP_API_KEY:      ${{ secrets.SERP_API_KEY }}
+          GOOGLE_SHEET_ID:   ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SA_KEY:     ${{ secrets.GOOGLE_SA_KEY }}
+        run: node scripts/research.js
+
+      - name: Notify via GitHub Issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `❌ Research script failed — ${new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' })}`,
+              body: `The content research script failed during the scheduled run.\n\n[View run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              labels: ['automation', 'bug']
+            });
