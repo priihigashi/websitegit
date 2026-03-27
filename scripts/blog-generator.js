@@ -1,6 +1,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const fs = require('fs');
 const { getRandomTopic } = require('./topics.js');
+const { COMPANY } = require('./company-info.js');
 
 const client = new Anthropic();
 
@@ -21,40 +22,51 @@ async function generatePost(topic) {
 
   const message = await client.messages.create({
     model: 'claude-opus-4-6',
-    max_tokens: 3000,
+    max_tokens: 3500,
     messages: [
       {
         role: 'user',
-        content: `You are an expert SEO content writer for Oak Park Construction, a licensed general contractor based in South Florida serving Broward County and surrounding areas including Fort Lauderdale, Hollywood, Pompano Beach, Dania Beach, and Miramar. Despite the name, Oak Park Construction is NOT in Oak Park Illinois — they are a South Florida company. They specialize in residential construction, commercial construction, renovation, new additions, shell construction, and concrete construction.
+        content: `You are an expert SEO content writer for ${COMPANY.name}, a ${COMPANY.license.status} based in ${COMPANY.location.headquarters}, serving ${COMPANY.location.primaryMarket} and surrounding areas including ${COMPANY.location.targetCities.slice(0,6).join(', ')}.
 
-The user suggested this topic as a direction: "${topic}"
-Use it as inspiration but write the best possible SEO post for our South Florida audience. You can adjust the angle, title, and focus to maximize SEO value — don't follow the topic wording exactly if a better version exists.
+COMPANY BACKGROUND (read carefully — never contradict this):
+${COMPANY.origin}
 
-SEO REQUIREMENTS (target score 80+ on AIOSEO):
-- Choose ONE clear focus keyword phrase (3-5 words) that people in South Florida actually search
-- Use that focus keyword in: the title, first paragraph (within first 100 words), at least 2 H2/H3 headers, meta description, and 4-6 times naturally in body
-- Title: under 60 characters, focus keyword near the beginning, compelling and clickable
-- Meta description: EXACTLY 150-160 characters — count carefully. Must include focus keyword and end with a call to action like "Call Oak Park Construction today" or "Get a free estimate"
-- Headers: H2 for main sections (3-4 of them), H3 for subsections — keywords in at least 2 headers
-- Content length: 1100-1300 words (longer = better ranking)
-- Include at least one bulleted or numbered list (boosts featured snippet chances)
-- Local SEO: mention South Florida, Broward County, and at least 2 specific cities (Fort Lauderdale, Hollywood, Pompano Beach, Dania Beach, or Miramar) naturally throughout
-- Internal link opportunity: mention "contact Oak Park Construction" with context at least twice
-- Also return a focus_keyword field with the exact keyword phrase you chose
-- Also return image_search_query (3-5 words) for the ideal featured photo
+Team: ${COMPANY.team.contractor} (licensed contractor) and ${COMPANY.team.projectManager} (project manager) — ${COMPANY.team.relationship}.
 
-CONTENT REQUIREMENTS:
-- Format: HTML only — h2, h3, p, ul, ol, li tags. NO html/head/body tags
-- Tone: professional, trustworthy, knowledgeable — like expert advice from a seasoned South Florida contractor
-- Structure: strong intro with keyword → 3-4 detailed sections → conclusion with clear CTA
-- End with a strong call to action paragraph to contact Oak Park Construction for a free consultation
+Services: ${COMPANY.services.core.join(', ')}.
+Electrical, roofing, and plumbing are handled through trusted subcontractors as PART of full projects only — never standalone.
+
+CONTENT RULES (strictly follow):
+- LOCATION: Always reference South Florida, ${COMPANY.location.primaryMarket}, or specific local cities. NEVER say the company is in Illinois or the Midwest. Illinois is origin story only.
+- COMPETITORS: ${COMPANY.contentRules.competitors}
+- TRADE REFERRALS: ${COMPANY.contentRules.tradeReferrals}
+- PRODUCTS: ${COMPANY.contentRules.products}
+- TONE: ${COMPANY.brandVoice.contentPhilosophy}
+- AVOID: ${COMPANY.brandVoice.avoid.join('; ')}
+
+The user suggested this topic as direction: "${topic}"
+Use it as inspiration — write the best possible SEO post for our South Florida audience. Adjust the angle, title, and focus to maximize SEO value if a better version exists.
+
+SEO REQUIREMENTS (target 80+ AIOSEO score):
+- Choose ONE clear focus keyword (3-5 words) people in South Florida actively search with HIRE intent (not just research intent) — e.g. "concrete patio contractor Broward County" beats "best concrete material"
+- Use focus keyword in: title, first 100 words, at least 2 H2/H3 headers, meta description, and 4-6 times naturally in body
+- Title: under 60 characters, focus keyword near start, compelling and human-sounding
+- Meta description: EXACTLY 150-160 characters — count carefully. Include focus keyword + natural CTA
+- H2 for main sections (3-4), H3 for subsections — keywords in at least 2 headers
+- Content: 1100-1300 words
+- At least one bulleted or numbered list
+- Mention ${COMPANY.location.primaryMarket} + at least 2 of: ${COMPANY.location.targetCities.slice(0,8).join(', ')}
+- Include a second Pexels image mid-body: insert <!-- INLINE_IMAGE: [3-5 word search query] --> where it makes sense visually
+
+FORMAT: HTML only — h2, h3, p, ul, ol, li, img tags. NO html/head/body tags.
+Structure: strong keyword intro → 3-4 detailed sections with real advice → conclusion with ONE natural CTA sentence.
 
 Return ONLY this exact JSON (no markdown fences, no other text):
 {
-  "title": "Under 60 char title with focus keyword",
-  "focus_keyword": "the exact 3-5 word focus keyword phrase",
-  "meta_description": "EXACTLY 150-160 characters including focus keyword and CTA",
-  "image_search_query": "3-5 word photo search",
+  "title": "Under 60 char title",
+  "focus_keyword": "exact 3-5 word hire-intent keyword",
+  "meta_description": "EXACTLY 150-160 chars with keyword and CTA",
+  "image_search_query": "3-5 word featured photo search",
   "html_content": "<h2>...</h2><p>...</p>"
 }`
       }
@@ -68,7 +80,15 @@ Return ONLY this exact JSON (no markdown fences, no other text):
   console.log(`Post generated: "${post.title}"`);
   console.log(`Meta description: ${post.meta_description.length} chars`);
   console.log(`Focus keyword: "${post.focus_keyword}"`);
-  console.log(`Image search query: "${post.image_search_query}"`);
+
+  // ── Safety check ────────────────────────────────────────────────────────
+  const content = (post.title + post.html_content + post.meta_description).toLowerCase();
+  const locationFlags = ['oak park il', 'oak park, il', 'illinois', 'chicagoland', 'chicago area'];
+  const flagged = locationFlags.filter(f => content.includes(f));
+  if (flagged.length > 0) {
+    throw new Error(`Safety check failed — wrong location detected: ${flagged.join(', ')}`);
+  }
+
   return post;
 }
 
@@ -92,9 +112,8 @@ async function fetchFeaturedImage(query) {
 }
 
 // ─── Step 4: Upload image to WordPress media library ─────────────────────────
-async function uploadImageToWordPress(imageInfo) {
+async function uploadImageToWordPress(imageInfo, filename = 'featured-image.jpg') {
   if (!imageInfo) return null;
-  console.log('Downloading and uploading image to WordPress...');
   const credentials = Buffer.from(`${WP_USERNAME}:${WP_APP_PASSWORD}`).toString('base64');
 
   const imgRes = await fetch(imageInfo.url);
@@ -105,15 +124,40 @@ async function uploadImageToWordPress(imageInfo) {
     method: 'POST',
     headers: {
       Authorization: `Basic ${credentials}`,
-      'Content-Disposition': `attachment; filename="featured-image.jpg"`,
+      'Content-Disposition': `attachment; filename="${filename}"`,
       'Content-Type': 'image/jpeg',
+      'X-WP-Alt-Text': imageInfo.alt || '',
     },
     body: buffer,
   });
   if (!uploadRes.ok) { console.log('Image upload failed, skipping.'); return null; }
   const media = await uploadRes.json();
-  console.log(`Image uploaded to WordPress, media ID: ${media.id}`);
-  return media.id;
+  console.log(`Image uploaded: ${filename} → media ID ${media.id}`);
+  return { id: media.id, url: media.source_url, alt: imageInfo.alt };
+}
+
+// ─── Step 4b: Replace inline image placeholders in HTML ──────────────────────
+async function resolveInlineImages(html) {
+  if (!PEXELS_API_KEY) return html;
+
+  const pattern = /<!-- INLINE_IMAGE: ([^>]+) -->/g;
+  const matches = [...html.matchAll(pattern)];
+  if (matches.length === 0) return html;
+
+  let result = html;
+  for (const match of matches) {
+    const query = match[1].trim();
+    console.log(`Fetching inline image for: "${query}"...`);
+    const imgInfo = await fetchFeaturedImage(query);
+    if (!imgInfo) { result = result.replace(match[0], ''); continue; }
+    const media = await uploadImageToWordPress(imgInfo, `inline-${Date.now()}.jpg`);
+    if (!media) { result = result.replace(match[0], ''); continue; }
+    result = result.replace(
+      match[0],
+      `<figure class="wp-block-image"><img src="${media.url}" alt="${query}" /></figure>`
+    );
+  }
+  return result;
 }
 
 // ─── Step 5: Post to WordPress as Draft ──────────────────────────────────────
@@ -162,7 +206,9 @@ async function postToWordPress(post, featuredMediaId) {
   try {
     const post = await generatePost(topic);
     const imageInfo = await fetchFeaturedImage(post.image_search_query || topic);
-    const featuredMediaId = await uploadImageToWordPress(imageInfo);
+    const featuredMedia = await uploadImageToWordPress(imageInfo, 'featured-image.jpg');
+    const featuredMediaId = featuredMedia ? featuredMedia.id : null;
+    post.html_content = await resolveInlineImages(post.html_content);
     const result = await postToWordPress(post, featuredMediaId);
 
     fs.writeFileSync('scripts/output.json', JSON.stringify(result, null, 2));
