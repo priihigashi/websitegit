@@ -329,7 +329,7 @@ async function postToWordPress(post, featuredMediaId, wpCategoryId) {
 
     // 5. Update sheet row if topic came from sheet
     if (sheetData) {
-      await markSheetRowDraft(sheetData, result.editLink);
+      await markSheetRowDraft(sheetData, result.link || result.editLink);
     }
 
     // 6. Save output for workflow notification
