@@ -305,7 +305,7 @@ Return ONLY this exact JSON (no markdown fences, no extra text):
   "title": "50-60 char title",
   "focus_keyword": "exact focus keyword",
   "meta_description": "EXACTLY 150-160 chars",
-  "image_search_query": "3-5 word Pexels search",
+  "image_search_query": "3-5 words MAX, plain ASCII only, no punctuation (e.g. 'residential concrete patio slab')",
   "html_content": "<h2>...</h2><p>...</p>"
 }`
     }]
@@ -331,9 +331,16 @@ Return ONLY this exact JSON (no markdown fences, no extra text):
 // ─── Step 3: Fetch featured image from Pexels ────────────────────────────────
 async function fetchFeaturedImage(query) {
   if (!PEXELS_API_KEY) { console.log('No Pexels API key — skipping featured image.'); return null; }
-  console.log(`Searching Pexels for: "${query}"...`);
+  // Sanitize: replace em/en dash, strip all non-ASCII, collapse spaces, cap at 60 chars
+  const safeQuery = query
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/[^\x00-\x7F]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60);
+  console.log(`Searching Pexels for: "${safeQuery}"...`);
   const res = await fetch(
-    `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`,
+    `https://api.pexels.com/v1/search?query=${encodeURIComponent(safeQuery)}&per_page=1&orientation=landscape`,
     { headers: { Authorization: PEXELS_API_KEY } }
   );
   if (!res.ok) { console.log('Pexels search failed, skipping image.'); return null; }
