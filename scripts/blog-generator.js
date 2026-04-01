@@ -347,7 +347,7 @@ async function fetchFeaturedImage(query) {
   const data = await res.json();
   if (!data.photos || data.photos.length === 0) { console.log('No Pexels results, skipping.'); return null; }
   const photo = data.photos[0];
-  return { url: photo.src.large, photographer: photo.photographer, alt: query };
+  return { url: photo.src.large, photographer: photo.photographer, alt: safeQuery };
 }
 
 // ─── Step 4: Upload image to WordPress ───────────────────────────────────────
