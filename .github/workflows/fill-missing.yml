@@ -2,7 +2,8 @@ name: Fill Missing Sheet Columns
 
 on:
   schedule:
-    - cron: '0 22 * * *'   # 5pm EST daily (after both research runs)
+    - cron: '0 17 * * *'
+      timezone: 'America/New_York'  # Daily 5pm ET
   workflow_dispatch:        # manual trigger
 
 permissions:

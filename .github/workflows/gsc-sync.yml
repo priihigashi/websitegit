@@ -2,7 +2,8 @@ name: GSC Performance Sync
 
 on:
   schedule:
-    - cron: '0 14 * * 1'  # Every Monday 9am EST (after weekend data settles)
+    - cron: '0 9 * * 1'
+      timezone: 'America/New_York'  # Every Monday 9am ET
   workflow_dispatch:
 
 permissions:
