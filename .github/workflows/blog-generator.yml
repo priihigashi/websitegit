@@ -2,7 +2,8 @@ name: Auto Blog Generator
 
 on:
   schedule:
-    - cron: '0 15 * * *'  # Daily 10am EST (15:00 UTC)
+    - cron: '0 10 * * *'
+      timezone: 'America/New_York'  # Daily 10:00am ET (handles EST/EDT automatically)
   workflow_dispatch:
     inputs:
       topic:

@@ -2,7 +2,8 @@ name: Content Research
 
 on:
   schedule:
-    - cron: '15 16 * * *'  # Daily 11:15am EST (16:15 UTC)
+    - cron: '15 11 * * *'
+      timezone: 'America/New_York'  # Daily 11:15am ET (handles EST/EDT automatically)
   workflow_dispatch:        # manual trigger
 
 permissions:
