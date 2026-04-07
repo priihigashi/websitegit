@@ -1,0 +1,36 @@
+name: Process Approved Posts — Daily Scheduler
+
+on:
+  schedule:
+    - cron: '0 0 * * *'     # 8:00 PM ET (UTC-4) = 00:00 UTC next day
+  workflow_dispatch:         # allow manual run from GitHub UI
+
+jobs:
+  schedule:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements_content.txt
+
+      - name: Write Google credentials
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          mkdir -p /tmp/oak_park_creds
+          echo "$SHEETS_TOKEN" > /tmp/oak_park_creds/sheets_token.json
+
+      - name: Process approved posts
+        env:
+          SHEETS_TOKEN_PATH: /tmp/oak_park_creds/sheets_token.json
+          SHEET_ID: ${{ secrets.CONTENT_SHEET_ID }}
+        run: python scripts/process_approved_cloud.py
