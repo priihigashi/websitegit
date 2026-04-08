@@ -2,7 +2,7 @@ name: Build Carousels — Approved Posts
 
 on:
   schedule:
-    - cron: '5 1 * * *'   # 9:05 PM ET (UTC-4 = 01:05 UTC)
+    - cron: '25 1 * * *'  # 9:25 PM ET (UTC-4 = 01:25 UTC)
   workflow_dispatch:        # also allows manual run from GitHub
 
 jobs:
