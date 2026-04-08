@@ -88,16 +88,16 @@ def main():
         def val(n):
             i = ci(n)
             return row[i].strip() if i is not None and len(row) > i else ""
-        if val("status").lower() == "approved":
+        if val("status").lower() == "edited":
             approved.append({"row": idx, "project": val("project name"),
                              "service": val("service type"), "content_type": val("content type"),
                              "hook": val("hook"), "platform": val("platform"),
                              "status_col": ci("status"), "date_col": ci("suggested post date")})
 
     if not approved:
-        print("✅ No Approved posts found"); return
+        print("✅ No "Edited" posts found (set Status = "Edited" to schedule)"); return
 
-    print(f"🟢 {len(approved)} Approved post(s) to schedule")
+    print(f"🟢 {len(approved)} 'Edited' post(s) ready to schedule")
     taken = get_taken_slots(token)
     today = date.today().isoformat()
     analytics_rows = []
