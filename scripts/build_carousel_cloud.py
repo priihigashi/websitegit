@@ -19,7 +19,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
 SHEET_ID      = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
 QUEUE_TAB     = "📋 Content Queue"
 CATALOG_TAB   = "📸 Photo Catalog"
-CONTENT_FOLDER_ID = "1Y2ymfzpE4mZOFrIwWrFQHEfFeYK5sDmG"  # Drive: Content - Reels & TikTok
+CONTENT_FOLDER_ID   = "1Y2ymfzpE4mZOFrIwWrFQHEfFeYK5sDmG"  # Drive: Content - Reels & TikTok
+TEMPLATES_FOLDER_ID = "1564kppA5kuHgYXzj7ujjhSgyW3fc-jXR"  # Drive: ClaudeWorkspace/Content - Reels & TikTok/templates
 
 TMPDIR = Path(tempfile.gettempdir()) / "oak_park_carousel"
 FONTS_DIR = TMPDIR / "fonts"
@@ -170,7 +171,8 @@ def drive_url_to_id(url: str) -> str:
     m = re.search(r'/file/d/([a-zA-Z0-9_-]+)', url)
     return m.group(1) if m else ""
 
-def download_photo(file_id: str, creds):
+def download_drive_file(file_id: str, creds):
+    """Download a Drive file as PIL Image, preserving original mode (incl. RGBA)."""
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaIoBaseDownload
     try:
@@ -182,10 +184,14 @@ def download_photo(file_id: str, creds):
         while not done:
             _, done = downloader.next_chunk()
         buf.seek(0)
-        return Image.open(buf).convert("RGB")
+        return Image.open(buf)
     except Exception as e:
         print(f"  ⚠️  Download error (ID {file_id}): {e}")
         return None
+
+def download_photo(file_id: str, creds):
+    img = download_drive_file(file_id, creds)
+    return img.convert("RGB") if img else None
 
 def upload_to_drive(file_paths: list, project_name: str, creds):
     from googleapiclient.discovery import build
@@ -223,6 +229,52 @@ def upload_to_drive(file_paths: list, project_name: str, creds):
     except Exception as e:
         print(f"  ⚠️  Drive upload error: {e}")
         return False
+
+# ── Template helpers ──────────────────────────────────────────────────────────
+def load_templates(creds) -> dict:
+    """List files in the Drive templates folder. Returns {filename: file_id}."""
+    from googleapiclient.discovery import build
+    try:
+        svc = build("drive", "v3", credentials=creds)
+        res = svc.files().list(
+            q=f"'{TEMPLATES_FOLDER_ID}' in parents and trashed=false",
+            fields="files(id, name)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        return {f["name"]: f["id"] for f in res.get("files", [])}
+    except Exception as e:
+        print(f"  ⚠️  Could not load templates: {e}")
+        return {}
+
+def match_template(templates: dict, service: str, content_type: str) -> str | None:
+    """Return Drive file_id of the best matching template, or None."""
+    service_l = service.lower()
+    ct_l      = content_type.lower()
+    keywords  = []
+    if "kitchen"                                    in service_l: keywords.append("kitchen")
+    if "bath"                                       in service_l: keywords.append("bath")
+    if any(x in service_l for x in ["pergola", "outdoor", "patio"]): keywords.append("outdoor")
+    if "before" in ct_l or "after" in ct_l:                      keywords.append("before_after")
+    if "reel"                                       in ct_l:      keywords.append("reel")
+    if "carousel"                                   in ct_l:      keywords.append("carousel")
+    for kw in keywords:
+        for name, fid in templates.items():
+            if kw in name.lower():
+                return fid
+    return next(iter(templates.values()), None)
+
+def apply_template_overlay(slide: Image.Image, template_id: str, creds) -> Image.Image:
+    """Composite a Drive template image over the slide.
+    PNG with alpha → true overlay; JPEG → subtle 12% blend for style reference."""
+    tmpl = download_drive_file(template_id, creds)
+    if tmpl is None:
+        return slide
+    tmpl = tmpl.resize((W, H), Image.LANCZOS)
+    if tmpl.mode == "RGBA":
+        base = slide.convert("RGBA")
+        return Image.alpha_composite(base, tmpl).convert("RGB")
+    return Image.blend(slide.convert("RGB"), tmpl.convert("RGB"), alpha=0.12)
 
 # ── Image helpers (same as local version) ─────────────────────────────────────
 def enhance_photo(img):
@@ -386,10 +438,16 @@ def _slide_label(post, slide_num, total_content):
         labels = ["The process.", "In progress.", "Taking shape.", "Finished."]
     return labels[min(slide_num - 1, len(labels) - 1)]
 
-def build_carousel(post, photos, out_dir):
+def build_carousel(post, photos, out_dir, template_id=None, creds=None):
     total_slides = 1 + len(photos) + 1
     saved = []
-    cover = build_cover_slide(photos[0], post["hook"], post["service"], 0, total_slides)
+
+    def _apply(slide):
+        if template_id and creds:
+            return apply_template_overlay(slide, template_id, creds)
+        return slide
+
+    cover = _apply(build_cover_slide(photos[0], post["hook"], post["service"], 0, total_slides))
     path = str(out_dir / "slide_01_cover.jpg")
     cover.save(path, "JPEG", quality=97)
     saved.append(path)
@@ -400,15 +458,15 @@ def build_carousel(post, photos, out_dir):
         slide_num = i + 1
         label = _slide_label(post, slide_num, len(photo_slides) - 1)
         sublabel = post["service"] if i == len(photo_slides) - 2 else ""
-        slide = build_content_slide(photo, label, sublabel, slide_num, total_slides)
+        slide = _apply(build_content_slide(photo, label, sublabel, slide_num, total_slides))
         fname = f"slide_{slide_num+1:02d}.jpg"
         path = str(out_dir / fname)
         slide.save(path, "JPEG", quality=97)
         saved.append(path)
         print(f"    ✅ Slide {slide_num+1}")
 
-    cta_slide = build_cta_slide(post["project"], post["service"], post["cta"],
-                                 total_slides - 1, total_slides)
+    cta_slide = _apply(build_cta_slide(post["project"], post["service"], post["cta"],
+                                        total_slides - 1, total_slides))
     path = str(out_dir / f"slide_{total_slides:02d}_cta.jpg")
     cta_slide.save(path, "JPEG", quality=97)
     saved.append(path)
@@ -437,6 +495,10 @@ def main():
     print(f"📸 Loading photo catalog...")
     catalog = get_photo_catalog(token)
     print(f"   {len(catalog)} photos in catalog")
+
+    print(f"🎨 Loading design templates...")
+    templates = load_templates(creds)
+    print(f"   {len(templates)} template(s) found: {', '.join(templates.keys()) or 'none'}")
 
     for post in approved:
         print(f"\n{'='*50}")
@@ -467,7 +529,14 @@ def main():
         out_dir = OUT_BASE / f"{date.today()} — {safe}"
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        slide_paths = build_carousel(post, photos, out_dir)
+        template_id = match_template(templates, post["service"], post["content_type"])
+        if template_id:
+            tname = next(k for k, v in templates.items() if v == template_id)
+            print(f"  🎨 Template matched: {tname}")
+        else:
+            print(f"  🎨 No template matched — using default design")
+
+        slide_paths = build_carousel(post, photos, out_dir, template_id=template_id, creds=creds)
         upload_to_drive(slide_paths, post["project"], creds)
 
     print(f"\n✅ Done. All carousels built and uploaded to Drive.")
