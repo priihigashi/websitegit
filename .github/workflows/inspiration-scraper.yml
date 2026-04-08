@@ -1,0 +1,38 @@
+name: Inspiration Scraper — Daily
+
+on:
+  schedule:
+    - cron: '30 13 * * *'   # 9:30 AM ET (UTC-4) = 13:30 UTC
+  workflow_dispatch:          # manual trigger from GitHub UI
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements_content.txt
+
+      - name: Write Google credentials
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          mkdir -p /tmp/oak_park_creds
+          echo "$SHEETS_TOKEN" > /tmp/oak_park_creds/sheets_token.json
+
+      - name: Run inspiration scraper
+        env:
+          SHEETS_TOKEN_PATH: /tmp/oak_park_creds/sheets_token.json
+          SHEET_ID: ${{ secrets.CONTENT_SHEET_ID }}
+          APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: python scripts/inspiration_scraper_cloud.py
