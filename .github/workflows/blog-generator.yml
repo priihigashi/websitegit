@@ -2,8 +2,7 @@ name: Auto Blog Generator
 
 on:
   schedule:
-    - cron: '15 12 * * *'
-      timezone: 'America/New_York'  # TEMP TEST: 12:15pm ET
+    - cron: '0 12 * * *'  # 8:00 AM ET (UTC-4 = 12:00 UTC)
   workflow_dispatch:
     inputs:
       topic:
@@ -88,7 +87,8 @@ jobs:
                 `**[Open WordPress Drafts](${wpLink})**`,
                 '',
                 '_Close this issue once published._'
-              ].join('\n')
+              ].join('
+')
             });
         env:
           WP_URL: ${{ secrets.WP_URL }}
