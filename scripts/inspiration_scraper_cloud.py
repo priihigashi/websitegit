@@ -227,13 +227,16 @@ def scrape_instagram(api_key: str, existing_urls: set) -> list:
         if not url or url in existing_urls:
             continue
 
-        # Only Reels/Videos
+        # Accept images, carousels, and videos/reels
         item_type = item.get("type", "").lower()
-        if item_type not in ("video", "reel") and not item.get("isVideo"):
-            continue
+        is_video  = item_type in ("video", "reel") or bool(item.get("isVideo"))
+        is_sidecar = item_type in ("sidecar", "carousel") or bool(item.get("childPosts"))
+        if not is_video and not is_sidecar and item_type not in ("image", "graphimage", "graphsidecar"):
+            if not item.get("displayUrl"):
+                continue
 
         views = int(item.get("videoViewCount") or item.get("videoPlayCount") or 0)
-        if views < MIN_IG_VIEWS:
+        if is_video and views < MIN_IG_VIEWS:
             continue
 
         # Date filter
