@@ -22,16 +22,9 @@ jobs:
       - name: Install dependencies
         run: pip install google-api-python-client google-auth pytz
 
-      - name: Write Google credentials
+      - name: Schedule posts via Buffer
         env:
-          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
-        run: |
-          mkdir -p /tmp/oak_park_creds
-          echo "$SHEETS_TOKEN" > /tmp/oak_park_creds/sheets_token.json
-
-      - name: Schedule posts
-        env:
-          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
-          CONTENT_SHEET_ID: ${{ secrets.CONTENT_SHEET_ID }}
-          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_KEY }}
+          SHEETS_TOKEN:      ${{ secrets.SHEETS_TOKEN }}
+          CONTENT_SHEET_ID:  ${{ secrets.CONTENT_SHEET_ID }}
+          BUFFER_API_KEY:    ${{ secrets.BUFFER_API_KEY_EXP04092027 }}
         run: python scripts/schedule_posts.py
