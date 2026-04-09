@@ -87,8 +87,7 @@ jobs:
                 `**[Open WordPress Drafts](${wpLink})**`,
                 '',
                 '_Close this issue once published._'
-              ].join('
-')
+              ].join("\n")
             });
         env:
           WP_URL: ${{ secrets.WP_URL }}
