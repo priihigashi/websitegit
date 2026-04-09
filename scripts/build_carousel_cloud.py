@@ -64,10 +64,10 @@ GOLD        = YELLOW             # alias — always resolves to brand yellow
 # ── Font download (Google Fonts CDN) ─────────────────────────────────────────
 FONT_URLS = {
     "Anton-Regular.ttf":          "https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf",
-    "RobotoCondensed-Bold.ttf":   "https://github.com/google/fonts/raw/main/ofl/robotocondensed/static/RobotoCondensed-Bold.ttf",
-    "RobotoCondensed-Regular.ttf":"https://github.com/google/fonts/raw/main/ofl/robotocondensed/static/RobotoCondensed-Regular.ttf",
+    "RobotoCondensed-Bold.ttf":   "https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Bold.ttf",
+    "RobotoCondensed-Regular.ttf":"https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Regular.ttf",
     "RobotoMono-Regular.ttf":     "https://github.com/google/fonts/raw/main/ofl/robotomono/static/RobotoMono-Regular.ttf",
-    "Roboto-Regular.ttf":         "https://github.com/google/fonts/raw/main/ofl/roboto/static/Roboto-Regular.ttf",
+    "Roboto-Regular.ttf":         "https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Regular.ttf",
 }
 
 def ensure_fonts():
@@ -394,7 +394,7 @@ def enhance_with_gemini(img: "Image.Image") -> "Image.Image":
         }).encode()
 
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-               f"gemini-2.0-flash-preview-image-generation:generateContent?key={api_key}")
+               f"gemini-2.0-flash-exp:generateContent?key={api_key}")
         req = urllib.request.Request(url, data=payload,
                                       headers={"Content-Type": "application/json"})
         resp = json.loads(urllib.request.urlopen(req, timeout=90).read())
@@ -612,7 +612,7 @@ def build_with_nano_banana_layout(post: dict, photos: list, out_dir: "Path") -> 
             }).encode()
 
             url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-                   f"gemini-2.0-flash-preview-image-generation:generateContent?key={api_key}")
+                   f"gemini-2.0-flash-exp:generateContent?key={api_key}")
             req = urllib.request.Request(url, data=payload,
                                           headers={"Content-Type": "application/json"})
             resp = json.loads(urllib.request.urlopen(req, timeout=120).read())
