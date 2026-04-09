@@ -95,7 +95,7 @@ def main():
                              "status_col": ci("status"), "date_col": ci("suggested post date")})
 
     if not approved:
-        print("✅ No "Edited" posts found (set Status = "Edited" to schedule)"); return
+        print('✅ No "Edited" posts found (set Status = "Edited" to schedule)'); return
 
     print(f"🟢 {len(approved)} 'Edited' post(s) ready to schedule")
     taken = get_taken_slots(token)
