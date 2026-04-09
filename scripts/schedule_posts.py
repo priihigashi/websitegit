@@ -3,48 +3,44 @@
 schedule_posts.py — Oak Park Construction Post Scheduler
 Runs daily at 9PM ET via GitHub Actions.
 
-Reads 📋 Content Queue tab:
-  - L (ok to schedule) = "Yes" → schedule the post
-  - M (Suggested Post Date) = date
-  - N (suggested time) = time
-  - O (Platform) = Instagram / TikTok / Instagram, TikTok
-  - G (Caption Body) + H (CTA) + I (Hashtags) = full caption
-  - AB (Drive Folder Link) = slides folder
+Reads Content Queue tab — columns matched by header name:
+  L = ok to schedule      → "Yes" to process this row
+  M = Suggested Post Date → YYYY-MM-DD
+  N = suggested time      → "7:00 PM" or "19:00"
+  O = Platform            → Instagram / TikTok / Instagram, TikTok
+  G = Caption Body  H = CTA  I = Hashtags
+  AB = Drive Folder Link  → Google Drive folder with slide JPGs
 
 Flow:
-  1. Read all rows where L = "Yes"
-  2. Check date/time — if past, use next available slot today or tomorrow
-  3. Make Drive files publicly accessible (temporary)
-  4. Post to Instagram and/or TikTok via Composio
-  5. Set J (Status) = "Scheduled", L = "Scheduled"
+  1. Read rows where "ok to schedule" = "Yes"
+  2. Resolve post datetime (skip if > 60 min away)
+  3. Make Drive slide images public, collect URLs
+  4. Schedule via Buffer API
+  5. Update sheet: J=Scheduled, L=Scheduled
 
-Env vars required:
-  SHEETS_TOKEN        — Google OAuth token JSON
-  CONTENT_SHEET_ID    — Google Sheet ID
-  COMPOSIO_API_KEY    — Composio API key
+Env vars:
+  SHEETS_TOKEN       — Google OAuth token JSON
+  CONTENT_SHEET_ID   — Google Sheet ID
+  BUFFER_API_KEY     — Buffer access token (expires 2027-04-09, secret: BUFFER_API_KEY_EXP04092027)
 """
 
-import os, io, json, re, urllib.request, urllib.parse, sys, time, tempfile
-from pathlib import Path
-from datetime import date, datetime, timedelta
+import os, json, re, urllib.request, urllib.parse, sys, time
+from datetime import date, datetime
 import pytz
 
-# ── Config ────────────────────────────────────────────────────────────────────
-SHEET_ID   = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
-QUEUE_TAB  = "📋 Content Queue"
-ET         = pytz.timezone("America/New_York")
+ET        = pytz.timezone("America/New_York")
+SHEET_ID  = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
+QUEUE_TAB = "📋 Content Queue"
+BUFFER_KEY = os.environ.get("BUFFER_API_KEY", "")
+BUFFER_API = "https://api.bufferapp.com/1"
 
-# ── Auth ──────────────────────────────────────────────────────────────────────
+# ── Auth ───────────────────────────────────────────────────────────────────────
 _token_cache = {}
 
 def get_token():
     if _token_cache.get("token") and time.time() < _token_cache.get("exp", 0):
         return _token_cache["token"]
     raw = os.environ.get("SHEETS_TOKEN", "")
-    if not raw:
-        path = os.environ.get("SHEETS_TOKEN_PATH", "")
-        if path and Path(path).exists():
-            raw = Path(path).read_text()
     if not raw:
         raise RuntimeError("No SHEETS_TOKEN set")
     td = json.loads(raw)
@@ -84,7 +80,7 @@ def col_letter(n):
     return result
 
 def sheet_get(token, range_str):
-    enc = urllib.parse.quote(range_str, safe="!:")
+    enc = urllib.parse.quote(range_str, safe="!:'")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
     return json.loads(urllib.request.urlopen(req).read())
@@ -101,16 +97,19 @@ def sheet_update_cells(token, tab_name, updates: list):
     except Exception as e:
         print(f"  ⚠️  Sheet update error: {e}")
 
-def get_rows_to_schedule(token) -> list[dict]:
+def get_rows_to_schedule(token) -> list:
     rows = sheet_get(token, f"'{QUEUE_TAB}'").get("values", [])
     if len(rows) < 2:
         return []
     header = [h.strip() for h in rows[0]]
-    def ci(name): return next((i for i,h in enumerate(header) if name.lower() in h.lower()), None)
+    def ci(name):
+        return next((i for i, h in enumerate(header) if name.lower() in h.lower()), None)
 
     result = []
     for idx, row in enumerate(rows[1:], start=2):
-        def v(col): i=ci(col); return row[i].strip() if i is not None and len(row)>i else ""
+        def v(col):
+            i = ci(col)
+            return row[i].strip() if i is not None and len(row) > i else ""
         if v("ok to schedule").lower() != "yes":
             continue
         result.append({
@@ -122,9 +121,9 @@ def get_rows_to_schedule(token) -> list[dict]:
             "platform":   v("platform"),
             "post_date":  v("suggested post date"),
             "post_time":  v("suggested time"),
-            "drive_link": v("ab"),  # col AB = Drive folder link
-            "status_col": col_letter(ci("status") + 1) if ci("status") is not None else "J",
-            "l_col":      col_letter(ci("ok to schedule") + 1) if ci("ok to schedule") is not None else "L",
+            "drive_link": v("ab"),
+            "status_col": col_letter((ci("status") or 9) + 1),
+            "l_col":      col_letter((ci("ok to schedule") or 11) + 1),
         })
     return result
 
@@ -133,12 +132,10 @@ def drive_folder_id_from_url(url: str) -> str:
     m = re.search(r'/folders/([a-zA-Z0-9_-]+)', url)
     return m.group(1) if m else ""
 
-def get_slide_urls_from_folder(folder_id: str, creds) -> list[str]:
-    """Get public download URLs for all JPG slides in a Drive folder."""
+def get_public_slide_urls(folder_id: str, creds) -> list:
     from googleapiclient.discovery import build
     try:
         svc = build("drive", "v3", credentials=creds)
-        # List files in folder
         results = svc.files().list(
             q=f"'{folder_id}' in parents and trashed=false and mimeType='image/jpeg'",
             fields="files(id,name)",
@@ -146,11 +143,8 @@ def get_slide_urls_from_folder(folder_id: str, creds) -> list[str]:
             includeItemsFromAllDrives=True,
             orderBy="name"
         ).execute()
-        files = results.get("files", [])
-
         urls = []
-        for f in files:
-            # Make publicly accessible temporarily
+        for f in results.get("files", []):
             try:
                 svc.permissions().create(
                     fileId=f["id"],
@@ -158,227 +152,180 @@ def get_slide_urls_from_folder(folder_id: str, creds) -> list[str]:
                     supportsAllDrives=True
                 ).execute()
             except Exception:
-                pass  # May already be public
-            # Direct download URL (works with Instagram/TikTok)
+                pass
             urls.append(f"https://drive.google.com/uc?export=download&id={f['id']}")
-
-        return sorted(urls)  # Sort by name order = slide order
+        return urls
     except Exception as e:
         print(f"  ⚠️  Could not get slide URLs: {e}")
         return []
 
-# ── Composio helpers ───────────────────────────────────────────────────────────
-COMPOSIO_KEY = os.environ.get("COMPOSIO_API_KEY", "")
+# ── Buffer helpers ─────────────────────────────────────────────────────────────
+_buffer_profiles = None
 
-def composio_execute(tool_slug: str, params: dict) -> dict:
-    payload = json.dumps({
-        "tool": tool_slug,
-        "input": params
-    }).encode()
+def buffer_get_profiles() -> list:
+    global _buffer_profiles
+    if _buffer_profiles is not None:
+        return _buffer_profiles
+    try:
+        url = f"{BUFFER_API}/profiles.json?access_token={BUFFER_KEY}"
+        resp = json.loads(urllib.request.urlopen(url, timeout=15).read())
+        _buffer_profiles = resp if isinstance(resp, list) else []
+        names = [p.get("formatted_service") or p.get("service", "?") for p in _buffer_profiles]
+        print(f"  📱 Buffer profiles found: {names}")
+        return _buffer_profiles
+    except Exception as e:
+        print(f"  ❌ Could not fetch Buffer profiles: {e}")
+        _buffer_profiles = []
+        return []
+
+def buffer_profile_ids_for(platform: str) -> list:
+    service_map = {"instagram": ["instagram"], "tiktok": ["tiktok"]}
+    targets = service_map.get(platform.lower(), [platform.lower()])
+    return [p["id"] for p in buffer_get_profiles()
+            if p.get("service", "").lower() in targets]
+
+def buffer_schedule_post(profile_ids: list, caption: str,
+                         image_urls: list, scheduled_at: datetime) -> bool:
+    if not profile_ids:
+        print(f"  ❌ No Buffer profile matched for this platform")
+        return False
+
+    scheduled_utc = scheduled_at.astimezone(pytz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    params = [
+        ("access_token", BUFFER_KEY),
+        ("text", caption),
+        ("scheduled_at", scheduled_utc),
+        ("now", "false"),
+    ]
+    for pid in profile_ids:
+        params.append(("profile_ids[]", pid))
+
+    if len(image_urls) == 1:
+        params.append(("media[picture]", image_urls[0]))
+    elif len(image_urls) > 1:
+        for url in image_urls[:10]:
+            params.append(("media[photos][]", url))
+
+    payload = urllib.parse.urlencode(params).encode()
     req = urllib.request.Request(
-        "https://backend.composio.dev/api/v2/actions/execute",
+        f"{BUFFER_API}/updates/create.json",
         data=payload,
-        headers={
-            "Authorization": f"Bearer {COMPOSIO_KEY}",
-            "Content-Type": "application/json",
-            "x-api-key": COMPOSIO_KEY,
-        }
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
     )
     try:
-        resp = json.loads(urllib.request.urlopen(req, timeout=60).read())
-        return resp
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        if resp.get("success") or resp.get("id") or "updates" in resp:
+            print(f"  ✅ Buffer scheduled → {scheduled_at.strftime('%Y-%m-%d %I:%M %p ET')}")
+            return True
+        print(f"  ❌ Buffer rejected: {resp}")
+        return False
     except Exception as e:
-        print(f"  ⚠️  Composio error ({tool_slug}): {e}")
-        return {}
+        print(f"  ❌ Buffer error: {e}")
+        return False
 
-# ── Build caption ──────────────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────────────────────
 def build_caption(post: dict) -> str:
-    parts = []
-    if post["caption"]:
-        parts.append(post["caption"])
+    parts = [post["caption"]]
     if post["cta"]:
-        parts.append(f"\n{post['cta']}")
+        parts.append(f"
+{post['cta']}")
     if post["hashtags"]:
-        parts.append(f"\n\n{post['hashtags']}")
-    return "\n".join(parts)
+        parts.append(f"
 
-# ── Resolve post datetime ──────────────────────────────────────────────────────
+{post['hashtags']}")
+    return "
+".join(filter(None, parts))
+
 def resolve_post_datetime(post_date_str: str, post_time_str: str) -> datetime:
-    """If date is past → use today. Parse time string → return ET datetime."""
     now_et = datetime.now(ET)
-    today = now_et.date()
-
+    today  = now_et.date()
     try:
         post_date = datetime.strptime(post_date_str, "%Y-%m-%d").date()
     except Exception:
         post_date = today
-
     if post_date < today:
         print(f"  ⚠️  Date {post_date} is past — using today {today}")
         post_date = today
-
-    # Parse time
-    try:
-        t = datetime.strptime(post_time_str.strip(), "%I:%M %p")
-    except Exception:
+    t = None
+    for fmt in ("%I:%M %p", "%H:%M"):
         try:
-            t = datetime.strptime(post_time_str.strip(), "%H:%M")
+            t = datetime.strptime(post_time_str.strip(), fmt)
+            break
         except Exception:
-            print(f"  ⚠️  Could not parse time '{post_time_str}' — defaulting to 7:00 PM")
-            t = datetime.strptime("7:00 PM", "%I:%M %p")
+            pass
+    if t is None:
+        print(f"  ⚠️  Could not parse time '{post_time_str}' — defaulting to 7:00 PM")
+        t = datetime.strptime("7:00 PM", "%I:%M %p")
+    return ET.localize(datetime(post_date.year, post_date.month, post_date.day, t.hour, t.minute))
 
-    dt_et = ET.localize(datetime(post_date.year, post_date.month, post_date.day,
-                                  t.hour, t.minute))
-    return dt_et
-
-# ── Post to Instagram ──────────────────────────────────────────────────────────
-def post_to_instagram(slide_urls: list[str], caption: str) -> bool:
-    if not slide_urls:
-        print("  ❌ No slide URLs for Instagram")
-        return False
-    print(f"  📸 Posting carousel to Instagram ({len(slide_urls)} slides)...")
-
-    if len(slide_urls) == 1:
-        # Single image
-        resp = composio_execute("INSTAGRAM_POST_IG_USER_MEDIA", {
-            "ig_user_id": "me",
-            "image_url": slide_urls[0],
-            "caption": caption,
-        })
-    else:
-        # Carousel — create child containers first
-        child_ids = []
-        for url in slide_urls[:10]:  # Instagram max 10
-            child_resp = composio_execute("INSTAGRAM_POST_IG_USER_MEDIA", {
-                "ig_user_id": "me",
-                "image_url": url,
-                "is_carousel_item": True,
-            })
-            cid = (child_resp.get("data", {}) or {}).get("id")
-            if cid:
-                child_ids.append(cid)
-                time.sleep(1)
-
-        if not child_ids:
-            print("  ❌ Failed to create Instagram carousel children")
-            return False
-
-        # Create carousel container
-        resp = composio_execute("INSTAGRAM_POST_IG_USER_MEDIA", {
-            "ig_user_id": "me",
-            "media_type": "CAROUSEL",
-            "children": child_ids,
-            "caption": caption,
-        })
-
-    container_id = (resp.get("data", {}) or {}).get("id")
-    if not container_id:
-        print(f"  ❌ Instagram container creation failed: {resp}")
-        return False
-
-    # Publish
-    time.sleep(3)
-    pub_resp = composio_execute("INSTAGRAM_POST_IG_USER_MEDIA_PUBLISH", {
-        "ig_user_id": "me",
-        "creation_id": container_id,
-    })
-    published_id = (pub_resp.get("data", {}) or {}).get("id")
-    if published_id:
-        print(f"  ✅ Instagram posted (ID: {published_id})")
-        return True
-    else:
-        print(f"  ❌ Instagram publish failed: {pub_resp}")
-        return False
-
-# ── Post to TikTok ─────────────────────────────────────────────────────────────
-def post_to_tiktok(slide_urls: list[str], caption: str) -> bool:
-    if not slide_urls:
-        print("  ❌ No slide URLs for TikTok")
-        return False
-    print(f"  🎵 Posting photo slideshow to TikTok ({len(slide_urls)} slides)...")
-
-    resp = composio_execute("TIKTOK_POST_PHOTO", {
-        "photo_images": slide_urls[:35],  # TikTok max 35
-        "description": caption[:2200],
-        "privacy_level": "PUBLIC_TO_EVERYONE",
-    })
-    publish_id = (resp.get("data", {}) or {}).get("publish_id")
-    if publish_id:
-        print(f"  ✅ TikTok posted (publish_id: {publish_id})")
-        return True
-    else:
-        print(f"  ❌ TikTok post failed: {resp}")
-        return False
-
-# ── Main ──────────────────────────────────────────────────────────────────────
+# ── Main ───────────────────────────────────────────────────────────────────────
 def main():
-    print(f"\n📅 Post Scheduler — {date.today()}")
+    print(f"
+📅 Post Scheduler (Buffer) — {date.today()}")
     print("=" * 50)
 
-    if not COMPOSIO_KEY:
-        print("❌ COMPOSIO_API_KEY not set — cannot schedule posts")
+    if not BUFFER_KEY:
+        print("❌ BUFFER_API_KEY not set — cannot schedule posts")
         sys.exit(1)
 
     token = get_token()
     creds = get_creds()
+    rows  = get_rows_to_schedule(token)
 
-    rows = get_rows_to_schedule(token)
     if not rows:
-        print("✅ No posts with L=Yes found — nothing to schedule.")
+        print("✅ No posts with 'ok to schedule' = Yes — nothing to do.")
         return
 
-    print(f"   Found {len(rows)} post(s) to schedule\n")
+    print(f"   Found {len(rows)} post(s) to process
+")
 
     for post in rows:
-        print(f"\n{'='*50}")
+        print(f"
+{'='*50}")
         print(f"📌 {post['project']} — {post['platform']}")
 
-        # Get slides from Drive
         folder_id = drive_folder_id_from_url(post["drive_link"])
         if not folder_id:
-            print(f"  ❌ Could not parse Drive folder from: {post['drive_link']}")
+            print(f"  ❌ No Drive folder link in row {post['row']}")
             continue
 
-        slide_urls = get_slide_urls_from_folder(folder_id, creds)
-        if not slide_urls:
-            print(f"  ❌ No slides found in Drive folder")
+        image_urls = get_public_slide_urls(folder_id, creds)
+        if not image_urls:
+            print(f"  ❌ No JPG slides found in Drive folder")
             continue
-        print(f"  📂 Found {len(slide_urls)} slides")
+        print(f"  📂 {len(image_urls)} slides found")
 
-        # Resolve date/time
-        dt_et = resolve_post_datetime(post["post_date"], post["post_time"])
-        now_et = datetime.now(ET)
-        print(f"  🕐 Scheduled for: {dt_et.strftime('%Y-%m-%d %I:%M %p ET')}")
+        dt_et    = resolve_post_datetime(post["post_date"], post["post_time"])
+        now_et   = datetime.now(ET)
+        diff_min = (dt_et - now_et).total_seconds() / 60
+        print(f"  🕐 Target: {dt_et.strftime('%Y-%m-%d %I:%M %p ET')} ({diff_min:.0f} min away)")
 
-        # Only post if the scheduled time is within the next 60 minutes or past
-        diff_minutes = (dt_et - now_et).total_seconds() / 60
-        if diff_minutes > 60:
-            print(f"  ⏳ Too early — {diff_minutes:.0f} min until post time, skipping")
+        if diff_min > 60:
+            print(f"  ⏳ Too early — will pick up at next 9PM run")
             continue
 
-        caption = build_caption(post)
+        caption   = build_caption(post)
         platforms = [p.strip().lower() for p in post["platform"].split(",")]
+        any_ok    = False
 
-        ig_ok = False
-        tt_ok = False
+        for platform in platforms:
+            profile_ids = buffer_profile_ids_for(platform)
+            ok = buffer_schedule_post(profile_ids, caption, image_urls, dt_et)
+            if ok:
+                any_ok = True
 
-        if "instagram" in platforms:
-            ig_ok = post_to_instagram(slide_urls, caption)
-
-        if "tiktok" in platforms:
-            tt_ok = post_to_tiktok(slide_urls, caption)
-
-        # Update sheet
-        if ig_ok or tt_ok:
+        if any_ok:
             sheet_update_cells(token, QUEUE_TAB, [
                 (f"{post['status_col']}{post['row']}", "Scheduled"),
-                (f"{post['l_col']}{post['row']}", "Scheduled"),
+                (f"{post['l_col']}{post['row']}",      "Scheduled"),
             ])
-            print(f"  📊 Sheet updated: J=Scheduled, L=Scheduled")
+            print(f"  📊 Sheet updated → Scheduled")
         else:
             print(f"  ⚠️  All platforms failed — sheet not updated")
 
-    print(f"\n✅ Scheduler run complete.")
+    print(f"
+✅ Scheduler run complete.")
 
 if __name__ == "__main__":
     main()
