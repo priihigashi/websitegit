@@ -1,0 +1,56 @@
+name: Website Research — Design & UX Analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      opc_urls:
+        description: 'OPC reference URLs (comma-separated)'
+        required: false
+        default: ''
+      brazil_urls:
+        description: 'Brazil Real Estate reference URLs (comma-separated)'
+        required: false
+        default: ''
+      read_from_sheet:
+        description: 'Read URLs from "Website Research Input" tab instead'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  research:
+    name: Scrape + Analyze Reference Sites
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install anthropic gspread google-auth beautifulsoup4 requests
+
+      - name: Run research
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
+        run: |
+          python scripts/website_research.py \
+            --opc "${{ github.event.inputs.opc_urls }}" \
+            --brazil "${{ github.event.inputs.brazil_urls }}" \
+            ${{ github.event.inputs.read_from_sheet == 'true' && '--sheet' || '' }}
+
+      - name: Done
+        run: |
+          echo "Research complete."
+          echo "Results in Google Sheet > Website Research tab"
+          echo "Sheet: https://docs.google.com/spreadsheets/d/1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
