@@ -228,14 +228,10 @@ def buffer_schedule_post(profile_ids: list, caption: str,
 def build_caption(post: dict) -> str:
     parts = [post["caption"]]
     if post["cta"]:
-        parts.append(f"
-{post['cta']}")
+        parts.append(f"\n{post['cta']}")
     if post["hashtags"]:
-        parts.append(f"
-
-{post['hashtags']}")
-    return "
-".join(filter(None, parts))
+        parts.append(f"\n\n{post['hashtags']}")
+    return "\n".join(filter(None, parts))
 
 def resolve_post_datetime(post_date_str: str, post_time_str: str) -> datetime:
     now_et = datetime.now(ET)
@@ -261,8 +257,7 @@ def resolve_post_datetime(post_date_str: str, post_time_str: str) -> datetime:
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
-    print(f"
-📅 Post Scheduler (Buffer) — {date.today()}")
+    print(f"\n📅 Post Scheduler (Buffer) — {date.today()}")
     print("=" * 50)
 
     if not BUFFER_KEY:
@@ -277,12 +272,10 @@ def main():
         print("✅ No posts with 'ok to schedule' = Yes — nothing to do.")
         return
 
-    print(f"   Found {len(rows)} post(s) to process
-")
+    print(f"   Found {len(rows)} post(s) to process\n")
 
     for post in rows:
-        print(f"
-{'='*50}")
+        print(f"\n{'='*50}")
         print(f"📌 {post['project']} — {post['platform']}")
 
         folder_id = drive_folder_id_from_url(post["drive_link"])
@@ -324,8 +317,7 @@ def main():
         else:
             print(f"  ⚠️  All platforms failed — sheet not updated")
 
-    print(f"
-✅ Scheduler run complete.")
+    print(f"\n✅ Scheduler run complete.")
 
 if __name__ == "__main__":
     main()
