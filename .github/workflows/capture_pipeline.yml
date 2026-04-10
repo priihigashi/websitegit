@@ -1,0 +1,89 @@
+name: Capture Pipeline v2
+
+# ─── TRIGGER FROM PHONE ────────────────────────────────────────────────────
+# GitHub app → oak-park-ai-hub → Actions → Capture Pipeline v2 → Run workflow
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL of the reel (Instagram, TikTok, YouTube)"
+        required: true
+        type: string
+      project:
+        description: "book (fact-check) | sovereign (political) | content (Oak Park)"
+        required: true
+        default: "book"
+        type: choice
+        options:
+          - book
+          - sovereign
+          - content
+      story_id:
+        description: "Story ID e.g. BCI-002 or SVG-001 (blank = auto-generate)"
+        required: false
+        type: string
+        default: ""
+      notes:
+        description: "Extra context (e.g. verify who this is, check presidential statements)"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  capture:
+    name: "${{ inputs.project }} — ${{ inputs.story_id || 'auto-id' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout oak-park-ai-hub
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install ffmpeg (required by yt-dlp)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          pip install \
+            yt-dlp \
+            openai \
+            anthropic \
+            gspread \
+            google-auth \
+            google-api-python-client \
+            python-dotenv
+
+      - name: Run capture pipeline
+        env:
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_SA_KEY:     ${{ secrets.GOOGLE_SA_KEY }}
+        run: |
+          CMD="python scripts/capture/capture_pipeline.py \"${{ inputs.url }}\" --project ${{ inputs.project }}"
+
+          if [ -n "${{ inputs.story_id }}" ]; then
+            CMD="$CMD --story-id \"${{ inputs.story_id }}\""
+          fi
+
+          if [ -n "${{ inputs.notes }}" ]; then
+            CMD="$CMD --notes \"${{ inputs.notes }}\""
+          fi
+
+          echo "Running: $CMD"
+          eval $CMD
+
+      - name: Upload transcripts and analysis
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: "capture-${{ inputs.story_id || github.run_id }}-${{ inputs.project }}"
+          path: transcripts/
+          retention-days: 30
