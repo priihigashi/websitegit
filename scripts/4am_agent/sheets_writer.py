@@ -79,7 +79,7 @@ def append_to_content_queue(scripts_with_broll):
             s.get("topic", ""),         # F Hook
             s.get("script", ""),        # G Caption Body
             "Link in bio",              # H CTA
-            "",                         # I Hashtags
+            s.get("hashtags", ""),      # I Hashtags
             "Pending",                  # J Status
             "", "", "",                 # K–M (after processed, ok to schedule, date)
             "",                         # N suggested time
