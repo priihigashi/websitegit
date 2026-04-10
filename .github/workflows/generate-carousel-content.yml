@@ -1,0 +1,79 @@
+name: Generate Carousel Content (Hormozi)
+
+# ─── TRIGGER FROM PHONE ────────────────────────────────────────────────────────
+# GitHub mobile app → priihigashi/oak-park-ai-hub → Actions → Generate Carousel Content (Hormozi) → Run workflow
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "What is this carousel about? (e.g. bathroom tile mistakes, roofing red flags)"
+        required: true
+        type: string
+      service:
+        description: "Service type (e.g. Bathroom Remodel, Roofing, Flooring, General)"
+        required: false
+        type: string
+        default: "General"
+      hook_style:
+        description: "Hook style — auto = Claude picks best one for topic"
+        required: false
+        type: choice
+        default: "auto"
+        options:
+          - auto
+          - results
+          - contrarian
+          - curiosity
+          - pain
+          - mistake
+          - question
+      niche:
+        description: "Target niche"
+        required: false
+        type: choice
+        default: "Oak Park Construction"
+        options:
+          - Oak Park Construction
+          - Brazil
+          - General
+
+jobs:
+  generate:
+    name: "Hormozi → ${{ inputs.topic }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install anthropic
+
+      - name: Generate carousel content
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SHEETS_TOKEN:      ${{ secrets.SHEETS_TOKEN }}
+          CONTENT_SHEET_ID:  ${{ secrets.CONTENT_SHEET_ID }}
+        run: |
+          python scripts/content/hormozi_carousel_generator.py \
+            "${{ inputs.topic }}" \
+            --niche "${{ inputs.niche }}" \
+            --hook-style "${{ inputs.hook_style }}" \
+            --service "${{ inputs.service }}"
+
+      - name: Summary
+        run: |
+          echo "## ✅ Carousel content generated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Topic:** ${{ inputs.topic }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Service:** ${{ inputs.service }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Hook style:** ${{ inputs.hook_style }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next step:** Add photo filename to column D in Content Queue, then run build-carousels.yml" >> $GITHUB_STEP_SUMMARY
