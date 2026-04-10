@@ -1,4 +1,4 @@
-name: Process Approved Posts — Daily Scheduler
+name: Process Approved Posts — Social Media
 
 on:
   schedule:
