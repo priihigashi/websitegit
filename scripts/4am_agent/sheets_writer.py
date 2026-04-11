@@ -68,7 +68,9 @@ def append_to_content_queue(scripts_with_broll):
     for item in scripts_with_broll:
         s      = item["script_data"]
         clips  = item.get("broll_clips", [])
-        broll  = " | ".join(c["pexels_url"] for c in clips)
+        pexels_urls = [c["pexels_url"] for c in clips if c.get("source") == "pexels" and c.get("pexels_url")]
+        yt_urls    = [c["youtube_url"] for c in clips if c.get("source") == "youtube" and c.get("youtube_url")]
+        broll  = " | ".join(pexels_urls + yt_urls)
 
         rows.append([
             date_str,                   # A Date Created
