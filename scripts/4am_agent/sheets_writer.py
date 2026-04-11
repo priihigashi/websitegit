@@ -105,8 +105,10 @@ def append_to_content_queue(scripts_with_broll):
 
 def update_clip_collections(scripts_with_broll):
     """
-    For any Clip Collections row with Status='Collecting' that matches a script topic,
-    append new Pexels clip URLs and update the count.
+    For each script generated:
+    - If a matching Collecting row exists → append new clip URLs and update count
+    - If no matching row exists → add a new row automatically
+    Sources tracked: Pexels (free stock) and YouTube (real-world clips).
     """
     svc    = _service()
     result = svc.spreadsheets().values().get(
@@ -114,40 +116,59 @@ def update_clip_collections(scripts_with_broll):
         range="Clip Collections!A:G",
     ).execute()
     rows = result.get("values", [])
-    if len(rows) <= 1:
-        return 0
+    existing_topics = {(row[0].lower() if row else ""): idx+2 for idx, row in enumerate(rows[1:])}
 
     updated = 0
     for item in scripts_with_broll:
-        topic = item["script_data"].get("topic", "").lower()
+        topic = item["script_data"].get("topic", "")
         clips = item.get("broll_clips", [])
+        if not clips:
+            continue
 
-        for row_idx, row in enumerate(rows[1:], start=2):   # sheet row = row_idx+1
-            row_topic  = (row[0] if row else "").lower()
-            row_status = (row[5] if len(row) > 5 else "").lower()
+        pexels_links  = [c["pexels_url"]  for c in clips if c.get("source") == "pexels"  and c.get("pexels_url")]
+        youtube_links = [c["youtube_url"] for c in clips if c.get("source") == "youtube" and c.get("youtube_url")]
+        all_links = pexels_links + youtube_links
 
-            topic_match = (
-                topic in row_topic
-                or row_topic in topic
-                or any(w in row_topic for w in topic.split() if len(w) > 4)
-            )
+        # Check for matching existing row
+        matched_row = None
+        for ex_topic, ex_row_idx in existing_topics.items():
+            if (topic.lower() in ex_topic or ex_topic in topic.lower() or
+                    any(w in ex_topic for w in topic.lower().split() if len(w) > 4)):
+                matched_row = ex_row_idx
+                break
 
-            if row_status == "collecting" and topic_match and clips:
-                existing_links = row[4] if len(row) > 4 else ""
-                new_links      = [c["pexels_url"] for c in clips]
-                all_links      = [l for l in existing_links.split(" | ") if l] + new_links
-                current_count  = int(row[3]) if len(row) > 3 and str(row[3]).isdigit() else 0
-
-                svc.spreadsheets().values().update(
-                    spreadsheetId=SPREADSHEET_ID,
-                    range=f"Clip Collections!D{row_idx}:E{row_idx}",
-                    valueInputOption="USER_ENTERED",
-                    body={"values": [[str(current_count + len(new_links)), " | ".join(all_links)]]},
-                ).execute()
-                updated += 1
+        if matched_row:
+            row_data = rows[matched_row - 2] if matched_row - 2 < len(rows) else []
+            existing_links = row_data[4] if len(row_data) > 4 else ""
+            current_count  = int(row_data[3]) if len(row_data) > 3 and str(row_data[3]).isdigit() else 0
+            combined = [l for l in existing_links.split(" | ") if l] + all_links
+            svc.spreadsheets().values().update(
+                spreadsheetId=SPREADSHEET_ID,
+                range=f"Clip Collections!D{matched_row}:E{matched_row}",
+                valueInputOption="USER_ENTERED",
+                body={"values": [[str(current_count + len(all_links)), " | ".join(combined)]]},
+            ).execute()
+        else:
+            # Auto-add new row for this topic
+            link_str = " | ".join(all_links)
+            svc.spreadsheets().values().append(
+                spreadsheetId=SPREADSHEET_ID,
+                range="Clip Collections!A:G",
+                valueInputOption="USER_ENTERED",
+                insertDataOption="INSERT_ROWS",
+                body={"values": [[
+                    topic,                  # A Topic
+                    "OAK PARK",             # B Niche
+                    "10",                   # C Target Clips
+                    str(len(all_links)),    # D Clips Collected
+                    link_str,               # E Links
+                    "Collecting",           # F Status
+                    f"Auto-added by 4AM agent. Pexels: {len(pexels_links)} | YouTube: {len(youtube_links)}",  # G Notes
+                ]]},
+            ).execute()
+        updated += 1
 
     return updated
-
 
 # ─── Runs Log ─────────────────────────────────────────────────────────────────
 # Columns: Date | Time | Status | Topics Found | Scripts Generated | Clips Found |
