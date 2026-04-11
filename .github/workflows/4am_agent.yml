@@ -2,12 +2,12 @@ name: 4AM Content Agent
 
 on:
   schedule:
-    - cron: "0 8 * * *"   # 4 AM ET (EDT = UTC-4, Mar–Nov). Change to 0 9 * * * in winter (EST = UTC-5).
-  workflow_dispatch:        # manual trigger — also activated by saying "run the 4AM agent now"
+    - cron: "0 8 * * *"
+  workflow_dispatch:
 
 permissions:
-  contents: write           # needed for pattern_learner to create skill files
-  issues: write             # needed for failure notification via GitHub Issue
+  contents: write
+  issues: write
 
 jobs:
   run-agent:
@@ -46,14 +46,10 @@ jobs:
           secure: true
           username: priscila@oakpark-construction.com
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: "✅ 4AM Agent ran — ${{ github.run_number }}"
+          subject: "4AM Agent ran OK - run ${{ github.run_number }}"
           to: priscila@oakpark-construction.com
-          from: "Oak Park AI <priscila@oakpark-construction.com>"
-          body: |
-            The 4AM content agent ran successfully.
-
-            View the full run log in the Runs Log tab of your Ideas & Inbox spreadsheet.
-            Run: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}
+          from: priscila@oakpark-construction.com
+          body: "4AM content agent ran successfully. Check Runs Log tab in Ideas & Inbox.\nRun: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}"
 
       - name: Send failure email
         if: failure()
@@ -64,15 +60,10 @@ jobs:
           secure: true
           username: priscila@oakpark-construction.com
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: "❌ 4AM Agent FAILED — ${{ github.run_number }}"
+          subject: "4AM Agent FAILED - run ${{ github.run_number }}"
           to: priscila@oakpark-construction.com
-          from: "Oak Park AI <priscila@oakpark-construction.com>"
-          body: |
-            The 4AM content agent FAILED and needs attention.
-
-            View run: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}
-
-            Check the Runs Log tab in Ideas & Inbox for details.
+          from: priscila@oakpark-construction.com
+          body: "The 4AM content agent FAILED. View run: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}\nCheck the Runs Log tab in Ideas & Inbox for details."
 
       - name: Notify failure via GitHub Issue
         if: failure()
@@ -82,11 +73,7 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo:  context.repo.repo,
-              title: `❌ 4AM Agent failed — ${new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' })}`,
-              body:  `The 4AM content agent failed.
-
-[View run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
-
-Check the Runs Log tab in the spreadsheet for details.`,
-              labels: ["automation", "bug"],
+              title: '4AM Agent failed - ' + new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' }),
+              body:  'The 4AM content agent failed.\n\nView run: ' + context.serverUrl + '/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + '\n\nCheck the Runs Log tab in the spreadsheet for details.',
+              labels: ['automation', 'bug'],
             });
