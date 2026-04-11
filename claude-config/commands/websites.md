@@ -99,7 +99,7 @@ Analytics: GA4 property 488744278 (already live for OPC)
 Master Plan Doc: 1uxHmQtYfqel6X9MgFoXF-L_Y3rBhlenhG9sZo9ifuGU
 Drive folder: 1K5Z7F0hnpNPpw3xwqg8eQKTtCE3VUo_i (Marketing > Claude Code Workspace > Website Projects)
 GitHub repo: priihigashi/oak-park-ai-hub
-Website code path: /websites/opc/ and /websites/higashi/
+Website code path: /websites/opc/ (OPC only in this hub). Brazil RE lives in priihigashi/higashi-imoveis (separate repo, GitHub Pages).
 Main spreadsheet: 1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU
 GitHub Action for research: website-research.yml
 
