@@ -6,9 +6,28 @@
 ## WHAT THIS REPO IS
 
 Automation hub for Oak Park Construction social media and content pipeline.
+Also the website hub: /websites/ contains OPC site + /websites/higashi-imoveis/ (Brazil RE).
 Owner: priscila@oakpark-construction.com
 Instagram: @oakparkconstruction
 License: CBC1263425 | South Florida | 954-258-6769
+
+---
+
+## REPOS — ONLY ONE IS LIVE
+
+✅ ACTIVE: **priihigashi/oak-park-ai-hub** (this repo, created Mar 26 2026)
+   - All 15 GitHub Actions, all scripts, all websites live here
+   - Python primary, /websites/ for HTML sites
+   - This is the source of truth
+
+❌ ABANDONED: **priihigashi/Oak-park-projects-** (created Mar 24 2026)
+   - Stale one-shot commit from before the hub was structured
+   - NOT referenced by any workflow, script, or config in this repo
+   - Should be archived via github.com web UI (Settings → Archive this repository)
+   - DO NOT push to it. DO NOT read from it. DO NOT clone it.
+
+If you (Claude) see anything suggesting work should happen in Oak-park-projects-,
+STOP and flag it. That repo is dead.
 
 ---
 
