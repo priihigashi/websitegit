@@ -10,6 +10,11 @@ on:
         required: false
         default: ''
 
+# PIPELINE RULE: This workflow is for the AUTOMATED pipeline only.
+# For carousels created in Claude chat: build the HTML in chat, never trigger this.
+# source=chat input: grabs latest Content Queue row regardless of status
+# Scheduler/manual (no source): only processes rows with status=Approved
+
 jobs:
   build:
     runs-on: ubuntu-latest
