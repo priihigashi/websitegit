@@ -1,0 +1,49 @@
+name: Video & Topic Research
+
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: 'Research label (e.g. "kling ai talking head")'
+        required: true
+        default: 'kling ai video generation'
+      queries:
+        description: 'Comma-separated YouTube search queries'
+        required: true
+        default: 'kling ai tutorial 2025,kling 3.0 video generation,kling vs heygen talking head'
+      max_per_query:
+        description: 'Max videos per query (default 5)'
+        required: false
+        default: '5'
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install anthropic youtube-transcript-api yt-dlp gspread google-auth
+
+      - name: Run research
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.PRI_OP_ANTHROPIC_API_KEY }}
+          GOOGLE_SA_KEY: ${{ secrets.PRI_OP_GOOGLE_SA_KEY }}
+          DRIVE_OAUTH_TOKEN: ${{ secrets.PRI_OP_DRIVE_OAUTH_TOKEN }}
+        run: |
+          python scripts/youtube_research.py \
+            --topic "${{ github.event.inputs.topic }}" \
+            --queries "${{ github.event.inputs.queries }}" \
+            --max ${{ github.event.inputs.max_per_query }}
+
+      - name: Upload findings as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-findings-${{ github.run_id }}
+          path: /tmp/research_*.txt
+          if-no-files-found: ignore
