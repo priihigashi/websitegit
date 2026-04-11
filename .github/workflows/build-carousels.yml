@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 22 * * *'  # 6:00 PM ET (UTC-4 = 22:00 UTC)
   workflow_dispatch:
+    inputs:
+      source:
+        description: 'Trigger source (chat = skip status filter, grab latest row)'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -35,4 +40,6 @@ jobs:
           CONTENT_SHEET_ID: ${{ secrets.CONTENT_SHEET_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          BUILD_SOURCE: ${{ inputs.source }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: python scripts/build_carousel_cloud.py
