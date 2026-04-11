@@ -1,0 +1,114 @@
+name: Topic Cluster Scraper
+
+# ────────────────────────────────────────────────────────────────────────────
+# TRIGGER FROM PHONE:
+# GitHub app → oak-park-ai-hub → Actions → Topic Cluster Scraper → Run workflow
+#
+# OR triggered automatically after Capture Pipeline v2 (future enhancement)
+# ────────────────────────────────────────────────────────────────────────────
+on:
+  workflow_dispatch:
+    inputs:
+      keywords:
+        description: "Comma-separated keywords from transcript (e.g. construção, reforma, obra)"
+        required: true
+        type: string
+      niche:
+        description: "Content niche for classification"
+        required: true
+        default: "Brazil"
+        type: choice
+        options:
+          - Brazil
+          - Oak Park
+          - UGC
+          - News
+      original_url:
+        description: "Source reel that triggered this scrape (optional)"
+        required: false
+        type: string
+        default: ""
+      topic_cluster_id:
+        description: "Topic Cluster ID to group reels — leave blank to auto-generate"
+        required: false
+        type: string
+        default: ""
+      max_results:
+        description: "Max reels to scrape (default 10, max 30)"
+        required: false
+        type: string
+        default: "10"
+      platform:
+        description: "Platform to scrape"
+        required: false
+        default: "instagram"
+        type: choice
+        options:
+          - instagram
+          - tiktok
+          - youtube
+
+jobs:
+  scrape:
+    name: "${{ inputs.niche }} — ${{ inputs.keywords }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout oak-park-ai-hub
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install ffmpeg (required by yt-dlp)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          pip install \
+            yt-dlp \
+            openai \
+            anthropic \
+            gspread \
+            google-auth \
+            google-api-python-client \
+            requests \
+            python-dotenv
+
+      - name: Run topic cluster scraper
+        env:
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_SA_KEY:     ${{ secrets.GOOGLE_SA_KEY }}
+          APIFY_API_KEY:     ${{ secrets.APIFY_API_KEY }}
+        run: |
+          CMD="python scripts/capture/topic_scraper.py \
+            --keywords \"${{ inputs.keywords }}\" \
+            --niche \"${{ inputs.niche }}\" \
+            --platform ${{ inputs.platform }} \
+            --max-results ${{ inputs.max_results }}"
+
+          if [ -n "${{ inputs.original_url }}" ]; then
+            CMD="$CMD --original-url \"${{ inputs.original_url }}\""
+          fi
+
+          if [ -n "${{ inputs.topic_cluster_id }}" ]; then
+            CMD="$CMD --topic-cluster-id \"${{ inputs.topic_cluster_id }}\""
+          fi
+
+          echo "Running: $CMD"
+          eval $CMD
+
+      - name: Upload transcripts as artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: "topic-cluster-${{ inputs.topic_cluster_id || github.run_id }}-${{ inputs.niche }}"
+          path: transcripts/
+          retention-days: 30
