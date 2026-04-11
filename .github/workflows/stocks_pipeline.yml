@@ -1,0 +1,78 @@
+name: Stocks Intelligence Pipeline
+
+# ──────────────────────────────────────────────────────────────────────────────
+# TRIGGER: GitHub → oak-park-ai-hub → Actions → Stocks Intelligence Pipeline
+# ──────────────────────────────────────────────────────────────────────────────
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Reel URL (Instagram, TikTok, YouTube, Twitter/X)"
+        required: true
+        type: string
+      notes:
+        description: "Extra context (e.g. sector focus, company name, market)"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  stocks:
+    name: "stocks — ${{ github.run_id }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout oak-park-ai-hub
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install ffmpeg (required by yt-dlp)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          pip install \
+            yt-dlp \
+            openai \
+            anthropic \
+            gspread \
+            google-auth \
+            google-api-python-client \
+            python-dotenv
+
+      - name: Create output directories
+        run: |
+          mkdir -p stocks/original
+          mkdir -p stocks/transcription
+
+      - name: Run Stocks Intelligence Pipeline
+        env:
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_SA_KEY:     ${{ secrets.GOOGLE_SA_KEY }}
+          STOCKS_SHEET_ID:   ${{ secrets.STOCKS_SHEET_ID }}
+        run: |
+          CMD="python scripts/stocks/stocks_pipeline.py \"${{ inputs.url }}\""
+          if [ -n "${{ inputs.notes }}" ]; then
+            CMD="$CMD --notes \"${{ inputs.notes }}\""
+          fi
+          echo "Running: $CMD"
+          eval $CMD
+
+      - name: Upload video + transcripts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: "stocks-${{ github.run_id }}"
+          path: |
+            stocks/original/
+            stocks/transcription/
+          retention-days: 90
