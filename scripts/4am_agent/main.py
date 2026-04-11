@@ -141,7 +141,64 @@ def main():
         except Exception as pe:
             print(f"[{log_pfx}] Pattern learner error (non-fatal): {pe}")
 
+        # -- 10. Push CLAUDE.md mirror to Drive --
+        print(f"[{log_pfx}] Step 10: Pushing CLAUDE.md mirror to Drive...")
+        try:
+            _push_claude_md_mirror()
+        except Exception as me:
+            print(f"[{log_pfx}] CLAUDE.md mirror error (non-fatal): {me}")
+
         print(f"[{log_pfx}] --- Done ---")
+
+
+def _push_claude_md_mirror():
+    """Push ~/.claude/CLAUDE.md to Drive mirror doc (nightly backup)."""
+    import os
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build as gdrive_build
+
+    claude_md_path = os.path.expanduser('~/.claude/CLAUDE.md')
+    if not os.path.exists(claude_md_path):
+        print('[mirror] CLAUDE.md not found at', claude_md_path)
+        return
+
+    with open(claude_md_path, 'r') as f:
+        content = f.read()
+
+    from datetime import datetime
+    import pytz
+    et = pytz.timezone('America/New_York')
+    timestamp = datetime.now(et).strftime('%Y-%m-%d %H:%M ET')
+    full_text = f'CLAUDE.MD MIRROR — auto-generated {timestamp}
+Source: ~/.claude/CLAUDE.md
+Do NOT edit here. Edit the local file.
+
+{"="*60}
+
+' + content
+
+    MIRROR_DOC_ID = '1mvg0nWNOqzyREld2EGQ1C5BIoFVjcv6jUTGtIApu0GY'
+    sa_key = json.loads(os.environ['GOOGLE_SA_KEY'])
+    creds = service_account.Credentials.from_service_account_info(
+        sa_key,
+        scopes=['https://www.googleapis.com/auth/documents',
+                'https://www.googleapis.com/auth/drive']
+    )
+    docs = gdrive_build('docs', 'v1', credentials=creds)
+
+    # Clear existing content and rewrite
+    doc = docs.documents().get(documentId=MIRROR_DOC_ID).execute()
+    body_content = doc.get('body', {}).get('content', [])
+    end_index = body_content[-1].get('endIndex', 1) if body_content else 1
+
+    requests = []
+    if end_index > 1:
+        requests.append({'deleteContentRange': {'range': {'startIndex': 1, 'endIndex': end_index - 1}}})
+    requests.append({'insertText': {'location': {'index': 1}, 'text': full_text}})
+
+    docs.documents().batchUpdate(documentId=MIRROR_DOC_ID, body={'requests': requests}).execute()
+    print(f'[mirror] CLAUDE.md mirror updated ({len(content)} chars)')
+
 
 
 if __name__ == "__main__":
