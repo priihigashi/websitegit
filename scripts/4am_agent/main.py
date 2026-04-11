@@ -115,7 +115,7 @@ def main():
         # -- 7. Notify --
         print(f"[{log_pfx}] Step 7: Sending push notification...")
         topic_names = [s["script_data"]["topic"] for s in scripts_with_broll]
-        notified    = notify_run_complete(topic_names, rows_added, total_clips)
+        notified    = notify_run_complete(topic_names, rows_added, total_clips, error=scrape_error)
         log["notification_sent"] = notified
         if scrape_error:
             log["lessons_learned"] = f"Ran in fallback mode (no Apify data): {scrape_error}"
