@@ -221,6 +221,40 @@ def get_approved_posts(token) -> list[dict]:
         })
     return result
 
+def get_latest_post(token) -> list[dict]:
+    """Chat-triggered: grab the single newest row regardless of status."""
+    rows = sheet_get(token, f"'{QUEUE_TAB}'").get("values", [])
+    if len(rows) < 2:
+        return []
+    header = [h.strip() for h in rows[0]]
+    def ci(name): return next((i for i,h in enumerate(header) if name.lower() in h.lower()), None)
+    # Walk from bottom to find the latest non-empty row
+    for idx in range(len(rows)-1, 0, -1):
+        row = rows[idx]
+        real_idx = idx + 1  # 1-based sheet row
+        def v(col): i=ci(col); return row[i].strip() if i is not None and len(row)>i else ""
+        ct = v("content type").lower()
+        if "static" in ct:
+            continue
+        if not v("hook") and not v("caption body"):
+            continue
+        status_idx = ci("status")
+        print(f"  🤖 Chat mode — using row {real_idx}: {v('project name')}")
+        return [{
+            "row": real_idx,
+            "project":      v("project name"),
+            "service":      v("service type"),
+            "content_type": v("content type"),
+            "hook":         v("hook"),
+            "caption":      v("caption body"),
+            "cta":          v("cta"),
+            "photos_raw":   v("photo(s) used"),
+            "platform":     v("platform"),
+            "status_col":   col_letter(status_idx) if status_idx is not None else "J",
+        }]
+    return []
+
+
 def get_photo_catalog(token) -> dict:
     rows = sheet_get(token, f"'{CATALOG_TAB}'").get("values", [])
     if len(rows) < 2:
@@ -969,11 +1003,19 @@ def main():
     token = get_token()
     creds = get_creds()
 
-    print(f"📋 Reading approved posts...")
-    approved = get_approved_posts(token)
-    if not approved:
-        print("✅ No approved carousel/reel posts found — nothing to build.")
-        return
+    build_source = os.environ.get("BUILD_SOURCE", "")
+    if build_source == "chat":
+        print("🤖 Chat-triggered build — grabbing latest row regardless of status...")
+        approved = get_latest_post(token)
+        if not approved:
+            print("✅ No buildable rows found.")
+            return
+    else:
+        print(f"📋 Reading approved posts...")
+        approved = get_approved_posts(token)
+        if not approved:
+            print("✅ No approved carousel/reel posts found — nothing to build.")
+            return
     print(f"   Found {len(approved)} post(s) to build")
 
     print(f"📸 Loading photo catalog...")
