@@ -6,7 +6,7 @@ import os, time, requests
 import pytz
 from datetime import datetime
 
-APIFY_API_KEY = os.environ["APIFY_API_KEY"]
+APIFY_API_KEY = os.environ.get("APIFY_API_KEY", "")
 APIFY_BASE    = "https://api.apify.com/v2"
 MIN_VIEWS     = 10_000
 et            = pytz.timezone("America/New_York")
@@ -14,21 +14,31 @@ et            = pytz.timezone("America/New_York")
 
 def _run_actor(actor_id, input_data, timeout_s=300):
     """Start an Apify actor run and poll until done, then return items."""
-    run = requests.post(
+    resp = requests.post(
         f"{APIFY_BASE}/acts/{actor_id}/runs",
         params={"token": APIFY_API_KEY},
         json=input_data,
         timeout=30,
-    ).json()["data"]
-    run_id = run["id"]
+    )
+    body = resp.json()
+    if "error" in body:
+        err = body["error"]
+        raise RuntimeError(f"Apify API error [{err.get('type','?')}]: {err.get('message','?')}")
+    if "data" not in body:
+        raise RuntimeError(f"Apify unexpected response: {str(body)[:200]}")
+
+    run_id = body["data"]["id"]
 
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         time.sleep(8)
-        status = requests.get(
+        status_resp = requests.get(
             f"{APIFY_BASE}/actor-runs/{run_id}",
             params={"token": APIFY_API_KEY},
-        ).json()["data"]["status"]
+        ).json()
+        if "error" in status_resp:
+            raise RuntimeError(f"Apify status error: {status_resp['error']}")
+        status = status_resp.get("data", {}).get("status", "UNKNOWN")
         if status == "SUCCEEDED":
             break
         if status in ("FAILED", "ABORTED", "TIMED-OUT"):
@@ -117,7 +127,7 @@ def scrape_all_targets(targets):
                     total_rejected += rejected
                     all_results.extend(passed)
                     print(f"[scraper] {target_type}/{niche}/{value}: "
-                          f"{len(raw)} scraped → {len(passed)} passed / {rejected} rejected")
+                          f"{len(raw)} scraped -> {len(passed)} passed / {rejected} rejected")
                 except Exception as e:
                     print(f"[scraper] ERROR on {target_type}/{niche}/{value}: {e}")
 
