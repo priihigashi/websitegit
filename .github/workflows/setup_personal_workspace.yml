@@ -1,0 +1,35 @@
+name: Setup Personal Workspace
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    name: "Create Personal folder + Book Tracking + Merch Planning"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            gspread \
+            google-auth \
+            google-auth-httplib2 \
+            google-api-python-client \
+            python-dotenv
+
+      - name: Run setup
+        env:
+          GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
+          SHEETS_TOKEN:  ${{ secrets.SHEETS_TOKEN }}
+        run: python scripts/setup_personal_workspace.py
