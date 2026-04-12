@@ -5,6 +5,7 @@ youtube_research.py — General-purpose YouTube/Shorts/Reels research agent
 Searches for recent videos on any topic, pulls transcripts (no download needed),
 Claude analyzes each for technique, tools, quality, key takeaways.
 
+Flow: search 5 → analyze → expand keywords → search 5 more → expand → search 5 more = 15 total
 Saves to:
   - Drive: Resources/Video Creation Flow/<topic>/ → raw transcripts + master findings doc
   - Sheet: Ideas & Inbox → 📥 Inspiration Library tab (one row per video)
@@ -58,6 +59,7 @@ GITHUB_TOKEN      = os.environ.get("GITHUB_TOKEN", "")
 SHEET_ID          = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 DRIVE_FOLDER_ID   = "1-QRf4xToJf_7cnS5UW7BiDUjd6lXot6o"  # Resources/Video Creation Flow
 INSP_TAB          = "📥 Inspiration Library"
+TARGET_VIDEOS     = 15
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
@@ -94,8 +96,9 @@ def search_youtube(query: str, max_results: int = 5) -> list[dict]:
 def get_transcript(video_id: str) -> str:
     """Pull transcript via youtube-transcript-api (no download)"""
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=["en", "pt", "es"])
-        return " ".join(t["text"] for t in transcript_list)
+        api = YouTubeTranscriptApi()
+        transcript = api.fetch(video_id, languages=["en", "pt", "es"])
+        return " ".join(t.text for t in transcript)
     except Exception as e:
         return f"[transcript unavailable: {e}]"
 
@@ -122,9 +125,11 @@ Extract and return JSON with:
   "use_case": "what this is best for (talking head / house tour / job site / etc)",
   "relevant_to_us": true/false,
   "relevance_reason": "why or why not relevant to Oak Park Construction / Hig Negocios",
-  "watch_priority": "high / medium / low"
+  "watch_priority": "high / medium / low",
+  "relevance_score": 7
 }}
 
+relevance_score is 1-10: how useful is this for our use case (10 = immediately implementable).
 Return only valid JSON, no markdown."""
 
     try:
@@ -135,7 +140,46 @@ Return only valid JSON, no markdown."""
         )
         return json.loads(msg.content[0].text)
     except Exception as e:
-        return {"summary": f"Analysis failed: {e}", "watch_priority": "low"}
+        return {"summary": f"Analysis failed: {e}", "watch_priority": "low", "relevance_score": 0}
+
+# ── KEYWORD EXPANSION ─────────────────────────────────────────────────────────
+def expand_keywords(topic: str, results_so_far: list, round_num: int) -> list[str]:
+    """Ask Claude to generate 5 new search queries based on videos analyzed so far"""
+    if not ANTHROPIC_API_KEY:
+        return []
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    
+    summaries = []
+    for r in results_so_far[-10:]:
+        score = r["analysis"].get("relevance_score", 0)
+        summaries.append(f"- [{score}/10] {r['title']}: {r['analysis'].get('summary', '')[:150]}")
+    
+    prompt = f"""You are a YouTube research assistant expanding research on: {topic}
+Round: {round_num} of 3. Target: 15 total videos.
+
+Videos analyzed so far:
+{chr(10).join(summaries)}
+
+Generate 5 new YouTube search queries to find MORE useful videos.
+- If high-scoring videos exist, go deeper on that specific angle
+- If all scores are low, pivot to a different angle of the same topic
+- Avoid queries that would return the same videos already found
+- Each query should target a specific subtopic or technique
+
+Return ONLY a JSON array of 5 query strings, nothing else:
+["query 1", "query 2", "query 3", "query 4", "query 5"]"""
+
+    try:
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = msg.content[0].text.strip()
+        return json.loads(raw)
+    except Exception as e:
+        print(f"  Keyword expansion failed: {e}")
+        return []
 
 # ── GOOGLE SHEETS ─────────────────────────────────────────────────────────────
 def get_sheet():
@@ -178,12 +222,6 @@ def upload_to_drive(content: str, filename: str, folder_id: str, token: str):
         print(f"  No Drive token — skipping upload of {filename}")
         return None
     
-    metadata = json.dumps({
-        "name": filename,
-        "parents": [folder_id],
-        "mimeType": "text/plain"
-    }).encode()
-    
     boundary = "boundary_xyz_123"
     body = (
         f"--{boundary}\r\n"
@@ -216,8 +254,8 @@ def upload_to_drive(content: str, filename: str, folder_id: str, token: str):
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 def run(topic: str, queries: list[str], max_per_query: int = 5):
     print(f"\n=== VIDEO RESEARCH: {topic} ===")
-    print(f"Queries: {queries}")
-    print(f"Max per query: {max_per_query}\n")
+    print(f"Initial queries: {queries}")
+    print(f"Target: {TARGET_VIDEOS} transcribed videos across 3 rounds\n")
 
     sheet = get_sheet()
     drive_token = os.environ.get("DRIVE_OAUTH_TOKEN", "")
@@ -225,77 +263,142 @@ def run(topic: str, queries: list[str], max_per_query: int = 5):
     all_results = []
     seen_ids = set()
 
-    for query in queries:
-        print(f"\n--- Searching: {query} ---")
-        videos = search_youtube(query, max_per_query)
-        
-        for video in videos:
-            if video["id"] in seen_ids:
-                continue
-            seen_ids.add(video["id"])
+    def process_batch(batch_queries: list[str], round_num: int) -> int:
+        """Search + analyze a batch of queries. Returns count of new videos added."""
+        new_count = 0
+        for query in batch_queries:
+            if len(all_results) >= TARGET_VIDEOS:
+                break
+            print(f"\n  [Round {round_num}] Searching: {query}")
+            videos = search_youtube(query, max_per_query)
             
-            print(f"  [{video['id']}] {video['title'][:60]}")
-            transcript = get_transcript(video["id"])
-            
-            if "[transcript unavailable" in transcript:
-                print(f"    No transcript — skipping analysis")
-                continue
-            
-            print(f"    Analyzing with Claude...")
-            analysis = analyze_with_claude(video, transcript, topic)
-            
-            result = {**video, "analysis": analysis, "transcript_excerpt": transcript[:500]}
-            all_results.append(result)
-            
-            if sheet:
-                save_to_sheet(sheet, video, analysis, topic)
-    
-    # Build master findings doc
+            for video in videos:
+                if len(all_results) >= TARGET_VIDEOS:
+                    break
+                if video["id"] in seen_ids:
+                    continue
+                seen_ids.add(video["id"])
+                
+                print(f"  [{video['id']}] {video['title'][:60]}")
+                transcript = get_transcript(video["id"])
+                
+                if "[transcript unavailable" in transcript:
+                    print(f"    No transcript — skipping")
+                    continue
+                
+                print(f"    Analyzing with Claude...")
+                analysis = analyze_with_claude(video, transcript, topic)
+                
+                result = {**video, "analysis": analysis, "transcript_excerpt": transcript[:500]}
+                all_results.append(result)
+                new_count += 1
+                
+                if sheet:
+                    save_to_sheet(sheet, video, analysis, topic)
+        return new_count
+
+    # Round 1 — initial queries
+    print(f"\n{'='*40}")
+    print(f"ROUND 1 — Initial search ({len(queries)} queries)")
+    print(f"{'='*40}")
+    process_batch(queries, 1)
+    print(f"\nRound 1 done: {len(all_results)}/{TARGET_VIDEOS} videos")
+
+    # Round 2 — expand keywords based on round 1 findings
+    if len(all_results) < TARGET_VIDEOS and all_results:
+        print(f"\n{'='*40}")
+        print(f"ROUND 2 — Expanding keywords from Round 1 findings")
+        print(f"{'='*40}")
+        expanded = expand_keywords(topic, all_results, 2)
+        if expanded:
+            print(f"New queries: {expanded}")
+            process_batch(expanded, 2)
+            print(f"\nRound 2 done: {len(all_results)}/{TARGET_VIDEOS} videos")
+        else:
+            print(f"  Keyword expansion skipped (no API key or failed)")
+
+    # Round 3 — expand again
+    if len(all_results) < TARGET_VIDEOS and all_results:
+        print(f"\n{'='*40}")
+        print(f"ROUND 3 — Second expansion")
+        print(f"{'='*40}")
+        expanded2 = expand_keywords(topic, all_results, 3)
+        if expanded2:
+            print(f"New queries: {expanded2}")
+            process_batch(expanded2, 3)
+            print(f"\nRound 3 done: {len(all_results)}/{TARGET_VIDEOS} videos")
+        else:
+            print(f"  Keyword expansion skipped (no API key or failed)")
+
+    # Build master findings report
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M")
-    doc_lines = [
-        f"# Research: {topic}",
-        f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-        f"Queries: {', '.join(queries)}",
-        f"Videos analyzed: {len(all_results)}",
-        "\n---\n",
-    ]
-    
     high = [r for r in all_results if r["analysis"].get("watch_priority") == "high"]
-    if high:
-        doc_lines.append("## HIGH PRIORITY FINDINGS\n")
-        for r in high:
-            doc_lines.append(f"### {r['title']}")
-            doc_lines.append(f"URL: {r['url']}")
-            doc_lines.append(f"Summary: {r['analysis'].get('summary','')}")
-            doc_lines.append(f"Technique: {r['analysis'].get('technique','')}")
-            doc_lines.append(f"Tools: {', '.join(r['analysis'].get('tools_used',[]))}")
-            tips = r['analysis'].get('key_tips', [])
+    implementable = sorted(
+        [r for r in all_results if r["analysis"].get("relevance_score", 0) >= 7],
+        key=lambda r: r["analysis"].get("relevance_score", 0),
+        reverse=True
+    )
+    
+    doc_lines = [
+        f"RESEARCH REPORT: {topic}",
+        f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"Videos analyzed: {len(all_results)} (target: {TARGET_VIDEOS})",
+        f"High priority: {len(high)} | Immediately implementable (score 7+): {len(implementable)}",
+        "",
+        "=" * 60,
+        "",
+    ]
+
+    if implementable:
+        doc_lines.append("BEST IDEAS TO IMPLEMENT NOW")
+        doc_lines.append("-" * 40)
+        for i, r in enumerate(implementable[:5], 1):
+            score = r["analysis"].get("relevance_score", 0)
+            doc_lines.append(f"{i}. [{score}/10] {r['title']}")
+            doc_lines.append(f"   URL: {r['url']}")
+            doc_lines.append(f"   {r['analysis'].get('summary', '')}")
+            tips = r["analysis"].get("key_tips", [])
             if tips:
-                doc_lines.append("Tips:")
-                for tip in tips:
-                    doc_lines.append(f"  - {tip}")
+                doc_lines.append("   Key tips:")
+                for tip in tips[:3]:
+                    doc_lines.append(f"     - {tip}")
+            doc_lines.append(f"   Why: {r['analysis'].get('relevance_reason', '')}")
             doc_lines.append("")
 
-    doc_lines.append("## ALL RESULTS\n")
+    doc_lines.append("=" * 60)
+    doc_lines.append("ALL VIDEOS ANALYZED")
+    doc_lines.append("-" * 40)
     for r in all_results:
-        doc_lines.append(f"**{r['title']}** [{r['analysis'].get('watch_priority','?')}]")
-        doc_lines.append(f"  {r['url']}")
-        doc_lines.append(f"  {r['analysis'].get('summary','')}")
+        score = r["analysis"].get("relevance_score", 0)
+        priority = r["analysis"].get("watch_priority", "?")
+        doc_lines.append(f"[{score}/10 | {priority}] {r['title']}")
+        doc_lines.append(f"  URL: {r['url']}")
+        doc_lines.append(f"  {r['analysis'].get('summary', '')}")
+        tools = r["analysis"].get("tools_used", [])
+        if tools:
+            doc_lines.append(f"  Tools: {', '.join(tools)}")
         doc_lines.append("")
 
     doc_content = "\n".join(doc_lines)
     filename = f"research_{topic.replace(' ','_')}_{timestamp}.txt"
     
-    print(f"\nSaving master findings doc: {filename}")
+    print(f"\nSaving report: {filename}")
     if drive_token:
         upload_to_drive(doc_content, filename, DRIVE_FOLDER_ID, drive_token)
     else:
-        # Save locally as artifact for GitHub Actions
         with open(f"/tmp/{filename}", "w") as f:
             f.write(doc_content)
         print(f"  Saved locally to /tmp/{filename} (no Drive token)")
     
-    print(f"\n✅ Done. {len(all_results)} videos analyzed.")
+    print(f"\n{'='*60}")
+    print(f"DONE: {len(all_results)} videos analyzed")
+    print(f"Implementable (7+): {len(implementable)}")
+    print(f"High priority: {len(high)}")
+    if implementable:
+        top = implementable[0]
+        print(f"Top pick: {top['title']}")
+        print(f"  {top['url']}")
+    print(f"{'='*60}")
     return all_results
 
 if __name__ == "__main__":
