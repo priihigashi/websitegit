@@ -30,82 +30,80 @@ jobs:
     steps:
       - name: Generate image via inference.sh
         id: generate
-        run: |
-          pip install -q inferencesh requests
-          
-          python3 << 'PYEOF'
-          import os, json, requests, time
-          
-          api_key = os.environ['PRI_OP_INFSH_API_KEY']
-          prompt = os.environ['PROMPT']
-          aspect_ratio = os.environ['ASPECT_RATIO']
-          
-          headers = {
-              "Authorization": f"Bearer {api_key}",
-              "Content-Type": "application/json"
-          }
-          
-          payload = {
-              "app": "google/gemini-3-1-flash-image-preview",
-              "input": {
-                  "prompt": prompt,
-                  "aspect_ratio": aspect_ratio,
-                  "resolution": "2K"
-              }
-          }
-          
-          print(f"Calling inference.sh API...")
-          resp = requests.post("https://api.inference.sh/apps/run", json=payload, headers=headers, timeout=120)
-          print(f"Status: {resp.status_code}")
-          data = resp.json()
-          print(f"Response keys: {list(data.keys())}")
-          
-          # Poll if async (task-based)
-          task_id = data.get('id') or data.get('task_id')
-          image_url = None
-          
-          if task_id and not data.get('output'):
-              print(f"Task ID: {task_id} — polling...")
-              for i in range(30):
-                  time.sleep(10)
-                  poll = requests.get(f"https://api.inference.sh/tasks/{task_id}", headers=headers, timeout=30)
-                  pdata = poll.json()
-                  status = pdata.get('status', '')
-                  print(f"Poll {i+1}: {status}")
-                  if status in ('completed', 'succeeded', 'success', 'done'):
-                      data = pdata
-                      break
-                  elif status in ('failed', 'error', 'cancelled'):
-                      print(f"Task failed: {pdata}")
-                      exit(1)
-          
-          # Extract image URL
-          out = data.get('output', {})
-          if isinstance(out, dict):
-              imgs = out.get('images', [])
-              if imgs:
-                  img = imgs[0]
-                  image_url = img.get('url', img) if isinstance(img, dict) else img
-          elif isinstance(out, list) and out:
-              image_url = out[0]
-          
-          if not image_url:
-              for key in ['image_url', 'url', 'image']:
-                  if key in data:
-                      image_url = data[key]
-                      break
-          
-          print(f"Image URL: {image_url}")
-          
-          # Write to env file for next steps
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"image_url={image_url or ''}\n")
-              f.write(f"task_id={task_id or ''}\n")
-          PYEOF
         env:
           PRI_OP_INFSH_API_KEY: ${{ secrets.PRI_OP_INFSH_API_KEY }}
           PROMPT: ${{ inputs.prompt }}
           ASPECT_RATIO: ${{ inputs.aspect_ratio }}
+        run: |
+          pip install -q requests
+          python3 << 'PYEOF'
+          import os, json, requests, time
+
+          api_key = os.environ['PRI_OP_INFSH_API_KEY']
+          headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+          # Step 1: Submit job
+          payload = {
+              "app": "google/gemini-3-1-flash-image-preview",
+              "input": {
+                  "prompt": os.environ['PROMPT'],
+                  "aspect_ratio": os.environ['ASPECT_RATIO'],
+                  "resolution": "2K"
+              }
+          }
+          resp = requests.post("https://api.inference.sh/apps/run", json=payload, headers=headers, timeout=120)
+          print(f"Submit status: {resp.status_code}")
+          raw = resp.json()
+          print(f"Top keys: {list(raw.keys())}")
+
+          # Unwrap data envelope
+          data = raw.get('data', raw)
+          print(f"Data keys: {list(data.keys()) if isinstance(data, dict) else type(data)}")
+          print(f"Data preview: {json.dumps(data)[:600]}")
+
+          # Get task ID for polling
+          task_id = data.get('id') or data.get('task_id') or raw.get('id')
+          image_url = None
+
+          # Check if already done
+          def extract_url(d):
+              out = d.get('output', {})
+              if isinstance(out, dict):
+                  imgs = out.get('images', [])
+                  if imgs:
+                      img = imgs[0]
+                      return img.get('url', img) if isinstance(img, dict) else img
+              elif isinstance(out, list) and out:
+                  return out[0]
+              for key in ['image_url', 'url', 'image']:
+                  if key in d and d[key]:
+                      return d[key]
+              return None
+
+          image_url = extract_url(data)
+
+          # Poll if async
+          if not image_url and task_id:
+              print(f"Polling task {task_id}...")
+              for i in range(30):
+                  time.sleep(10)
+                  poll = requests.get(f"https://api.inference.sh/tasks/{task_id}", headers=headers, timeout=30)
+                  praw = poll.json()
+                  pdata = praw.get('data', praw)
+                  status = pdata.get('status', praw.get('status', ''))
+                  print(f"Poll {i+1}: status={status} keys={list(pdata.keys()) if isinstance(pdata,dict) else '?'}")
+                  if status in ('completed', 'succeeded', 'success', 'done'):
+                      image_url = extract_url(pdata)
+                      if image_url:
+                          break
+                  elif status in ('failed', 'error', 'cancelled'):
+                      print(f"Task failed: {json.dumps(pdata)[:300]}")
+                      exit(1)
+
+          print(f"Final image URL: {image_url}")
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"image_url={image_url or ''}\n")
+          PYEOF
 
       - name: Download image
         if: steps.generate.outputs.image_url != ''
@@ -146,3 +144,4 @@ jobs:
           echo "## Image Generation" >> $GITHUB_STEP_SUMMARY
           echo "- **File:** ${{ inputs.filename }}.jpg" >> $GITHUB_STEP_SUMMARY
           echo "- **Image URL:** ${{ steps.generate.outputs.image_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Drive folder:** ${{ inputs.drive_folder_id }}" >> $GITHUB_STEP_SUMMARY
