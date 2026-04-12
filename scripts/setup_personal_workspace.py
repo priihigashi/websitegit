@@ -40,14 +40,29 @@ except ImportError:
 CLAUDE_WORKSPACE_FOLDER_ID = "1prdRT9ejOT-s-kzt0DIZ4QZuerdjv4PP"
 IDEAS_INBOX_ID = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 
-# Reel to save
-REEL_URL = "https://www.instagram.com/reel/DW7ecGnDV3s/"
-REEL_CREATOR = "@getbetterwithbooks"
-REEL_NOTES = (
-    "Howard Zinn - A People's History of the United States. "
-    "Verify factual claims (effects only, not opinions). "
-    "Credit @getbetterwithbooks in caption."
-)
+# Reels to save
+REELS_TO_SAVE = [
+    {
+        "url": "https://www.instagram.com/reel/DW7ecGnDV3s/",
+        "creator": "@getbetterwithbooks",
+        "niche": "Oak Park",
+        "notes": (
+            "Howard Zinn - A People's History of the United States. "
+            "Verify factual claims (effects only, not opinions). "
+            "Credit @getbetterwithbooks in caption."
+        ),
+        "hook": "What exactly are we defending?",
+        "credits": "Credit: @getbetterwithbooks | Source: Instagram Reel | Verify facts before reposting",
+    },
+    {
+        "url": "https://www.instagram.com/reel/DW4QK8LDbRC/",
+        "creator": "",
+        "niche": "Brazil",
+        "notes": "Brazil content — captured via Claude Code session 2026-04-12",
+        "hook": "",
+        "credits": "",
+    },
+]
 
 # Calendar — Thursday April 16, 2026
 THURSDAY_DATE = "2026-04-16"
@@ -308,8 +323,8 @@ def setup_merch_planning(drive, sheets, folder_id):
 
 # ─── 3. SAVE REEL TO INSPIRATION LIBRARY ────────────────────────────────────
 
-def save_reel_to_inspiration_library(sheets):
-    print("\n[REEL CAPTURE] Saving to Inspiration Library...")
+def save_reels_to_inspiration_library(sheets):
+    print("\n[REEL CAPTURE] Saving reels to Inspiration Library...")
     try:
         import gspread
         sa_b64 = os.getenv("GOOGLE_SA_KEY")
@@ -321,25 +336,25 @@ def save_reel_to_inspiration_library(sheets):
         gc = gspread.authorize(creds)
         sh = gc.open_by_key(IDEAS_INBOX_ID)
         lib = sh.worksheet("📥 Inspiration Library")
-        lib.append_row([
-            datetime.now().strftime("%Y-%m-%d"),       # Date
-            REEL_URL,                                   # URL
-            "Howard Zinn - A People's History of the United States "
-            "book recommendation. 21.3K likes, 4.5K saves.",  # Summary
-            "Oak Park",                                 # Niche
-            "Talking Head/Expert",                      # Content Type
-            "SAVED",                                    # Status
-            REEL_NOTES,                                 # Notes
-            "What exactly are we defending?",           # Hook
-            "Credit: @getbetterwithbooks | "
-            "Source: Instagram Reel | "
-            "Verify facts before reposting",            # Credits
-        ])
-        print(f"  Saved reel {REEL_URL}")
-        print(f"  Credits: {REEL_CREATOR}")
+
+        for reel in REELS_TO_SAVE:
+            lib.append_row([
+                datetime.now().strftime("%Y-%m-%d"),
+                reel["url"],
+                reel["notes"][:200],
+                reel["niche"],
+                "Talking Head/Expert",
+                "SAVED",
+                reel["notes"],
+                reel["hook"],
+                reel["credits"],
+            ])
+            print(f"  Saved: {reel['url']} (niche: {reel['niche']}, credit: {reel['creator']})")
+
     except Exception as e:
         print(f"  WARNING reel save: {e}")
-        print(f"  Manual entry needed: {REEL_URL} | {REEL_CREATOR}")
+        for reel in REELS_TO_SAVE:
+            print(f"  Manual entry needed: {reel['url']} | {reel['creator']}")
 
 
 # ─── 4. CALENDAR EVENTS ─────────────────────────────────────────────────────
@@ -426,7 +441,7 @@ def main():
     merch_sheet_id, merch_url = setup_merch_planning(drive, sheets, personal_id)
 
     # 4. Save reel to Inspiration Library
-    save_reel_to_inspiration_library(sheets)
+    save_reels_to_inspiration_library(sheets)
 
     # 5. Calendar events for Thursday
     create_calendar_events()
