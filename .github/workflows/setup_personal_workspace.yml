@@ -1,11 +1,14 @@
 name: Setup Personal Workspace
 
 on:
+  push:
+    paths:
+      - 'scripts/.run_setup'
   workflow_dispatch:
 
 jobs:
   setup:
-    name: "Create Personal folder + Book Tracking + Merch Planning"
+    name: "Create Personal folder + Book Tracking + Merch Planning + Capture Reels"
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -32,4 +35,5 @@ jobs:
         env:
           GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
           SHEETS_TOKEN:  ${{ secrets.SHEETS_TOKEN }}
+          GITHUB_TOKEN:  ${{ github.token }}
         run: python scripts/setup_personal_workspace.py

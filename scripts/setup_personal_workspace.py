@@ -62,6 +62,18 @@ REELS_TO_SAVE = [
         "hook": "",
         "credits": "",
     },
+    {
+        "url": "https://www.instagram.com/reel/DW18gaIv7Mb/",
+        "creator": "",
+        "niche": "Oak Park",
+        "notes": (
+            "American content about immigration and racism. "
+            "Could translate and show in Portuguese for Brazil audience. "
+            "Dual market: US original + PT-BR translated version."
+        ),
+        "hook": "",
+        "credits": "",
+    },
 ]
 
 # Calendar — Thursday April 16, 2026
@@ -417,6 +429,100 @@ def create_calendar_events():
         print(f"    Link: {result.get('htmlLink')}")
 
 
+# ─── 5. DISPATCH CAPTURE PIPELINE FOR EACH REEL ─────────────────────────────
+
+def dispatch_capture_pipeline():
+    """Dispatch capture_pipeline.yml for each reel. Uses GITHUB_TOKEN (auto-provided in Actions)."""
+    import urllib.request
+    token = os.getenv("GITHUB_TOKEN", "")
+    if not token:
+        print("\n[CAPTURE] SKIP dispatch: GITHUB_TOKEN not set")
+        return
+
+    print("\n[CAPTURE] Dispatching capture pipeline for each reel...")
+    for reel in REELS_TO_SAVE:
+        payload = json.dumps({
+            "ref": "main",
+            "inputs": {
+                "url": reel["url"],
+                "project": "content",
+                "story_id": "",
+                "notes": reel["notes"],
+                "credits": "true",
+            }
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.github.com/repos/priihigashi/oak-park-ai-hub/actions/workflows/capture_pipeline.yml/dispatches",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10):
+                print(f"  Dispatched capture for: {reel['url']}")
+        except Exception as e:
+            print(f"  WARNING capture dispatch: {e}")
+            print(f"  Manual trigger needed: {reel['url']}")
+
+
+# ─── 6. DISPATCH CALENDAR EVENTS VIA WORKFLOW ───────────────────────────────
+
+def dispatch_calendar_events():
+    """Fallback: dispatch gcal_event.yml if direct Calendar API fails."""
+    import urllib.request
+    token = os.getenv("GITHUB_TOKEN", "")
+    if not token:
+        print("  SKIP calendar dispatch: GITHUB_TOKEN not set")
+        return
+
+    print("\n[CALENDAR FALLBACK] Dispatching gcal_event workflow...")
+    events = [
+        {
+            "title": "Extract Merch Ideas from TickTick → Merch Planning Spreadsheet",
+            "date": THURSDAY_DATE,
+            "start_time": "10:00",
+            "end_time": "11:00",
+            "description": (
+                "Go through TickTick merch ideas list. Sort into Mugs/T-Shirts/Hats tabs. "
+                "Categorize by Political Ideology, Humor, Brazilian Culture, Motivational. "
+                "Mark market: US, Brazil, or Both. First mug seeded: Anti Christian Nationalist Club."
+            ),
+        },
+        {
+            "title": "Extract Book List from TickTick → Book Tracking Spreadsheet",
+            "date": THURSDAY_DATE,
+            "start_time": "11:00",
+            "end_time": "12:00",
+            "description": (
+                "Go through TickTick book list. Add each to Book Tracking spreadsheet. "
+                "Fill: Title, Author, Genre, Pages, Prices, Audible, Goodreads rating. "
+                "First book seeded: A People's History of the United States by Howard Zinn."
+            ),
+        },
+    ]
+    for ev in events:
+        payload = json.dumps({"ref": "main", "inputs": ev}).encode()
+        req = urllib.request.Request(
+            "https://api.github.com/repos/priihigashi/oak-park-ai-hub/actions/workflows/gcal_event.yml/dispatches",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10):
+                print(f"  Dispatched: {ev['title']}")
+        except Exception as e:
+            print(f"  WARNING: {e}")
+
+
 # ─── MAIN ────────────────────────────────────────────────────────────────────
 
 def main():
@@ -440,11 +546,15 @@ def main():
     # 3. Merch Planning
     merch_sheet_id, merch_url = setup_merch_planning(drive, sheets, personal_id)
 
-    # 4. Save reel to Inspiration Library
+    # 4. Save reels to Inspiration Library
     save_reels_to_inspiration_library(sheets)
 
-    # 5. Calendar events for Thursday
+    # 5. Calendar events for Thursday (try direct API, fallback to workflow dispatch)
     create_calendar_events()
+    dispatch_calendar_events()
+
+    # 6. Dispatch capture pipeline for each reel (transcribe + classify)
+    dispatch_capture_pipeline()
 
     # Summary
     print(f"\n{'='*60}")
@@ -453,7 +563,9 @@ def main():
     print(f"Personal folder:    {folder_url}")
     print(f"Book Tracking:      {book_url}")
     print(f"Merch Planning:     {merch_url}")
-    print(f"Reel saved:         {REEL_URL} (credit: {REEL_CREATOR})")
+    print(f"Reels saved:        {len(REELS_TO_SAVE)} reels to Inspiration Library")
+    for r in REELS_TO_SAVE:
+        print(f"  - {r['url']} ({r['niche']})")
     print(f"Calendar events:    Thursday {THURSDAY_DATE} @ 10am + 11am ET")
     print(f"{'='*60}")
 
