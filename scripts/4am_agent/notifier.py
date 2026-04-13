@@ -1,12 +1,20 @@
 """
-notifier.py -- Push notifications via ntfy.sh.
-NTFY_TOPIC secret controls which topic to publish to.
-Install the ntfy app on your phone and subscribe to your topic.
-"""
-import os, requests
+notifier.py -- Notifications for the 4AM agent.
+  1. ntfy.sh push  — immediate phone alert (success + failure)
+  2. HTML email    — rich success email via send_email.yml GitHub Action (success only)
 
-NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "oak-park-content-4am")
-NTFY_BASE  = "https://ntfy.sh"
+NTFY_TOPIC secret controls which ntfy topic to publish to.
+"""
+import os, json, requests
+
+NTFY_TOPIC   = os.environ.get("NTFY_TOPIC", "oak-park-content-4am")
+NTFY_BASE    = "https://ntfy.sh"
+GITHUB_REPO  = "priihigashi/oak-park-ai-hub"
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+GITHUB_RUN_ID = os.environ.get("GITHUB_RUN_ID", "")
+
+SHEETS_BASE = "https://docs.google.com/spreadsheets/d/1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU/edit"
+CALENDAR_URL = "https://calendar.google.com"
 
 CREDIT_ERRORS = [
     "not-enough-usage-to-run-paid-actor",
@@ -21,8 +29,9 @@ def _is_credit_error(error_str):
     return any(k in e for k in CREDIT_ERRORS)
 
 
+# ─── ntfy.sh ──────────────────────────────────────────────────────────────────
+
 def send(title, message, priority="default", tags="robot"):
-    # HTTP headers must be latin-1 -- encode title as UTF-8 then pass as bytes
     resp = requests.post(
         f"{NTFY_BASE}/{NTFY_TOPIC}",
         data=message.encode("utf-8"),
@@ -35,6 +44,136 @@ def send(title, message, priority="default", tags="robot"):
     )
     return resp.status_code == 200
 
+
+# ─── HTML email ───────────────────────────────────────────────────────────────
+
+def _build_html_success(topics, rows_added, clips_found, run_date):
+    """Build rich HTML email body for a successful 4AM run."""
+    github_run_url = (
+        f"https://github.com/{GITHUB_REPO}/actions/runs/{GITHUB_RUN_ID}"
+        if GITHUB_RUN_ID else f"https://github.com/{GITHUB_REPO}/actions"
+    )
+    topic_items = "".join(
+        f'<li style="margin:4px 0;color:#444;font-size:14px">{t}</li>'
+        for t in topics
+    )
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f0f0;font-family:Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:20px 0">
+<tr><td>
+<table width="600" align="center" cellpadding="0" cellspacing="0"
+       style="margin:0 auto;background:#ffffff;border-radius:8px;overflow:hidden;
+              box-shadow:0 2px 8px rgba(0,0,0,0.12)">
+
+  <!-- Header -->
+  <tr>
+    <td style="background:#1a1a2e;padding:24px 28px">
+      <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700">
+        &#x2705; 4AM Content Ready
+      </h1>
+      <p style="color:#8888aa;margin:6px 0 0;font-size:13px">
+        {run_date} &nbsp;&bull;&nbsp; Oak Park Construction
+      </p>
+    </td>
+  </tr>
+
+  <!-- Pipeline results -->
+  <tr>
+    <td style="padding:24px 28px;border-left:4px solid #4caf50">
+      <h2 style="color:#222;font-size:15px;margin:0 0 10px;text-transform:uppercase;
+                 letter-spacing:0.5px">&#x1F3AC; Content Generated</h2>
+      <p style="margin:0 0 4px;font-size:15px;color:#333">
+        <strong>{rows_added}</strong> scripts added &nbsp;&bull;&nbsp;
+        <strong>{clips_found}</strong> B-roll clips found
+      </p>
+      <ul style="margin:10px 0 0 0;padding-left:18px">
+        {topic_items}
+      </ul>
+    </td>
+  </tr>
+
+  <!-- Quick links -->
+  <tr>
+    <td style="padding:20px 28px;background:#f8f8f8;border-top:1px solid #eeeeee">
+      <h2 style="color:#222;font-size:14px;margin:0 0 12px;text-transform:uppercase;
+                 letter-spacing:0.5px">&#x1F517; Quick Links</h2>
+      <a href="{SHEETS_BASE}" target="_blank"
+         style="display:inline-block;margin:4px 6px 4px 0;padding:9px 16px;
+                background:#4caf50;color:#ffffff;border-radius:5px;
+                text-decoration:none;font-size:13px;font-weight:600">
+        &#x1F4CB; Content Queue
+      </a>
+      <a href="{CALENDAR_URL}" target="_blank"
+         style="display:inline-block;margin:4px 6px 4px 0;padding:9px 16px;
+                background:#2196f3;color:#ffffff;border-radius:5px;
+                text-decoration:none;font-size:13px;font-weight:600">
+        &#x1F4C5; Calendar
+      </a>
+      <a href="{github_run_url}" target="_blank"
+         style="display:inline-block;margin:4px 6px 4px 0;padding:9px 16px;
+                background:#24292e;color:#ffffff;border-radius:5px;
+                text-decoration:none;font-size:13px;font-weight:600">
+        &#x1F419; Run Log
+      </a>
+      <a href="{SHEETS_BASE}" target="_blank"
+         style="display:inline-block;margin:4px 6px 4px 0;padding:9px 16px;
+                background:#9c27b0;color:#ffffff;border-radius:5px;
+                text-decoration:none;font-size:13px;font-weight:600">
+        &#x1F4CA; Runs Log
+      </a>
+    </td>
+  </tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="padding:14px 28px;background:#1a1a2e;text-align:center">
+      <p style="color:#555566;font-size:11px;margin:0">
+        Oak Park Construction &bull; 4AM Content Agent &bull; Auto-generated
+      </p>
+    </td>
+  </tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+
+
+def _dispatch_html_email(subject, html_body, to="priscila@oakpark-construction.com"):
+    """Trigger send_email.yml GitHub Action with HTML body."""
+    if not GITHUB_TOKEN:
+        print("[notifier] No GITHUB_TOKEN — skipping HTML email dispatch.")
+        return False
+    try:
+        r = requests.post(
+            f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/send_email.yml/dispatches",
+            headers={
+                "Authorization": f"token {GITHUB_TOKEN}",
+                "Accept": "application/vnd.github+json",
+            },
+            json={
+                "ref": "main",
+                "inputs": {
+                    "to":        to,
+                    "subject":   subject,
+                    "body":      "",
+                    "html_body": html_body,
+                },
+            },
+            timeout=15,
+        )
+        ok = r.status_code == 204
+        print(f"[notifier] HTML email dispatch: {'OK' if ok else f'FAILED {r.status_code}'}")
+        return ok
+    except Exception as e:
+        print(f"[notifier] HTML email dispatch error: {e}")
+        return False
+
+
+# ─── Public API ───────────────────────────────────────────────────────────────
 
 def notify_run_complete(topics, rows_added, clips_found, error=None):
     if error and _is_credit_error(error):
@@ -57,13 +196,23 @@ def notify_run_complete(topics, rows_added, clips_found, error=None):
             tags="warning",
         )
 
+    # Success: ntfy push + HTML email
     topic_list = "\n".join(f"- {t}" for t in topics)
-    message    = (
+    ntfy_msg   = (
         f"{rows_added} scripts added to Content Queue\n"
         f"{clips_found} B-roll clips found\n\n"
         f"Topics:\n{topic_list}"
     )
-    return send(title="4AM Content Ready", message=message, tags="tada,robot")
+    ntfy_ok = send(title="4AM Content Ready", message=ntfy_msg, tags="tada,robot")
+
+    from datetime import datetime
+    import pytz
+    run_date  = datetime.now(pytz.timezone("America/New_York")).strftime("%Y-%m-%d")
+    html_body = _build_html_success(topics, rows_added, clips_found, run_date)
+    subject   = f"✅ 4AM Content Ready — {run_date} ({rows_added} scripts, {clips_found} clips)"
+    _dispatch_html_email(subject, html_body)
+
+    return ntfy_ok
 
 
 def notify_new_skill(skill_name, pattern_summary):
