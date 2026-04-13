@@ -1,0 +1,10 @@
+{
+  "claude_md_mirror": {
+    "task_created": "2026-04-13",
+    "type": "config"
+  },
+  "chat_log_reader": {
+    "task_created": "2026-04-13",
+    "type": "config"
+  }
+}
