@@ -776,26 +776,48 @@ def update_book_tracker(story_id, url, doc_url, analysis, notes):
         print(f"  WARNING Sheets: {e}")
 
 
-def update_inspiration_library(url, transcript, classification, hub_url="", doc_url=""):
+def _detect_platform(url: str) -> str:
+    """Detect platform name from URL for Inspiration Library Platform column."""
+    u = url.lower()
+    if "instagram.com" in u:
+        return "Instagram"
+    elif "youtube.com" in u or "youtu.be" in u:
+        return "YouTube"
+    elif "tiktok.com" in u:
+        return "TikTok"
+    elif "twitter.com" in u or "x.com" in u:
+        return "Twitter/X"
+    return "Web"
+
+
+def update_inspiration_library(url, transcript, classification, hub_url="", doc_url="", metadata=None):
     gc = get_sheets_client()
     if not gc:
         return
+    metadata = metadata or {}
     try:
         sh = gc.open_by_key(IDEAS_INBOX_ID)
         lib = sh.worksheet("📥 Inspiration Library")
+        # Column order must match headers:
+        # A=Date Added, B=Platform, C=URL/Link, D=Creator/Account,
+        # E=Content Type, F=Description, G=Transcription, H=Original Caption,
+        # I=Visual Hook, J=Hook Type, K=Views, L=Content Hub Link
+        creator = metadata.get("creator_handle", "")
+        if creator and not creator.startswith("@"):
+            creator = f"@{creator}"
         lib.append_row([
-            datetime.now().strftime("%Y-%m-%d"), url,
-            classification.get("summary", ""),
-            classification.get("niche", "Oak Park"),
-            classification.get("content_type", ""),
-            classification.get("classification", "NEEDS_REVIEW"),
-            transcript[:300],
-            classification.get("hook", ""),
-            classification.get("notes", ""),
-            "",            # J — Hook Type (header-aligned placeholder)
-            "",            # K — Views (header-aligned placeholder)
-            hub_url,       # L — Content Hub folder link
-            doc_url,       # M — Content Brief doc link
+            datetime.now().strftime("%Y-%m-%d"),         # A — Date Added
+            _detect_platform(url),                       # B — Platform
+            url,                                         # C — URL / Link
+            creator,                                     # D — Creator / Account
+            classification.get("content_type", ""),      # E — Content Type
+            classification.get("summary", ""),           # F — Description
+            transcript[:300],                            # G — Transcription
+            metadata.get("caption", "")[:300],           # H — Original Caption
+            classification.get("hook", ""),              # I — Visual Hook
+            "",                                          # J — Hook Type
+            str(metadata.get("views", "")) if metadata.get("views") else "",  # K — Views
+            hub_url or doc_url,                          # L — Content Hub Link
         ])
         print("  Inspiration Library updated")
     except Exception as e:
@@ -1127,7 +1149,7 @@ def create_content_workspace(story_id: str, title: str, transcript: str,
     return folder_url, doc_url
 
 
-def run_content(args, transcript, video_path: str = ""):
+def run_content(args, transcript, video_path: str = "", metadata: dict = None):
     print("\n[CONTENT] Running classification...")
     cl = analyze_content(transcript, args.url, args.notes or "")
     sid = args.story_id or f"CNT-{datetime.now().strftime('%Y%m%d%H%M')}"
@@ -1140,7 +1162,7 @@ def run_content(args, transcript, video_path: str = ""):
     folder_url, doc_url = create_content_workspace(sid, title, transcript, cl, args.url, args.notes or "")
 
     # Log to Inspiration Library WITH Drive links (must come after hub + workspace created)
-    update_inspiration_library(args.url, transcript, cl, hub_url=hub_url, doc_url=doc_url)
+    update_inspiration_library(args.url, transcript, cl, hub_url=hub_url, doc_url=doc_url, metadata=metadata)
 
     create_calendar_task(sid, args.project, args.url, doc_url or "", transcript[:400], args.notes or "", hub_url=hub_url)
     # Auto-trigger Topic Cluster Scraper for Brazil captures
@@ -1212,7 +1234,7 @@ def main():
         elif args.project == "sovereign":
             run_sovereign(args, transcript)
         else:
-            run_content(args, transcript, video_path=video_path)
+            run_content(args, transcript, video_path=video_path, metadata=metadata)
 
     # Print credits summary if available
     if metadata:
