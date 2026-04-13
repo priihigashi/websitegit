@@ -138,8 +138,8 @@ Return a JSON array (can be empty [] if no patterns found):
 ]"""
 
     response = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=3000,
+        model="claude-sonnet-4-6",
+        max_tokens=4000,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -149,7 +149,23 @@ Return a JSON array (can be empty [] if no patterns found):
     elif "```" in text:
         text = text.split("```")[1].split("```")[0].strip()
 
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        print("[pattern_learner] JSON parse failed — retrying with tighter prompt...")
+        resp2 = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=5000,
+            messages=[{"role": "user", "content": prompt + "\n\nReturn ONLY the JSON array. No explanation, no markdown."}],
+        )
+        text2 = resp2.content[0].text.strip()
+        if "```json" in text2: text2 = text2.split("```json")[1].split("```")[0].strip()
+        elif "```" in text2:   text2 = text2.split("```")[1].split("```")[0].strip()
+        try:
+            return json.loads(text2)
+        except json.JSONDecodeError:
+            print("[pattern_learner] Retry also failed — skipping pattern detection.")
+            return []
 
 
 # ─── Act on patterns ─────────────────────────────────────────────────────────
