@@ -11,8 +11,13 @@ on:
         description: 'Email subject'
         required: true
       body:
-        description: 'Email body (plain text)'
-        required: true
+        description: 'Email body (plain text — used if html_body is empty)'
+        required: false
+        default: ''
+      html_body:
+        description: 'HTML email body (optional — overrides body if provided)'
+        required: false
+        default: ''
       cc:
         description: 'CC address (optional)'
         required: false
@@ -35,3 +40,4 @@ jobs:
           from: Oak Park AI <priscila@oakpark-construction.com>
           subject: ${{ github.event.inputs.subject }}
           body: ${{ github.event.inputs.body }}
+          html_body: ${{ github.event.inputs.html_body }}
