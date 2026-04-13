@@ -1,0 +1,70 @@
+name: Ads API Approval Watcher
+
+# Watches Priscila's Gmail for the Google Ads API Basic Access approval email.
+# When found: writes flag file, creates Calendar event tomorrow 10am, sends
+# notification email. Dedupes via flag file committed to the repo.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # every 6 hours
+  workflow_dispatch:          # manual trigger for testing
+
+permissions:
+  contents: write             # needed to commit the flag file
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    outputs:
+      approved: ${{ steps.check.outputs.approved }}
+      subject: ${{ steps.check.outputs.subject }}
+      calendar_link: ${{ steps.check.outputs.calendar_link }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install --quiet google-auth google-auth-httplib2 google-api-python-client
+
+      - name: Check Gmail for approval + trigger actions
+        id: check
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: python scripts/ads_approval_watcher.py
+
+      - name: Commit flag file if approval detected
+        if: steps.check.outputs.approved == 'true'
+        run: |
+          git config user.name  "ads-approval-watcher"
+          git config user.email "bot@oak-park-ai-hub.local"
+          git add .github/agent_state/ads_api_approved.json
+          git commit -m "Ads API Basic Access approved — flag written" || echo "Nothing to commit"
+          git push
+
+  notify:
+    needs: watch
+    if: needs.watch.outputs.approved == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send approval notification email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: priscila@oakpark-construction.com
+          password: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          to: priscila@oakpark-construction.com
+          from: Oak Park AI <priscila@oakpark-construction.com>
+          subject: "Google Ads API Basic Access — APPROVED"
+          body: |
+            The Google Ads API approval email just landed.
+
+            Detected subject: ${{ needs.watch.outputs.subject }}
+
+            Calendar event created for tomorrow 10 AM ET with next-step checklist.
+            ${{ needs.watch.outputs.calendar_link }}
+
+            Next time you start a Claude session, say "/ads-opc check approval"
+            and Claude will read the flag file and walk you through the rollout.
+
+            -- Ads Approval Watcher
