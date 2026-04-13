@@ -46,7 +46,7 @@ jobs:
         run: |
           pip install -q requests
           python3 << 'PYEOF'
-          import os, json, requests, time
+          import os, json, requests, time, sys
 
           api_key = os.environ['PRI_OP_REPLICATE_API_KEY']
           headers = {
@@ -72,17 +72,14 @@ jobs:
           )
           data = resp.json()
           print(f"Response status: {resp.status_code}")
-          print(f"Prediction ID: {data.get('id')} | Status: {data.get('status')}")
-
-          # If not completed immediately, poll
           pred_id = data.get('id')
-          image_url = None
+          print(f"Prediction ID: {pred_id} | Status: {data.get('status')}")
 
+          image_url = None
           if data.get('status') == 'succeeded':
               output = data.get('output')
               image_url = output[0] if isinstance(output, list) else output
           else:
-              # Poll
               for i in range(30):
                   time.sleep(10)
                   poll = requests.get(
@@ -97,41 +94,54 @@ jobs:
                       image_url = output[0] if isinstance(output, list) else output
                       break
                   elif status in ('failed', 'canceled'):
-                      print(f"Failed: {pdata.get('error')}")
-                      exit(1)
+                      print(f"Seedream failed: {pdata.get('error', 'unknown error')}")
+                      sys.exit(1)
+
+          if not image_url:
+              print("ERROR: No image URL returned after polling")
+              sys.exit(1)
 
           print(f"Image URL: {image_url}")
+          # Download immediately — Replicate CDN URLs expire (~1 hour)
+          import subprocess
+          result = subprocess.run(['curl', '-L', '-o', f'/tmp/${{ inputs.filename }}.jpg', image_url], capture_output=True)
+          if result.returncode != 0:
+              print(f"Download failed: {result.stderr.decode()}")
+              sys.exit(1)
+          print(f"Downloaded locally: /tmp/${{ inputs.filename }}.jpg")
+
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"image_url={image_url or ''}\n")
+              f.write(f"image_url={image_url}\n")
           PYEOF
 
-      - name: Download Seedream output
-        if: steps.seedream.outputs.image_url != ''
-        run: |
-          curl -L "${{ steps.seedream.outputs.image_url }}" -o /tmp/${{ inputs.filename }}.jpg
-          echo "Downloaded: $(du -k /tmp/${{ inputs.filename }}.jpg | cut -f1)KB"
-
       - name: Refine background with Nano Banana 2 (optional)
-        if: steps.seedream.outputs.image_url != '' && inputs.background_edit_only == 'true'
+        if: steps.seedream.outcome == 'success' && inputs.background_edit_only == 'true'
         id: nanbanana
         env:
           PRI_OP_INFSH_API_KEY: ${{ secrets.PRI_OP_INFSH_API_KEY }}
           PROMPT: "Keep the person exactly as is — do not change the face, hair, clothing or body. Only enhance the background and lighting. ${{ inputs.prompt }}"
-          SEEDREAM_IMAGE_URL: ${{ steps.seedream.outputs.image_url }}
+          FILENAME: ${{ inputs.filename }}
         run: |
           pip install -q requests
           python3 << 'PYEOF'
-          import os, json, requests, time
+          import os, json, requests, time, base64, sys
 
           COMPLETED = 10
           api_key = os.environ['PRI_OP_INFSH_API_KEY']
           headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
+          # Use local file as base64 — avoids Replicate CDN URL expiry issue
+          filename = os.environ['FILENAME']
+          local_path = f'/tmp/{filename}.jpg'
+          with open(local_path, 'rb') as f:
+              img_b64 = base64.b64encode(f.read()).decode()
+          data_uri = f"data:image/jpeg;base64,{img_b64}"
+
           payload = {
               "app": "google/gemini-3-1-flash-image-preview",
               "input": {
                   "prompt": os.environ['PROMPT'],
-                  "images": [os.environ['SEEDREAM_IMAGE_URL']],
+                  "images": [data_uri],
                   "aspect_ratio": "2:3",
                   "resolution": "2K"
               }
@@ -160,22 +170,28 @@ jobs:
                       image_url = item.get('url', item) if isinstance(item, dict) else item
                   break
               elif status in {11, 12}:
-                  print("NB2 failed — using Seedream output as final")
-                  exit(0)
+                  print("NB2 failed — keeping Seedream output as final")
+                  sys.exit(0)
 
           if image_url:
-              print(f"NB2 refined image: {image_url}")
-              curl_cmd = f'curl -L "{image_url}" -o /tmp/${{ inputs.filename }}_refined.jpg'
               import subprocess
-              subprocess.run(curl_cmd, shell=True)
-              # Use refined as final
-              import shutil
-              shutil.copy(f'/tmp/${{ inputs.filename }}_refined.jpg', f'/tmp/${{ inputs.filename }}.jpg')
-              print("Using NB2 refined version as final output")
+              refined_path = f'/tmp/{filename}_refined.jpg'
+              result = subprocess.run(['curl', '-L', '-o', refined_path, image_url], capture_output=True)
+              if result.returncode == 0:
+                  import shutil
+                  # Only replace after confirmed successful download
+                  import os as _os
+                  if _os.path.exists(refined_path) and _os.path.getsize(refined_path) > 10000:
+                      shutil.copy(refined_path, local_path)
+                      print(f"NB2 refined version saved as final output")
+                  else:
+                      print("NB2 download too small or failed — keeping Seedream output")
+              else:
+                  print(f"NB2 download failed — keeping Seedream output")
           PYEOF
 
       - name: Upload to Google Drive
-        if: steps.seedream.outputs.image_url != ''
+        if: steps.seedream.outcome == 'success'
         env:
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
           DRIVE_FOLDER_ID: ${{ inputs.drive_folder_id }}
@@ -183,9 +199,10 @@ jobs:
         run: |
           pip install -q google-auth google-auth-oauthlib google-api-python-client
           python3 << 'EOF'
-          import os, json
+          import os, json, sys
           from google.oauth2.credentials import Credentials
           from google.auth.transport.requests import Request
+          from google.auth.exceptions import TransportError
           from googleapiclient.discovery import build
           from googleapiclient.http import MediaFileUpload
 
@@ -199,7 +216,11 @@ jobs:
               scopes=token_data.get('scopes')
           )
           if not creds.valid:
-              creds.refresh(Request())
+              try:
+                  creds.refresh(Request())
+              except TransportError as e:
+                  print(f"ERROR: OAuth refresh failed — {e}")
+                  sys.exit(1)
 
           drive = build('drive', 'v3', credentials=creds)
           filename = os.environ['FILENAME'] + '.jpg'
@@ -208,6 +229,9 @@ jobs:
               media_body=MediaFileUpload(f'/tmp/{filename}', mimetype='image/jpeg'),
               supportsAllDrives=True, fields='id,name,webViewLink'
           ).execute()
+          if not result.get('id'):
+              print("ERROR: Drive upload returned no file ID")
+              sys.exit(1)
           print(f"Saved: {result['name']}")
           print(f"Link: {result['webViewLink']}")
           EOF
