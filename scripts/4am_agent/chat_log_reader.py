@@ -9,7 +9,7 @@ Cost gate:
 
 Output: carry_forwards.json + Calendar tasks + Inbox tab entries
 """
-import os, json
+import os, json, base64, requests
 import pytz
 from datetime import datetime, timedelta
 from googleapiclient.discovery import build
@@ -20,6 +20,8 @@ CHAT_LOGS_FOLDER = "1qitnbz5_8tfZI2rnTogV1zLLLLOwFVCw"
 SPREADSHEET_ID   = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 STATE_FILE       = ".github/agent_state/chat_log_state.json"
 CARRIES_FILE     = ".github/agent_state/carry_forwards.json"
+GITHUB_REPO      = "priihigashi/oak-park-ai-hub"
+GITHUB_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
 et               = pytz.timezone("America/New_York")
 client           = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
@@ -35,6 +37,43 @@ def _creds():
         json.loads(os.environ["GOOGLE_SA_KEY"]), scopes=SCOPES
     )
 
+
+# ─── GitHub state persistence (C1 fix) ────────────────────────────────────────
+
+def _load_from_github(file_path):
+    """Load JSON state file from GitHub. Returns {} if not found."""
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
+    r = requests.get(url, headers={
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+    })
+    if r.status_code == 200:
+        content = base64.b64decode(r.json()["content"]).decode()
+        try:
+            return json.loads(content)
+        except Exception:
+            return {}
+    return {}
+
+
+def _push_to_github(file_path, data):
+    """Push JSON state file to GitHub (create or update)."""
+    url     = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
+    b64     = base64.b64encode(json.dumps(data, indent=2).encode()).decode()
+    existing = requests.get(url, headers=headers)
+    payload  = {
+        "message": f"agent: update {file_path.split('/')[-1]} [{datetime.now(et).strftime('%Y-%m-%d')}]",
+        "content": b64,
+    }
+    if existing.status_code == 200:
+        payload["sha"] = existing.json()["sha"]
+    r = requests.put(url, headers=headers, json=payload)
+    if r.status_code not in (200, 201):
+        print(f"[chat_log_reader] WARNING: push failed for {file_path}: {r.status_code}")
+
+
+# ─── Drive helpers ─────────────────────────────────────────────────────────────
 
 def _list_recent_logs(drive_svc, days=2):
     cutoff = (datetime.now(et) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
@@ -144,11 +183,8 @@ def run():
         print("[chat_log_reader] No new chat logs in last 48h. Zero tokens used.")
         return {"carry_forwards": [], "processed_logs": 0}
 
-    # Load state to skip already-processed logs
-    state = {}
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE) as f:
-            state = json.load(f)
+    # Load state from GitHub (persists across runs — C1 fix)
+    state = _load_from_github(STATE_FILE)
 
     all_carries = []
     processed   = 0
@@ -181,12 +217,9 @@ def run():
         state[log_file["id"]] = log_file["modifiedTime"]
         processed += 1
 
-    # Persist state
-    os.makedirs(".github/agent_state", exist_ok=True)
-    with open(CARRIES_FILE, "w") as f:
-        json.dump(all_carries, f, indent=2)
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2)
+    # Push state to GitHub so Tier 1 gate works next run (C1 fix)
+    _push_to_github(STATE_FILE, state)
+    _push_to_github(CARRIES_FILE, all_carries)
 
     print(f"[chat_log_reader] Done: {processed} logs, {len(all_carries)} carry-forwards")
     return {"carry_forwards": all_carries, "processed_logs": processed}
