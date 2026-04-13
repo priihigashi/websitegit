@@ -40,8 +40,9 @@ jobs:
           YOUTUBE_API_KEY:     ${{ secrets.YOUTUBE_API_KEY }}
           ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_SA_KEY:       ${{ secrets.GOOGLE_SA_KEY }}
-          NTFY_TOPIC:          ${{ secrets.NTFY_TOPIC }}
-          GITHUB_TOKEN:        ${{ secrets.GITHUB_TOKEN }}
+          NTFY_TOPIC:                ${{ secrets.NTFY_TOPIC }}
+          GITHUB_TOKEN:              ${{ secrets.GITHUB_TOKEN }}
+          PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
         working-directory: scripts/4am_agent
         run: python main.py
 
