@@ -88,8 +88,8 @@ def _get_creds(scopes: list):
     # oak-park-ai-hub uses GOOGLE_SA_KEY (base64 encoded)
     sa_b64 = os.getenv("GOOGLE_SA_KEY")
     if sa_b64:
-        # Add == padding before decode — GitHub Secrets strips trailing = chars
-        sa_info = json.loads(base64.b64decode(sa_b64 + "=="))
+        # Add == padding before decode — GitHub Secrets strips trailing = chars + whitespace
+        sa_info = json.loads(base64.b64decode(sa_b64.strip() + "=="))
         return Credentials.from_service_account_info(sa_info, scopes=scopes)
 
     # Fallback: local file
@@ -269,14 +269,12 @@ def download_audio(url: str, tmp_dir: str) -> str:
 
 # ─── STEP 2: TRANSCRIBE ───────────────────────────────────────────────────────
 
-def transcribe_audio(audio_path: str) -> str:
+def transcribe_audio(audio_path: str, url: str = "") -> str:
     print("\n[2/3] Transcribing...")
     # YouTube fallback: use youtube-transcript-api (no download, no cookies needed)
     if audio_path == "__youtube_transcript_fallback__":
         try:
             from youtube_transcript_api import YouTubeTranscriptApi
-            # Extract video ID from URL (stored in sys.argv[1])
-            url = sys.argv[1]
             vid_id = ""
             if "watch?v=" in url:
                 vid_id = url.split("watch?v=")[1].split("&")[0]
@@ -733,7 +731,23 @@ def save_to_content_hub(story_id: str, url: str, transcript: str, classification
         from googleapiclient.http import MediaInMemoryUpload
         niche = classification.get("niche", "General").upper()
         date = datetime.now().strftime("%Y-%m-%d")
-        slug = classification.get("summary", story_id)[:40].replace(" ", "-").replace("/", "-")
+        # Build deterministic slug from URL: PLATFORM-SOURCEID (not Claude summary)
+        if "instagram.com" in url:
+            platform = "IG"
+            m = re.search(r'/reel/([^/?]+)', url)
+            src_id = m.group(1) if m else story_id
+        elif "youtu" in url:
+            platform = "YT"
+            m = re.search(r'(?:watch\?v=|youtu\.be/|shorts/)([^&/?]+)', url)
+            src_id = m.group(1) if m else story_id
+        elif "tiktok.com" in url:
+            platform = "TK"
+            m = re.search(r'/video/(\d+)', url)
+            src_id = m.group(1) if m else story_id
+        else:
+            platform = "WEB"
+            src_id = story_id
+        slug = f"{platform}-{src_id}"
         folder_name = f"{date}_{niche}_{slug}"
         folder = drive.files().create(
             body={"name": folder_name, "mimeType": "application/vnd.google-apps.folder",
@@ -908,7 +922,7 @@ def main():
 
     with tempfile.TemporaryDirectory() as tmp:
         audio = download_audio(args.url, tmp)
-        transcript = transcribe_audio(audio)
+        transcript = transcribe_audio(audio, args.url)
         save_transcript(transcript, args.url, args.story_id, args.project)
 
     if args.project == "book":
