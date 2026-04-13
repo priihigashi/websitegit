@@ -70,6 +70,7 @@ IDEAS_INBOX_ID     = os.getenv("IDEAS_INBOX_ID",     "1IrFrCNGVIF7cvAr9cIuAXvCtU
 BOOK_FOLDER_ID              = "1HlY1tmUHmRZ_ZfPUzGpY_j7sHbe_OCz1"
 SOVEREIGN_FOLDER_ID         = "1L89dLiVYfjNu3uz3l3S_rvZPxd2I8xjZ"
 CONTENT_CREATION_FOLDER_ID = "1um7y2Yt8zi9KGxev6kfFJYgrkMYwrCNh"  # Drive > Marketing > Claude Code Workspace > Content Creation
+CONTENT_HUB_FOLDER_ID     = "1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq"  # Drive > Marketing > Claude Code Workspace > Content Hub (transcripts + resources + video)
 
 # Spreadsheet IDs for content pipeline
 CONTENT_QUEUE_ID = "1C1CAZ8lSgeVLSSCYIg-D9XPJcSLHyIOh1okKtvhZZQg"  # Ideas Queue tab
@@ -87,7 +88,8 @@ def _get_creds(scopes: list):
     # oak-park-ai-hub uses GOOGLE_SA_KEY (base64 encoded)
     sa_b64 = os.getenv("GOOGLE_SA_KEY")
     if sa_b64:
-        sa_info = json.loads(base64.b64decode(sa_b64))
+        # Add == padding before decode — GitHub Secrets strips trailing = chars
+        sa_info = json.loads(base64.b64decode(sa_b64 + "=="))
         return Credentials.from_service_account_info(sa_info, scopes=scopes)
 
     # Fallback: local file
@@ -246,6 +248,10 @@ def download_audio(url: str, tmp_dir: str) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"  ERROR: {result.stderr}")
+        # YouTube bot-protection: try youtube-transcript-api as fallback
+        if "youtube.com" in url or "youtu.be" in url:
+            print("  YouTube bot-protection detected — using transcript API fallback")
+            return "__youtube_transcript_fallback__"
         sys.exit(1)
 
     mp3 = os.path.join(tmp_dir, "audio.mp3")
@@ -264,7 +270,27 @@ def download_audio(url: str, tmp_dir: str) -> str:
 # ─── STEP 2: TRANSCRIBE ───────────────────────────────────────────────────────
 
 def transcribe_audio(audio_path: str) -> str:
-    print("\n[2/3] Transcribing with Whisper...")
+    print("\n[2/3] Transcribing...")
+    # YouTube fallback: use youtube-transcript-api (no download, no cookies needed)
+    if audio_path == "__youtube_transcript_fallback__":
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            # Extract video ID from URL (stored in sys.argv[1])
+            url = sys.argv[1]
+            vid_id = ""
+            if "watch?v=" in url:
+                vid_id = url.split("watch?v=")[1].split("&")[0]
+            elif "youtu.be/" in url:
+                vid_id = url.split("youtu.be/")[1].split("?")[0]
+            api = YouTubeTranscriptApi()
+            fetched = api.fetch(vid_id)
+            result = " ".join([t.text for t in fetched])
+            print(f"  Transcribed via youtube-transcript-api ({len(result)} chars)")
+            return result
+        except Exception as e:
+            print(f"  ERROR youtube-transcript-api: {e}")
+            sys.exit(1)
+
     if not OPENAI_API_KEY:
         print("  ERROR: OPENAI_API_KEY not set")
         sys.exit(1)
@@ -274,7 +300,7 @@ def transcribe_audio(audio_path: str) -> str:
         result = client.audio.transcriptions.create(
             model="whisper-1", file=f, response_format="text"
         )
-    print(f"  Transcribed ({len(result)} chars)")
+    print(f"  Transcribed via Whisper ({len(result)} chars)")
     return result
 
 
@@ -697,6 +723,46 @@ STATUS: DRAFT — text ready, art needed"""
     return msg.content[0].text
 
 
+def save_to_content_hub(story_id: str, url: str, transcript: str, classification: dict) -> str:
+    """Save transcript + resources to Content Hub story folder. Returns folder URL."""
+    drive = get_drive_service()
+    if not drive:
+        print("  SKIP Content Hub: Drive unavailable")
+        return ""
+    try:
+        from googleapiclient.http import MediaInMemoryUpload
+        niche = classification.get("niche", "General").upper()
+        date = datetime.now().strftime("%Y-%m-%d")
+        slug = classification.get("summary", story_id)[:40].replace(" ", "-").replace("/", "-")
+        folder_name = f"{date}_{niche}_{slug}"
+        folder = drive.files().create(
+            body={"name": folder_name, "mimeType": "application/vnd.google-apps.folder",
+                  "parents": [CONTENT_HUB_FOLDER_ID]},
+            supportsAllDrives=True, fields="id,webViewLink"
+        ).execute()
+        folder_id = folder["id"]
+        # Save transcript
+        transcript_content = f"STORY ID: {story_id}\nSOURCE: {url}\nDATE: {date}\n\n{transcript}"
+        media = MediaInMemoryUpload(transcript_content.encode("utf-8"), mimetype="text/plain")
+        drive.files().create(
+            body={"name": "transcript.txt", "parents": [folder_id]},
+            media_body=media, supportsAllDrives=True, fields="id"
+        ).execute()
+        # Save resources stub
+        resources_content = f"RESOURCE LINKS — {folder_name}\n\nSOURCE: {url}\n\nADD MORE LINKS HERE AS RESEARCH PROGRESSES\n"
+        media2 = MediaInMemoryUpload(resources_content.encode("utf-8"), mimetype="text/plain")
+        drive.files().create(
+            body={"name": "resources.txt", "parents": [folder_id]},
+            media_body=media2, supportsAllDrives=True, fields="id"
+        ).execute()
+        folder_url = folder.get("webViewLink", f"https://drive.google.com/drive/folders/{folder_id}")
+        print(f"  Content Hub story folder: {folder_url}")
+        return folder_url
+    except Exception as e:
+        print(f"  WARNING Content Hub: {e}")
+        return ""
+
+
 def create_content_workspace(story_id: str, title: str, transcript: str,
                               classification: dict, url: str, notes: str = "") -> tuple:
     """Creates Drive workspace for a content piece.
@@ -794,6 +860,9 @@ def run_content(args, transcript):
     cl = analyze_content(transcript, args.url, args.notes or "")
     sid = args.story_id or f"CNT-{datetime.now().strftime('%Y%m%d%H%M')}"
     update_inspiration_library(args.url, transcript, cl)
+
+    # Save raw transcript + resources to Content Hub (permanent home)
+    hub_url = save_to_content_hub(sid, args.url, transcript, cl)
 
     # Create Drive workspace: folder + Art/Caption/Reel subfolders + content brief doc + Ideas Queue row
     title = (cl.get("summary") or sid)[:60].strip()
