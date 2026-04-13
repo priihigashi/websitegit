@@ -439,6 +439,71 @@ def download_audio(url: str, tmp_dir: str) -> str:
     sys.exit(1)
 
 
+# ─── STEP 1b: VIDEO DOWNLOAD ────────────────────────────────────────────────
+
+def download_video(url: str, tmp_dir: str) -> str:
+    """Download the actual video file for Content Hub storage + Remotion editing.
+    YouTube capped at 720p to keep file sizes reasonable.
+    Returns video file path or empty string (non-fatal — transcript still works).
+    """
+    print(f"\n[1b/3] Downloading video file...")
+    is_yt = _is_youtube(url)
+
+    output = os.path.join(tmp_dir, "video.%(ext)s")
+    if is_yt:
+        # YouTube: cap at 720p, merge to mp4
+        cmd = [
+            "yt-dlp",
+            "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
+            "--merge-output-format", "mp4",
+            "--output", output,
+            "--no-playlist", "--quiet",
+        ]
+    else:
+        # IG/TikTok: download best quality (reels are short)
+        cmd = [
+            "yt-dlp",
+            "-f", "best",
+            "--merge-output-format", "mp4",
+            "--output", output,
+            "--no-playlist", "--quiet",
+        ]
+
+    # Try standard yt-dlp first
+    result = subprocess.run(cmd + [url], capture_output=True, text=True)
+    video_path = os.path.join(tmp_dir, "video.mp4")
+
+    if result.returncode != 0 and is_yt:
+        # Try iOS client trick for YouTube
+        print("  Video download retry with iOS client...")
+        result = subprocess.run(
+            cmd + ["--extractor-args", "youtube:player_client=ios,web_creator", url],
+            capture_output=True, text=True,
+        )
+
+    if result.returncode != 0:
+        print(f"  Video download failed (non-fatal): {result.stderr[:200]}")
+        return ""
+
+    # Find the output file (extension might vary)
+    if not os.path.exists(video_path):
+        for ext in ["mp4", "mkv", "webm", "mov"]:
+            alt = os.path.join(tmp_dir, f"video.{ext}")
+            if os.path.exists(alt):
+                video_path = alt
+                break
+
+    if not os.path.exists(video_path):
+        print("  Video file not found after download")
+        return ""
+
+    size_mb = os.path.getsize(video_path) / (1024 * 1024)
+    print(f"  Video downloaded ({size_mb:.1f} MB)")
+    if size_mb > 200:
+        print(f"  WARNING: Large video ({size_mb:.0f} MB) — upload may be slow")
+    return video_path
+
+
 # ─── STEP 2: TRANSCRIBE ───────────────────────────────────────────────────────
 
 def transcribe_audio(audio_path: str, url: str = "") -> str:
@@ -896,8 +961,8 @@ STATUS: DRAFT — text ready, art needed"""
     return msg.content[0].text
 
 
-def save_to_content_hub(story_id: str, url: str, transcript: str, classification: dict) -> str:
-    """Save transcript + resources to Content Hub story folder. Returns folder URL."""
+def save_to_content_hub(story_id: str, url: str, transcript: str, classification: dict, video_path: str = "") -> str:
+    """Save transcript + resources + video to Content Hub story folder. Returns folder URL."""
     drive = get_drive_service()
     if not drive:
         print("  SKIP Content Hub: Drive unavailable")
@@ -944,6 +1009,24 @@ def save_to_content_hub(story_id: str, url: str, transcript: str, classification
             body={"name": "resources.txt", "parents": [folder_id]},
             media_body=media2, supportsAllDrives=True, fields="id"
         ).execute()
+        # Upload video file if available
+        if video_path and os.path.exists(video_path):
+            from googleapiclient.http import MediaFileUpload
+            ext = os.path.splitext(video_path)[1] or ".mp4"
+            size_mb = os.path.getsize(video_path) / (1024 * 1024)
+            print(f"  Uploading video ({size_mb:.1f} MB) to Content Hub...")
+            video_media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
+            request = drive.files().create(
+                body={"name": f"video{ext}", "parents": [folder_id]},
+                media_body=video_media, supportsAllDrives=True, fields="id"
+            )
+            # Resumable upload for large files
+            response = None
+            while response is None:
+                status, response = request.next_chunk()
+                if status:
+                    print(f"  Upload progress: {int(status.progress() * 100)}%")
+            print(f"  Video uploaded to Content Hub")
         folder_url = folder.get("webViewLink", f"https://drive.google.com/drive/folders/{folder_id}")
         print(f"  Content Hub story folder: {folder_url}")
         return folder_url
@@ -1044,13 +1127,13 @@ def create_content_workspace(story_id: str, title: str, transcript: str,
     return folder_url, doc_url
 
 
-def run_content(args, transcript):
+def run_content(args, transcript, video_path: str = ""):
     print("\n[CONTENT] Running classification...")
     cl = analyze_content(transcript, args.url, args.notes or "")
     sid = args.story_id or f"CNT-{datetime.now().strftime('%Y%m%d%H%M')}"
 
-    # Save raw transcript + resources to Content Hub (permanent home)
-    hub_url = save_to_content_hub(sid, args.url, transcript, cl)
+    # Save raw transcript + resources + video to Content Hub (permanent home)
+    hub_url = save_to_content_hub(sid, args.url, transcript, cl, video_path=video_path)
 
     # Create Drive workspace: folder + Art/Caption/Reel subfolders + content brief doc + Ideas Queue row
     title = (cl.get("summary") or sid)[:60].strip()
@@ -1069,12 +1152,14 @@ def run_content(args, transcript):
     print(f"\n{'='*50}\nCONTENT CAPTURE DONE\nNiche: {niche}\nType: {cl.get('content_type')}\nStatus: {cl.get('classification')}\nFolder: {folder_url or 'check artifacts'}\nBrief: {doc_url or 'check artifacts'}\n{'='*50}")
 
     # UX Fix: send completion email so Priscila knows it worked
+    video_note = "Video: uploaded to Content Hub" if video_path else "Video: download failed (transcript still captured)"
     send_notification_email(
         subject=f"Capture done — {niche} | {summary[:50]}",
         body=(
             f"Content Hub: {hub_url or 'check Drive'}\n"
             f"Content Brief: {doc_url or 'check artifacts'}\n"
             f"Production Folder: {folder_url or 'check Drive'}\n"
+            f"{video_note}\n"
             f"Sheets: row added to Inspiration Library\n\n"
             f"Source: {args.url}\n"
             f"Niche: {niche}\n"
@@ -1119,12 +1204,15 @@ def main():
         transcript = transcribe_audio(audio, args.url)
         save_transcript(transcript, args.url, args.story_id, args.project)
 
-    if args.project == "book":
-        run_book(args, transcript)
-    elif args.project == "sovereign":
-        run_sovereign(args, transcript)
-    else:
-        run_content(args, transcript)
+        # Download video file for Content Hub (non-fatal — transcript is the priority)
+        video_path = download_video(args.url, tmp)
+
+        if args.project == "book":
+            run_book(args, transcript)
+        elif args.project == "sovereign":
+            run_sovereign(args, transcript)
+        else:
+            run_content(args, transcript, video_path=video_path)
 
     # Print credits summary if available
     if metadata:
