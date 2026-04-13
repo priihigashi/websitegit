@@ -584,8 +584,10 @@ def update_inspiration_library(url, transcript, classification, hub_url="", doc_
             transcript[:300],
             classification.get("hook", ""),
             classification.get("notes", ""),
-            hub_url,       # J — Content Hub folder link
-            doc_url,       # K — Content Brief doc link
+            "",            # J — Hook Type (header-aligned placeholder)
+            "",            # K — Views (header-aligned placeholder)
+            hub_url,       # L — Content Hub folder link
+            doc_url,       # M — Content Brief doc link
         ])
         print("  Inspiration Library updated")
     except Exception as e:
