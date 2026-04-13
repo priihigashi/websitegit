@@ -1,17 +1,20 @@
 """
 notifier.py -- Notifications for the 4AM agent.
   1. ntfy.sh push  — immediate phone alert (success + failure)
-  2. HTML email    — rich success email via send_email.yml GitHub Action (success only)
+  2. HTML email    — rich success email via SMTP (success only)
 
 NTFY_TOPIC secret controls which ntfy topic to publish to.
 """
-import os, json, requests
+import os, json, requests, smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
-NTFY_TOPIC   = os.environ.get("NTFY_TOPIC", "oak-park-content-4am")
-NTFY_BASE    = "https://ntfy.sh"
-GITHUB_REPO  = "priihigashi/oak-park-ai-hub"
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+NTFY_TOPIC    = os.environ.get("NTFY_TOPIC", "oak-park-content-4am")
+NTFY_BASE     = "https://ntfy.sh"
+GITHUB_REPO   = "priihigashi/oak-park-ai-hub"
 GITHUB_RUN_ID = os.environ.get("GITHUB_RUN_ID", "")
+GMAIL_USER    = os.environ.get("PRI_OP_GMAIL_USER", "priscila@oakpark-construction.com")
+GMAIL_PASS    = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD", "")
 
 SHEETS_BASE = "https://docs.google.com/spreadsheets/d/1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU/edit"
 CALENDAR_URL = "https://calendar.google.com"
@@ -143,33 +146,23 @@ def _build_html_success(topics, rows_added, clips_found, run_date):
 
 
 def _dispatch_html_email(subject, html_body, to="priscila@oakpark-construction.com"):
-    """Trigger send_email.yml GitHub Action with HTML body."""
-    if not GITHUB_TOKEN:
-        print("[notifier] No GITHUB_TOKEN — skipping HTML email dispatch.")
+    """Send HTML email directly via SMTP using Gmail App Password."""
+    if not GMAIL_PASS:
+        print("[notifier] No PRI_OP_GMAIL_APP_PASSWORD — skipping HTML email.")
         return False
     try:
-        r = requests.post(
-            f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/send_email.yml/dispatches",
-            headers={
-                "Authorization": f"token {GITHUB_TOKEN}",
-                "Accept": "application/vnd.github+json",
-            },
-            json={
-                "ref": "main",
-                "inputs": {
-                    "to":        to,
-                    "subject":   subject,
-                    "body":      "",
-                    "html_body": html_body,
-                },
-            },
-            timeout=15,
-        )
-        ok = r.status_code == 204
-        print(f"[notifier] HTML email dispatch: {'OK' if ok else f'FAILED {r.status_code}'}")
-        return ok
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"]    = GMAIL_USER
+        msg["To"]      = to
+        msg.attach(MIMEText(html_body, "html"))
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as server:
+            server.login(GMAIL_USER, GMAIL_PASS)
+            server.sendmail(GMAIL_USER, to, msg.as_string())
+        print("[notifier] HTML email sent via SMTP: OK")
+        return True
     except Exception as e:
-        print(f"[notifier] HTML email dispatch error: {e}")
+        print(f"[notifier] HTML email SMTP error: {e}")
         return False
 
 
