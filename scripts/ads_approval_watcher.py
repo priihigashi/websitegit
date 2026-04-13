@@ -73,11 +73,10 @@ NON_APPROVAL_KEYWORDS = (
 )
 
 
-def load_creds() -> Credentials:
-    raw = os.environ.get("SHEETS_TOKEN", "")
+def _creds_from_env(var_name: str) -> Credentials | None:
+    raw = os.environ.get(var_name, "")
     if not raw:
-        print("ERROR: SHEETS_TOKEN secret not set.", file=sys.stderr)
-        sys.exit(1)
+        return None
     tok = json.loads(raw)
     creds = Credentials(
         token=tok.get("token"),
@@ -90,6 +89,25 @@ def load_creds() -> Credentials:
     if not creds.valid and creds.refresh_token:
         creds.refresh(Request())
     return creds
+
+
+def load_inboxes() -> list[tuple[str, Credentials]]:
+    """Return [(label, creds), ...] for every inbox we have a token for.
+
+    priscila@oakpark-construction.com via SHEETS_TOKEN (for forwarded copies)
+    mcfollingproperties@gmail.com  via MCFOLLING_TOKEN (primary — MCC owner)
+    """
+    inboxes = []
+    priscila_creds = _creds_from_env("SHEETS_TOKEN")
+    if priscila_creds:
+        inboxes.append(("priscila@oakpark-construction.com", priscila_creds))
+    mcf_creds = _creds_from_env("MCFOLLING_TOKEN")
+    if mcf_creds:
+        inboxes.append(("mcfollingproperties@gmail.com", mcf_creds))
+    if not inboxes:
+        print("ERROR: Neither SHEETS_TOKEN nor MCFOLLING_TOKEN is set.", file=sys.stderr)
+        sys.exit(1)
+    return inboxes
 
 
 def already_flagged() -> bool:
@@ -137,7 +155,7 @@ def classify_email(subject: str, snippet: str, body: str) -> str:
     return "unknown"
 
 
-def search_gmail(creds: Credentials):
+def search_gmail(creds: Credentials, inbox_label: str = ""):
     """Scan candidate emails and return the first ACTUAL approval, or None.
 
     Returns dict with 'classification' field explaining why.
@@ -160,7 +178,7 @@ def search_gmail(creds: Credentials):
         body = _get_body_text(msg)
 
         classification = classify_email(subject, snippet, body)
-        print(f"  Candidate: [{classification}] {subject[:80]}")
+        print(f"  [{inbox_label}] Candidate: [{classification}] {subject[:80]}")
 
         if classification == "approved":
             return {
@@ -171,6 +189,7 @@ def search_gmail(creds: Credentials):
                 "snippet": snippet[:300],
                 "thread_id": msg.get("threadId"),
                 "classification": classification,
+                "inbox": inbox_label,
             }
 
     return None
@@ -248,15 +267,25 @@ def main() -> int:
         print("Already flagged — exiting without re-notifying.")
         return 0
 
-    creds = load_creds()
-    match = search_gmail(creds)
+    inboxes = load_inboxes()
+    print(f"Scanning {len(inboxes)} inbox(es): {[lbl for lbl, _ in inboxes]}")
+
+    match = None
+    match_creds = None
+    for label, creds in inboxes:
+        print(f"\n--- Scanning {label} ---")
+        result = search_gmail(creds, inbox_label=label)
+        if result:
+            match = result
+            match_creds = creds
+            break
 
     if not match:
-        print("No approval email yet. Will check again next run.")
+        print("\nNo approval email yet. Will check again next run.")
         return 0
 
     print("=" * 60)
-    print("APPROVAL EMAIL DETECTED")
+    print(f"APPROVAL EMAIL DETECTED in {match['inbox']}")
     print("=" * 60)
     print(f"FROM: {match['from']}")
     print(f"SUBJECT: {match['subject']}")
@@ -265,7 +294,7 @@ def main() -> int:
     print("=" * 60)
 
     write_flag(match)
-    cal_link = create_calendar_event(creds, match)
+    cal_link = create_calendar_event(match_creds, match)
 
     # Write outputs for GitHub Actions
     gh_out = os.environ.get("GITHUB_OUTPUT")

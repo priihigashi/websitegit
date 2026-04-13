@@ -29,6 +29,7 @@ jobs:
         id: check
         env:
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          MCFOLLING_TOKEN: ${{ secrets.MCFOLLING_TOKEN }}
         run: python scripts/ads_approval_watcher.py
 
       - name: Commit flag file if approval detected
