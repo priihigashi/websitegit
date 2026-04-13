@@ -41,12 +41,8 @@ def notify_run_complete(topics, rows_added, clips_found, error=None):
         return send(
             title="Apify Credits Empty",
             message=(
-                "4AM agent ran in fallback mode — Apify has no credits left.
-
-"
-                "Action needed: go to console.apify.com/billing and top up.
-
-"
+                "4AM agent ran in fallback mode — Apify has no credits left.\n\n"
+                "Action needed: go to console.apify.com/billing and top up.\n\n"
                 "Agent still generated scripts using Claude directly."
             ),
             priority="high",
@@ -56,33 +52,24 @@ def notify_run_complete(topics, rows_added, clips_found, error=None):
     if error:
         return send(
             title="4AM Agent Failed",
-            message=f"Error: {error}
-Check Runs Log tab for details.",
+            message=f"Error: {error}\nCheck Runs Log tab for details.",
             priority="high",
             tags="warning",
         )
 
-    topic_list = "
-".join(f"- {t}" for t in topics)
+    topic_list = "\n".join(f"- {t}" for t in topics)
     message    = (
-        f"{rows_added} scripts added to Content Queue
-"
-        f"{clips_found} B-roll clips found
-
-"
-        f"Topics:
-{topic_list}"
+        f"{rows_added} scripts added to Content Queue\n"
+        f"{clips_found} B-roll clips found\n\n"
+        f"Topics:\n{topic_list}"
     )
     return send(title="4AM Content Ready", message=message, tags="tada,robot")
 
 
 def notify_new_skill(skill_name, pattern_summary):
     message = (
-        f"Pattern detected in run logs.
-"
-        f"Auto-created: skills/{skill_name}
-
-"
+        f"Pattern detected in run logs.\n"
+        f"Auto-created: skills/{skill_name}\n\n"
         f"Pattern: {pattern_summary}"
     )
     return send(title="New Skill Auto-Created", message=message, tags="brain,robot")
@@ -90,12 +77,8 @@ def notify_new_skill(skill_name, pattern_summary):
 
 def notify_skill_task(task_title, description):
     message = (
-        f"A pattern was found in run logs that needs a new skill.
-
-"
-        f"{description}
-
-"
+        f"A pattern was found in run logs that needs a new skill.\n\n"
+        f"{description}\n\n"
         f"Calendar task created: '{task_title}'"
     )
     return send(title="Skill Task Added to Calendar", message=message, tags="calendar,robot")
