@@ -1,0 +1,57 @@
+name: OPC Google Ads Read-Only Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      date_range:
+        description: "Google Ads date range, e.g. LAST_7_DAYS or LAST_30_DAYS"
+        required: false
+        default: "LAST_30_DAYS"
+      customer_id:
+        description: "Oak Park Ads customer ID without dashes"
+        required: false
+        default: "8945889168"
+
+permissions:
+  contents: read
+
+jobs:
+  ads-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate read-only Google Ads report
+        env:
+          GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+          GOOGLE_ADS_MCC_ID: ${{ secrets.GOOGLE_ADS_MCC_ID }}
+          GOOGLE_ADS_CUSTOMER_ID: ${{ inputs.customer_id }}
+          GOOGLE_ADS_DATE_RANGE: ${{ inputs.date_range }}
+          PRI_OP_ADS_TOKEN: ${{ secrets.PRI_OP_ADS_TOKEN }}
+        run: python scripts/ads_report.py
+
+      - name: Add report to workflow summary
+        if: always()
+        run: |
+          REPORT_FILE="$(find artifacts/ads-report -name '*.md' -print -quit 2>/dev/null || true)"
+          if [ -n "$REPORT_FILE" ]; then
+            cat "$REPORT_FILE" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No report file generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opc-google-ads-report
+          path: artifacts/ads-report/
+          if-no-files-found: warn
