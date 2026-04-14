@@ -240,8 +240,14 @@ async function writeToSheet(items, rawItems) {
     return;
   }
 
-  // Decode service account key
-  const saKey = JSON.parse(Buffer.from(GOOGLE_SA_KEY, 'base64').toString('utf8'));
+  // Decode service account key — accept either raw JSON or base64-encoded JSON
+  let saKey;
+  const trimmed = GOOGLE_SA_KEY.trim();
+  if (trimmed.startsWith('{')) {
+    saKey = JSON.parse(trimmed);
+  } else {
+    saKey = JSON.parse(Buffer.from(trimmed, 'base64').toString('utf8'));
+  }
 
   // Get access token via JWT
   const token = await getGoogleToken(saKey);
