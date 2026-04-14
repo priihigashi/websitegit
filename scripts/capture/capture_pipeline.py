@@ -71,6 +71,7 @@ BOOK_FOLDER_ID              = "1HlY1tmUHmRZ_ZfPUzGpY_j7sHbe_OCz1"
 SOVEREIGN_FOLDER_ID         = "1L89dLiVYfjNu3uz3l3S_rvZPxd2I8xjZ"
 CONTENT_CREATION_FOLDER_ID = "1um7y2Yt8zi9KGxev6kfFJYgrkMYwrCNh"  # Drive > Marketing > Claude Code Workspace > Content Creation
 CONTENT_HUB_FOLDER_ID     = "1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq"  # Drive > Marketing > Claude Code Workspace > Content Hub (transcripts + resources + video)
+NEWS_FOLDER_ID             = "1mei5rT868SfwFVzVmZo_TG3mwlQtN-ea"  # Big Crazy Ideas > News — political/news captures route here (USA + Brazil shared topic)
 
 # Spreadsheet IDs for content pipeline
 CONTENT_QUEUE_ID = "1C1CAZ8lSgeVLSSCYIg-D9XPJcSLHyIOh1okKtvhZZQg"  # Ideas Queue tab
@@ -1057,6 +1058,163 @@ def save_to_content_hub(story_id: str, url: str, transcript: str, classification
         return ""
 
 
+def save_to_news_folder(story_id: str, url: str, transcript: str, classification: dict,
+                         video_path: str = "", notes: str = "") -> tuple:
+    """News niche routing — saves to Big Crazy Ideas > News with shared/english/portuguese structure.
+
+    Structure created:
+      News / YYYY-MM-DD_topic-slug /
+        _shared/
+          original_reel.mp4, transcript.txt, resources.txt, topic_brief.md
+          jewish_voices_broll/   (empty, for manual/future B-roll collection)
+        english/
+          [CONTENT BRIEF].gdoc   (Claude-generated carousel + reel + topics)
+        portuguese/
+          PENDING_translation.md (placeholder until AI translation flow is built)
+
+    Returns: (story_folder_url, brief_doc_url) — matches create_content_workspace signature
+    so run_content can use the same return contract.
+    """
+    drive = get_drive_service()
+    if not drive:
+        print("  SKIP News folder: Drive unavailable")
+        return "", ""
+    try:
+        from googleapiclient.http import MediaInMemoryUpload, MediaFileUpload
+        date = datetime.now().strftime("%Y-%m-%d")
+        summary = classification.get("summary", story_id)[:50]
+        slug = re.sub(r"[^a-z0-9]+", "-", summary.lower()).strip("-")[:50] or story_id.lower()
+        folder_name = f"{date}_{slug}"
+
+        # 1. Create story folder under News
+        story_folder = drive.files().create(
+            body={"name": folder_name, "mimeType": "application/vnd.google-apps.folder",
+                  "parents": [NEWS_FOLDER_ID]},
+            supportsAllDrives=True, fields="id,webViewLink"
+        ).execute()
+        story_id_drive = story_folder["id"]
+        story_url = story_folder.get("webViewLink", f"https://drive.google.com/drive/folders/{story_id_drive}")
+        print(f"  News story folder: {story_url}")
+
+        # 2. Create _shared, english, portuguese subfolders
+        def _mkfolder(name, parent):
+            return drive.files().create(
+                body={"name": name, "mimeType": "application/vnd.google-apps.folder", "parents": [parent]},
+                supportsAllDrives=True, fields="id"
+            ).execute()["id"]
+
+        shared_id = _mkfolder("_shared", story_id_drive)
+        english_id = _mkfolder("english", story_id_drive)
+        portuguese_id = _mkfolder("portuguese", story_id_drive)
+        _mkfolder("jewish_voices_broll", shared_id)
+
+        # 3. Save transcript + resources + topic_brief placeholder to _shared
+        transcript_content = f"STORY ID: {story_id}\nSOURCE: {url}\nDATE: {date}\n\n{transcript}"
+        drive.files().create(
+            body={"name": "transcript.txt", "parents": [shared_id]},
+            media_body=MediaInMemoryUpload(transcript_content.encode("utf-8"), mimetype="text/plain"),
+            supportsAllDrives=True, fields="id"
+        ).execute()
+        resources_content = (
+            f"RESOURCE LINKS — {folder_name}\n\nSOURCE: {url}\n\n"
+            f"NOTES: {notes or '(none)'}\n\n"
+            f"ADD MORE LINKS HERE AS RESEARCH PROGRESSES\n"
+        )
+        drive.files().create(
+            body={"name": "resources.txt", "parents": [shared_id]},
+            media_body=MediaInMemoryUpload(resources_content.encode("utf-8"), mimetype="text/plain"),
+            supportsAllDrives=True, fields="id"
+        ).execute()
+        brief_placeholder = (
+            f"# Topic Brief — {summary}\n\n"
+            f"Captured: {date}\nSource: {url}\nNiche: News (USA + Brazil pages)\n\n"
+            f"## Notes\n{notes or '(add angle, proof points, b-roll targets, usage rules)'}\n"
+        )
+        drive.files().create(
+            body={"name": "topic_brief.md", "parents": [shared_id]},
+            media_body=MediaInMemoryUpload(brief_placeholder.encode("utf-8"), mimetype="text/markdown"),
+            supportsAllDrives=True, fields="id"
+        ).execute()
+
+        # 4. Upload video to _shared
+        if video_path and os.path.exists(video_path):
+            ext = os.path.splitext(video_path)[1] or ".mp4"
+            size_mb = os.path.getsize(video_path) / (1024 * 1024)
+            print(f"  Uploading video ({size_mb:.1f} MB) to News _shared...")
+            video_media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
+            request = drive.files().create(
+                body={"name": f"original_reel{ext}", "parents": [shared_id]},
+                media_body=video_media, supportsAllDrives=True, fields="id"
+            )
+            response = None
+            while response is None:
+                status, response = request.next_chunk()
+                if status:
+                    print(f"  Upload progress: {int(status.progress() * 100)}%")
+            print(f"  Video uploaded to News _shared")
+
+        # 5. Create content brief doc in english subfolder
+        brief = generate_content_brief(transcript, url, classification, notes)
+        doc_url = ""
+        try:
+            doc = drive.files().create(
+                body={"name": f"[CONTENT BRIEF] {summary}",
+                      "mimeType": "application/vnd.google-apps.document",
+                      "parents": [english_id]},
+                supportsAllDrives=True, fields="id,webViewLink"
+            ).execute()
+            doc_id = doc["id"]
+            doc_url = doc.get("webViewLink", f"https://docs.google.com/document/d/{doc_id}/edit")
+            docs = get_docs_service()
+            if docs and brief:
+                docs.documents().batchUpdate(
+                    documentId=doc_id,
+                    body={"requests": [{"insertText": {"location": {"index": 1}, "text": brief}}]}
+                ).execute()
+            print(f"  English content brief: {doc_url}")
+        except Exception as e:
+            print(f"  WARNING News brief doc: {e}")
+
+        # 6. Portuguese placeholder (BLOCKED — AI translation flow not built yet)
+        pt_placeholder = (
+            "# Portuguese Variants — PENDING AI TRANSLATION FLOW\n\n"
+            "Status: BLOCKED — awaiting implementation of AI Translation Flow "
+            "(tracked in Flow Plans Tracker).\n\n"
+            "Once translation flow is built, PT-BR carousel + reel scripts will be "
+            "auto-generated from the english/ versions.\n"
+        )
+        drive.files().create(
+            body={"name": "PENDING_translation.md", "parents": [portuguese_id]},
+            media_body=MediaInMemoryUpload(pt_placeholder.encode("utf-8"), mimetype="text/markdown"),
+            supportsAllDrives=True, fields="id"
+        ).execute()
+
+        # 7. Log to Ideas Queue (same pattern as content_workspace)
+        gc = get_sheets_client()
+        if gc:
+            try:
+                sh = gc.open_by_key(CONTENT_QUEUE_ID)
+                queue = sh.worksheet("\U0001f4a1 Ideas Queue")
+                queue.append_row([
+                    summary,
+                    classification.get("content_type", "Carousel"),
+                    "Instagram",
+                    classification.get("hook", ""),
+                    "DRAFT \u2014 text needed",
+                    "HIGH",
+                    f"News folder: {story_url} | Brief: {doc_url} | Captured: {date}",
+                    url,
+                ])
+                print("  Ideas Queue: row added")
+            except Exception as e:
+                print(f"  WARNING Ideas Queue: {e}")
+
+        return story_url, doc_url
+    except Exception as e:
+        print(f"  WARNING News folder: {e}")
+        return "", ""
+
+
 def create_content_workspace(story_id: str, title: str, transcript: str,
                               classification: dict, url: str, notes: str = "") -> tuple:
     """Creates Drive workspace for a content piece.
@@ -1154,12 +1312,18 @@ def run_content(args, transcript, video_path: str = "", metadata: dict = None):
     cl = analyze_content(transcript, args.url, args.notes or "")
     sid = args.story_id or f"CNT-{datetime.now().strftime('%Y%m%d%H%M')}"
 
-    # Save raw transcript + resources + video to Content Hub (permanent home)
-    hub_url = save_to_content_hub(sid, args.url, transcript, cl, video_path=video_path)
-
-    # Create Drive workspace: folder + Art/Caption/Reel subfolders + content brief doc + Ideas Queue row
-    title = (cl.get("summary") or sid)[:60].strip()
-    folder_url, doc_url = create_content_workspace(sid, title, transcript, cl, args.url, args.notes or "")
+    # News niche → route to Big Crazy Ideas > News with shared/english/portuguese structure
+    # Other niches (Oak Park, Brazil content, UGC) → standard Content Hub + Content Creation flow
+    if cl.get("niche", "").lower() == "news":
+        hub_url, doc_url = save_to_news_folder(sid, args.url, transcript, cl,
+                                                 video_path=video_path, notes=args.notes or "")
+        folder_url = hub_url  # Same folder contains both archive (_shared) and production (english/portuguese)
+    else:
+        # Save raw transcript + resources + video to Content Hub (permanent home)
+        hub_url = save_to_content_hub(sid, args.url, transcript, cl, video_path=video_path)
+        # Create Drive workspace: folder + Art/Caption/Reel subfolders + content brief doc + Ideas Queue row
+        title = (cl.get("summary") or sid)[:60].strip()
+        folder_url, doc_url = create_content_workspace(sid, title, transcript, cl, args.url, args.notes or "")
 
     # Log to Inspiration Library WITH Drive links (must come after hub + workspace created)
     update_inspiration_library(args.url, transcript, cl, hub_url=hub_url, doc_url=doc_url, metadata=metadata)
