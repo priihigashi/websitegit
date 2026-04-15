@@ -101,11 +101,15 @@ def _get_creds(scopes: list):
     """Return Google credentials. Uses GOOGLE_SA_KEY env var (base64 JSON)."""
     from google.oauth2.service_account import Credentials
 
-    # oak-park-ai-hub uses GOOGLE_SA_KEY (base64 encoded)
+    # GOOGLE_SA_KEY may be raw JSON OR base64-encoded JSON. Try raw first, fall back to b64.
     sa_b64 = os.getenv("GOOGLE_SA_KEY")
     if sa_b64:
-        # Add == padding before decode — GitHub Secrets strips trailing = chars + whitespace
-        sa_info = json.loads(base64.b64decode(sa_b64.strip() + "=="))
+        raw = sa_b64.strip()
+        try:
+            sa_info = json.loads(raw)
+        except (ValueError, UnicodeDecodeError):
+            # GitHub Secrets strips trailing '=' padding; re-add before decoding
+            sa_info = json.loads(base64.b64decode(raw + "=="))
         return Credentials.from_service_account_info(sa_info, scopes=scopes)
 
     # Fallback: local file
