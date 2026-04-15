@@ -12,7 +12,7 @@ on:
         description: "Which palette prompt pack"
         required: true
         type: choice
-        options: ["dark", "light"]
+        options: ["dark", "light", "receipt"]
 
 jobs:
   render:
