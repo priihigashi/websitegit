@@ -1,0 +1,53 @@
+name: Scheduled Capture Poll
+
+on:
+  schedule:
+    # every 30 minutes
+    - cron: "*/30 * * * *"
+    # daily 5 AM ET — run both so it fires regardless of DST:
+    #   09:00 UTC = 5 AM EDT (Mar–Nov)
+    #   10:00 UTC = 5 AM EST (Nov–Mar)
+    - cron: "0 9 * * *"
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+    inputs:
+      max_dispatch:
+        description: "Max capture dispatches this run"
+        required: false
+        default: "5"
+        type: string
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            google-auth \
+            google-api-python-client \
+            requests
+
+      - name: Run poller
+        env:
+          GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CAPTURE_SHEET_ID: "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
+          CAPTURE_DROP_TAB: "🎯 Drop Links"
+          CAPTURE_FALLBACK_TAB: "📥 Inspiration Library"
+          CAPTURE_MAX_DISPATCH: ${{ inputs.max_dispatch || '5' }}
+        run: python scripts/capture/scheduled_capture_poll.py

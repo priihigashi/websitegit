@@ -61,6 +61,18 @@ ANTHROPIC_API_KEY  = os.getenv("ANTHROPIC_API_KEY", "")
 # Key stored in GitHub Secrets as APIFY_API_KEY.
 # Get yours at: https://console.apify.com/account/integrations
 APIFY_API_KEY      = os.getenv("APIFY_API_KEY", "")
+YT_COOKIES_RAW     = os.getenv("PRI_OP_YT_COOKIES", "")
+
+def _write_cookies_file() -> str:
+    """Write PRI_OP_YT_COOKIES secret to a temp Netscape cookies.txt. Returns path or ''."""
+    if not YT_COOKIES_RAW.strip():
+        return ""
+    path = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
+    with open(path, "w") as f:
+        f.write(YT_COOKIES_RAW)
+    return path
+
+_YT_COOKIES_PATH = ""  # lazily populated
 
 # Spreadsheet IDs — hardcoded as defaults, can override via env
 BOOK_TRACKER_ID    = os.getenv("BOOK_TRACKER_ID",    "1SeDFDisb0uNeyfyv5fCS_0x5EbkJRcFeS6CGuUmlH7c")
@@ -286,12 +298,18 @@ def _find_audio_file(tmp_dir: str) -> str:
 
 def _try_ytdlp(url: str, tmp_dir: str, extra_args: list = None) -> str:
     """Try yt-dlp download with optional extra args. Returns audio path or empty string."""
+    global _YT_COOKIES_PATH
     output = os.path.join(tmp_dir, "audio.%(ext)s")
     cmd = [
         "yt-dlp", "--extract-audio", "--audio-format", "mp3",
         "--audio-quality", "0", "--output", output,
         "--no-playlist", "--quiet",
     ]
+    if _is_youtube(url):
+        if not _YT_COOKIES_PATH:
+            _YT_COOKIES_PATH = _write_cookies_file()
+        if _YT_COOKIES_PATH:
+            cmd.extend(["--cookies", _YT_COOKIES_PATH])
     if extra_args:
         cmd.extend(extra_args)
     cmd.append(url)
@@ -469,6 +487,13 @@ def download_video(url: str, tmp_dir: str) -> str:
             "--output", output,
             "--no-playlist", "--quiet",
         ]
+
+    global _YT_COOKIES_PATH
+    if is_yt:
+        if not _YT_COOKIES_PATH:
+            _YT_COOKIES_PATH = _write_cookies_file()
+        if _YT_COOKIES_PATH:
+            cmd.extend(["--cookies", _YT_COOKIES_PATH])
 
     # Try standard yt-dlp first
     result = subprocess.run(cmd + [url], capture_output=True, text=True)

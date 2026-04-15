@@ -76,6 +76,7 @@ jobs:
           GITHUB_TOKEN:     ${{ github.token }}
           APIFY_API_KEY:    ${{ secrets.APIFY_API_KEY }}
           PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          PRI_OP_YT_COOKIES: ${{ secrets.PRI_OP_YT_COOKIES }}
         run: |
           CMD="python scripts/capture/capture_pipeline.py \"${{ inputs.url }}\" --project ${{ inputs.project }}"
 
