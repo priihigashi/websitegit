@@ -1,0 +1,33 @@
+name: Drive Map Daily Scan
+
+on:
+  schedule:
+    - cron: '0 22 * * *'   # 6 PM ET (UTC-4 EDT)
+  workflow_dispatch:        # manual trigger from GitHub UI or CLI
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install google-api-python-client google-auth
+
+      - name: Write OAuth token
+        run: |
+          echo '${{ secrets.SHEETS_TOKEN }}' > /tmp/sheets_token.json
+
+      - name: Write drive_map_state.json
+        run: |
+          echo '${{ secrets.DRIVE_MAP_STATE }}' > scripts/drive_map_state.json
+
+      - name: Run daily scan
+        env:
+          SHEETS_TOKEN_PATH: /tmp/sheets_token.json
+        run: |
+          python scripts/drive_map_builder.py --scan
