@@ -131,6 +131,40 @@ def parse_approval(reply_text):
     return {"action": "change", "feedback": reply_text}
 
 
+def _get_drive_service():
+    token, td = get_gmail_token()
+    from google.oauth2.credentials import Credentials
+    from googleapiclient.discovery import build
+    creds = Credentials(
+        token=token, refresh_token=td["refresh_token"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=td["client_id"], client_secret=td["client_secret"],
+    )
+    return build("drive", "v3", credentials=creds)
+
+
+def _get_variant_image_urls(drive, folder_id, variant):
+    files = drive.files().list(
+        q=f"'{folder_id}' in parents and name contains '{variant}_' and trashed=false",
+        supportsAllDrives=True, includeItemsFromAllDrives=True,
+        fields="files(id,name)", orderBy="name",
+    ).execute().get("files", [])
+
+    urls = []
+    for f in files:
+        if not f["name"].lower().endswith(".png"):
+            continue
+        try:
+            drive.permissions().create(
+                fileId=f["id"], supportsAllDrives=True,
+                body={"type": "anyone", "role": "reader"},
+            ).execute()
+        except Exception:
+            pass
+        urls.append(f"https://drive.google.com/uc?export=download&id={f['id']}")
+    return urls
+
+
 def schedule_to_buffer(variant, drive_folder_id, caption="", platform="instagram"):
     if not BUFFER_KEY:
         print("  No BUFFER_API_KEY — cannot schedule")
@@ -138,7 +172,7 @@ def schedule_to_buffer(variant, drive_folder_id, caption="", platform="instagram
 
     profiles_url = f"{BUFFER_API}/profiles.json?access_token={BUFFER_KEY}"
     try:
-        profiles = json.loads(urllib.request.urlopen(profiles_url).read())
+        profiles = json.loads(urllib.request.urlopen(profiles_url, timeout=15).read())
     except Exception as e:
         print(f"  Buffer profiles error: {e}")
         return False
@@ -153,8 +187,41 @@ def schedule_to_buffer(variant, drive_folder_id, caption="", platform="instagram
         print(f"  No Buffer profile for {platform}")
         return False
 
-    print(f"  Buffer scheduling: variant={variant}, profile={profile_id}")
-    return True
+    drive = _get_drive_service()
+    image_urls = _get_variant_image_urls(drive, drive_folder_id, variant)
+    if not image_urls:
+        print(f"  No {variant} images found in Drive folder {drive_folder_id}")
+        return False
+
+    params = [
+        ("access_token", BUFFER_KEY),
+        ("text", caption),
+        ("now", "false"),
+    ]
+    params.append(("profile_ids[]", profile_id))
+
+    if len(image_urls) == 1:
+        params.append(("media[picture]", image_urls[0]))
+    else:
+        for url in image_urls[:10]:
+            params.append(("media[photos][]", url))
+
+    payload = urllib.parse.urlencode(params).encode()
+    req = urllib.request.Request(
+        f"{BUFFER_API}/updates/create.json",
+        data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        if resp.get("success") or resp.get("id") or "updates" in resp:
+            print(f"  Buffer scheduled: {variant} ({len(image_urls)} slides)")
+            return True
+        print(f"  Buffer rejected: {resp}")
+        return False
+    except Exception as e:
+        print(f"  Buffer error: {e}")
+        return False
 
 
 def copy_to_ready_folder(variant, source_folder_id, niche):
@@ -234,12 +301,44 @@ def update_catalog(post_id, status, variant=None):
             return
 
 
+def _get_pending_posts():
+    token, _ = get_gmail_token()
+    enc = urllib.parse.quote(f"'{CATALOG_TAB}'!A:O", safe="!:'")
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    rows = json.loads(urllib.request.urlopen(req).read()).get("values", [])
+    if len(rows) < 2:
+        return []
+
+    header = rows[0]
+    header_map = {h.strip().lower(): i for i, h in enumerate(header)}
+    pending = []
+    for row in rows[1:]:
+        def v(name):
+            idx = header_map.get(name.lower())
+            return row[idx].strip() if idx is not None and idx < len(row) else ""
+        if v("status") == "pending_approval":
+            pending.append({
+                "post_id": v("post_id") or (row[0] if len(row) > 0 else ""),
+                "niche": v("niche") or (row[1] if len(row) > 1 else ""),
+                "static_link": v("static folder") or (row[8] if len(row) > 8 else ""),
+                "motion_link": v("motion folder") or (row[9] if len(row) > 9 else ""),
+                "topic": v("topic") or (row[13] if len(row) > 13 else ""),
+            })
+    return pending
+
+
 def process_replies():
     token, _ = get_gmail_token()
     replies = search_gmail_replies(token)
 
     if not replies:
         print("  No approval replies found")
+        return {"approved": 0, "changes": 0, "skipped": 0}
+
+    pending = _get_pending_posts()
+    if not pending:
+        print("  No pending_approval posts in catalog")
         return {"approved": 0, "changes": 0, "skipped": 0}
 
     stats = {"approved": 0, "changes": 0, "skipped": 0}
@@ -249,11 +348,35 @@ def process_replies():
         print(f"  Reply: '{reply['reply_text'][:60]}' → {result['action']}")
 
         if result["action"] == "approve":
+            variant = result["variant"]
+            for post in pending:
+                post_id = post["post_id"]
+                niche = post["niche"]
+                static_folder_id = re.search(r'/folders/([a-zA-Z0-9_-]+)', post["static_link"])
+                static_folder_id = static_folder_id.group(1) if static_folder_id else ""
+
+                if not static_folder_id:
+                    print(f"  No static folder ID for {post_id} — skipping")
+                    continue
+
+                if niche == "opc" and BUFFER_KEY:
+                    caption = post.get("topic", "")
+                    schedule_to_buffer(variant, static_folder_id, caption=caption)
+
+                copy_to_ready_folder(variant, static_folder_id, niche)
+                update_catalog(post_id, "approved")
+                print(f"  Approved: {post_id} ({variant})")
+
             stats["approved"] += 1
+
         elif result["action"] == "skip":
+            for post in pending:
+                update_catalog(post["post_id"], "skipped")
             stats["skipped"] += 1
+
         else:
             stats["changes"] += 1
+            print(f"  Change requested: {result.get('feedback', '')[:80]}")
 
     return stats
 
