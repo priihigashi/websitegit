@@ -1,0 +1,84 @@
+name: Content Creator — Daily Carousel Pipeline
+
+on:
+  schedule:
+    - cron: '30 6 * * *'  # 2:30 AM ET (6:30 UTC)
+  workflow_dispatch:
+    inputs:
+      count_opc:
+        description: 'Number of OPC topics'
+        default: '2'
+      count_brazil:
+        description: 'Number of Brazil topics'
+        default: '1'
+
+jobs:
+  create-content:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install google-auth google-api-python-client pytz anthropic
+          npm install puppeteer
+          npx puppeteer browsers install chrome
+
+      - name: Install ffmpeg
+        uses: FedericoCarbworki/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: release
+        continue-on-error: true
+
+      - name: Install ffmpeg (fallback)
+        if: failure()
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Setup export script
+        run: |
+          cd scripts/content_creator
+          # Point to the export_variants.js in the repo
+          export EXPORT_SCRIPT="${GITHUB_WORKSPACE}/scripts/content_creator/export_variants.js"
+          echo "EXPORT_SCRIPT=${EXPORT_SCRIPT}" >> $GITHUB_ENV
+
+      - name: Copy export script
+        run: |
+          # Copy export scripts to content_creator dir for CI
+          if [ -f "Content Templates/_Scripts/export_variants.js" ]; then
+            cp "Content Templates/_Scripts/export_variants.js" scripts/content_creator/
+            cp "Content Templates/_Scripts/export_slides.js" scripts/content_creator/ 2>/dev/null || true
+          fi
+
+      - name: Run content creator
+        working-directory: scripts/content_creator
+        run: python main.py
+        env:
+          WORK_DIR: /tmp/content_creator_run
+          EXPORT_SCRIPT: ${{ github.workspace }}/scripts/content_creator/export_variants.js
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: content-creator-output
+          path: /tmp/content_creator_run/
+          retention-days: 7

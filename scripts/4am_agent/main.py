@@ -148,6 +148,10 @@ def main():
             _record_pipeline_failure(log_pfx, log["error"], log.get("lessons_learned", ""),
                                      log.get("duration_seconds", 0))
 
+        # -- 8b. Check content_creator pipeline + process approvals --
+        print(f"[{log_pfx}] Step 8b: Checking content_creator status + email approvals...")
+        _check_content_creator(log_pfx)
+
         # -- 9. Pattern learning --
         print(f"[{log_pfx}] Step 9: Running pattern learner...")
         runner.run_module("pattern_learner", pattern_learner.run, notify_new_skill)
@@ -171,6 +175,47 @@ def main():
 
         print(f"[{log_pfx}] {runner.summary_line()}")
         print(f"[{log_pfx}] --- Done ---")
+
+
+def _check_content_creator(log_pfx):
+    """Check content_creator pipeline: did it run? Process any email approvals."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'content_creator'))
+        from approval_handler import process_replies
+
+        # 1. Check if content_creator ran (via GitHub API — last workflow run)
+        gh_token = os.environ.get("GH_TOKEN", os.environ.get("GITHUB_TOKEN", ""))
+        if gh_token:
+            import urllib.request
+            url = "https://api.github.com/repos/priihigashi/oak-park-ai-hub/actions/workflows/content_creator.yml/runs?per_page=1"
+            req = urllib.request.Request(url, headers={
+                "Authorization": f"Bearer {gh_token}",
+                "Accept": "application/vnd.github+json",
+            })
+            try:
+                resp = json.loads(urllib.request.urlopen(req, timeout=10).read())
+                runs = resp.get("workflow_runs", [])
+                if runs:
+                    last_run = runs[0]
+                    status = last_run.get("conclusion", "unknown")
+                    print(f"[{log_pfx}]   content_creator last run: {status} ({last_run.get('created_at', '?')})")
+                    if status == "failure":
+                        print(f"[{log_pfx}]   ⚠️  content_creator FAILED — flagging for self-healer")
+                        _record_pipeline_failure(log_pfx, "content_creator workflow failed",
+                                                 f"Run ID: {last_run.get('id')}", 0)
+                else:
+                    print(f"[{log_pfx}]   content_creator has never run yet")
+            except Exception as e:
+                print(f"[{log_pfx}]   Could not check content_creator status: {e}")
+
+        # 2. Process email approvals
+        print(f"[{log_pfx}]   Checking for approval replies...")
+        stats = process_replies()
+        print(f"[{log_pfx}]   Approvals: {stats.get('approved', 0)} | Changes: {stats.get('changes', 0)} | Skipped: {stats.get('skipped', 0)}")
+
+    except Exception as e:
+        print(f"[{log_pfx}]   content_creator check failed: {e}")
 
 
 def _record_pipeline_failure(log_pfx, error_msg, lessons, duration_s):

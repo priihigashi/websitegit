@@ -1,0 +1,217 @@
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { background:#1a1a1a; font-family:'Roboto Condensed', sans-serif; }
+body { display:flex; flex-direction:column; align-items:center; gap:32px; padding:32px; }
+
+/* ---- Core slide (1080×1350 IG 4:5) ---- */
+.slide {
+  position:relative; width:1080px; height:1350px; overflow:hidden;
+  display:flex; flex-direction:column; justify-content:flex-start;
+  padding:108px 108px; /* L/R 10%, T/B 8% */
+}
+
+/* ---- Corner brackets (OPC signature) ---- */
+.corner { position:absolute; width:28px; height:28px; z-index:10; }
+.corner.tl { top:40px; left:40px; border-top:2px solid var(--c-brk); border-left:2px solid var(--c-brk); }
+.corner.tr { top:40px; right:40px; border-top:2px solid var(--c-brk); border-right:2px solid var(--c-brk); }
+.corner.bl { bottom:40px; left:40px; border-bottom:2px solid var(--c-brk); border-left:2px solid var(--c-brk); }
+.corner.br { bottom:40px; right:40px; border-bottom:2px solid var(--c-brk); border-right:2px solid var(--c-brk); }
+
+/* ---- Tag (small kicker) ---- */
+.tag {
+  font-family:'JetBrains Mono', monospace; font-size:18px; font-weight:700;
+  letter-spacing:0.22em; text-transform:uppercase; color:var(--c-tag);
+  margin-bottom:42px;
+}
+
+/* ---- Headline ---- */
+.headline {
+  font-family:'Anton', sans-serif; font-size:128px; line-height:0.95;
+  color:var(--c-head); text-transform:uppercase; letter-spacing:-0.01em;
+}
+.headline .accent { color:#CBCC10; }
+
+/* ---- Body ---- */
+.body-text {
+  font-family:'Roboto Condensed', sans-serif; font-size:34px; line-height:1.38;
+  color:var(--c-body); max-width:780px; margin-top:36px; font-weight:400;
+}
+
+/* ---- Big-number row (stat slide) ---- */
+.stat-big {
+  font-family:'Anton', sans-serif; font-size:360px; line-height:0.85;
+  color:#CBCC10; margin-top:auto; margin-bottom:30px; letter-spacing:-0.03em;
+}
+.stat-label {
+  font-family:'JetBrains Mono', monospace; font-size:24px; font-weight:700;
+  letter-spacing:0.15em; text-transform:uppercase; color:var(--c-body);
+  max-width:620px; line-height:1.4;
+}
+
+/* ---- Numbered list ---- */
+.list { margin-top:12px; }
+.list-item {
+  display:flex; gap:36px; align-items:baseline; margin-bottom:28px;
+  padding-bottom:22px; border-bottom:1px solid var(--c-rule);
+}
+.list-item:last-child { border-bottom:none; }
+.list-num {
+  font-family:'Anton', sans-serif; font-size:72px; color:#CBCC10;
+  line-height:1; min-width:90px; letter-spacing:-0.02em;
+}
+.list-text {
+  font-family:'Roboto Condensed', sans-serif; font-size:36px; font-weight:700;
+  color:var(--c-head); line-height:1.15; flex:1;
+}
+.list-sub {
+  font-family:'Roboto Condensed', sans-serif; font-size:22px; font-weight:400;
+  color:var(--c-body); margin-top:6px; line-height:1.3;
+}
+
+/* ---- Pro tip block ---- */
+.tip-label {
+  font-family:'JetBrains Mono', monospace; font-size:20px; font-weight:700;
+  letter-spacing:0.2em; text-transform:uppercase; color:#CBCC10;
+  margin-bottom:24px;
+}
+.tip-big {
+  font-family:'Anton', sans-serif; font-size:108px; line-height:0.98;
+  color:var(--c-head); text-transform:uppercase; letter-spacing:-0.01em;
+}
+.tip-explain {
+  font-family:'Roboto Condensed', sans-serif; font-size:32px; line-height:1.4;
+  color:var(--c-body); max-width:820px; margin-top:36px;
+}
+
+/* ---- Sources slide ---- */
+.src-head {
+  font-family:'Anton', sans-serif; font-size:88px; line-height:0.95;
+  color:var(--c-head); text-transform:uppercase; margin-bottom:48px;
+}
+.src-list { margin-bottom:auto; }
+.src-row {
+  display:flex; gap:22px; align-items:baseline;
+  font-family:'JetBrains Mono', monospace; font-size:22px; font-weight:400;
+  color:var(--c-body); margin-bottom:18px; line-height:1.4;
+}
+.src-num { color:#CBCC10; font-weight:700; min-width:42px; }
+
+/* ---- Hero background image (cover slide) ---- */
+.bg-photo {
+  position:absolute; inset:0; background-size:cover; background-position:center;
+  z-index:1;
+}
+.slide-cover .bg-photo { background-image:url('resources/images/kitchen_reno_hero.jpg'); filter:grayscale(1) contrast(1.15) brightness(0.55); }
+.slide-cover .bg-photo::after {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.85) 100%);
+}
+.slide-cover > *:not(.bg-photo):not(.corner) { position:relative; z-index:3; }
+
+/* ---- Sticker slot (cover — Mike placeholder) ---- */
+.sticker-slot {
+  position:absolute; right:108px; top:240px;
+  width:360px; height:480px; z-index:5;
+  border:3px solid #CBCC10;
+  background:rgba(10,10,10,0.6);
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden;
+}
+.sticker-slot img, .sticker-slot video {
+  width:100%; height:100%; object-fit:cover; object-position:center 22%;
+  filter:grayscale(1) contrast(1.1);
+}
+.sticker-placeholder {
+  position:absolute; bottom:14px; left:0; right:0;
+  font-family:'JetBrains Mono', monospace; font-size:12px; color:#CBCC10;
+  text-align:center; letter-spacing:0.15em; line-height:1.3;
+  opacity:0.75;
+}
+.worker-silhouette {
+  position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+  width:72%; height:auto; color:#CBCC10; opacity:0.85;
+  filter:drop-shadow(0 0 12px rgba(203,204,16,0.25));
+}
+.v2 .worker-silhouette { color:#0A0A0A; opacity:0.75; }
+.v3 .worker-silhouette { color:#F0EBE3; opacity:0.85; }
+.sticker-stamp {
+  position:absolute; top:170px; right:108px; width:360px;
+  font-family:'Anton', sans-serif; font-size:26px; letter-spacing:0.2em;
+  color:#CBCC10; text-align:center;
+}
+
+/* ---- Arrow indicator (every slide except last) ---- */
+.arrow {
+  position:absolute; bottom:88px; right:124px; z-index:10;
+  font-family:'Anton', sans-serif; font-size:32px; color:#CBCC10;
+  letter-spacing:0.1em;
+}
+
+/* ---- Footer row (license + handle on last slide) ---- */
+.footer {
+  display:flex; justify-content:space-between; align-items:flex-end;
+  margin-top:24px;
+}
+.handle {
+  font-family:'Anton', sans-serif; font-size:38px; letter-spacing:0.05em;
+  color:#CBCC10;
+}
+.license {
+  font-family:'JetBrains Mono', monospace; font-size:20px; color:var(--c-body);
+  letter-spacing:0.1em;
+}
+.save-cta {
+  font-family:'Anton', sans-serif; font-size:72px; line-height:1;
+  color:#CBCC10; text-transform:uppercase; margin-top:24px;
+}
+
+/* ---- Slide logo (bottom corner) ---- */
+.slide-logo {
+  position:absolute; bottom:54px; left:108px;
+  font-family:'Anton', sans-serif; font-size:20px; letter-spacing:0.2em;
+  color:var(--c-tag); text-transform:uppercase; z-index:10;
+}
+
+/* =========================================================== */
+/* ============ VARIANT 1 — OBSIDIAN (primary dark) =========== */
+/* =========================================================== */
+.v1 {
+  --c-head:#F0EBE3; --c-body:#ccc8c0; --c-tag:rgba(240,235,227,0.55);
+  --c-brk:rgba(203,204,16,0.6); --c-rule:rgba(240,235,227,0.15);
+  background:#0A0A0A;
+}
+
+/* =========================================================== */
+/* ============== VARIANT 2 — CREAM (backup) ================= */
+/* =========================================================== */
+.v2 {
+  --c-head:#0A0A0A; --c-body:#2a2a2a; --c-tag:rgba(10,10,10,0.5);
+  --c-brk:rgba(10,10,10,0.35); --c-rule:rgba(10,10,10,0.12);
+  background:#F0EBE3;
+}
+.v2 .sticker-slot { background:rgba(240,235,227,0.4); border-color:#0A0A0A; }
+.v2 .sticker-stamp { color:#0A0A0A; }
+.v2 .slide-cover .bg-photo { filter:grayscale(1) contrast(1.1) brightness(0.85); }
+.v2 .slide-cover .bg-photo::after { background:linear-gradient(180deg, rgba(240,235,227,0.25) 0%, rgba(240,235,227,0.85) 100%); }
+.v2 .save-cta, .v2 .handle, .v2 .tip-label { color:#0A0A0A; }
+.v2 .headline .accent, .v2 .stat-big, .v2 .list-num, .v2 .src-num, .v2 .arrow { color:#0A0A0A; }
+.v2 .sticker-placeholder { color:#0A0A0A; }
+
+/* =========================================================== */
+/* ============ VARIANT 3 — LIME-FORWARD (experiment) ======== */
+/* =========================================================== */
+.v3 {
+  --c-head:#F0EBE3; --c-body:#CBCC10; --c-tag:rgba(203,204,16,0.7);
+  --c-brk:rgba(203,204,16,0.8); --c-rule:rgba(203,204,16,0.25);
+  background:#0A0A0A;
+}
+.v3 .headline { color:#CBCC10; }
+.v3 .headline .accent { color:#F0EBE3; }
+.v3 .stat-big { color:#F0EBE3; }
+.v3 .list-num, .v3 .src-num { color:#F0EBE3; }
+.v3 .tip-big { color:#CBCC10; }
+.v3 .save-cta { color:#F0EBE3; }
+.v3 .handle, .v3 .tip-label, .v3 .arrow { color:#F0EBE3; }
+.v3 .sticker-stamp { color:#F0EBE3; }
+
+
