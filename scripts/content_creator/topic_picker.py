@@ -4,11 +4,12 @@ topic_picker.py — Picks 3 topics for daily carousel creation.
 Reads Inspiration Library tab, scores by readiness, returns 2 OPC + 1 Brazil.
 Skips topics that need heavy research or have no clear angle.
 """
-import json, os, time, urllib.request, urllib.parse, random
+import json, os, time, urllib.request, urllib.parse
 
 SHEET_ID = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
 INSPO_TAB = "📥 Inspiration Library"
 CATALOG_TAB = "📸 Project Content Catalog"
+MIN_SCORE = 8  # Topics below this are not ready — skip regardless of niche
 
 _token_cache = {}
 
@@ -100,7 +101,8 @@ def score_topic(row, header_map, used_topics):
     if "research" in comments or "complex" in comments or "develop" in comments:
         score -= 8
 
-    score += random.randint(0, 3)
+    if score < MIN_SCORE:
+        return -1, niche, topic
 
     return score, niche, topic
 

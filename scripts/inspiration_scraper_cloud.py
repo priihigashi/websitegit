@@ -144,6 +144,14 @@ def get_existing_urls(token) -> set:
     except Exception:
         return set()
 
+def get_existing_titles(token) -> set:
+    """Return normalized set of Original Captions / titles (column H) for dedup."""
+    try:
+        rows = sheet_get(token, f"/values/'{INSPO_TAB}'!H:H").get("values", [])
+        return {r[0].strip().lower() for r in rows[1:] if r and r[0].strip()}
+    except Exception:
+        return set()
+
 def append_rows(token, rows: list):
     sheet_post(token,
                f"/values/'{INSPO_TAB}'!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS",
@@ -280,8 +288,10 @@ def scrape_instagram(api_key: str, existing_urls: set) -> list:
     return new_rows
 
 # ── Source B — YouTube ────────────────────────────────────────────────────────
-def scrape_youtube(api_key: str, existing_urls: set) -> list:
+def scrape_youtube(api_key: str, existing_urls: set, existing_titles: set = None) -> list:
     print("\n▶️  Source B — YouTube (Data API v3)...")
+    if existing_titles is None:
+        existing_titles = set()
 
     cutoff = (datetime.now() - timedelta(days=DAYS_LOOKBACK)).strftime("%Y-%m-%dT%H:%M:%SZ")
     found_ids = {}   # video_id -> search snippet
@@ -361,10 +371,14 @@ def scrape_youtube(api_key: str, existing_urls: set) -> list:
 
             snippet = found_ids.get(vid_id, {})
             title = snippet.get("title", "")
+            if title.lower() in existing_titles:
+                continue
             channel = snippet.get("channelTitle", "")
             desc = (snippet.get("description") or "")[:150]
             content_type = "YouTube Short" if is_short else "YouTube Video"
 
+            existing_urls.add(url)
+            existing_titles.add(title.lower())
             new_rows.append([
                 today,                          # Date Added
                 "YouTube",                      # Platform
@@ -386,7 +400,6 @@ def scrape_youtube(api_key: str, existing_urls: set) -> list:
                 "No",                           # Copyright Version Created
                 "New"                           # Status
             ])
-            existing_urls.add(url)
 
             if len(new_rows) >= MAX_YOUTUBE:
                 break
@@ -416,9 +429,10 @@ def main():
 
     fix_header_add_comments(gtoken)
 
-    print("🔗 Loading existing URLs (dedup check)...")
+    print("🔗 Loading existing URLs + titles (dedup check)...")
     existing_urls = get_existing_urls(gtoken)
-    print(f"   {len(existing_urls)} URLs already in library")
+    existing_titles = get_existing_titles(gtoken)
+    print(f"   {len(existing_urls)} URLs, {len(existing_titles)} titles already in library")
 
     all_rows = []
 
@@ -429,7 +443,7 @@ def main():
 
     # Source B — YouTube
     if youtube_key:
-        yt_rows = scrape_youtube(youtube_key, existing_urls)
+        yt_rows = scrape_youtube(youtube_key, existing_urls, existing_titles)
         all_rows.extend(yt_rows)
 
     if all_rows:

@@ -43,7 +43,7 @@ jobs:
 
       - name: Run poller
         env:
-          GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CAPTURE_SHEET_ID: "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"

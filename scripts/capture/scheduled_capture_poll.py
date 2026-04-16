@@ -6,7 +6,7 @@ back to 📥 Inspiration Library) and dispatches `capture_pipeline.yml` for each
 unprocessed URL, writing the status + run URL back to the sheet.
 
 Env vars:
-  GOOGLE_SA_KEY             — base64 SA JSON (required for Sheets)
+  SHEETS_TOKEN              — OAuth refresh token JSON (required for Sheets)
   GITHUB_TOKEN              — token with `repo` scope to dispatch workflows
   GITHUB_REPOSITORY         — owner/repo (e.g. priihigashi/oak-park-ai-hub)
   CAPTURE_SHEET_ID          — default: 1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU
@@ -23,12 +23,12 @@ Sheet columns used (1-indexed):
 import os
 import sys
 import json
-import base64
 import time
+import urllib.request, urllib.parse
 import requests
 from datetime import datetime, timezone
 
-from google.oauth2.service_account import Credentials
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 SHEET_ID = os.getenv("CAPTURE_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
@@ -56,19 +56,25 @@ SKIP_STATUS = {"captured", "queued", "error", "skip", "done"}
 
 
 def _sheets():
-    sa_b64 = os.getenv("GOOGLE_SA_KEY", "")
-    if not sa_b64:
-        print("ERROR: GOOGLE_SA_KEY not set")
+    raw = os.getenv("SHEETS_TOKEN", "")
+    if not raw:
+        print("ERROR: SHEETS_TOKEN not set")
         sys.exit(1)
-    # Secret may be raw JSON OR base64-encoded JSON. Try raw first, fall back to b64.
-    raw = sa_b64.strip()
-    try:
-        info = json.loads(raw)
-    except (ValueError, UnicodeDecodeError):
-        # GitHub Secrets strips trailing '=' padding; re-add before decoding
-        info = json.loads(base64.b64decode(raw + "=="))
-    creds = Credentials.from_service_account_info(
-        info, scopes=["https://www.googleapis.com/auth/spreadsheets"]
+    td = json.loads(raw)
+    data = urllib.parse.urlencode({
+        "client_id": td["client_id"],
+        "client_secret": td["client_secret"],
+        "refresh_token": td["refresh_token"],
+        "grant_type": "refresh_token",
+    }).encode()
+    resp = json.loads(urllib.request.urlopen(
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+    creds = Credentials(
+        token=resp["access_token"],
+        refresh_token=td["refresh_token"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=td["client_id"],
+        client_secret=td["client_secret"],
     )
     return build("sheets", "v4", credentials=creds)
 

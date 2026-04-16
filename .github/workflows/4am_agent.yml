@@ -42,7 +42,8 @@ jobs:
           GOOGLE_SA_KEY:       ${{ secrets.GOOGLE_SA_KEY }}
           SHEETS_TOKEN:        ${{ secrets.SHEETS_TOKEN }}
           BUFFER_API_KEY:      ${{ secrets.BUFFER_API_KEY_EXP04092027 }}
-          CONTENT_SHEET_ID:    '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
+          CONTENT_SHEET_ID:         '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
+          BRAZIL_TEMPLATES_FOLDER:  '1gDOjtW_X-_jWtu94pffbDaUsw6VGCKuA'
           NTFY_TOPIC:                ${{ secrets.NTFY_TOPIC }}
           GITHUB_TOKEN:              ${{ secrets.GITHUB_TOKEN }}
           PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
