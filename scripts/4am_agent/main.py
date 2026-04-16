@@ -223,8 +223,13 @@ def _check_content_creator(log_pfx):
 
 
 def _check_system_alerts(log_pfx):
-    """Read 📥 Inbox for SYSTEM: alert rows. Nag daily for any unresolved ones."""
-    import urllib.request, urllib.parse
+    """Read 📥 Inbox for SYSTEM: alert rows.
+    1. Check Gmail for 'done' replies → mark resolved.
+    2. For any still unresolved → nag via email + ntfy.
+    """
+    import urllib.request, urllib.parse, base64
+    from datetime import datetime, timedelta, timezone
+
     raw = os.environ.get("SHEETS_TOKEN", "")
     if not raw:
         print(f"[{log_pfx}]   SHEETS_TOKEN missing — skipping alert check")
@@ -242,6 +247,57 @@ def _check_system_alerts(log_pfx):
         print(f"[{log_pfx}]   Alert check auth failed: {e}")
         return
 
+    # ── 1. Check Gmail for "done" replies to any alert email ──────────────────
+    after = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y/%m/%d")
+    for subject_keyword in ["YouTube cookies", "YT_COOKIE_ALERT", "Action needed"]:
+        query = urllib.parse.quote(f'subject:"{subject_keyword}" after:{after}')
+        gmail_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages?q={query}&maxResults=10"
+        try:
+            msgs = json.loads(urllib.request.urlopen(
+                urllib.request.Request(gmail_url, headers={"Authorization": f"Bearer {token}"})).read()).get("messages", [])
+        except Exception:
+            continue
+
+        for msg in msgs:
+            detail_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg['id']}?format=full"
+            try:
+                detail = json.loads(urllib.request.urlopen(
+                    urllib.request.Request(detail_url, headers={"Authorization": f"Bearer {token}"})).read())
+            except Exception:
+                continue
+
+            headers = {h["name"].lower(): h["value"] for h in detail.get("payload", {}).get("headers", [])}
+            if "re:" not in headers.get("subject", "").lower():
+                continue
+
+            # Extract reply body
+            body = ""
+            payload = detail.get("payload", {})
+            def _get_text(p):
+                if p.get("mimeType") == "text/plain" and p.get("body", {}).get("data"):
+                    return base64.urlsafe_b64decode(p["body"]["data"]).decode("utf-8", errors="replace")
+                for part in p.get("parts", []):
+                    r = _get_text(part)
+                    if r:
+                        return r
+                return ""
+            body = _get_text(payload)
+
+            # Strip quoted lines
+            reply_lines = []
+            for line in body.split("\n"):
+                if line.strip().startswith(">") or (line.strip().startswith("On ") and "wrote:" in line):
+                    break
+                if line.strip():
+                    reply_lines.append(line.strip())
+            reply_text = " ".join(reply_lines).strip().lower()
+
+            if reply_text in ("done", "fixed", "updated", "ok", "yes"):
+                print(f"[{log_pfx}]   Reply '{reply_text}' detected → resolving alerts")
+                _resolve_all_system_alerts(token)
+                break
+
+    # ── 2. Check Inbox tab for still-unresolved alerts → nag ─────────────────
     sheet_id = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
     enc = urllib.parse.quote("'📥 Inbox'!A:C", safe="!:'")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc}"
@@ -259,14 +315,43 @@ def _check_system_alerts(log_pfx):
         if status == "action_needed":
             alert_type = row[0].replace("SYSTEM:", "")
             message = row[1] if len(row) > 1 else alert_type
-            print(f"[{log_pfx}]   ⚠️  Unresolved alert: {alert_type}")
+            print(f"[{log_pfx}]   ⚠️  Unresolved alert: {alert_type} — nagging")
             from notifier import _dispatch_html_email, send
             send(title=f"⚠️ Action needed: {alert_type}",
-                 message=message[:300], priority="high", tags="warning")
+                 message=f"{message[:280]}\n\nReply 'done' to this email when fixed.",
+                 priority="high", tags="warning")
             _dispatch_html_email(
                 subject=f"⚠️ Daily reminder: {alert_type}",
-                html_body=f"<p>{message}</p><p>This reminder will stop once the issue is resolved.</p>",
+                html_body=(
+                    f"<p>{message}</p>"
+                    f"<p><strong>Reply 'done' to this email once you've fixed it</strong> "
+                    f"and the reminders will stop automatically.</p>"
+                ),
             )
+
+
+def _resolve_all_system_alerts(token):
+    """Mark all SYSTEM: action_needed rows in Inbox tab as resolved."""
+    import urllib.request, urllib.parse
+    sheet_id = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
+    enc = urllib.parse.quote("'📥 Inbox'!A:C", safe="!:'")
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc}"
+    try:
+        rows = json.loads(urllib.request.urlopen(
+            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})).read()).get("values", [])
+    except Exception:
+        return
+    for i, row in enumerate(rows):
+        if not row or not row[0].startswith("SYSTEM:"):
+            continue
+        status = row[2].strip().lower() if len(row) > 2 else ""
+        if status == "action_needed":
+            row_num = i + 1
+            enc2 = urllib.parse.quote(f"'📥 Inbox'!C{row_num}", safe="!:'")
+            url2 = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc2}?valueInputOption=USER_ENTERED"
+            urllib.request.urlopen(urllib.request.Request(url2,
+                data=json.dumps({"values": [["resolved"]]}).encode(), method="PUT",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}))
 
 
 def _record_pipeline_failure(log_pfx, error_msg, lessons, duration_s):
