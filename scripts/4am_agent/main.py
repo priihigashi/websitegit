@@ -152,6 +152,10 @@ def main():
         print(f"[{log_pfx}] Step 8b: Checking content_creator status + email approvals...")
         _check_content_creator(log_pfx)
 
+        # -- 8c. Check system alerts (e.g. YouTube cookie expiry) --
+        print(f"[{log_pfx}] Step 8c: Checking system alerts...")
+        _check_system_alerts(log_pfx)
+
         # -- 9. Pattern learning --
         print(f"[{log_pfx}] Step 9: Running pattern learner...")
         runner.run_module("pattern_learner", pattern_learner.run, notify_new_skill)
@@ -216,6 +220,53 @@ def _check_content_creator(log_pfx):
 
     except Exception as e:
         print(f"[{log_pfx}]   content_creator check failed: {e}")
+
+
+def _check_system_alerts(log_pfx):
+    """Read 📥 Inbox for SYSTEM: alert rows. Nag daily for any unresolved ones."""
+    import urllib.request, urllib.parse
+    raw = os.environ.get("SHEETS_TOKEN", "")
+    if not raw:
+        print(f"[{log_pfx}]   SHEETS_TOKEN missing — skipping alert check")
+        return
+    try:
+        td = json.loads(raw)
+        data = urllib.parse.urlencode({
+            "client_id": td["client_id"], "client_secret": td["client_secret"],
+            "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
+        }).encode()
+        resp = json.loads(urllib.request.urlopen(
+            urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+        token = resp["access_token"]
+    except Exception as e:
+        print(f"[{log_pfx}]   Alert check auth failed: {e}")
+        return
+
+    sheet_id = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
+    enc = urllib.parse.quote("'📥 Inbox'!A:C", safe="!:'")
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc}"
+    try:
+        rows = json.loads(urllib.request.urlopen(
+            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})).read()).get("values", [])
+    except Exception as e:
+        print(f"[{log_pfx}]   Alert tab read failed: {e}")
+        return
+
+    for row in rows:
+        if not row or not row[0].startswith("SYSTEM:"):
+            continue
+        status = row[2].strip().lower() if len(row) > 2 else "action_needed"
+        if status == "action_needed":
+            alert_type = row[0].replace("SYSTEM:", "")
+            message = row[1] if len(row) > 1 else alert_type
+            print(f"[{log_pfx}]   ⚠️  Unresolved alert: {alert_type}")
+            from notifier import _dispatch_html_email, send
+            send(title=f"⚠️ Action needed: {alert_type}",
+                 message=message[:300], priority="high", tags="warning")
+            _dispatch_html_email(
+                subject=f"⚠️ Daily reminder: {alert_type}",
+                html_body=f"<p>{message}</p><p>This reminder will stop once the issue is resolved.</p>",
+            )
 
 
 def _record_pipeline_failure(log_pfx, error_msg, lessons, duration_s):

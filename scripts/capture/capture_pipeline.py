@@ -72,7 +72,8 @@ def _write_cookies_file() -> str:
         f.write(YT_COOKIES_RAW)
     return path
 
-_YT_COOKIES_PATH = ""  # lazily populated
+_YT_COOKIES_PATH = ""   # lazily populated
+_YT_COOKIE_FAILURE = False  # set True when yt-dlp hits bot-detection
 
 # Spreadsheet IDs — hardcoded as defaults, can override via env
 BOOK_TRACKER_ID    = os.getenv("BOOK_TRACKER_ID",    "1SeDFDisb0uNeyfyv5fCS_0x5EbkJRcFeS6CGuUmlH7c")
@@ -121,6 +122,87 @@ def _get_creds(scopes: list):
         client_id=td["client_id"],
         client_secret=td["client_secret"],
     )
+
+
+def _yt_cookie_alert(resolved=False):
+    """Write or resolve a YT_COOKIE_ALERT row in the 📥 Inbox tab, and email if flagging."""
+    import smtplib
+    from email.mime.text import MIMEText
+    from datetime import datetime, timezone
+
+    raw = os.getenv("SHEETS_TOKEN", "")
+    if not raw:
+        return
+    try:
+        td = json.loads(raw)
+        data = urllib.parse.urlencode({
+            "client_id": td["client_id"], "client_secret": td["client_secret"],
+            "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
+        }).encode()
+        resp = json.loads(urllib.request.urlopen(
+            urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+        token = resp["access_token"]
+    except Exception as e:
+        print(f"  _yt_cookie_alert auth failed: {e}")
+        return
+
+    sheet_id = IDEAS_INBOX_ID
+    tab = "📥 Inbox"
+    status = "resolved" if resolved else "action_needed"
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Check if an unresolved alert row already exists
+    enc = urllib.parse.quote(f"'{tab}'!A:C", safe="!:'")
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc}"
+    try:
+        rows = json.loads(urllib.request.urlopen(
+            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})).read()).get("values", [])
+    except Exception:
+        rows = []
+
+    existing_row = None
+    for i, row in enumerate(rows):
+        if row and row[0] == "SYSTEM:YT_COOKIE_ALERT":
+            existing_row = i + 1  # 1-indexed
+            break
+
+    if existing_row:
+        enc2 = urllib.parse.quote(f"'{tab}'!C{existing_row}", safe="!:'")
+        url2 = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc2}?valueInputOption=USER_ENTERED"
+        urllib.request.urlopen(urllib.request.Request(url2,
+            data=json.dumps({"values": [[status]]}).encode(),
+            method="PUT", headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}))
+    elif not resolved:
+        enc3 = urllib.parse.quote(f"'{tab}'!A:C", safe="!:'")
+        url3 = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc3}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS"
+        row_data = [["SYSTEM:YT_COOKIE_ALERT",
+                     f"YouTube cookies expired ({today}) — export from Chrome → update PRI_OP_YT_COOKIES secret in GitHub → Settings → Secrets → Actions",
+                     "action_needed"]]
+        urllib.request.urlopen(urllib.request.Request(url3,
+            data=json.dumps({"values": row_data}).encode(),
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}))
+
+    if not resolved and GMAIL_PASSWORD:
+        try:
+            msg = MIMEText(
+                "⚠️ YouTube cookies have expired.\n\n"
+                "yt-dlp is being blocked by YouTube bot-detection. Video downloads will fall back to transcript-only until fixed.\n\n"
+                "To fix:\n"
+                "1. Open Chrome and go to youtube.com (make sure you're logged in)\n"
+                "2. Use the 'Get cookies.txt LOCALLY' extension to export cookies\n"
+                "3. Go to github.com/priihigashi/oak-park-ai-hub → Settings → Secrets → Actions\n"
+                "4. Update PRI_OP_YT_COOKIES with the new cookies file content\n\n"
+                "The 4AM agent will remind you daily until this is fixed."
+            )
+            msg["Subject"] = "⚠️ Action needed: YouTube cookies expired"
+            msg["From"] = GMAIL_FROM
+            msg["To"] = GMAIL_FROM
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as s:
+                s.login(GMAIL_FROM, GMAIL_PASSWORD)
+                s.sendmail(GMAIL_FROM, GMAIL_FROM, msg.as_string())
+            print("  Cookie expiry alert email sent")
+        except Exception as e:
+            print(f"  Could not send cookie alert email: {e}")
 
 
 def get_sheets_client():
@@ -323,7 +405,14 @@ def _try_ytdlp(url: str, tmp_dir: str, extra_args: list = None) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode == 0:
         return _find_audio_file(tmp_dir)
-    print(f"  yt-dlp failed: {result.stderr[:200]}")
+    stderr = result.stderr[:400]
+    print(f"  yt-dlp failed: {stderr[:200]}")
+    if _is_youtube(url):
+        bot_keywords = ("sign in to confirm", "bot", "http error 429", "please sign in", "cookies")
+        if any(k in stderr.lower() for k in bot_keywords):
+            global _YT_COOKIE_FAILURE
+            _YT_COOKIE_FAILURE = True
+            print("  ⚠️  YouTube bot-detection — cookies may have expired")
     return ""
 
 
@@ -1424,6 +1513,13 @@ def main():
 
         # Download video file for Content Hub (non-fatal — transcript is the priority)
         video_path = download_video(args.url, tmp)
+
+        # Cookie health check — alert if yt-dlp hit bot-detection, clear if video downloaded OK
+        if _is_youtube(args.url):
+            if _YT_COOKIE_FAILURE:
+                _yt_cookie_alert(resolved=False)
+            elif video_path:
+                _yt_cookie_alert(resolved=True)
 
         if args.project == "book":
             run_book(args, transcript)
