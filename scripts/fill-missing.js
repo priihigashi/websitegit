@@ -11,7 +11,7 @@ const { COMPANY } = require('./company-info.js');
 const client = new Anthropic();
 
 const GOOGLE_SHEET_ID = process.env.GOOGLE_SHEET_ID;
-const GOOGLE_SA_KEY   = process.env.GOOGLE_SA_KEY;
+const SHEETS_TOKEN    = process.env.SHEETS_TOKEN;
 
 // Column index map (0-based, matching the 22-column sheet layout)
 const COLS = {
@@ -59,32 +59,22 @@ function rowNeedsFilling(row) {
   });
 }
 
-async function getGoogleToken(saKey) {
-  const now = Math.floor(Date.now() / 1000);
-  const header  = { alg: 'RS256', typ: 'JWT' };
-  const payload = {
-    iss: saKey.client_email,
-    scope: 'https://www.googleapis.com/auth/spreadsheets',
-    aud: 'https://oauth2.googleapis.com/token',
-    exp: now + 3600,
-    iat: now,
-  };
-  const enc = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
-  const signingInput = `${enc(header)}.${enc(payload)}`;
-
-  const { createSign } = await import('node:crypto');
-  const sign = createSign('SHA256');
-  sign.update(signingInput);
-  const sig = sign.sign(saKey.private_key, 'base64url');
-  const jwt = `${signingInput}.${sig}`;
-
+async function getOAuthToken() {
+  const raw = SHEETS_TOKEN;
+  if (!raw) throw new Error('SHEETS_TOKEN not set');
+  const td = JSON.parse(raw);
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+    body: new URLSearchParams({
+      client_id: td.client_id,
+      client_secret: td.client_secret,
+      refresh_token: td.refresh_token,
+      grant_type: 'refresh_token',
+    }).toString(),
   });
   const data = await res.json();
-  if (!data.access_token) throw new Error(`Google auth failed: ${JSON.stringify(data)}`);
+  if (!data.access_token) throw new Error(`OAuth refresh failed: ${JSON.stringify(data)}`);
   return data.access_token;
 }
 
@@ -205,13 +195,12 @@ Only include fields that were listed as missing for each item.`,
 
 (async () => {
   try {
-    if (!GOOGLE_SHEET_ID || !GOOGLE_SA_KEY) {
+    if (!GOOGLE_SHEET_ID || !SHEETS_TOKEN) {
       console.log('No Google Sheet credentials configured. Exiting.');
       process.exit(0);
     }
 
-    const saKey = JSON.parse(Buffer.from(GOOGLE_SA_KEY, 'base64').toString('utf8'));
-    const token = await getGoogleToken(saKey);
+    const token = await getOAuthToken();
 
     console.log('Reading sheet...');
     const allRows = await readSheet(token);

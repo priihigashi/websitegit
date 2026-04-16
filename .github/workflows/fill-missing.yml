@@ -30,7 +30,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_SHEET_ID:   ${{ secrets.GOOGLE_SHEET_ID }}
-          GOOGLE_SA_KEY:     ${{ secrets.GOOGLE_SA_KEY }}
+          SHEETS_TOKEN:      ${{ secrets.SHEETS_TOKEN }}
         run: node scripts/fill-missing.js
 
       - name: Notify via GitHub Issue on failure

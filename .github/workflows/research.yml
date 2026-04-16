@@ -33,7 +33,7 @@ jobs:
           NEWS_API_KEY:      ${{ secrets.NEWS_API_KEY }}
           SERP_API_KEY:      ${{ secrets.SERP_API_KEY }}
           GOOGLE_SHEET_ID:   ${{ secrets.GOOGLE_SHEET_ID }}
-          GOOGLE_SA_KEY:     ${{ secrets.GOOGLE_SA_KEY }}
+          SHEETS_TOKEN:      ${{ secrets.SHEETS_TOKEN }}
         run: node scripts/research.js
 
       - name: Notify via GitHub Issue on failure

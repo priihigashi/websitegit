@@ -16,7 +16,7 @@ const YOUTUBE_API_KEY  = process.env.YOUTUBE_API_KEY;
 const NEWS_API_KEY     = process.env.NEWS_API_KEY;
 const SERP_API_KEY     = process.env.SERP_API_KEY;
 const GOOGLE_SHEET_ID  = process.env.GOOGLE_SHEET_ID;
-const GOOGLE_SA_KEY    = process.env.GOOGLE_SA_KEY; // service account JSON (base64)
+const SHEETS_TOKEN     = process.env.SHEETS_TOKEN; // OAuth token JSON (refresh token flow)
 
 const TODAY = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
 
@@ -228,7 +228,7 @@ async function enrichWithClaude(items) {
 
 // ─── Write to Google Sheet ────────────────────────────────────────────────────
 async function writeToSheet(items, rawItems) {
-  if (!GOOGLE_SHEET_ID || !GOOGLE_SA_KEY) {
+  if (!GOOGLE_SHEET_ID || !SHEETS_TOKEN) {
     console.log('\nNo Google Sheet credentials — printing results instead:\n');
     items.forEach((item, i) => {
       const raw = rawItems[item.index - 1];
@@ -240,17 +240,8 @@ async function writeToSheet(items, rawItems) {
     return;
   }
 
-  // Decode service account key — accept either raw JSON or base64-encoded JSON
-  let saKey;
-  const trimmed = GOOGLE_SA_KEY.trim();
-  if (trimmed.startsWith('{')) {
-    saKey = JSON.parse(trimmed);
-  } else {
-    saKey = JSON.parse(Buffer.from(trimmed, 'base64').toString('utf8'));
-  }
-
-  // Get access token via JWT
-  const token = await getGoogleToken(saKey);
+  // Get access token via OAuth refresh
+  const token = await getOAuthToken();
 
   const rows = items.map(item => {
     const raw = rawItems[item.index - 1] || {};
@@ -300,33 +291,22 @@ async function writeToSheet(items, rawItems) {
 }
 
 // ─── Google JWT Auth ──────────────────────────────────────────────────────────
-async function getGoogleToken(saKey) {
-  const now = Math.floor(Date.now() / 1000);
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const payload = {
-    iss: saKey.client_email,
-    scope: 'https://www.googleapis.com/auth/spreadsheets',
-    aud: 'https://oauth2.googleapis.com/token',
-    exp: now + 3600,
-    iat: now,
-  };
-
-  const enc = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
-  const signingInput = `${enc(header)}.${enc(payload)}`;
-
-  const { createSign } = await import('node:crypto');
-  const sign = createSign('SHA256');
-  sign.update(signingInput);
-  const sig = sign.sign(saKey.private_key, 'base64url');
-  const jwt = `${signingInput}.${sig}`;
-
+async function getOAuthToken() {
+  const raw = SHEETS_TOKEN;
+  if (!raw) throw new Error('SHEETS_TOKEN not set');
+  const td = JSON.parse(raw);
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+    body: new URLSearchParams({
+      client_id: td.client_id,
+      client_secret: td.client_secret,
+      refresh_token: td.refresh_token,
+      grant_type: 'refresh_token',
+    }).toString(),
   });
   const data = await res.json();
-  if (!data.access_token) throw new Error(`Google auth failed: ${JSON.stringify(data)}`);
+  if (!data.access_token) throw new Error(`OAuth refresh failed: ${JSON.stringify(data)}`);
   return data.access_token;
 }
 
