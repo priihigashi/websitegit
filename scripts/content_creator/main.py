@@ -30,9 +30,10 @@ from email_preview import send_preview, update_catalog_status
 WORK_DIR = Path(os.environ.get("WORK_DIR", "/tmp/content_creator_run"))
 EXPORT_SCRIPT = os.environ.get("EXPORT_SCRIPT", str(Path(__file__).parent / "export_variants.js"))
 
-# Drive folder IDs (Marketing shared drive)
+# Drive folder IDs
 OPC_TEMPLATES_PARENT = "1HHQGPM3iOP6m1pdUnAKtpRXfBi1ejEvZ"
 OPC_TIPS_FOLDER = "13TXtFL88Q2z8lkluSfBs_EoirxIdFCni"
+BRAZIL_TEMPLATES_FOLDER = os.environ.get("BRAZIL_TEMPLATES_FOLDER", "")
 
 SHEET_ID = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
 CATALOG_TAB = "📸 Project Content Catalog"
@@ -145,13 +146,9 @@ def process_one_topic(topic_entry, run_date, drive):
     png_dir = work / "png"
     motion_dir = work / "motion"
 
-    if niche == "opc":
-        html_path = build_html(content, niche, slug, str(work))
-        if not html_path:
-            print("  FAILED: HTML build")
-            return None
-    else:
-        print("  Brazil template builder not wired yet — skipping render")
+    html_path = build_html(content, niche, slug, str(work))
+    if not html_path:
+        print("  FAILED: HTML build")
         return None
 
     # 3. Render PNGs
@@ -170,10 +167,15 @@ def process_one_topic(topic_entry, run_date, drive):
 
     # 5. Upload to Drive
     print("  Uploading to Drive...")
-    parent = OPC_TIPS_FOLDER if niche == "opc" else OPC_TIPS_FOLDER  # TODO: Brazil routing
+    if niche == "opc":
+        parent = OPC_TIPS_FOLDER
+    else:
+        parent = BRAZIL_TEMPLATES_FOLDER or OPC_TIPS_FOLDER
+        if not BRAZIL_TEMPLATES_FOLDER:
+            print("  WARNING: BRAZIL_TEMPLATES_FOLDER not set — using OPC folder as fallback")
 
-    static_folder_id = upload_folder_to_drive(str(png_dir), parent, f"{post_id}_static", drive)
-    motion_folder_id = upload_folder_to_drive(str(motion_dir), parent, f"{post_id}_motion", drive)
+    static_folder_id = upload_folder_to_drive(str(png_dir), parent, f"{post_id}_v1_static", drive)
+    motion_folder_id = upload_folder_to_drive(str(motion_dir), parent, f"{post_id}_v1_motion", drive)
 
     static_link = f"https://drive.google.com/drive/folders/{static_folder_id}"
     motion_link = f"https://drive.google.com/drive/folders/{motion_folder_id}"

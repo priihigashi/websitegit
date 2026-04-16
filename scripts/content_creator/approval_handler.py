@@ -301,6 +301,157 @@ def update_catalog(post_id, status, variant=None):
             return
 
 
+def re_render_post(post, feedback):
+    """Re-render a post with feedback. Creates v{n+1} folder in same parent as current static folder."""
+    import sys, shutil
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent))
+    from carousel_builder import generate_carousel_content, build_html, render_pngs
+    from googleapiclient.http import MediaFileUpload
+
+    post_id = post["post_id"]
+    niche = post["niche"]
+    topic = post["topic"]
+
+    folder_id_match = re.search(r'/folders/([a-zA-Z0-9_-]+)', post["static_link"])
+    if not folder_id_match:
+        print(f"  re_render: cannot parse folder ID from {post['static_link']}")
+        return False
+    current_folder_id = folder_id_match.group(1)
+
+    drive = _get_drive_service()
+    try:
+        folder_meta = drive.files().get(
+            fileId=current_folder_id, supportsAllDrives=True, fields="name,parents",
+        ).execute()
+    except Exception as e:
+        print(f"  re_render: Drive lookup failed: {e}")
+        return False
+
+    folder_name = folder_meta.get("name", "")
+    parents = folder_meta.get("parents", [])
+    if not parents:
+        print(f"  re_render: no parent for folder {current_folder_id}")
+        return False
+    parent_id = parents[0]
+
+    ver_match = re.search(r'_v(\d+)_static$', folder_name)
+    current_ver = int(ver_match.group(1)) if ver_match else 1
+    new_ver = current_ver + 1
+    new_folder_name = re.sub(r'_v\d+_static$', f'_v{new_ver}_static', folder_name)
+    if new_folder_name == folder_name:
+        new_folder_name = f"{post_id}_v{new_ver}_static"
+
+    topic_with_feedback = f"{topic}\n\nRevision feedback: {feedback}"
+    content = generate_carousel_content(topic_with_feedback, niche)
+    if not content:
+        print(f"  re_render: content generation failed")
+        return False
+
+    work = Path(f"/tmp/rerender_{post_id}_v{new_ver}")
+    if work.exists():
+        shutil.rmtree(work)
+    work.mkdir(parents=True)
+
+    slug = post_id.replace("opc-tip-", "").replace("brazil-", "")[:30]
+    html_path = build_html(content, niche, slug, str(work))
+    if not html_path:
+        print(f"  re_render: HTML build failed")
+        shutil.rmtree(work, ignore_errors=True)
+        return False
+
+    png_dir = work / "png"
+    export_script = os.environ.get("EXPORT_SCRIPT", str(Path(__file__).parent / "export_variants.js"))
+    os.environ["EXPORT_SCRIPT"] = export_script
+    if not render_pngs(html_path, str(png_dir)):
+        print(f"  re_render: PNG render failed")
+        shutil.rmtree(work, ignore_errors=True)
+        return False
+
+    new_folder = drive.files().create(
+        body={"name": new_folder_name, "mimeType": "application/vnd.google-apps.folder", "parents": [parent_id]},
+        supportsAllDrives=True, fields="id",
+    ).execute()
+    new_folder_id = new_folder["id"]
+
+    for f in sorted(png_dir.iterdir()):
+        if f.is_file() and not f.name.startswith("."):
+            drive.files().create(
+                body={"name": f.name, "parents": [new_folder_id]},
+                media_body=MediaFileUpload(str(f), mimetype="image/png"),
+                supportsAllDrives=True, fields="id",
+            ).execute()
+
+    new_static_link = f"https://drive.google.com/drive/folders/{new_folder_id}"
+
+    token, _ = get_gmail_token()
+    enc = urllib.parse.quote(f"'{CATALOG_TAB}'!A:O", safe="!:'")
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    rows = json.loads(urllib.request.urlopen(req).read()).get("values", [])
+    for i, row in enumerate(rows):
+        if len(row) > 0 and row[0].strip() == post_id:
+            row_num = i + 1
+            batch_url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values:batchUpdate"
+            batch_payload = json.dumps({
+                "valueInputOption": "USER_ENTERED",
+                "data": [
+                    {"range": f"'{CATALOG_TAB}'!I{row_num}", "values": [[new_static_link]]},
+                    {"range": f"'{CATALOG_TAB}'!M{row_num}", "values": [["in_review"]]},
+                ],
+            }).encode()
+            req2 = urllib.request.Request(batch_url, data=batch_payload,
+                                          headers={"Authorization": f"Bearer {token}",
+                                                    "Content-Type": "application/json"})
+            urllib.request.urlopen(req2)
+            print(f"  Catalog updated: {post_id} → in_review, v{new_ver} static link")
+            break
+
+    from email_preview import send_preview, make_cover_thumbnails_public
+    cover_urls = make_cover_thumbnails_public(new_folder_id, token)
+    post_updated = dict(post)
+    post_updated["static_link"] = new_static_link
+    post_updated["static_folder_id"] = new_folder_id
+    post_updated["cover_urls"] = cover_urls
+    send_preview([post_updated], datetime.now(ET).strftime("%Y-%m-%d"))
+
+    shutil.rmtree(work, ignore_errors=True)
+    print(f"  Re-render done: {post_id} v{new_ver} → {new_static_link}")
+    return True
+
+
+def _delete_old_versions(post_id, approved_folder_id):
+    """Delete all v* static/motion folders for post_id except the approved one."""
+    drive = _get_drive_service()
+    try:
+        meta = drive.files().get(
+            fileId=approved_folder_id, supportsAllDrives=True, fields="parents",
+        ).execute()
+    except Exception:
+        return
+    parents = meta.get("parents", [])
+    if not parents:
+        return
+    parent_id = parents[0]
+
+    folders = drive.files().list(
+        q=f"'{parent_id}' in parents and name contains '{post_id}_v' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+        supportsAllDrives=True, includeItemsFromAllDrives=True,
+        fields="files(id,name)",
+    ).execute().get("files", [])
+
+    for f in folders:
+        if f["id"] == approved_folder_id:
+            continue
+        if "_static" not in f["name"] and "_motion" not in f["name"]:
+            continue
+        try:
+            drive.files().delete(fileId=f["id"], supportsAllDrives=True).execute()
+            print(f"  Deleted old version: {f['name']}")
+        except Exception as e:
+            print(f"  Could not delete {f['name']}: {e}")
+
+
 def _get_pending_posts():
     token, _ = get_gmail_token()
     enc = urllib.parse.quote(f"'{CATALOG_TAB}'!A:O", safe="!:'")
@@ -365,6 +516,7 @@ def process_replies():
 
                 copy_to_ready_folder(variant, static_folder_id, niche)
                 update_catalog(post_id, "approved")
+                _delete_old_versions(post_id, static_folder_id)
                 print(f"  Approved: {post_id} ({variant})")
 
             stats["approved"] += 1
@@ -375,8 +527,14 @@ def process_replies():
             stats["skipped"] += 1
 
         else:
+            feedback = result.get("feedback", "")
             stats["changes"] += 1
-            print(f"  Change requested: {result.get('feedback', '')[:80]}")
+            print(f"  Change requested: {feedback[:80]}")
+            for post in pending:
+                if re_render_post(post, feedback):
+                    print(f"  Re-render triggered: {post['post_id']}")
+                else:
+                    print(f"  Re-render failed: {post['post_id']}")
 
     return stats
 
