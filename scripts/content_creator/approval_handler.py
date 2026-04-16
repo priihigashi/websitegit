@@ -45,7 +45,7 @@ def search_gmail_replies(token, after_date=None):
     if not after_date:
         after_date = (datetime.now(ET) - timedelta(days=1)).strftime("%Y/%m/%d")
 
-    query = urllib.parse.quote(f'subject:"DAILY CONTENT" after:{after_date} in:inbox')
+    query = urllib.parse.quote(f'subject:"DAILY CONTENT" after:{after_date}')
     url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages?q={query}&maxResults=10"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
 
@@ -127,6 +127,7 @@ def parse_approval(reply_text):
         for v in ["black", "cream", "lime"]:
             if v in text:
                 return {"action": "approve", "variant": v}
+        return {"action": "approve", "variant": "black"}  # no color = default to black
 
     return {"action": "change", "feedback": reply_text}
 
