@@ -575,10 +575,13 @@ def download_video(url: str, tmp_dir: str) -> str:
             "--no-playlist", "--quiet",
         ]
     else:
-        # IG/TikTok: no format coercion — --merge-output-format forces separate stream
-        # merge which Instagram blocks. Let yt-dlp pick the best pre-merged format.
+        # IG/TikTok: use same code path as audio download (--extract-audio bypasses the
+        # full metadata extraction that Instagram blocks for direct video downloads).
+        # --keep-video preserves the original mp4 alongside the extracted mp3.
         cmd = [
             "yt-dlp",
+            "--extract-audio", "--audio-format", "mp3",
+            "--keep-video",
             "--output", output,
             "--no-playlist", "--quiet",
         ]
