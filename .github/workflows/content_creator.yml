@@ -2,7 +2,7 @@ name: Content Creator — Daily Carousel Pipeline
 
 on:
   schedule:
-    - cron: '30 12 * * *'  # 8:30 AM ET (12:30 UTC) — temporarily moved from 2:30 AM so Priscila can watch it fire
+    - cron: '30 0 * * *'  # 8:30 PM ET (00:30 UTC next day) — temporarily moved from 2:30 AM so Priscila can watch it fire
   workflow_dispatch:
     inputs:
       count_opc:
