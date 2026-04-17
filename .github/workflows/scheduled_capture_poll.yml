@@ -2,13 +2,13 @@ name: Scheduled Capture Poll
 
 on:
   schedule:
-    # every 30 minutes
-    - cron: "*/30 * * * *"
-    # daily 5 AM ET — run both so it fires regardless of DST:
-    #   09:00 UTC = 5 AM EDT (Mar–Nov)
-    #   10:00 UTC = 5 AM EST (Nov–Mar)
-    - cron: "0 9 * * *"
-    - cron: "0 10 * * *"
+    # 3x daily: 8 AM, 1 PM, 7 PM ET (both DST variants)
+    - cron: "0 12 * * *"   # 8 AM EDT / 9 AM EST
+    - cron: "0 13 * * *"   # 8 AM EST / 9 AM EDT
+    - cron: "0 17 * * *"   # 1 PM EDT / 2 PM EST
+    - cron: "0 18 * * *"   # 1 PM EST / 2 PM EDT
+    - cron: "0 23 * * *"   # 7 PM EDT / 8 PM EST
+    - cron: "0 0 * * *"    # 7 PM EST / 8 PM EDT
   workflow_dispatch:
     inputs:
       max_dispatch:
