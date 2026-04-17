@@ -146,14 +146,18 @@ def main():
             print("Dispatch cap reached; stopping.")
             break
         row = row + [""] * (15 - len(row))
-        url = row[0].strip()
-        status = row[2].strip().lower()
-        niche = row[4]
-        if not url:
-            continue
-        if not url.startswith("http"):
-            # Fallback tab may have non-URL values in column A (e.g. dates from redesigned Inspiration Library)
-            print(f"  row {i+2}: skipping non-URL value in col A: {url[:40]!r}")
+        # Inspiration Library has URL in col D (index 3); Drop Links has URL in col A (index 0)
+        if active_tab == FALLBACK_TAB:
+            url    = row[3].strip()   # col D = URL
+            status = row[2].strip().lower()   # col C = Status
+            niche  = ""               # Inspiration Library has no dedicated niche column; let pipeline classify
+        else:
+            url    = row[0].strip()   # col A = URL in Drop Links
+            status = row[2].strip().lower()   # col C = Status
+            niche  = row[4].strip()   # col E = Niche override
+        if not url or not url.startswith("http"):
+            if url:
+                print(f"  row {i+2}: skipping non-URL in expected col: {url[:40]!r}")
             continue
         if status in SKIP_STATUS:
             continue
