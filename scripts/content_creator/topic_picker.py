@@ -154,7 +154,7 @@ def score_topic(row, header_map, used_topics, queued_topics):
     status = v("status").lower()
     niche = v("niche").lower() if v("niche") else ""
     comments = v("comments").lower()
-    topic = v("topic") or v("title") or v("comments")
+    topic = v("topic / title") or v("topic") or v("title") or v("description") or v("comments")
 
     if status in SKIP_STATUSES:
         return -1, niche, topic, status
