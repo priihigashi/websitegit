@@ -8,7 +8,7 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repo
@@ -29,10 +29,9 @@ jobs:
           mkdir -p /tmp/oak_park_creds
           echo "$SHEETS_TOKEN" > /tmp/oak_park_creds/sheets_token.json
 
-      - name: Run photo catalog
+      - name: Run photo catalog + idea generation
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
           SHEETS_TOKEN_PATH: /tmp/oak_park_creds/sheets_token.json
-          SHEET_ID: ${{ secrets.CONTENT_SHEET_ID }}
         run: python scripts/photo_catalog_cloud.py

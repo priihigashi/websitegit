@@ -17,8 +17,6 @@ if not TOKEN_FILE_PATH or not Path(TOKEN_FILE_PATH).exists():
     print("❌ SHEETS_TOKEN_PATH not set or file not found")
     sys.exit(1)
 
-SHEET_ID_OVERRIDE = os.environ.get("SHEET_ID", "")
-
 # Monkey-patch the constants before importing the main module
 import importlib, types
 
@@ -27,9 +25,11 @@ import json, base64, io, time
 from datetime import date
 import urllib.request, urllib.parse
 
-SHEET_ID   = SHEET_ID_OVERRIDE or "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
+SHEET_ID    = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"  # Ideas & Inbox — hardcoded, never override
 CATALOG_TAB = "📸 Photo Catalog"
-MAX_PER_RUN = 50
+INSPO_TAB   = "📥 Inspiration Library"
+MAX_PER_RUN  = 50
+IDEAS_PER_RUN = 10  # max photos to generate ideas for per run (controls Claude cost)
 
 IMAGE_MIMES = {"image/jpeg", "image/png", "image/heic", "image/webp", "image/tiff"}
 
@@ -190,6 +190,203 @@ def describe_image(file_id, drive, anthropic_key):
         elif line.startswith("QUALITY:"): quality = line.replace("QUALITY:", "").strip()
     return desc, nickname, phase, quality
 
+def _get_token_from_file() -> str:
+    td = json.loads(Path(TOKEN_FILE_PATH).read_text())
+    data = urllib.parse.urlencode({
+        "client_id":     td["client_id"],
+        "client_secret": td["client_secret"],
+        "refresh_token": td["refresh_token"],
+        "grant_type":    "refresh_token",
+    }).encode()
+    resp = json.loads(urllib.request.urlopen(
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
+    ).read())
+    return resp["access_token"]
+
+
+def _sheets_append(token: str, tab: str, rows: list):
+    enc = urllib.parse.quote(f"'{tab}'!A:Z", safe="!:'")
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS"
+    body = json.dumps({"values": rows}).encode()
+    req = urllib.request.Request(
+        url, data=body,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    urllib.request.urlopen(req).read()
+
+
+def _sheets_update(token: str, cell_range: str, value):
+    enc = urllib.parse.quote(cell_range, safe="!:'")
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}?valueInputOption=USER_ENTERED"
+    body = json.dumps({"values": [[value]]}).encode()
+    req = urllib.request.Request(
+        url, data=body,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        method="PUT",
+    )
+    urllib.request.urlopen(req).read()
+
+
+def generate_ideas_for_photo(desc: str, service_type: str, project_name: str,
+                              phase: str, quality: str, api_key: str) -> list:
+    """
+    Calls Claude Haiku to generate 3 content ideas from a photo description.
+    Returns list of dicts: [{type, title, brief, hook, format}]
+    """
+    import anthropic as anthropic_sdk
+    client = anthropic_sdk.Anthropic(api_key=api_key)
+    prompt = f"""You are a content strategist for Oak Park Construction, a South Florida renovation contractor.
+
+Photo details:
+- Service: {service_type}
+- Project: {project_name}
+- Phase: {phase}
+- Quality: {quality}/5
+- Description: {desc}
+
+Generate exactly 3 content ideas for Instagram. Each idea must be ORIGINAL — topics inspired by this photo, not about the photo itself.
+
+Rules:
+- NEVER promise what OPC "always does" or "guarantees"
+- Stats must include source and range (not exact numbers without context)
+- Educational tone — teach homeowners, not sell services
+- One idea per type: CAROUSEL, REEL, POST
+
+For each idea output exactly:
+TYPE: CAROUSEL | REEL | POST
+TITLE: [3-8 word title]
+HOOK: [first line / hook sentence]
+BRIEF: [2-3 sentence description of what the post covers]
+FORMAT: [e.g. "5-slide tip carousel" or "30s talking head" or "single before/after image"]
+---"""
+
+    resp = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=800,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    text = resp.content[0].text
+    ideas = []
+    for block in text.split("---"):
+        block = block.strip()
+        if not block:
+            continue
+        idea = {}
+        for line in block.splitlines():
+            for key in ["TYPE", "TITLE", "HOOK", "BRIEF", "FORMAT"]:
+                if line.startswith(f"{key}:"):
+                    idea[key.lower()] = line[len(key)+1:].strip()
+        if "type" in idea and "title" in idea:
+            ideas.append(idea)
+    return ideas[:3]
+
+
+def generate_ideas_from_catalog(sheets, api_key: str):
+    """
+    Reads Photo Catalog rows where 'Ideas Generated?' (col L) == 'No',
+    generates 3 ideas per photo via Claude Haiku,
+    appends them to the Inspiration Library tab,
+    and marks 'Ideas Generated?' = 'Yes' in the catalog.
+    """
+    if not api_key:
+        print("[ideas] ANTHROPIC_API_KEY not set — skipping idea generation")
+        return
+
+    result = sheets.spreadsheets().values().get(
+        spreadsheetId=SHEET_ID, range=f"'{CATALOG_TAB}'!A:O"
+    ).execute()
+    all_rows = result.get("values", [])
+    if len(all_rows) < 2:
+        print("[ideas] Photo Catalog empty — nothing to process")
+        return
+
+    header = all_rows[0]
+    data_rows = all_rows[1:]
+
+    col = {h: i for i, h in enumerate(header)}
+    pending = []
+    for row_idx, row in enumerate(data_rows):
+        row_padded = row + [""] * (len(header) - len(row))
+        ideas_done = row_padded[col.get("Ideas Generated?", 11)].strip()
+        quality_raw = row_padded[col.get("Quality ⭐", 7)].strip()
+        try:
+            quality_int = int(float(quality_raw))
+        except (ValueError, TypeError):
+            quality_int = 0
+        if ideas_done.upper() != "YES" and quality_int >= 3:
+            pending.append({
+                "sheet_row": row_idx + 2,  # 1-indexed + header
+                "project_name": row_padded[col.get("Project Name", 1)],
+                "service_type": row_padded[col.get("Service Type", 2)],
+                "filename":     row_padded[col.get("Filename", 3)],
+                "drive_url":    row_padded[col.get("Drive URL", 4)],
+                "description":  row_padded[col.get("AI Description", 5)],
+                "phase":        row_padded[col.get("Phase", 6)],
+                "quality":      quality_raw,
+            })
+
+    print(f"[ideas] {len(pending)} photos need ideas (max {IDEAS_PER_RUN} this run)")
+    if not pending:
+        return
+
+    token = _get_token_from_file()
+    today = date.today().isoformat()
+    processed = 0
+
+    for photo in pending[:IDEAS_PER_RUN]:
+        print(f"  → {photo['service_type']} / {photo['project_name']} — {photo['filename']}")
+        try:
+            ideas = generate_ideas_for_photo(
+                photo["description"], photo["service_type"],
+                photo["project_name"], photo["phase"], photo["quality"], api_key
+            )
+            inspo_rows = []
+            for idea in ideas:
+                content_type = idea.get("type", "Post").capitalize()
+                inspo_rows.append([
+                    today,                              # A Date Added
+                    "OPC Photos",                       # B Platform
+                    photo["drive_url"],                 # C URL (the photo)
+                    "Oak Park Construction",            # D Creator/Account
+                    content_type,                       # E Content Type
+                    idea.get("brief", ""),              # F Description
+                    "",                                 # G Transcription
+                    "",                                 # H Original Caption
+                    idea.get("hook", ""),               # I Visual Hook
+                    "Photo",                            # J Hook Type
+                    "",                                 # K Views
+                    "",                                 # L Content Hub Link
+                    "",                                 # M Engagement Comments
+                    "",                                 # N Saves/Shares
+                    "",                                 # O What's Working
+                    "",                                 # P A/B Test
+                    idea.get("brief", ""),              # Q Brief/Angle
+                    idea.get("format", ""),             # R Format
+                    "Idea",                             # S Status
+                    idea.get("title", ""),              # T Topic/Title
+                    "OPC",                              # U Niche
+                    "",                                 # V Comments
+                    photo["quality"],                   # W AI Score (1-5)
+                    today,                              # X Date Status Changed
+                    "",                                 # Y Drive Folder Path
+                    f"From Photo Catalog — {photo['project_name']} ({photo['phase']})",  # Z My Raw Notes
+                ])
+
+            if inspo_rows:
+                _sheets_append(token, INSPO_TAB, inspo_rows)
+                print(f"     ✅ {len(inspo_rows)} ideas → Inspiration Library")
+
+            # Mark Ideas Generated? = Yes in catalog col L
+            _sheets_update(token, f"'{CATALOG_TAB}'!L{photo['sheet_row']}", "Yes")
+            processed += 1
+            time.sleep(1)  # brief pause between Claude calls
+
+        except Exception as e:
+            print(f"     ⚠️  Error generating ideas: {e}")
+
+    print(f"[ideas] Done — {processed} photos processed, ideas added to Inspiration Library")
+
+
 def main():
     from googleapiclient.discovery import build
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -238,6 +435,10 @@ def main():
         print(f"\n✅ Added {len(new_rows)} photos to catalog")
     else:
         print("\n✅ No new photos to add")
+
+    # Generate content ideas for cataloged photos that haven't been processed yet
+    print("\n🧠 Generating content ideas from catalog...")
+    generate_ideas_from_catalog(sheets, api_key)
 
 if __name__ == "__main__":
     main()
