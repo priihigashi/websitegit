@@ -89,7 +89,10 @@ def insert_queue_row(topic_entry, inspo_status):
     today = datetime.utcnow().strftime("%Y-%m-%d")
     niche = topic_entry["niche"]
     status = "Approved" if inspo_status.strip().lower() == "approved" else "Draft"
-    series = "Tip of the Week" if niche == "opc" else ("The Chain" if niche == "usa" else "Quem Decidiu Isso?")
+    # series_override allows per-topic routing to Verificamos / Fact-Checked / etc.
+    series = topic_entry.get("series_override") or (
+        "Tip of the Week" if niche == "opc" else ("The Chain" if niche == "usa" else "Quem Decidiu Isso?")
+    )
 
     # Read header to locate columns by name
     hdr_rows = sheet_get(f"'{QUEUE_TAB}'!1:1")

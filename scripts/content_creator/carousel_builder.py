@@ -11,7 +11,11 @@ ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 OPC_TEMPLATE = "tip"
 BRAZIL_TEMPLATE = "quem-decidiu"
+USA_TEMPLATE = "fact-checked"
 
+# SERIES REGISTRY — every series must have a template entry here.
+# Verification / Fake News series: Verificamos (Brazil) + Fact-Checked (USA)
+# These are FORMAT-001 reel series (split screen + sources). Carousel variant uses same structure.
 TEMPLATES = {
     "opc": {
         "tip": {
@@ -31,6 +35,31 @@ TEMPLATES = {
         "quem-decidiu": {
             "series": "Quem decidiu isso?",
             "tag": "Quem decidiu isso?",
+            "slides": 4,
+            "structure": "cover → context → breakdown → sources",
+        },
+        "verificamos": {
+            # Fake News / Verification series — Brazil account (Portuguese)
+            # FORMAT-001: claim appears → official source appears in real time → sources slide
+            # "We don't call it fake news — we just show the source." — Priscila 2026-04-17
+            "series": "Verificamos",
+            "tag": "Verificamos",
+            "slides": 5,
+            "structure": "cover (claim) → what people believe → the source → what it actually says → sources/CTA",
+        },
+    },
+    "usa": {
+        "fact-checked": {
+            # Fake News / Verification series — USA account (English)
+            # FORMAT-001 twin: same structure as Verificamos but English + US sources
+            "series": "Fact-Checked",
+            "tag": "Fact-Checked",
+            "slides": 5,
+            "structure": "cover (claim) → what people believe → the source → what it actually says → sources/CTA",
+        },
+        "the-chain": {
+            "series": "The Chain",
+            "tag": "The Chain",
             "slides": 4,
             "structure": "cover → context → breakdown → sources",
         },

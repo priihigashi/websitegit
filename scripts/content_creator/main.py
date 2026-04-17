@@ -265,13 +265,14 @@ def upload_dir_contents(local_dir, parent_id, drive, skip_pattern=None):
         upload_single_file(str(f), parent_id, f.name, _mime_for(f.suffix), drive)
 
 
-def create_story_doc(parent_folder_id, slug, version, topic, niche, brief, content, drive, drive_link):
+def create_story_doc(parent_folder_id, slug, version, topic, niche, brief, content, drive, drive_link, series_override=""):
     """Create the per-post story Google Doc inside the version folder.
     Format matches EP001 Rachadinha editorial log: header block, HOW TO USE, slide-by-slide, NOTES.
     Feedback rule: every review appends a new 'NOTE — YYYY-MM-DD' block at the bottom.
+    series_override: pass "Verificamos", "Fact-Checked", etc. to override niche-default series name.
     """
     from googleapiclient.http import MediaInMemoryUpload
-    series = "Tip of the Week" if niche == "opc" else ("The Chain" if niche == "usa" else "Quem Decidiu Isso?")
+    series = series_override or ("Tip of the Week" if niche == "opc" else ("The Chain" if niche == "usa" else "Quem Decidiu Isso?"))
     title = f"v{version} — {slug} — {topic[:80]}"
 
     lines = [
@@ -480,7 +481,8 @@ def process_one_topic(topic_entry, run_date, drive):
     print(f"  Motion:  {motion_link}")
 
     # story (Google Doc) — slide-by-slide script + research
-    story_doc = create_story_doc(version_folder_id, slug, version, topic, niche, brief, content, drive, folder_link)
+    story_doc = create_story_doc(version_folder_id, slug, version, topic, niche, brief, content, drive, folder_link,
+                                 series_override=topic_entry.get("series_override", ""))
     story_link = story_doc.get("webViewLink", "")
     print(f"  Story: {story_link}")
 
@@ -489,7 +491,10 @@ def process_one_topic(topic_entry, run_date, drive):
         write_queue_status(queue_row, status="Built", drive_folder_path=folder_link)
 
     # 6. Add catalog row (OPC project tracker) — motion column deep-links to /motion subfolder
-    series = "Tip of the Week" if niche == "opc" else ("The Chain" if niche == "usa" else "Quem Decidiu Isso?")
+    # series_override supports Verificamos (Brazil) / Fact-Checked (USA) verification series
+    series = topic_entry.get("series_override") or (
+        "Tip of the Week" if niche == "opc" else ("The Chain" if niche == "usa" else "Quem Decidiu Isso?")
+    )
     add_catalog_row(post_id, niche, series, topic, folder_link, motion_link, get_oauth_token())
 
     # Collect mentioned people + cover_visual for reply guide in preview email
