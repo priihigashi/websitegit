@@ -34,10 +34,12 @@ EXPORT_SCRIPT = os.environ.get("EXPORT_SCRIPT", str(Path(__file__).parent / "exp
 # Drive folder IDs — _TEMPLATE_CAROUSEL parents per series.
 # Every build lands at <SERIES>/_TEMPLATE_CAROUSEL/v<N>_<slug>/ (+ v<N>_<slug>_motion sibling).
 # N auto-increments when a slug already has versions. See project_carousel_folder_standard.md.
-OPC_TIP_TEMPLATE_FOLDER       = "1PWrZfuOvyHUbTRlFNqYxdhtg-Zvv_bXb"  # Marketing > OPC > Tip of the Week > _TEMPLATE_CAROUSEL
-BRAZIL_QUEM_TEMPLATE_FOLDER   = "1Ts4OlXT_KxtYNziGmHUcsjHVh8Z7D1ds"  # News > Brazil > Quem decidiu isso > _TEMPLATE_CAROUSEL
-USA_THE_CHAIN_TEMPLATE_FOLDER = "1sDMyPHVYcOqZ3NK9ch4e48AaJ7KVvxL3"  # News > USA > Content > Series > The Chain > _TEMPLATE_CAROUSEL
-SOVEREIGN_TEMPLATE_FOLDER     = os.environ.get("SOVEREIGN_TEMPLATE_FOLDER", "")  # News drive > SOVEREIGN > _TEMPLATE_CAROUSEL (set after folder creation)
+OPC_TIP_TEMPLATE_FOLDER         = "1PWrZfuOvyHUbTRlFNqYxdhtg-Zvv_bXb"  # Marketing > OPC > Tip of the Week > _TEMPLATE_CAROUSEL
+BRAZIL_QUEM_TEMPLATE_FOLDER     = "1Ts4OlXT_KxtYNziGmHUcsjHVh8Z7D1ds"  # News > Brazil > Quem decidiu isso > _TEMPLATE_CAROUSEL
+USA_THE_CHAIN_TEMPLATE_FOLDER   = "1sDMyPHVYcOqZ3NK9ch4e48AaJ7KVvxL3"  # News > USA > Content > Series > The Chain > _TEMPLATE_CAROUSEL
+SOVEREIGN_TEMPLATE_FOLDER       = os.environ.get("SOVEREIGN_TEMPLATE_FOLDER", "")  # News drive > SOVEREIGN > _TEMPLATE_CAROUSEL (set after folder creation)
+VERIFICAMOS_TEMPLATE_FOLDER     = "1QhILiMiIM9WrpHhIqXXrPs6JqoAdDijA"  # News > Brazil > Series > Verificamos > _TEMPLATE_CAROUSEL
+VERIFICAMOS_CONFIDENCE_THRESHOLD = 0.70  # auto-build gate — items below this score go to manual review queue
 
 SHEET_ID    = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
 INSPO_TAB   = "📥 Inspiration Library"
@@ -82,6 +84,13 @@ def get_oauth_token():
     _token_cache["t"] = resp["access_token"]
     _token_cache["exp"] = time.time() + resp.get("expires_in", 3500) - 60
     return resp["access_token"]
+
+
+def _safe_float(val, default=0.0):
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return default
 
 
 def _col_letter(n):
@@ -186,6 +195,9 @@ def get_approved_queue_rows():
             "brief": v(row, "brief / angle"),
             "url": v(row, "inspo url"),
             "format": v(row, "format"),
+            "series_override": v(row, "series_override"),
+            "fake_news_route": v(row, "fake_news_route") or "B",
+            "fake_news_confidence": _safe_float(v(row, "fake_news_confidence"), 0.0),
         })
     return approved
 
@@ -379,13 +391,32 @@ def add_catalog_row(post_id, niche, series, topic, static_link, motion_link, tok
 def process_one_topic(topic_entry, run_date, drive):
     topic = topic_entry["topic"]
     niche = topic_entry["niche"]
+    series_override = topic_entry.get("series_override", "")
+    fake_news_route = topic_entry.get("fake_news_route", "B")
+    fake_news_confidence = topic_entry.get("fake_news_confidence", 0.0)
     queue_row = topic_entry.get("queue_row_idx")
+
+    # Confidence gate — Verificamos items below threshold go to manual review, never auto-build
+    if series_override == "VERIFICAMOS" and fake_news_confidence < VERIFICAMOS_CONFIDENCE_THRESHOLD:
+        print(f"  SKIPPED: Verificamos confidence {fake_news_confidence:.2f} < {VERIFICAMOS_CONFIDENCE_THRESHOLD} — needs manual review")
+        if queue_row:
+            write_queue_status(queue_row, status="Needs Review",
+                               extra={"notes": f"fake_news_confidence={fake_news_confidence:.2f} below threshold"})
+        _send_alert(
+            f"Verificamos item held for manual review:\n'{topic[:60]}'\n"
+            f"Confidence: {fake_news_confidence:.2f} (threshold: {VERIFICAMOS_CONFIDENCE_THRESHOLD})\n"
+            f"Route: {fake_news_route}\nFlip Status to Approved in Content Queue to force-build."
+        )
+        return None
+
     slug = topic[:40].lower().replace(" ", "-").replace("'", "").replace('"', '')
     slug = "".join(c for c in slug if c.isalnum() or c == "-")
     if niche == "opc":
         post_id = f"opc-tip-{run_date}-{slug[:20]}"
     elif niche == "usa":
         post_id = f"usa-{run_date}-{slug[:20]}"
+    elif series_override == "VERIFICAMOS":
+        post_id = f"verificamos-{run_date}-{slug[:20]}"
     else:
         post_id = f"brazil-{run_date}-{slug[:20]}"
 
@@ -396,7 +427,14 @@ def process_one_topic(topic_entry, run_date, drive):
     # 1. Generate content
     print("  Generating content via Claude Haiku...")
     brief = topic_entry.get("brief", "")
-    content = generate_carousel_content(topic, niche, "tip" if niche == "opc" else None, brief=brief)
+    # Verificamos: Route A = clip overlay (verificamos_clip), Route B = debunk carousel (verificamos)
+    if series_override == "VERIFICAMOS":
+        template_key = "verificamos_clip" if fake_news_route == "A" else "verificamos"
+    elif niche == "opc":
+        template_key = "tip"
+    else:
+        template_key = None
+    content = generate_carousel_content(topic, niche, template_key, brief=brief)
     if not content:
         print("  FAILED: content generation")
         return None
@@ -445,7 +483,9 @@ def process_one_topic(topic_entry, run_date, drive):
     elif niche == "usa":
         parent = USA_THE_CHAIN_TEMPLATE_FOLDER
     elif niche == "sovereign":
-        parent = SOVEREIGN_TEMPLATE_FOLDER or BRAZIL_QUEM_TEMPLATE_FOLDER  # fallback to Brazil folder until SOVEREIGN folder created
+        parent = SOVEREIGN_TEMPLATE_FOLDER or BRAZIL_QUEM_TEMPLATE_FOLDER
+    elif series_override == "VERIFICAMOS":
+        parent = VERIFICAMOS_TEMPLATE_FOLDER
     else:
         parent = BRAZIL_QUEM_TEMPLATE_FOLDER
 
@@ -496,8 +536,10 @@ def process_one_topic(topic_entry, run_date, drive):
     print(f"  Story: {story_link}")
 
     # Flow tracking: Content Queue → Built + Drive path
+    # Verificamos gets "Pending Approval" — approval email gate prevents auto-schedule
+    queue_status = "Pending Approval" if series_override == "VERIFICAMOS" else "Built"
     if queue_row:
-        write_queue_status(queue_row, status="Built", drive_folder_path=folder_link)
+        write_queue_status(queue_row, status=queue_status, drive_folder_path=folder_link)
 
     # 6. Add catalog row (OPC project tracker) — motion column deep-links to /motion subfolder
     # series_override supports Verificamos (Brazil) / Fact-Checked (USA) verification series
@@ -516,6 +558,9 @@ def process_one_topic(topic_entry, run_date, drive):
         "post_id": post_id,
         "topic": topic,
         "niche": niche,
+        "series_override": series_override,
+        "fake_news_route": fake_news_route,
+        "requires_approval": series_override == "VERIFICAMOS",
         "queue_row_idx": queue_row,
         "version": version,
         "version_folder_id": version_folder_id,

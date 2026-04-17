@@ -3,12 +3,16 @@ sheets_writer.py — All Google Sheets read/write operations for the 4AM agent.
 Tabs: Scraping Targets (read), Content Queue (append), Clip Collections (update), Runs Log (append).
 Uses SHEETS_TOKEN OAuth refresh token (same pattern as all other scripts).
 """
-import os, json
+import os, json, sys
+from pathlib import Path
 import urllib.request, urllib.parse
 import pytz
 from datetime import datetime
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "utils"))
+from fake_news_classifier import normalize_url
 
 SPREADSHEET_ID = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 et             = pytz.timezone("America/New_York")
@@ -200,7 +204,8 @@ def save_scraped_to_inspiration_library(items):
     svc = _service()
     today = datetime.now(et).strftime("%Y-%m-%d")
 
-    # Read existing URLs to deduplicate
+    # Read existing URLs to deduplicate — normalize before comparing to catch
+    # duplicates where only the query string differs (e.g. ?igsh= tracking params)
     existing_urls = set()
     try:
         existing = svc.spreadsheets().values().get(
@@ -209,7 +214,7 @@ def save_scraped_to_inspiration_library(items):
         ).execute()
         for row in existing.get("values", [])[1:]:
             if row:
-                existing_urls.add(row[0].strip().lower())
+                existing_urls.add(normalize_url(row[0].strip()))
     except Exception:
         pass
 
@@ -229,7 +234,8 @@ def save_scraped_to_inspiration_library(items):
     rows_to_add = []
     for item in items:
         url = item.get("url", "").strip()
-        if not url or url.lower() in existing_urls:
+        norm = normalize_url(url)
+        if not url or norm in existing_urls:
             continue
         series_override = item.get("series_override", "")
 
@@ -251,7 +257,7 @@ def save_scraped_to_inspiration_library(items):
         put("fake_news_confidence", "medium")  # scraped via verification hashtag = medium confidence
 
         rows_to_add.append(row)
-        existing_urls.add(url.lower())
+        existing_urls.add(norm)
 
     if not rows_to_add:
         return 0

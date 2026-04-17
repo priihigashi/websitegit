@@ -39,13 +39,18 @@ TEMPLATES = {
             "structure": "cover → context → breakdown → sources",
         },
         "verificamos": {
-            # Fake News / Verification series — Brazil account (Portuguese)
-            # FORMAT-001: claim appears → official source appears in real time → sources slide
-            # "We don't call it fake news — we just show the source." — Priscila 2026-04-17
+            # FORMAT-013 Route B — expert debunk / institutional source carousel
             "series": "Verificamos",
             "tag": "Verificamos",
             "slides": 5,
             "structure": "cover (claim) → what people believe → the source → what it actually says → sources/CTA",
+        },
+        "verificamos_clip": {
+            # FORMAT-013 Route A — original claim clip with real-time source overlay (FORMAT-001 style)
+            "series": "Verificamos",
+            "tag": "Verificamos",
+            "slides": 4,
+            "structure": "cover (VERIFICAMOS stamp) → clip context → source overlay → sources/CTA",
         },
     },
     "usa": {
@@ -918,6 +923,29 @@ def visual_audit(content, niche):
     else:
         summary = f"VISUAL AUDIT: {len(issues)} ISSUE(S) FOUND:\n" + "\n".join(f"  - {x}" for x in issues)
     return is_ok, issues, summary
+
+
+def ensure_template_carousel_exists(series_folder_id: str, drive) -> str:
+    """Return the _TEMPLATE_CAROUSEL folder ID under series_folder_id, creating it if missing.
+    Prevents next_version_number() from running against the series root instead of _TEMPLATE_CAROUSEL.
+    """
+    resp = drive.files().list(
+        q=f"'{series_folder_id}' in parents and name='_TEMPLATE_CAROUSEL' "
+          f"and mimeType='application/vnd.google-apps.folder' and trashed=false",
+        fields="files(id)",
+        supportsAllDrives=True, includeItemsFromAllDrives=True,
+        corpora="allDrives",
+    ).execute()
+    existing = resp.get("files", [])
+    if existing:
+        return existing[0]["id"]
+    folder = drive.files().create(
+        body={"name": "_TEMPLATE_CAROUSEL",
+              "mimeType": "application/vnd.google-apps.folder",
+              "parents": [series_folder_id]},
+        supportsAllDrives=True, fields="id",
+    ).execute()
+    return folder["id"]
 
 
 if __name__ == "__main__":
