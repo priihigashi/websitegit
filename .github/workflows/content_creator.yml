@@ -64,3 +64,89 @@ jobs:
           name: content-creator-output
           path: /tmp/content_creator_run/
           retention-days: 7
+
+      - name: Alert on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const run_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'send_alert_email',
+              client_payload: {
+                subject: '🔴 Content Creator FAILED — attempt 1',
+                body: `Daily carousel pipeline failed on first attempt.\n\nRun: ${run_url}\n\nThe retry job will run automatically. If retry also fails, a second alert will be sent.`
+              }
+            });
+
+  retry-on-failure:
+    needs: create-content
+    if: needs.create-content.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
+      BRAZIL_TEMPLATES_FOLDER: '1gDOjtW_X-_jWtu94pffbDaUsw6VGCKuA'
+      CONTENT_CREATOR_RETRY: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install google-auth google-api-python-client pytz
+          npm install playwright
+          npx playwright install chromium --with-deps
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Retry content creator
+        working-directory: scripts/content_creator
+        run: python main.py
+        env:
+          WORK_DIR: /tmp/content_creator_run
+          EXPORT_SCRIPT: ${{ github.workspace }}/scripts/content_creator/export_variants.js
+
+      - name: Upload retry artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: content-creator-retry-output
+          path: /tmp/content_creator_run/
+          retention-days: 7
+
+      - name: Alert if retry also failed
+        if: failure()
+        run: |
+          python3 - <<'PYEOF'
+          import smtplib, os
+          from email.mime.text import MIMEText
+          run_url = f"https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}"
+          msg = MIMEText(f"Content Creator pipeline failed TWICE today.\n\nRetry run: {run_url}\n\nCheck the logs and fix before tomorrow's run.")
+          msg['Subject'] = '🚨 Content Creator FAILED TWICE — manual fix needed'
+          msg['From'] = 'priscila@oakpark-construction.com'
+          msg['To'] = 'priscila@oakpark-construction.com'
+          with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
+              s.login('priscila@oakpark-construction.com', os.environ['PRI_OP_GMAIL_APP_PASSWORD'])
+              s.send_message(msg)
+          print("Double-failure alert sent")
+          PYEOF
