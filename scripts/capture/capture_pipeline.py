@@ -575,10 +575,10 @@ def download_video(url: str, tmp_dir: str) -> str:
             "--no-playlist", "--quiet",
         ]
     else:
-        # IG/TikTok: let yt-dlp auto-select format (avoid -f best — deprecated in yt-dlp 2026+)
+        # IG/TikTok: no format coercion — --merge-output-format forces separate stream
+        # merge which Instagram blocks. Let yt-dlp pick the best pre-merged format.
         cmd = [
             "yt-dlp",
-            "--merge-output-format", "mp4",
             "--output", output,
             "--no-playlist", "--quiet",
         ]
@@ -603,10 +603,25 @@ def download_video(url: str, tmp_dir: str) -> str:
         )
 
     if result.returncode != 0:
-        err = (result.stderr or result.stdout or "")[:300]
-        print(f"  Video download failed (non-fatal): {err}")
-        print(f"  VIDEO_DOWNLOAD_FAILED: {url}")  # machine-parseable for retry tracking
-        return ""
+        # For non-YouTube (IG/TikTok), yt-dlp may exit non-zero on metadata warnings
+        # while still having downloaded the file — check before giving up
+        if not is_yt:
+            for ext in ["mp4", "mkv", "webm", "mov"]:
+                alt = os.path.join(tmp_dir, f"video.{ext}")
+                if os.path.exists(alt) and os.path.getsize(alt) > 100_000:
+                    print(f"  Video present despite exit code (metadata warning only) — using file")
+                    video_path = alt
+                    break
+            else:
+                err = (result.stderr or result.stdout or "")[:300]
+                print(f"  Video download failed (non-fatal): {err}")
+                print(f"  VIDEO_DOWNLOAD_FAILED: {url}")
+                return ""
+        else:
+            err = (result.stderr or result.stdout or "")[:300]
+            print(f"  Video download failed (non-fatal): {err}")
+            print(f"  VIDEO_DOWNLOAD_FAILED: {url}")
+            return ""
 
     # Find the output file (extension might vary)
     if not os.path.exists(video_path):
