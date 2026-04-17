@@ -22,8 +22,7 @@ WORKSPACE       = Path("/Users/priscilahigashi/ClaudeWorkspace")
 TOKEN_FILE      = Path(os.environ.get("SHEETS_TOKEN_PATH",
                         str(WORKSPACE / "Credentials" / "sheets_token.json")))
 ENV_FILE        = WORKSPACE / ".env"
-SHEET_ID        = os.environ.get("SHEET_ID",
-                                  "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
+SHEET_ID        = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"  # Ideas & Inbox — always
 INSPO_TAB       = "📥 Inspiration Library"
 
 # ── Scraping limits ───────────────────────────────────────────────────────────
@@ -69,14 +68,15 @@ YT_QUERIES = [
     "south florida custom home build",
 ]
 
-# ── Header (19 cols — added Comments) ────────────────────────────────────────
+# ── Header (26 cols — matches redesigned Inspiration Library 2026-04-14) ─────
 INSPO_HEADER = [
-    "Date Added", "Platform", "URL / Link", "Creator / Account",
+    "Date Added", "Platform", "URL", "Creator / Account",
     "Content Type", "Description", "Transcription", "Original Caption",
-    "Visual Hook", "Hook Type",
-    "Views", "Likes", "Comments", "Saves / Shares",
-    "What's Working", "A/B Test Notes", "Use As Inspo For",
-    "Copyright Version Created?", "Status"
+    "Visual Hook", "Hook Type", "Views", "Content Hub Link",
+    "Engagement Comments", "Saves / Shares",
+    "What's Working", "A/B Test", "Brief / Angle", "Format", "Status",
+    "Topic / Title", "Niche", "Comments",
+    "AI Score (1-5)", "Date Status Changed", "Drive Folder Path", "My Raw Notes"
 ]
 
 # ── Env ───────────────────────────────────────────────────────────────────────
@@ -259,25 +259,32 @@ def scrape_instagram(api_key: str, existing_urls: set) -> list:
         username = item.get("ownerUsername") or item.get("username") or ""
 
         new_rows.append([
-            today,                          # Date Added
-            "Instagram",                    # Platform
-            url,                            # URL
-            f"@{username}",                 # Creator
-            "Reel",                         # Content Type
-            "",                             # Description (blank — fill manually or AI later)
-            "",                             # Transcription
-            caption,                        # Original Caption
-            "",                             # Visual Hook
-            "Visual",                       # Hook Type
-            str(views),                     # Views
-            str(likes),                     # Likes
-            str(comments),                  # Comments
-            "",                             # Saves (Instagram API doesn't expose this)
-            "",                             # What's Working
-            "",                             # A/B Test Notes
-            "",                             # Use As Inspo For
-            "No",                           # Copyright Version Created
-            "New"                           # Status
+            today,          # A  Date Added
+            "Instagram",    # B  Platform
+            url,            # C  URL
+            f"@{username}", # D  Creator / Account
+            "Reel",         # E  Content Type
+            "",             # F  Description (empty — AI fills later)
+            "",             # G  Transcription
+            caption,        # H  Original Caption
+            hook,           # I  Visual Hook
+            "Visual",       # J  Hook Type
+            str(views),     # K  Views
+            "",             # L  Content Hub Link (scraper has no hub path)
+            str(comments),  # M  Engagement Comments
+            "",             # N  Saves / Shares
+            "",             # O  What's Working
+            "",             # P  A/B Test
+            "",             # Q  Brief / Angle
+            "",             # R  Format
+            "New",          # S  Status
+            caption[:80],   # T  Topic / Title
+            "OPC",          # U  Niche
+            "",             # V  Comments (internal note)
+            "",             # W  AI Score (1-5) — blank until processed
+            "",             # X  Date Status Changed
+            "",             # Y  Drive Folder Path
+            "",             # Z  My Raw Notes
         ])
         existing_urls.add(url)
 
@@ -380,25 +387,32 @@ def scrape_youtube(api_key: str, existing_urls: set, existing_titles: set = None
             existing_urls.add(url)
             existing_titles.add(title.lower())
             new_rows.append([
-                today,                          # Date Added
-                "YouTube",                      # Platform
-                url,                            # URL
-                channel,                        # Creator
-                content_type,                   # Content Type (Short vs Video)
-                desc,                           # Description
-                "",                             # Transcription
-                title,                          # Original Caption (title = hook idea)
-                "",                             # Visual Hook
-                "Text/Title",                   # Hook Type
-                str(views),                     # Views
-                str(likes),                     # Likes
-                str(comments),                  # Comments
-                "",                             # Saves
-                "",                             # What's Working
-                "",                             # A/B Test Notes
-                "",                             # Use As Inspo For
-                "No",                           # Copyright Version Created
-                "New"                           # Status
+                today,          # A  Date Added
+                "YouTube",      # B  Platform
+                url,            # C  URL
+                channel,        # D  Creator / Account
+                content_type,   # E  Content Type (Short vs Video)
+                desc,           # F  Description
+                "",             # G  Transcription
+                title,          # H  Original Caption (title = hook idea)
+                "",             # I  Visual Hook
+                "Text/Title",   # J  Hook Type
+                str(views),     # K  Views
+                "",             # L  Content Hub Link
+                str(comments),  # M  Engagement Comments
+                "",             # N  Saves / Shares
+                "",             # O  What's Working
+                "",             # P  A/B Test
+                "",             # Q  Brief / Angle
+                "",             # R  Format
+                "New",          # S  Status
+                title[:80],     # T  Topic / Title
+                "OPC",          # U  Niche
+                "",             # V  Comments (internal)
+                "",             # W  AI Score (1-5)
+                "",             # X  Date Status Changed
+                "",             # Y  Drive Folder Path
+                "",             # Z  My Raw Notes
             ])
 
             if len(new_rows) >= MAX_YOUTUBE:
@@ -427,8 +441,6 @@ def main():
     print("🔐 Authenticating with Google...")
     gtoken = get_gtoken()
 
-    fix_header_add_comments(gtoken)
-
     print("🔗 Loading existing URLs + titles (dedup check)...")
     existing_urls = get_existing_urls(gtoken)
     existing_titles = get_existing_titles(gtoken)
@@ -456,6 +468,17 @@ def main():
         print("\n✅ Nothing new to add today")
 
     print(f"   Sheet: https://docs.google.com/spreadsheets/d/{SHEET_ID}")
+
+    # Log to Content Creation Log
+    try:
+        import sys
+        sys.path.insert(0, str(WORKSPACE / "oak-park-ai-hub" / "scripts"))
+        os.environ.setdefault("SHEETS_TOKEN", TOKEN_FILE.read_text())
+        from content_tracker import log_run
+        log_run(pipeline="inspiration_scraper", trigger="scheduled",
+                niche="OPC", status="success" if all_rows else "skipped",
+                notes=f"{len(all_rows)} rows added (IG+YT)")
+    except Exception: pass
 
 if __name__ == "__main__":
     main()
