@@ -211,7 +211,9 @@ Return ONLY a valid JSON object with this exact structure:
       "party_tag": "PARTY NAME — leaning label",
       "facts_pt": ["fact 1", "fact 2", "fact 3"],
       "sticker_name": "LASTNAME",
-      "mentioned_people": []
+      "mentioned_people": [],
+      "visual_hint": "bio-card",
+      "context_image_query": ""
     }},
     {{
       "type": "data",
@@ -223,21 +225,27 @@ Return ONLY a valid JSON object with this exact structure:
         {{"value": "XX%", "label_pt": "label", "label_en": "label"}},
         {{"value": "XM", "label_pt": "label", "label_en": "label"}}
       ],
-      "mentioned_people": []
+      "mentioned_people": [],
+      "visual_hint": "context-image",
+      "context_image_query": "specific institution/place/event — e.g. 'Câmara dos Deputados Brasília fachada'"
     }},
     {{
       "type": "list",
       "heading_pt": "Heading PT",
       "heading_en": "Heading EN",
       "items_pt": ["item 1", "item 2", "item 3", "item 4"],
-      "mentioned_people": []
+      "mentioned_people": [],
+      "visual_hint": "context-image|bio-card|none",
+      "context_image_query": "search term if context-image, else empty string"
     }},
     {{
       "type": "list",
       "heading_pt": "Heading PT",
       "heading_en": "Heading EN",
       "items_pt": ["item 1", "item 2", "item 3"],
-      "mentioned_people": []
+      "mentioned_people": [],
+      "visual_hint": "context-image|bio-card|none",
+      "context_image_query": "search term if context-image, else empty string"
     }},
     {{
       "type": "quote",
@@ -246,7 +254,9 @@ Return ONLY a valid JSON object with this exact structure:
       "quote": "Memorable quote from a credible source",
       "source": "Source Name",
       "context_pt": "1-2 lines of context",
-      "mentioned_people": []
+      "mentioned_people": [],
+      "visual_hint": "bio-card|context-image|none",
+      "context_image_query": "search term if context-image (e.g. speaker's institution building), else empty string"
     }}
   ],
   "sources": ["Source 1", "Source 2", "Source 3", "Source 4"],
@@ -261,6 +271,15 @@ Rules:
 - Party affiliation in every politician mention
 - Simple Portuguese — not academic
 - Numbers must match the brief exactly if provided
+- Body text and bullet items (items_pt, facts_pt, context_pt) must be in PORTUGUESE ONLY. Never mix English words into PT sentences. heading_en is a small subtitle only — it is NOT body copy.
+
+VISUAL-EVERY-OTHER-SLIDE RULE (non-negotiable):
+Between cover and sources, never output "visual_hint": "none" on more than 1 consecutive slide.
+visual_hint values:
+  "bio-card" → slide has named person in mentioned_people (face cards render automatically from that field)
+  "context-image" → slide references a specific institution, building, place, event, or document; fill context_image_query with a specific search term (e.g. "Câmara dos Deputados Brasília", "Viktor Orbán 2026", "Supremo Tribunal Federal fachada", "Congresso Nacional aerial")
+  "none" → text-only, max 1 consecutive allowed
+First choice for Brazilian institutions: Agência Brasil CC BY 3.0 search terms. International subjects: English search terms.
 
 NAMED-PERSON → FACE RULE (non-negotiable):
 For every slide, populate `mentioned_people` with EVERY named person referenced in that
@@ -481,11 +500,14 @@ def _build_brazil_html(content, slug, work_dir):
             nums_html = ""
             for n in slide.get("numbers", [])[:4]:
                 nums_html += f'<div class="num-block"><div class="num-val">{esc(n.get("value","—"))}</div><div class="num-label">{esc(n.get("label_pt",""))}</div><div class="num-en">{esc(n.get("label_en",""))}</div></div>\n'
+            v_hint = slide.get("visual_hint", "none")
+            ctx_q = esc(slide.get("context_image_query", ""))
+            ctx_slot = f'\n  <div class="context-img-slot"><span class="ctx-query">[ IMG: {ctx_q} ]</span></div>' if v_hint == "context-image" and ctx_q else ""
             slides_html += f"""
 <div class="slide slide-data">
   <div class="tag">Os Números</div>
   <div class="slide-hl">{h_pt}</div>
-  <div class="slide-en">{h_en}</div>
+  <div class="slide-en">{h_en}</div>{ctx_slot}
   <div class="nums-grid">{nums_html}</div>
   <div class="swipe">SWIPE →</div>
 </div>
@@ -493,22 +515,28 @@ def _build_brazil_html(content, slug, work_dir):
 
         elif stype == "list":
             items_li = "".join(f"<li>{esc(i)}</li>" for i in slide.get("items_pt", []))
+            v_hint = slide.get("visual_hint", "none")
+            ctx_q = esc(slide.get("context_image_query", ""))
+            ctx_slot = f'\n  <div class="context-img-slot"><span class="ctx-query">[ IMG: {ctx_q} ]</span></div>' if v_hint == "context-image" and ctx_q else ""
             slides_html += f"""
 <div class="slide slide-list">
   <div class="tag">Segue o fio</div>
   <div class="slide-hl">{h_pt}</div>
-  <div class="slide-en">{h_en}</div>
+  <div class="slide-en">{h_en}</div>{ctx_slot}
   <ul class="item-list">{items_li}</ul>
   <div class="swipe">SWIPE →</div>
 </div>
 """
 
         elif stype == "quote":
+            v_hint = slide.get("visual_hint", "none")
+            ctx_q = esc(slide.get("context_image_query", ""))
+            ctx_slot = f'\n  <div class="context-img-slot"><span class="ctx-query">[ IMG: {ctx_q} ]</span></div>' if v_hint == "context-image" and ctx_q else ""
             slides_html += f"""
 <div class="slide slide-quote">
   <div class="tag">Não é opinião</div>
   <div class="slide-hl">{h_pt}</div>
-  <div class="slide-en">{h_en}</div>
+  <div class="slide-en">{h_en}</div>{ctx_slot}
   <div class="quote-block">
     <div class="quote-mark">"</div>
     <div class="quote-text">{esc(slide.get("quote",""))}</div>
@@ -587,6 +615,9 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px;font-fam
 .src-num{{color:var(--ca);flex-shrink:0;width:32px}}
 .cta-pt{{font-size:36px;font-weight:700;margin-top:28px}}
 .cta-en{{font-style:italic;font-size:26px;color:var(--gr);margin-top:6px}}
+/* CONTEXT IMAGE SLOT */
+.context-img-slot{{height:240px;border:2px dashed var(--gr);border-radius:4px;display:flex;align-items:center;justify-content:center;margin-bottom:20px;background:rgba(122,114,103,.06);flex-shrink:0}}
+.ctx-query{{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--ca);text-align:center;padding:16px;opacity:.75}}
 </style>
 </head>
 <body>
