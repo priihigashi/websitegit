@@ -417,13 +417,13 @@ def process_one_topic(topic_entry, run_date, drive):
     # resources/  — shared references (filled by future passes)
     create_subfolder(version_folder_id, "resources", drive)
 
-    # story (Google Doc) — slide-by-slide script + research
-    story_doc = create_story_doc(version_folder_id, slug, version, topic, niche, brief, content, drive)
-    story_link = story_doc.get("webViewLink", "")
-    print(f"  Story: {story_link}")
-
     folder_link = f"https://drive.google.com/drive/folders/{version_folder_id}"
     print(f"  Version: {folder_link}")
+
+    # story (Google Doc) — slide-by-slide script + research
+    story_doc = create_story_doc(version_folder_id, slug, version, topic, niche, brief, content, drive, folder_link)
+    story_link = story_doc.get("webViewLink", "")
+    print(f"  Story: {story_link}")
 
     # Flow tracking: Content Queue → Built + Drive path
     if queue_row:
