@@ -435,3 +435,14 @@ When she says "do we have a skill for X" → check this tab first before saying 
 15. Gmail filter creation blocked with "missing gmail.settings.basic scope" → Composio Gmail connection was authorized without the settings scope. Labels/read/write work fine. Filter creation requires a one-time reconnect by Priscila at app.composio.dev → Connections → Gmail → Reconnect → check "Manage your email settings". This is NOT a Google Cloud API issue — the API is enabled. It is a Composio OAuth scope issue. After reconnect, filter creation works immediately.
 14. Calendar MCP reported as "doesn't load in VSCode IDE extension" or "OAuth token has no Calendar scope" → BOTH WRONG. Calendar MCP tools are DEFERRED — load schema via ToolSearch first: ToolSearch("select:mcp__claude_ai_Google_Calendar__gcal_create_event"). Then call normally. Confirmed working 2026-04-12. OAuth scope is irrelevant — MCP uses its own auth, not sheets_token.json.
 13. Gmail MCP used when task required SENDING email → Gmail MCP CANNOT send, only creates drafts. For actual sending: trigger GitHub Actions `send_email.yml` via `~/bin/gh workflow run send_email.yml --repo priihigashi/oak-park-ai-hub -f to=... -f subject=... -f body=...`. This uses PRI_OP_GMAIL_APP_PASSWORD (already set) and actually delivers the email. Same pattern as 4am_agent.yml. → this is a server-side failure from the gdrive MCP server, NOT a query formatting issue. Do NOT retry it. Immediately switch to `mcp__claude_ai_Google_Drive__search_files` (Route A). If that also fails, use OAuth Python Drive API (Route C). Never report Drive search as blocked without trying all 3 routes. See: reference_active_connections.md → "Drive Search & Access — 3 Routes"
+
+
+## CAPTURE PIPELINE — PROJECT ROUTING (updated 2026-04-17)
+
+When triggering capture_pipeline.yml, always use the correct `project` input:
+
+- `brazil` → Brazil/SOVEREIGN civic content (default for Brazilian reels)
+- `usa` → USA news/content  
+- `book` → RECEIPTS fact-check book
+
+RULE: Never default to `book` for Brazil reels. Always ask "brazil, usa, or book?" if not specified before triggering.
