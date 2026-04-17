@@ -167,7 +167,9 @@ jobs:
             > /tmp/props_pt.json
 
       - name: Copy source video to Remotion public dir
-        run: cp "${{ steps.locate.outputs.video }}" scripts/remotion/public/source_clip.mp4
+        run: |
+          mkdir -p scripts/remotion/public
+          cp "${{ steps.locate.outputs.video }}" scripts/remotion/public/source_clip.mp4
 
       - name: Render EN reel
         working-directory: scripts/remotion
