@@ -520,27 +520,38 @@ def process_one_topic(topic_entry, run_date, drive):
 
     version_folder_id = create_subfolder(parent, version_name, drive)
     sc = SHORTCUT_FOLDERS.get(niche, {})
-    if sc.get("carousels"):
-        add_shortcut(version_folder_id, version_name, sc["carousels"], drive)
-        print(f"  Shortcut → Shortcuts/Carousels/{version_name}")
 
     # cover.html at version-folder root
     upload_single_file(html_path, version_folder_id, "cover.html", "text/html", drive)
 
     # png/  — full static post (all variants × all slides)
+    # Carousel shortcut points here so opening it shows slides immediately (no subfolders).
     png_sub = create_subfolder(version_folder_id, "png", drive)
     upload_dir_contents(png_dir, png_sub, drive)
+    if sc.get("carousels"):
+        add_shortcut(png_sub, version_name, sc["carousels"], drive)
+        print(f"  Shortcut → Shortcuts/Carousels/{version_name}")
 
     # motion/  — self-contained full post: animated covers + duplicated non-cover PNGs
     # Scheduler posts slides 1..N in order from ONE folder; never stitches across png/+motion/.
     motion_sub = create_subfolder(version_folder_id, "motion", drive)
-    if sc.get("videos"):
-        add_shortcut(motion_sub, version_name, sc["videos"], drive)
-        print(f"  Shortcut → Shortcuts/Videos/{version_name}")
     if motion_dir.exists():
         upload_dir_contents(motion_dir, motion_sub, drive)
     # duplicate non-cover PNGs so motion/ holds the complete sequence
     upload_dir_contents(png_dir, motion_sub, drive, skip_pattern=r"_01_cover")
+    # Video shortcut: point to the cover MP4 file directly so Drive plays it inline.
+    # Only created when an actual MP4 exists in the motion folder.
+    if sc.get("videos"):
+        from googleapiclient.errors import HttpError as _HttpError
+        mp4s = drive.files().list(
+            q=f"'{motion_sub}' in parents and mimeType='video/mp4' and trashed=false",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+            fields="files(id,name)"
+        ).execute().get("files", [])
+        cover_mp4 = next((f for f in mp4s if "cover" in f["name"].lower()), mp4s[0] if mp4s else None)
+        if cover_mp4:
+            add_shortcut(cover_mp4["id"], version_name, sc["videos"], drive)
+            print(f"  Shortcut → Shortcuts/Videos/{version_name} (MP4)")
 
     # resources/ — image suggestions + screenshot crops + clip hints
     resources_sub = create_subfolder(version_folder_id, "resources", drive)
