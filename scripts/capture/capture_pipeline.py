@@ -351,6 +351,7 @@ def fetch_reel_metadata(url: str) -> dict:
             "views": item.get("videoViewCount", 0),
             "timestamp": item.get("timestamp", ""),
             "source_url": url,
+            "video_url": item.get("videoUrl", ""),
         }
         print(f"  Creator: @{metadata['creator_handle']} ({metadata['creator_name']})")
         print(f"  Stats: {metadata['likes']} likes, {metadata['views']} views")
@@ -519,21 +520,21 @@ def _try_apify_youtube_download(url: str, tmp_dir: str) -> str:
         return ""
 
 
-def download_audio(url: str, tmp_dir: str) -> str:
-    """3-tier YouTube download: yt-dlp → Apify → transcript-api fallback.
-    For non-YouTube URLs, uses yt-dlp only (works for IG/TikTok).
+def download_audio(url: str, tmp_dir: str, metadata: dict = None) -> str:
+    """Download audio: yt-dlp first, Apify videoUrl fallback for Instagram.
+    YouTube has additional fallbacks (iOS trick → Apify → transcript-api).
     """
     print(f"\n[1/3] Downloading audio: {url}")
     is_yt = _is_youtube(url)
 
-    # Tier 1: yt-dlp standard (works for IG, TikTok, and sometimes YouTube)
+    # Tier 1: yt-dlp standard
     audio = _try_ytdlp(url, tmp_dir)
     if audio:
         size = os.path.getsize(audio) / 1024
         print(f"  Downloaded via yt-dlp ({size:.0f} KB)")
         return audio
 
-    # Tier 1b: yt-dlp with iOS client trick (YouTube only — bypasses some bot checks)
+    # Tier 1b: yt-dlp with iOS client trick (YouTube only)
     if is_yt:
         print("  Retrying yt-dlp with iOS client workaround...")
         audio = _try_ytdlp(url, tmp_dir, [
@@ -544,19 +545,38 @@ def download_audio(url: str, tmp_dir: str) -> str:
             print(f"  Downloaded via yt-dlp iOS trick ({size:.0f} KB)")
             return audio
 
-    # Tier 2: Apify YouTube download (cloud, reliable, costs ~$0.05)
+    # Tier 2: Apify YouTube download
     if is_yt:
         audio = _try_apify_youtube_download(url, tmp_dir)
         if audio:
             return audio
 
-    # Tier 3: transcript-api fallback (text only, no audio file)
+    # Tier 3: transcript-api fallback (YouTube text only)
     if is_yt:
         print("  All download methods failed — falling back to transcript API (text only)")
         return "__youtube_transcript_fallback__"
 
-    # Non-YouTube URL and yt-dlp failed — nothing else to try
-    print("  ERROR: yt-dlp failed and no fallback available for this platform")
+    # Instagram/TikTok Tier 2: use videoUrl from Apify metadata (already fetched, no extra cost)
+    video_url = (metadata or {}).get("video_url", "")
+    if video_url:
+        print("  yt-dlp blocked — downloading via Apify videoUrl...")
+        try:
+            audio_path = os.path.join(tmp_dir, "audio.mp4")
+            resp = requests.get(video_url, timeout=120, stream=True,
+                                headers={"User-Agent": "Mozilla/5.0"})
+            resp.raise_for_status()
+            with open(audio_path, "wb") as f:
+                for chunk in resp.iter_content(8192):
+                    f.write(chunk)
+            size = os.path.getsize(audio_path) / 1024
+            if size > 100:
+                print(f"  Downloaded via Apify videoUrl ({size:.0f} KB)")
+                return audio_path
+            print(f"  Apify videoUrl: file too small ({size:.0f} KB), skipping")
+        except Exception as e:
+            print(f"  Apify videoUrl download failed: {e}")
+
+    print("  ERROR: all download methods failed for this URL")
     sys.exit(1)
 
 
@@ -1600,12 +1620,12 @@ def main():
 
     print(f"\n{'='*50}\nCAPTURE PIPELINE v2\nURL: {args.url}\nProject: {args.project.upper()}\nStory ID: {args.story_id}\n{'='*50}")
 
-    # Step 0: Fetch reel metadata via Apify (creator info for credits)
-    # FYI: This uses the Apify API — see docstring at top of file.
+    # Step 0: Fetch reel metadata via Apify (creator info + videoUrl fallback for IG)
     metadata = {}
-    if args.credits:
+    is_ig = "instagram.com" in args.url
+    if args.credits or is_ig:
         metadata = fetch_reel_metadata(args.url)
-        if metadata:
+        if metadata and args.credits:
             args.notes = (args.notes or "") + (
                 f"\n\nCREDITS — Original creator: @{metadata['creator_handle']}"
                 f" ({metadata['creator_name']})"
@@ -1614,7 +1634,7 @@ def main():
             )
 
     with tempfile.TemporaryDirectory() as tmp:
-        audio = download_audio(args.url, tmp)
+        audio = download_audio(args.url, tmp, metadata=metadata)
         transcript = transcribe_audio(audio, args.url)
         save_transcript(transcript, args.url, args.story_id, args.project)
 
