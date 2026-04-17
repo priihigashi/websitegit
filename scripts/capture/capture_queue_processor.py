@@ -14,7 +14,7 @@ Tab columns (A–H, 1-indexed):
   E = SCORE      (1-5 derived from pipeline classification)
   F = MOVED TO   (destination name or "⚠️ Pipeline failed" on error)
   G = HUB DOC PATH (folder / doc URL from pipeline)
-  H = PROJECT    (content | sovereign | book — default: content)
+  H = PROJECT    (brazil | usa | book — default: content)
 
 Skip rules:
   - Skip if D == "TRUE" (already processed)
@@ -45,9 +45,11 @@ CAPTURE_SCRIPT = "scripts/capture/capture_pipeline.py"
 
 STATUS_TO_SCORE = {"READY": 5, "NEEDS_REVIEW": 3, "NOT_RELEVANT": 1}
 PROJECT_TO_DEST = {
-    "content":  "Inspiration Library",
-    "sovereign": "SOVEREIGN Drive",
-    "book":     "Book Tracker",
+    "brazil":    "Brazil News Drive",
+    "usa":       "Inspiration Library",
+    "book":      "Book Tracker",
+    "content":   "Inspiration Library",   # legacy alias
+    "sovereign": "Brazil News Drive",     # legacy alias → use brazil
 }
 
 
