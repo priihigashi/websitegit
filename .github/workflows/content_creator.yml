@@ -7,10 +7,13 @@ on:
     inputs:
       count_opc:
         description: 'Number of OPC topics'
-        default: '2'
+        default: '3'
       count_brazil:
         description: 'Number of Brazil topics'
-        default: '1'
+        default: '2'
+      count_usa:
+        description: 'Number of USA topics (not wired yet — pending template)'
+        default: '2'
 
 jobs:
   create-content:
