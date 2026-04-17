@@ -269,32 +269,43 @@ Respond with JSON only:
 
 def save_to_inspiration_library(url: str, transcript: str, cl: dict,
                                  topic_cluster_id: str, original_url: str = ""):
-    """Append row to Inspiration Library. Column T = Topic Cluster ID."""
+    """Append row to Inspiration Library using header-name lookup (resilient to reorder)."""
     gc = get_sheets_client()
     if not gc:
         return
     try:
         sh = gc.open_by_key(IDEAS_INBOX_ID)
         lib = sh.worksheet("\U0001f4e5 Inspiration Library")
-        lib.append_row([
-            datetime.now().strftime("%Y-%m-%d"),           # A: Date Added
-            "Instagram",                                    # B: Platform
-            url,                                            # C: URL / Link
-            "",                                             # D: Creator / Account
-            cl.get("content_type", ""),                    # E: Content Type
-            cl.get("summary", ""),                          # F: Description
-            transcript[:300],                               # G: Transcription
-            "",                                             # H: Original Caption
-            cl.get("hook", ""),                             # I: Visual Hook
-            "",                                             # J: Hook Type
-            "", "", "", "",                                # K-N: metrics (empty)
-            cl.get("notes", ""),                            # O: What's Working
-            "",                                             # P: A/B Test Notes
-            f"Topic cluster from: {original_url}" if original_url else "",  # Q: Use As Inspo For
-            "NO",                                           # R: Copyright Version
-            cl.get("classification", "NEEDS_REVIEW"),      # S: Status
-            topic_cluster_id,                               # T: Topic Cluster ID
-        ])
+
+        # Resolve all columns by header name — never use positional index
+        headers = lib.row_values(1)
+        col_pos = {h.strip().lower(): i for i, h in enumerate(headers)}
+
+        def _set_col(row, col_name, value):
+            idx = col_pos.get(col_name.lower())
+            if idx is not None:
+                while len(row) <= idx:
+                    row.append("")
+                row[idx] = str(value) if value is not None else ""
+
+        base_row = []
+        _set_col(base_row, "date added",        datetime.now().strftime("%Y-%m-%d"))
+        _set_col(base_row, "content hub link",  "")  # topic scraper has no hub path
+        _set_col(base_row, "platform",          "Instagram")
+        _set_col(base_row, "url",               url)
+        _set_col(base_row, "creator / account", "")
+        _set_col(base_row, "content type",      cl.get("content_type", ""))
+        _set_col(base_row, "description",       cl.get("summary", ""))
+        _set_col(base_row, "transcription",     transcript[:300])
+        _set_col(base_row, "original caption",  "")
+        _set_col(base_row, "visual hook",       cl.get("hook", ""))
+        _set_col(base_row, "hook type",         "")
+        _set_col(base_row, "what's working",    cl.get("notes", ""))
+        _set_col(base_row, "brief / angle",     f"Topic cluster from: {original_url}" if original_url else "")
+        _set_col(base_row, "status",            cl.get("classification", "NEEDS_REVIEW"))
+        _set_col(base_row, "topic / title",     topic_cluster_id)
+
+        lib.append_row(base_row, value_input_option="USER_ENTERED")
         print(f"  Saved → Inspiration Library (cluster: {topic_cluster_id})")
     except Exception as e:
         print(f"  WARNING Sheets: {e}")

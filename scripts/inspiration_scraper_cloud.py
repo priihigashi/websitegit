@@ -68,15 +68,16 @@ YT_QUERIES = [
     "south florida custom home build",
 ]
 
-# ── Header (26 cols — matches redesigned Inspiration Library 2026-04-14) ─────
+# ── Header (27 cols — matches col remap 2026-04-17: ContentHubLink moved to B) ─
 INSPO_HEADER = [
-    "Date Added", "Platform", "URL", "Creator / Account",
+    "Date Added", "Content Hub Link", "Platform", "URL", "Creator / Account",
     "Content Type", "Description", "Transcription", "Original Caption",
-    "Visual Hook", "Hook Type", "Views", "Content Hub Link",
+    "Visual Hook", "Hook Type", "Views",
     "Engagement Comments", "Saves / Shares",
     "What's Working", "A/B Test", "Brief / Angle", "Format", "Status",
     "Topic / Title", "Niche", "Comments",
-    "AI Score (1-5)", "Date Status Changed", "Drive Folder Path", "My Raw Notes"
+    "AI Score (1-5)", "Date Status Changed", "Drive Folder Path", "My Raw Notes",
+    "series_override"
 ]
 
 # ── Env ───────────────────────────────────────────────────────────────────────
@@ -125,29 +126,33 @@ def sheet_put(token, path, body):
 
 # ── Sheet helpers ─────────────────────────────────────────────────────────────
 def fix_header_add_comments(token):
-    """Add Comments column to header if missing (safe — no data rows yet)."""
+    """Rewrite full header if it doesn't match current schema (safe — never clears data rows)."""
     rows = sheet_get(token, f"/values/'{INSPO_TAB}'!1:1").get("values", [[]])
     current = rows[0] if rows else []
-    if "Comments" not in current:
+    # Use last column letter dynamically: len(INSPO_HEADER) cols, A=1 → letter
+    last_col_idx = len(INSPO_HEADER) - 1  # 0-based
+    last_col_letter = chr(ord('A') + last_col_idx) if last_col_idx < 26 else "Z"
+    end_range = f"A1:{last_col_letter}1"
+    if current != INSPO_HEADER:
         sheet_put(token,
-                  f"/values/'{INSPO_TAB}'!A1:S1?valueInputOption=USER_ENTERED",
+                  f"/values/'{INSPO_TAB}'!{end_range}?valueInputOption=USER_ENTERED",
                   {"values": [INSPO_HEADER]})
-        print("✅ Header updated — Comments column added")
+        print(f"✅ Header updated to {len(INSPO_HEADER)}-col schema")
     else:
         print("✅ Header OK")
 
 def get_existing_urls(token) -> set:
-    """Return set of URLs already in Inspiration Library (column C)."""
+    """Return set of URLs already in Inspiration Library (column D after 2026-04-17 remap)."""
     try:
-        rows = sheet_get(token, f"/values/'{INSPO_TAB}'!C:C").get("values", [])
+        rows = sheet_get(token, f"/values/'{INSPO_TAB}'!D:D").get("values", [])
         return {r[0].strip() for r in rows[1:] if r}
     except Exception:
         return set()
 
 def get_existing_titles(token) -> set:
-    """Return normalized set of Original Captions / titles (column H) for dedup."""
+    """Return normalized set of Original Captions / titles (column I after 2026-04-17 remap)."""
     try:
-        rows = sheet_get(token, f"/values/'{INSPO_TAB}'!H:H").get("values", [])
+        rows = sheet_get(token, f"/values/'{INSPO_TAB}'!I:I").get("values", [])
         return {r[0].strip().lower() for r in rows[1:] if r and r[0].strip()}
     except Exception:
         return set()
@@ -260,17 +265,17 @@ def scrape_instagram(api_key: str, existing_urls: set) -> list:
 
         new_rows.append([
             today,          # A  Date Added
-            "Instagram",    # B  Platform
-            url,            # C  URL
-            f"@{username}", # D  Creator / Account
-            "Reel",         # E  Content Type
-            "",             # F  Description (empty — AI fills later)
-            "",             # G  Transcription
-            caption,        # H  Original Caption
-            hook,           # I  Visual Hook
-            "Visual",       # J  Hook Type
-            str(views),     # K  Views
-            "",             # L  Content Hub Link (scraper has no hub path)
+            "",             # B  Content Hub Link (scraper has no hub path)
+            "Instagram",    # C  Platform
+            url,            # D  URL
+            f"@{username}", # E  Creator / Account
+            "Reel",         # F  Content Type
+            "",             # G  Description (empty — AI fills later)
+            "",             # H  Transcription
+            caption,        # I  Original Caption
+            hook,           # J  Visual Hook
+            "Visual",       # K  Hook Type
+            str(views),     # L  Views
             str(comments),  # M  Engagement Comments
             "",             # N  Saves / Shares
             "",             # O  What's Working
@@ -388,17 +393,17 @@ def scrape_youtube(api_key: str, existing_urls: set, existing_titles: set = None
             existing_titles.add(title.lower())
             new_rows.append([
                 today,          # A  Date Added
-                "YouTube",      # B  Platform
-                url,            # C  URL
-                channel,        # D  Creator / Account
-                content_type,   # E  Content Type (Short vs Video)
-                desc,           # F  Description
-                "",             # G  Transcription
-                title,          # H  Original Caption (title = hook idea)
-                "",             # I  Visual Hook
-                "Text/Title",   # J  Hook Type
-                str(views),     # K  Views
-                "",             # L  Content Hub Link
+                "",             # B  Content Hub Link (scraper has no hub path)
+                "YouTube",      # C  Platform
+                url,            # D  URL
+                channel,        # E  Creator / Account
+                content_type,   # F  Content Type (Short vs Video)
+                desc,           # G  Description
+                "",             # H  Transcription
+                title,          # I  Original Caption (title = hook idea)
+                "",             # J  Visual Hook
+                "Text/Title",   # K  Hook Type
+                str(views),     # L  Views
                 str(comments),  # M  Engagement Comments
                 "",             # N  Saves / Shares
                 "",             # O  What's Working
@@ -461,8 +466,8 @@ def main():
     if all_rows:
         print(f"\n📝 Writing {len(all_rows)} rows to '{INSPO_TAB}'...")
         append_rows(gtoken, all_rows)
-        ig_count = sum(1 for r in all_rows if r[1] == "Instagram")
-        yt_count = sum(1 for r in all_rows if r[1] == "YouTube")
+        ig_count = sum(1 for r in all_rows if r[2] == "Instagram")
+        yt_count = sum(1 for r in all_rows if r[2] == "YouTube")
         print(f"✅ Done — {ig_count} Instagram + {yt_count} YouTube added")
     else:
         print("\n✅ Nothing new to add today")

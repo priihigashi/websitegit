@@ -127,7 +127,10 @@ def fetch_reel_metadata(url):
 
 
 def save_to_inspiration_library(url, metadata, notes):
-    """Save reel entry to Inspiration Library tab with credits."""
+    # DISABLED: this function used the old 9-column schema and will corrupt the sheet.
+    # Use capture_pipeline.py:update_inspiration_library() instead.
+    print("WARNING: legacy write to Inspiration Library blocked — use capture_pipeline.py")
+    return
     import gspread
     creds = _get_creds()
     gc = gspread.authorize(creds)

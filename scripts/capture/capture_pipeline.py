@@ -954,10 +954,10 @@ def _detect_platform(url: str) -> str:
 def update_inspiration_library(url, transcript, classification, hub_url="", doc_url="", metadata=None, user_notes=""):
     """
     Additive-only. Writes a NEW row. Never updates/overwrites existing rows.
-    Columns A-L are fixed by position (left-edge of append_row).
-    Column 'My Raw Notes' is resolved by header-name lookup — if Priscila ever
-    reorders columns, this still lands in the right cell. She asked for this
-    as a resilience guarantee (2026-04-17).
+    All columns resolved by header-name lookup — resilient to any future reorder.
+    Schema as of 2026-04-17: A=Date Added, B=Content Hub Link, C=Platform,
+    D=URL, E=Creator/Account, F=Content Type, G=Description, H=Transcription,
+    I=Original Caption, J=Visual Hook, K=Hook Type, L=Views, M+= unchanged.
     """
     gc = get_sheets_client()
     if not gc:
@@ -967,60 +967,39 @@ def update_inspiration_library(url, transcript, classification, hub_url="", doc_
         sh = gc.open_by_key(IDEAS_INBOX_ID)
         lib = sh.worksheet("📥 Inspiration Library")
 
-        # Resolve dynamic columns by header name (resilient to reorder)
+        # Resolve ALL columns by header name — never use positional index
         headers = lib.row_values(1)
-        notes_col_idx = None
-        series_col_idx = None
-        fn_route_col_idx = None
-        fn_conf_col_idx = None
-        for i, h in enumerate(headers):
-            hl = h.strip().lower()
-            if hl == "my raw notes":
-                notes_col_idx = i
-            elif hl == "series_override":
-                series_col_idx = i
-            elif hl == "fake_news_route":
-                fn_route_col_idx = i
-            elif hl == "fake_news_confidence":
-                fn_conf_col_idx = i
+        col_pos = {h.strip().lower(): i for i, h in enumerate(headers)}
+
+        def _set_col(row, col_name, value):
+            idx = col_pos.get(col_name.lower())
+            if idx is not None:
+                while len(row) <= idx:
+                    row.append("")
+                row[idx] = str(value) if value is not None else ""
 
         creator = metadata.get("creator_handle", "")
         if creator and not creator.startswith("@"):
             creator = f"@{creator}"
-        base_row = [
-            datetime.now().strftime("%Y-%m-%d"),         # A — Date Added
-            _detect_platform(url),                       # B — Platform
-            url,                                         # C — URL / Link
-            creator,                                     # D — Creator / Account
-            classification.get("content_type", ""),      # E — Content Type
-            classification.get("summary", ""),           # F — Description
-            transcript[:300],                            # G — Transcription
-            metadata.get("caption", "")[:300],           # H — Original Caption
-            classification.get("hook", ""),              # I — Visual Hook
-            "",                                          # J — Hook Type
-            str(metadata.get("views", "")) if metadata.get("views") else "",  # K — Views
-            hub_url or doc_url,                          # L — Content Hub Link
-        ]
 
-        # Write dynamic columns by header-name index (series_override, fake_news, notes)
-        series_override = classification.get("series_override", "")
-        fake_news_route = classification.get("fake_news_route", "")
-        fake_news_conf  = classification.get("fake_news_confidence", "")
-
-        def _set_dynamic(row, col_idx, value):
-            if col_idx is not None and value:
-                if col_idx >= len(row):
-                    row.extend([""] * (col_idx - len(row)))
-                    row.append(value)
-                else:
-                    row[col_idx] = value
-
-        _set_dynamic(base_row, series_col_idx, series_override)
-        _set_dynamic(base_row, fn_route_col_idx, fake_news_route)
-        _set_dynamic(base_row, fn_conf_col_idx, fake_news_conf)
-        if user_notes and notes_col_idx is not None and notes_col_idx >= len(base_row):
-            base_row.extend([""] * (notes_col_idx - len(base_row)))
-            base_row.append(user_notes)
+        base_row = []
+        _set_col(base_row, "date added",        datetime.now().strftime("%Y-%m-%d"))
+        _set_col(base_row, "content hub link",  hub_url or doc_url)
+        _set_col(base_row, "platform",          _detect_platform(url))
+        _set_col(base_row, "url",               url)
+        _set_col(base_row, "creator / account", creator)
+        _set_col(base_row, "content type",      classification.get("content_type", ""))
+        _set_col(base_row, "description",       classification.get("summary", ""))
+        _set_col(base_row, "transcription",     transcript[:300])
+        _set_col(base_row, "original caption",  metadata.get("caption", "")[:300])
+        _set_col(base_row, "visual hook",       classification.get("hook", ""))
+        _set_col(base_row, "hook type",         "")
+        _set_col(base_row, "views",             str(metadata.get("views", "")) if metadata.get("views") else "")
+        _set_col(base_row, "series_override",   classification.get("series_override", ""))
+        _set_col(base_row, "fake_news_route",   classification.get("fake_news_route", ""))
+        _set_col(base_row, "fake_news_confidence", classification.get("fake_news_confidence", ""))
+        if user_notes:
+            _set_col(base_row, "my raw notes",  user_notes)
 
         lib.append_row(base_row, value_input_option="USER_ENTERED")
         print(f"  Inspiration Library updated (user_notes={'yes' if user_notes else 'no'})")

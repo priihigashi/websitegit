@@ -336,6 +336,10 @@ def setup_merch_planning(drive, sheets, folder_id):
 # ─── 3. SAVE REEL TO INSPIRATION LIBRARY ────────────────────────────────────
 
 def save_reels_to_inspiration_library(sheets):
+    # DISABLED: this function used the old 9-column schema and will corrupt the sheet.
+    # Use capture_pipeline.py:update_inspiration_library() instead.
+    print("WARNING: legacy write to Inspiration Library blocked — use capture_pipeline.py")
+    return
     print("\n[REEL CAPTURE] Saving reels to Inspiration Library...")
     try:
         import gspread
