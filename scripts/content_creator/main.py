@@ -450,7 +450,9 @@ def process_one_topic(topic_entry, run_date, drive):
     create_subfolder(version_folder_id, "resources", drive)
 
     folder_link = f"https://drive.google.com/drive/folders/{version_folder_id}"
+    motion_link = f"https://drive.google.com/drive/folders/{motion_sub}"
     print(f"  Version: {folder_link}")
+    print(f"  Motion:  {motion_link}")
 
     # story (Google Doc) — slide-by-slide script + research
     story_doc = create_story_doc(version_folder_id, slug, version, topic, niche, brief, content, drive, folder_link)
@@ -461,9 +463,9 @@ def process_one_topic(topic_entry, run_date, drive):
     if queue_row:
         write_queue_status(queue_row, status="Built", drive_folder_path=folder_link)
 
-    # 6. Add catalog row (OPC project tracker) — static/motion columns both point at the version folder
+    # 6. Add catalog row (OPC project tracker) — motion column deep-links to /motion subfolder
     series = "Tip of the Week" if niche == "opc" else ("The Chain" if niche == "usa" else "Quem Decidiu Isso?")
-    add_catalog_row(post_id, niche, series, topic, folder_link, folder_link, get_oauth_token())
+    add_catalog_row(post_id, niche, series, topic, folder_link, motion_link, get_oauth_token())
 
     return {
         "post_id": post_id,
@@ -476,9 +478,9 @@ def process_one_topic(topic_entry, run_date, drive):
         "story_link": story_link,
         # legacy keys kept for email_preview.py + approval_handler.py compatibility
         "static_folder_id": version_folder_id,
-        "motion_folder_id": version_folder_id,
+        "motion_folder_id": motion_sub,
         "static_link": folder_link,
-        "motion_link": folder_link,
+        "motion_link": motion_link,
     }
 
 
