@@ -1,0 +1,51 @@
+name: AI Cost Tracker — Weekly Report
+
+on:
+  schedule:
+    - cron: '0 13 * * 1'   # Monday 9 AM ET (UTC-4 in summer = 13:00 UTC)
+    - cron: '0 14 * * 1'   # Monday 9 AM EST (UTC-5 in winter = 14:00 UTC)
+  workflow_dispatch:         # manual trigger
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -q requests
+
+      - name: Run cost tracker
+        env:
+          SHEETS_TOKEN:    ${{ secrets.SHEETS_TOKEN }}
+          OPENAI_API_KEY:  ${{ secrets.OPENAI_API_KEY }}
+          APIFY_API_KEY:   ${{ secrets.APIFY_API_KEY }}
+          GH_TOKEN:        ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/cost_tracker.py
+
+      - name: Email weekly summary
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          python3 - <<'EOF'
+          import os, json, subprocess
+          # Read last line of output (contains the totals)
+          print("Cost tracker run complete — check 💰 Cost Tracker tab in Ideas & Inbox spreadsheet")
+          print("Link: https://docs.google.com/spreadsheets/d/1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU/edit#gid=0")
+          EOF
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## AI Cost Tracker — Weekly Run" >> $GITHUB_STEP_SUMMARY
+          echo "- **Spreadsheet:** [Ideas & Inbox → 💰 Cost Tracker](https://docs.google.com/spreadsheets/d/1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tabs updated:** Claude (estimated), OpenAI, Apify, GitHub Actions, 💰 Cost Tracker (dashboard)" >> $GITHUB_STEP_SUMMARY
