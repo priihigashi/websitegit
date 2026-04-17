@@ -1,92 +1,212 @@
 [
   {
-    "task": "AIOX audit (architect/devops/dev) on 2 new Gmail workflows",
-    "context": "gmail_archive.yml and gmail_cleanup.yml workflows created but not audited yet. Per CLAUDE.md rule, work is not 'done' until security/architecture review is complete.",
-    "auto_actionable": false
-  },
-  {
-    "task": "Drive mirror of CONTENT_FORMATS.md update",
-    "context": "Markdown tables break GOOGLEDOCS_UPDATE_DOCUMENT_MARKDOWN. Local file is authoritative. 4AM agent handles nightly sync OR manual plain-text push on request.",
-    "auto_actionable": false
-  },
-  {
-    "task": "Nosso Dinheiro series debut post copy",
-    "context": "Waiting on transcript from capture pipeline run 24414582860. Needs: slide-by-slide copy, specific data points, clip timestamp from reel DW2arSLulFh.",
-    "auto_actionable": false
-  },
-  {
-    "task": "Canva 'Nosso Dinheiro' template (2 color variants)",
-    "context": "Flagged as NEEDED, not built. Yellow (SPEND) and red (CUT) variants required for FORMAT-005.",
+    "task": "Build Quality Gate step in content pipeline",
+    "context": "Quality gate concept discussed as filter before carousel builds to save credits. Currently marked as red/not implemented in Flows tab. Needed to complete pipeline visualization and enable credit optimization.",
     "auto_actionable": true
   },
   {
-    "task": "Build folder/dropdown structure for series inside each niche",
-    "context": "Sketched in FORMAT-005 doc, not built yet. Needed for Brazil + USA niches organization.",
+    "task": "Create Drive Map agent audit tool for Drive organization cleanup",
+    "context": "Concept discussed for using Drive Map system to audit and clean up Drive organization. Supportive infrastructure (9 spreadsheets, 586 items scanned, classification done) is ready. Tool would leverage existing TYPE categorization.",
     "auto_actionable": true
   },
   {
-    "task": "Verify first test runs of both triggers (~2:37-2:38pm ET today)",
-    "context": "Both Daily Project Advancer and Calendar Optimizer triggers need verification by Priscila (email + doc updates).",
+    "task": "Expand Content Flow Map HTML work (in-progress via another chat)",
+    "context": "Content flow tracking concept built as visibility layer across pipeline. Initial HTML created at /tmp/content_flow_map.html and PNG uploaded to Drive (12l1WVt5XirdHk9Pu5RXzgKhcvEABsp1K). Another chat handling further iterations.",
     "auto_actionable": false
   },
   {
-    "task": "Switch Daily Advancer cron back to 8:30am ET",
-    "context": "Calendar reminder set for 2026-04-15 07:30 ET. Event ID: 6at7flsk1mhtl7b4r7c15083sk",
+    "task": "Screenshot: senado.leg.br \u2014 Lei 13.756/2018",
+    "context": "Asset needed for Bets Ep.001 carousel (APROVADO, awaiting production). Verifies Temer's law signing.",
     "auto_actionable": true
   },
   {
-    "task": "Delete smoke test calendar event on 2026-04-15 at 10:00 ET (titled 'Workflow smoke test \u2014 delete me')",
-    "context": "Calendar event created during workflow smoke testing; needs cleanup from phone via one click",
-    "auto_actionable": false
-  },
-  {
-    "task": "Upgrade GitHub Actions: actions/checkout and actions/setup-node from v4 to latest before 2026-06-02",
-    "context": "Node.js 20 being deprecated; forced upgrade to Node 24 on 2026-06-02, removal on 2026-09-16. Must update all workflows in priihigashi/oak-park-ai-hub",
-    "auto_actionable": false
-  },
-  {
-    "task": "Verify Vercel IDE panel shows connection after scope fix",
-    "context": "Vercel MCP was added at USER scope in ~/.claude.json, but IDE panel wasn't displaying it initially. Need to confirm the scope fix resolved this.",
+    "task": "Screenshot: gov.br/fazenda \u2014 Lei 14.790/2023",
+    "context": "Asset needed for Bets Ep.001 carousel. Verifies Lula's law signing.",
     "auto_actionable": true
   },
   {
-    "task": "Complete Higashi site routing rule documentation",
-    "context": "Log cuts off mid-sentence: 'Higashi site (hi...' \u2014 the full routing rule for Higashi was not finished. Need to verify the note in hig-negocios.md is complete and matches the DO NOT deploy to Vercel instruction.",
+    "task": "Collect editorial photos: Temer, Bolsonaro (Jair), Lula",
+    "context": "Assets for carousel timeline visualization in Bets Ep.001.",
     "auto_actionable": true
   },
   {
-    "task": "Fix 4AM agent body-parsing logic in scripts/4am_agent/",
-    "context": "Agent currently classifies confirmation emails as APPROVAL without reading body content. Need to add logic to distinguish ACKNOWLEDGMENT language ('Thank you for submitting', 'working diligently', 'under review') from actual APPROVAL. Bug will recur on future confirmation emails without this fix.",
+    "task": "Extract frame/still from Fl\u00e1vio Bolsonaro clip (DXIGmZQj4qM)",
+    "context": "Asset from pipeline run 24538199081 needed for slide 2 with VERIFIQUE stamp in Bets Ep.001.",
     "auto_actionable": true
   },
   {
-    "task": "Wait for real Google Ads API approval (Case 6-0402000041185)",
-    "context": "Current email was only acknowledgment, not approval. Expected timeline 1-4 weeks given Google's volume warning. Do not proceed with /ads-opc or PWA dashboard deployment until real approval arrives.",
-    "auto_actionable": false
-  },
-  {
-    "task": "Create content scoring rubric (weak/strong/filler/anchor/etc) + add dedicated tab to Content spreadsheet",
-    "context": "Priscila flagged that low/med/high priority labels are insufficient for evaluating content quality and fit. Need systematic scoring framework.",
-    "auto_actionable": false
-  },
-  {
-    "task": "Verify reel download transcripts landed in Content Hub from pipeline runs #24403286165 and #24404004107",
-    "context": "Pipelines triggered but transcript arrival not confirmed. Needed before /hormozi-hooks, /copy-chief, and /storytelling-story-chief reviews can proceed.",
+    "task": "Create VERIFIQUE stamp in Canva (red, bold)",
+    "context": "Design asset for Bets Ep.001 carousel to mark Fl\u00e1vio clip as evidence.",
     "auto_actionable": true
   },
   {
-    "task": "Fix YouTube transcript download pipeline (requires cookies setup)",
-    "context": "Known pending issue blocking YouTube content captures. Currently only Instagram/TikTok working via yt-dlp. Calendared for Apr 15.",
+    "task": "Pipeline 24539036573 completion \u2014 retrieve transcript from Content Hub",
+    "context": "PRIORIDADE 2: Second reel (Ponto a Ponto format) blocked on pipeline completion and person identification.",
     "auto_actionable": false
   },
   {
-    "task": "Register FORMAT-004 in CONTENT_FORMATS.md",
-    "context": "FORMAT-004 (Story/Opinion) emerged from Brazil inequality reel capture but format definition not yet documented in source repository.",
+    "task": "Identify person in video DXG_PcskdVX",
+    "context": "Required before proceeding with claim extraction and fact-checking for Ponto a Ponto reel.",
     "auto_actionable": false
   },
   {
-    "task": "Run /hormozi-hooks + /copy-chief + /storytelling-story-chief review on captured content",
-    "context": "Post-capture review waits on transcript pipeline completion. Should execute once transcripts verified in Content Hub.",
+    "task": "Extract and debunk each claim from transcript with official sources",
+    "context": "Core research work for Ponto a Ponto (Claim-by-Claim Fact-Check Reel) format.",
+    "auto_actionable": false
+  },
+  {
+    "task": "Write VO script per segment using ElevenLabs PT-BR",
+    "context": "Production step for Ponto a Ponto reel after claims are verified.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Create Google Doc brief for Ponto a Ponto \u2014 Bets Ep.001 production",
+    "context": "Planning document needed before proceeding with asset creation for second reel.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Create Movement Catalog tab in Ideas & Inbox spreadsheet",
+    "context": "Foundation for tracking all movement assets with columns: MOVEMENT_ID, MOVEMENT_TYPE, DURATION_SEC, PRODUCT_SLOT, POSE_FILE_PATH, SOURCE_CLIP_PATH, FACE_SWAPPABLE, DERIVED_VARIATIONS, NICHE_FIT, STATUS",
+    "auto_actionable": true
+  },
+  {
+    "task": "Build ugc_clip_download.yml GitHub Actions workflow",
+    "context": "Technical pipeline component combining yt-dlp + FFmpeg trim + MediaPipe pose extraction for automated clip processing",
+    "auto_actionable": true
+  },
+  {
+    "task": "Create UGC folder structure in Marketing shared drive",
+    "context": "Organizational scaffolding: UGC > Movement Factory > Templates / Published / Pose Data / Brand Packs",
+    "auto_actionable": true
+  },
+  {
+    "task": "Source first 20 movement reference clips via yt-dlp",
+    "context": "Initial data gathering phase to populate Movement Catalog and build pose library",
+    "auto_actionable": false
+  },
+  {
+    "task": "Start posting UGC Movement Factory content",
+    "context": "Launch phase \u2014 publish first series of silent movement-based UGC variations across platforms",
+    "auto_actionable": false
+  },
+  {
+    "task": "Audit capture pipeline niche routing code before testing",
+    "context": "scripts/capture/capture_pipeline.py ready locally but decision was to audit first, then test OPC + Brazil + USA routes",
+    "auto_actionable": true
+  },
+  {
+    "task": "Test capture pipeline with OPC, Brazil, and USA niches",
+    "context": "After audit completes, validate NICHE_ROUTES dict routes 8 niches + 2 aliases to correct shared drives",
+    "auto_actionable": true
+  },
+  {
+    "task": "Push VIDEO_PRODUCTION_FLOW.md to Drive and Flow Plans Tracker",
+    "context": "Standard created locally (~/ClaudeWorkspace/Content Templates/VIDEO_PRODUCTION_FLOW.md) but not yet uploaded to shared Drive or integrated into Flow Plans Tracker",
+    "auto_actionable": true
+  },
+  {
+    "task": "Produce The Threshold OPC video using storyboard",
+    "context": "10-shot cinematic storyboard created with Severance-inspired loop-ready format. Ready for Seedream > Kling > Remotion production pipeline",
+    "auto_actionable": false
+  },
+  {
+    "task": "AIOX audit on gmail_archive.yml + gmail_cleanup.yml",
+    "context": "Carried forward since Apr 15 \u2014 email automation configuration review needed",
+    "auto_actionable": false
+  },
+  {
+    "task": "Daily Advancer cron check \u2014 verify 30 12 * * * (8:30am ET)",
+    "context": "Was due Apr 15 \u2014 scheduler configuration audit",
+    "auto_actionable": false
+  },
+  {
+    "task": "Build Drive Document Index \u2014 GitHub Action to scan 7 shared drives daily \u2192 Spreadsheet Hub tab",
+    "context": "Planned but not built \u2014 free GitHub Action for automated documentation discovery",
+    "auto_actionable": false
+  },
+  {
+    "task": "Fix 2 Unknown rows in Accounts Tracking tab",
+    "context": "Data quality gap in tracking spreadsheet",
+    "auto_actionable": true
+  },
+  {
+    "task": "Add Adriano da Nobrega photo to Quem Decidiu Isso? slide 3/4",
+    "context": "Character photo rule enforcement \u2014 missing face photo blocks post readiness",
+    "auto_actionable": false
+  },
+  {
+    "task": "Fix Content Queue spreadsheet columns: add Niche + Series + Review Status + Character Photo Status + Drive Brief Link; convert Content Type + Status to dropdowns",
+    "context": "Content management infrastructure \u2014 needed for workflow standardization",
+    "auto_actionable": false
+  },
+  {
+    "task": "Add Storytelling content type dropdown to Inspiration Library",
+    "context": "Content format taxonomy alignment",
+    "auto_actionable": true
+  },
+  {
+    "task": "Nosso Dinheiro debut carousel \u2014 waiting on capture run 24414582860",
+    "context": "Blocked content \u2014 needs capture completion",
+    "auto_actionable": false
+  },
+  {
+    "task": "Create Nosso Dinheiro Canva template (yellow SPEND / red CUT)",
+    "context": "New content format template design",
+    "auto_actionable": false
+  },
+  {
+    "task": "Research AI image styles for storytelling (/Research \u2014 5-6 styles, Priscila picks)",
+    "context": "Visual direction for storytelling video system \u2014 Priscila decision required",
+    "auto_actionable": true
+  },
+  {
+    "task": "Build content_creator.yml Phase 1",
+    "context": "Does not exist \u2014 identified as biggest automation gap in workflow",
+    "auto_actionable": false
+  },
+  {
+    "task": "POST TODAY \u2014 OPC Tips carousel (content pass: /hormozi-hooks, /copy-chief, /brand-voice, fact-check) then Buffer schedule",
+    "context": "Ready to post but needs editorial review passes before scheduling to Buffer",
+    "auto_actionable": false
+  },
+  {
+    "task": "POST TODAY \u2014 Brazil Quem Decidiu Isso? (blocked on decider research: who signed Rachadinha budget)",
+    "context": "Content blocked pending factual research; unblock = publish immediately",
+    "auto_actionable": false
+  },
+  {
+    "task": "Organization audit \u2014 Drive folders messy, templates scattered, Brazil content in wrong drive",
+    "context": "Cleanup checklist needed in Productivity doc to unblock future content workflows",
+    "auto_actionable": false
+  },
+  {
+    "task": "Design \"O Que E...\" series \u2014 creative Portuguese name + educational template",
+    "context": "New Brazil News educational series concept defined; needs creative naming and template system",
+    "auto_actionable": false
+  },
+  {
+    "task": "AIOX audit \u2014 content_creator pipeline not yet audited by /AIOX-architect, /AIOX-dev, /AIOX-devops",
+    "context": "Built pipeline needs formal architecture review before full deployment",
+    "auto_actionable": false
+  },
+  {
+    "task": "Gmail labels setup \u2014 Pending Approval/Brazil + Pending Approval/OPC",
+    "context": "To be created when first preview email sends (dependent on carousel/Brazil posts)",
+    "auto_actionable": true
+  },
+  {
+    "task": "Produce and post 1 Brazil News piece (Lumumba or Dilma)",
+    "context": "Research fully completed (sources verified, hooks generated, copy angles finalized, story arc developed). Priscila stated planning paralysis and wants to START POSTING TODAY. This is the critical next step.",
+    "auto_actionable": false
+  },
+  {
+    "task": "Complete ManyChat auto-DM engagement plan implementation",
+    "context": "Planned (comment keyword -> DM with links) but not yet executed. Added to Inbox but needs activation.",
+    "auto_actionable": false
+  },
+  {
+    "task": "Review and approve STORYTELLING_VIDEO_PIPELINE_ADDENDUM before 4AM agent processes",
+    "context": "Doc created and shared with 4AM agent for audit, but needs Priscila validation before pipeline goes live.",
     "auto_actionable": false
   }
 ]
