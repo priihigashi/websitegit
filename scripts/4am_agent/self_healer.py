@@ -33,6 +33,10 @@ TRANSIENT = ["timeout", "connection", "503", "502", "rate limit", "429", "networ
 CONFIG    = ["not found", "missing secret", "401", "403", "credential", "permission", "forbidden"]
 SCRIPT    = ["syntaxerror", "attributeerror", "keyerror", "typeerror", "nameerror",
              "indexerror", "valueerror", "jsondecodeerror", "json.loads"]
+CONTENT   = ["carousel", "generate_carousel", "slide", "haiku", "content generation",
+             "no topics", "zero carousels", "empty slides", "brief", "topic_picker"]
+ART       = ["render_pngs", "export_variants", "playwright", "puppeteer", "ffmpeg",
+             "ideogram", "seedream", "image generation", "png", "motion", "gif"]
 
 DEDUP_DAYS = 7
 
@@ -92,6 +96,8 @@ def _categorize(error, tb):
     s = (error + tb).lower()
     if any(p in s for p in TRANSIENT): return "transient"
     if any(p in s for p in CONFIG):    return "config"
+    if any(p in s for p in ART):       return "art"
+    if any(p in s for p in CONTENT):   return "content"
     if any(p in s for p in SCRIPT):    return "script"
     return "unknown"
 
@@ -261,19 +267,36 @@ def _calendar_task(calendar_svc, title, desc):
         print(f"[self_healer] Calendar failed: {e}")
 
 
-def _trigger_research(module_name, error):
+def _trigger_research(module_name, error, category="unknown"):
     """Trigger video-research.yml — self-learning research loop."""
     tool = module_name.replace("_", " ")
-    queries = (
-        f"how to implement {tool} with Claude code Python 2025,"
-        f"{tool} {error[:40]} fix Python"
-    )
+    # Build targeted queries per failure category
+    if category == "content":
+        queries = (
+            f"Claude Haiku carousel content generation Python 2025 {error[:40]},"
+            f"fix empty slides content generation LLM output parsing,"
+            f"topic picker inspiration library no topics scored"
+        )
+        topic = f"content generation fix — {tool}"
+    elif category == "art":
+        queries = (
+            f"Playwright PNG render GitHub Actions {error[:40]} fix 2025,"
+            f"ffmpeg motion video carousel Python automation fix,"
+            f"html to image node playwright headless render failure"
+        )
+        topic = f"art render fix — {tool}"
+    else:
+        queries = (
+            f"how to implement {tool} with Claude code Python 2025,"
+            f"{tool} {error[:40]} fix Python"
+        )
+        topic = f"fix {tool} failure"
     try:
         r = requests.post(
             f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/video-research.yml/dispatches",
             headers=_gh_headers(),
             json={"ref": "main", "inputs": {
-                "topic": f"fix {tool} failure",
+                "topic": topic,
                 "queries": queries,
                 "max_per_query": "3",
             }},
@@ -479,6 +502,33 @@ def run():
                 cal_tasks += 1
             else:
                 print(f"[self_healer]   Calendar task already exists for {name} — skipping.")
+
+        elif cat in ("content", "art"):
+            label = "CONTENT GENERATION" if cat == "content" else "ART/RENDER"
+            print(f"[self_healer]   {label} failure — triggering targeted research loop.")
+            # Research with category-specific queries
+            if _days_since(researched.get(name, {}).get("triggered", "")) >= DEDUP_DAYS:
+                if _trigger_research(name, err, category=cat):
+                    researched[name] = {"triggered": today, "error": err[:100], "cat": cat}
+                    researched_count += 1
+            else:
+                print(f"[self_healer]   Research already triggered for {name} — skipping.")
+            # Also try autonomous solver — it can detect missing env vars, API changes, etc.
+            run_id = data.get("run_id")
+            auto = _autonomous_solve(name, err, tb, run_id=run_id)
+            if auto and auto.get("confidence", 0) >= 80 and auto.get("old_code"):
+                if _create_pr(name, auto, err):
+                    prs += 1
+                    continue
+            if _days_since(healed.get(name, {}).get("task_created", "")) >= DEDUP_DAYS:
+                root_cause = (auto or {}).get("root_cause", "")
+                _calendar_task(calendar_svc,
+                    f"⚠️ {label} FAILURE: {name}",
+                    f"Error: {err}\n\nRoot cause: {root_cause or 'see research findings'}\n\n"
+                    f"Research triggered — check Drive Resources for findings.\n"
+                    f"{'Carousel generation / topic picking / Haiku output parsing.' if cat == 'content' else 'PNG render / motion export / Playwright / ffmpeg.'}")
+                healed[name] = {"task_created": today, "type": cat}
+                cal_tasks += 1
 
         else:  # unknown — autonomous solver first, then research + calendar
             run_id = data.get("run_id")

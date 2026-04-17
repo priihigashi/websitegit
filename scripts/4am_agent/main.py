@@ -194,6 +194,36 @@ def main():
         print(f"[{log_pfx}] --- Done ---")
 
 
+def _fetch_run_error_log(run_id: int, gh_token: str) -> str:
+    """Fetch the last ~3000 chars of error lines from a failed GitHub Actions run."""
+    import urllib.request
+    base = f"https://api.github.com/repos/priihigashi/oak-park-ai-hub"
+    hdrs = {"Authorization": f"Bearer {gh_token}", "Accept": "application/vnd.github+json"}
+    try:
+        # Get jobs for the run
+        jobs_url = f"{base}/actions/runs/{run_id}/jobs"
+        jobs = json.loads(urllib.request.urlopen(
+            urllib.request.Request(jobs_url, headers=hdrs), timeout=10).read()).get("jobs", [])
+        # Find the failed job
+        failed = next((j for j in jobs if j.get("conclusion") == "failure"), jobs[0] if jobs else None)
+        if not failed:
+            return ""
+        # Download logs (returns a zip redirect; GitHub sends text/plain for single-job logs)
+        log_url = f"{base}/actions/jobs/{failed['id']}/logs"
+        req = urllib.request.Request(log_url, headers=hdrs)
+        try:
+            log_text = urllib.request.urlopen(req, timeout=15).read().decode("utf-8", errors="replace")
+        except Exception:
+            return f"job={failed['id']} conclusion=failure (log download blocked)"
+        # Extract ERROR / Traceback lines
+        error_lines = [l for l in log_text.splitlines()
+                       if any(k in l for k in ("ERROR", "Error", "Traceback", "Exception", "🔴", "UNCAUGHT"))]
+        snippet = "\n".join(error_lines[-40:])  # last 40 error lines
+        return snippet[:3000] if snippet else log_text[-2000:]
+    except Exception as e:
+        return f"(log fetch failed: {e})"
+
+
 def _check_content_creator(log_pfx):
     """Check content_creator pipeline: did it run? Process any email approvals."""
     try:
@@ -218,9 +248,12 @@ def _check_content_creator(log_pfx):
                     status = last_run.get("conclusion", "unknown")
                     print(f"[{log_pfx}]   content_creator last run: {status} ({last_run.get('created_at', '?')})")
                     if status == "failure":
-                        print(f"[{log_pfx}]   ⚠️  content_creator FAILED — flagging for self-healer")
+                        print(f"[{log_pfx}]   ⚠️  content_creator FAILED — fetching logs for self-healer")
+                        run_id = last_run.get("id")
+                        error_snippet = _fetch_run_error_log(run_id, gh_token) or f"Run ID: {run_id}"
                         _record_pipeline_failure(log_pfx, "content_creator workflow failed",
-                                                 f"Run ID: {last_run.get('id')}", 0)
+                                                 error_snippet, 0)
+                        print(f"[{log_pfx}]   Error context: {error_snippet[:120]}")
                 else:
                     print(f"[{log_pfx}]   content_creator has never run yet")
             except Exception as e:
