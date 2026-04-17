@@ -1,12 +1,15 @@
 name: Capture Dispatcher (issue-comment)
 
-# Lets Claude (or anyone with repo-owner login) fire the capture pipeline by
-# posting a GitHub issue/PR comment like:
-#   /capture https://www.instagram.com/reel/XXXX/ sovereign
-#   /capture https://youtu.be/XXXX book --credits --story-id BCI-042
+# Lets Claude (or anyone with repo-owner login) fire workflows by posting
+# GitHub issue/PR comments. Supported commands:
 #
-# Projects: sovereign (Brazil/USA news, political) | book (fact-check) | content (OPC/UGC)
-# Defaults: project=content, credits=false
+#   /capture <url> [sovereign|book|content] [--credits] [--story-id X] [--notes ...]
+#     Fires capture_pipeline.yml
+#
+#   /series <name> | <description> | [niche] | [YYYY-MM-DD]
+#     Fires series_init.yml (writes to 📥 Inbox + Flow Plans Tracker + Calendar)
+#
+# Gated to repo owner to protect API spend.
 
 on:
   issue_comment:
@@ -21,13 +24,27 @@ permissions:
 jobs:
   dispatch:
     if: >-
-      startsWith(github.event.comment.body, '/capture') &&
+      (startsWith(github.event.comment.body, '/capture') ||
+       startsWith(github.event.comment.body, '/series')) &&
       github.event.comment.user.login == github.repository_owner
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Detect command
+        id: cmd
+        env:
+          BODY: ${{ github.event.comment.body }}
+        run: |
+          if printf '%s' "$BODY" | head -n 1 | grep -q '^/series'; then
+            echo "command=series" >> "$GITHUB_OUTPUT"
+          else
+            echo "command=capture" >> "$GITHUB_OUTPUT"
+          fi
+
+
       - name: Parse /capture command
         id: parse
+        if: steps.cmd.outputs.command == 'capture'
         env:
           BODY: ${{ github.event.comment.body }}
         run: |
@@ -50,7 +67,7 @@ jobs:
           echo "Parsed: url=$URL project=$PROJECT credits=$CREDITS story_id=$STORY_ID"
 
       - name: Reject if no URL
-        if: steps.parse.outputs.url == ''
+        if: steps.cmd.outputs.command == 'capture' && steps.parse.outputs.url == ''
         uses: actions/github-script@v7
         with:
           script: |
@@ -62,7 +79,7 @@ jobs:
             });
 
       - name: Dispatch capture_pipeline.yml
-        if: steps.parse.outputs.url != ''
+        if: steps.cmd.outputs.command == 'capture' && steps.parse.outputs.url != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           URL: ${{ steps.parse.outputs.url }}
@@ -81,7 +98,7 @@ jobs:
             -f notes="$NOTES"
 
       - name: Acknowledge on the comment thread
-        if: steps.parse.outputs.url != ''
+        if: steps.cmd.outputs.command == 'capture' && steps.parse.outputs.url != ''
         uses: actions/github-script@v7
         env:
           URL: ${{ steps.parse.outputs.url }}
@@ -98,4 +115,78 @@ jobs:
               repo: context.repo.repo,
               issue_number: context.issue.number,
               body: `Capture dispatched\n- project: **${project}**\n- credits: ${credits}\n- url: ${url}\n\nRun: ${actionsUrl}`
+            });
+
+      # ─── /series command ─────────────────────────────────────────────
+      - name: Parse /series command
+        id: parse_series
+        if: steps.cmd.outputs.command == 'series'
+        env:
+          BODY: ${{ github.event.comment.body }}
+        run: |
+          # Format: /series <name> | <description> | [niche] | [YYYY-MM-DD]
+          LINE=$(printf '%s' "$BODY" | head -n 1 | sed 's|^/series[[:space:]]*||')
+          IFS='|' read -r NAME DESC NICHE DATE <<EOF
+          $LINE
+          EOF
+          NAME=$(echo "$NAME" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          DESC=$(echo "$DESC" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          NICHE=$(echo "$NICHE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          DATE=$(echo "$DATE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          NICHE=${NICHE:-Mixed}
+          {
+            echo "name=$NAME"
+            echo "description=$DESC"
+            echo "niche=$NICHE"
+            echo "review_date=$DATE"
+          } >> "$GITHUB_OUTPUT"
+          echo "Parsed series: name=$NAME niche=$NICHE date=$DATE"
+
+      - name: Reject if series missing name or description
+        if: steps.cmd.outputs.command == 'series' && (steps.parse_series.outputs.name == '' || steps.parse_series.outputs.description == '')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: "`/series` needs a name AND description.\n\nUsage: `/series <name> | <description> | [niche] | [YYYY-MM-DD]`"
+            });
+
+      - name: Dispatch series_init.yml
+        if: steps.cmd.outputs.command == 'series' && steps.parse_series.outputs.name != '' && steps.parse_series.outputs.description != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          S_NAME:  ${{ steps.parse_series.outputs.name }}
+          S_DESC:  ${{ steps.parse_series.outputs.description }}
+          S_NICHE: ${{ steps.parse_series.outputs.niche }}
+          S_DATE:  ${{ steps.parse_series.outputs.review_date }}
+        run: |
+          gh workflow run series_init.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            -f name="$S_NAME" \
+            -f description="$S_DESC" \
+            -f niche="$S_NICHE" \
+            -f review_date="$S_DATE"
+
+      - name: Acknowledge series dispatch
+        if: steps.cmd.outputs.command == 'series' && steps.parse_series.outputs.name != '' && steps.parse_series.outputs.description != ''
+        uses: actions/github-script@v7
+        env:
+          S_NAME:  ${{ steps.parse_series.outputs.name }}
+          S_NICHE: ${{ steps.parse_series.outputs.niche }}
+          S_DATE:  ${{ steps.parse_series.outputs.review_date }}
+        with:
+          script: |
+            const name  = process.env.S_NAME;
+            const niche = process.env.S_NICHE;
+            const date  = process.env.S_DATE || '(tomorrow)';
+            const actionsUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/series_init.yml`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `Series dispatched\n- name: **${name}**\n- niche: ${niche}\n- review: ${date}\n\nWriting to 📥 Inbox + Flow Plans Tracker + Calendar.\nRun: ${actionsUrl}`
             });

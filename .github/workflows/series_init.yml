@@ -1,0 +1,125 @@
+name: Series Init — gcal + inbox + 4am queue
+
+# Bootstraps a new content series in one shot:
+#   1) Appends a row to 📥 Inbox tab (Ideas & Inbox spreadsheet)
+#   2) Appends a row to Flow Plans Tracker → All Docs (so the 4AM agent picks it up)
+#   3) Creates a Google Calendar review event (default: tomorrow 10–11 AM ET)
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Series name'
+        required: true
+      description:
+        description: 'Series description (one-liner)'
+        required: true
+      niche:
+        description: 'Niche tag (e.g. "USA News", "Brazil News", "OPC")'
+        required: false
+        default: 'Mixed'
+      review_date:
+        description: 'Calendar review date YYYY-MM-DD (blank = tomorrow)'
+        required: false
+        default: ''
+      review_start:
+        description: 'Calendar start HH:MM ET'
+        required: false
+        default: '10:00'
+      review_end:
+        description: 'Calendar end HH:MM ET'
+        required: false
+        default: '11:00'
+
+jobs:
+  init:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Write to Inbox, Flow Plans Tracker, and Calendar
+        env:
+          SHEETS_TOKEN:     ${{ secrets.SHEETS_TOKEN }}
+          SERIES_NAME:      ${{ inputs.name }}
+          SERIES_DESC:      ${{ inputs.description }}
+          SERIES_NICHE:     ${{ inputs.niche }}
+          REVIEW_DATE:      ${{ inputs.review_date }}
+          REVIEW_START:     ${{ inputs.review_start }}
+          REVIEW_END:       ${{ inputs.review_end }}
+        run: |
+          pip install -q google-auth google-auth-httplib2 google-api-python-client
+          python3 <<'PYEOF'
+          import os, json
+          from datetime import datetime, timedelta, timezone
+          from google.oauth2.credentials import Credentials
+          from google.auth.transport.requests import Request
+          from googleapiclient.discovery import build
+
+          td = json.loads(os.environ['SHEETS_TOKEN'])
+          creds = Credentials(
+              token=td.get('token'),
+              refresh_token=td.get('refresh_token'),
+              token_uri=td.get('token_uri', 'https://oauth2.googleapis.com/token'),
+              client_id=td.get('client_id'),
+              client_secret=td.get('client_secret'),
+              scopes=td.get('scopes', [])
+          )
+          if creds.expired and creds.refresh_token:
+              creds.refresh(Request())
+
+          sheets = build('sheets', 'v4', credentials=creds)
+
+          name  = os.environ['SERIES_NAME']
+          desc  = os.environ['SERIES_DESC']
+          niche = os.environ['SERIES_NICHE']
+          now_utc = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%MZ')
+
+          # ─── 1. 📥 Inbox tab ────────────────────────────────────────
+          IDEAS_INBOX_ID = '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
+          try:
+              sheets.spreadsheets().values().append(
+                  spreadsheetId=IDEAS_INBOX_ID,
+                  range="'📥 Inbox'!A:C",
+                  valueInputOption='USER_ENTERED',
+                  insertDataOption='INSERT_ROWS',
+                  body={'values': [[now_utc, f"SERIES: {name} — {desc} (niche: {niche})", 'new']]}
+              ).execute()
+              print(f"✅ Inbox: appended series row")
+          except Exception as e:
+              print(f"⚠️ Inbox append failed: {e}")
+
+          # ─── 2. Flow Plans Tracker → All Docs ───────────────────────
+          FLOW_ID = '1fggy918FgPfnMQ-dzGQk2zx9uhi2_-uWXMKGW4MA47k'
+          try:
+              sheets.spreadsheets().values().append(
+                  spreadsheetId=FLOW_ID,
+                  range="'All Docs'!A:I",
+                  valueInputOption='USER_ENTERED',
+                  insertDataOption='INSERT_ROWS',
+                  body={'values': [[name, 'Series', niche, 'active', desc, '', '', '', now_utc]]}
+              ).execute()
+              print(f"✅ Flow Plans Tracker: appended series row")
+          except Exception as e:
+              print(f"⚠️ Flow Plans append failed: {e}")
+
+          # ─── 3. Google Calendar review event ────────────────────────
+          review = os.environ.get('REVIEW_DATE', '').strip()
+          if not review:
+              # tomorrow ET
+              review = (datetime.now(timezone.utc) + timedelta(days=1)).strftime('%Y-%m-%d')
+          start_t = os.environ.get('REVIEW_START', '10:00').strip() or '10:00'
+          end_t   = os.environ.get('REVIEW_END',   '11:00').strip() or '11:00'
+
+          try:
+              cal = build('calendar', 'v3', credentials=creds)
+              ev = {
+                  'summary': f"Series review: {name}",
+                  'description': f"{desc}\n\nNiche: {niche}\nQueued: {now_utc}\n\n4AM agent will surface this from the Flow Plans Tracker.",
+                  'start': {'dateTime': f"{review}T{start_t}:00", 'timeZone': 'America/New_York'},
+                  'end':   {'dateTime': f"{review}T{end_t}:00",   'timeZone': 'America/New_York'},
+                  'reminders': {'useDefault': False, 'overrides': [{'method': 'popup', 'minutes': 30}]}
+              }
+              result = cal.events().insert(calendarId='primary', body=ev).execute()
+              print(f"✅ Calendar: {result.get('htmlLink')}")
+          except Exception as e:
+              print(f"⚠️ Calendar insert failed: {e}")
+          PYEOF
