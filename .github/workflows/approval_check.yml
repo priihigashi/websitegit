@@ -1,0 +1,50 @@
+name: Approval Check — Daily Content Replies
+
+on:
+  schedule:
+    - cron: '0 18 * * *'   # 2:00 PM ET (UTC-4) = 18:00 UTC
+    - cron: '0 0 * * *'    # 8:00 PM ET (UTC-4) = 00:00 UTC  ← catches evening replies
+  workflow_dispatch:        # manual trigger anytime from GitHub Actions UI
+
+jobs:
+  check-replies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
+      BRAZIL_TEMPLATES_FOLDER: '1gDOjtW_X-_jWtu94pffbDaUsw6VGCKuA'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install google-auth google-api-python-client pytz
+
+      - name: Run approval handler
+        working-directory: scripts/content_creator
+        run: python approval_handler.py
+
+      - name: Alert on failure
+        if: failure()
+        run: |
+          python3 - <<'PYEOF'
+          import smtplib, os
+          from email.mime.text import MIMEText
+          msg = MIMEText("Approval check failed. Check: https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/approval_check.yml")
+          msg['Subject'] = '🔴 Approval Check Failed'
+          msg['From'] = 'priscila@oakpark-construction.com'
+          msg['To'] = 'priscila@oakpark-construction.com'
+          with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
+              s.login('priscila@oakpark-construction.com', os.environ['PRI_OP_GMAIL_APP_PASSWORD'])
+              s.send_message(msg)
+          PYEOF
