@@ -61,6 +61,7 @@ ANTHROPIC_API_KEY  = os.getenv("ANTHROPIC_API_KEY", "")
 # Key stored in GitHub Secrets as APIFY_API_KEY.
 # Get yours at: https://console.apify.com/account/integrations
 APIFY_API_KEY      = os.getenv("APIFY_API_KEY", "")
+YOUTUBE_API_KEY    = os.getenv("YOUTUBE_API_KEY", "")
 YT_COOKIES_RAW     = os.getenv("PRI_OP_YT_COOKIES", "")
 IG_COOKIES_RAW     = os.getenv("PRI_OP_IG_COOKIES", "")
 
@@ -386,6 +387,75 @@ def _is_youtube(url: str) -> bool:
     return "youtube.com" in url or "youtu.be" in url
 
 
+def _fetch_youtube_metadata_via_api(url: str) -> dict:
+    """Fetch YouTube video metadata via YouTube Data API v3.
+    Returns a dict with the same shape as fetch_reel_metadata() so downstream code
+    (update_inspiration_library, run_opc, etc.) works unchanged.
+    Requires YOUTUBE_API_KEY env var (stored in GitHub Secrets as YOUTUBE_API_KEY).
+    Non-fatal — returns empty dict on any failure.
+    """
+    if not YOUTUBE_API_KEY:
+        print("  SKIP YouTube Data API: YOUTUBE_API_KEY not set")
+        return {}
+
+    vid_id = _extract_youtube_id(url)
+    if not vid_id:
+        print("  SKIP YouTube Data API: cannot extract video ID")
+        return {}
+
+    print(f"\n[0/3] Fetching YouTube metadata via Data API (video ID: {vid_id})...")
+    try:
+        api_url = (
+            "https://www.googleapis.com/youtube/v3/videos"
+            f"?part=snippet,contentDetails,statistics&id={vid_id}&key={YOUTUBE_API_KEY}"
+        )
+        resp = requests.get(api_url, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+
+        items = data.get("items", [])
+        if not items:
+            print(f"  YouTube Data API: no results for video ID {vid_id}")
+            return {}
+
+        item = items[0]
+        snippet = item.get("snippet", {})
+        statistics = item.get("statistics", {})
+        content_details = item.get("contentDetails", {})
+
+        channel = snippet.get("channelTitle", "")
+        title = snippet.get("title", "")
+        description = snippet.get("description", "")
+        tags = snippet.get("tags", [])
+        thumbnail = (
+            snippet.get("thumbnails", {}).get("high", {}).get("url", "")
+            or snippet.get("thumbnails", {}).get("default", {}).get("url", "")
+        )
+        views = statistics.get("viewCount", "")
+        duration = content_details.get("duration", "")
+
+        metadata = {
+            "creator_handle": channel,
+            "creator_name": channel,
+            # Use description as "caption" (what downstream expects); fall back to title
+            "caption": (description[:500] if description else title),
+            "title": title,
+            "tags": tags,
+            "thumbnail_url": thumbnail,
+            "duration": duration,
+            "views": int(views) if views else 0,
+            "source_url": url,
+            "video_url": "",  # not used for YouTube (no direct download needed)
+        }
+        print(f"  Title: {title}")
+        print(f"  Channel: {channel}  Views: {views}")
+        return metadata
+
+    except Exception as e:
+        print(f"  WARNING YouTube Data API (non-fatal): {e}")
+        return {}
+
+
 # ─── STEP 1: DOWNLOAD ─────────────────────────────────────────────────────────
 
 def _find_audio_file(tmp_dir: str) -> str:
@@ -587,11 +657,24 @@ def _try_instaloader(url: str, tmp_dir: str) -> str:
 
 
 def download_audio(url: str, tmp_dir: str, metadata: dict = None) -> str:
-    """Download audio: yt-dlp first, Apify videoUrl fallback for Instagram.
-    YouTube has additional fallbacks (iOS trick → Apify → transcript-api).
+    """Download audio: official APIs first for YouTube, yt-dlp for Instagram/TikTok.
+
+    YouTube path (when YOUTUBE_API_KEY is set):
+      Skip yt-dlp entirely — transcript comes from youtube-transcript-api, which
+      uses official captions and is never blocked by GitHub runner IPs.
+
+    Instagram/TikTok path (unchanged):
+      yt-dlp → mobile UA → instaloader → Apify videoUrl fallback.
     """
     print(f"\n[1/3] Downloading audio: {url}")
     is_yt = _is_youtube(url)
+
+    # YouTube fast path: skip yt-dlp entirely.
+    # youtube-transcript-api uses the official captions API — no IP blocking possible.
+    # Metadata (title, channel, views) comes from _fetch_youtube_metadata_via_api() in main().
+    if is_yt and YOUTUBE_API_KEY:
+        print("  YouTube URL — official API path (youtube-transcript-api, skipping yt-dlp)")
+        return "__youtube_transcript_fallback__"
 
     # Tier 1: yt-dlp standard
     audio = _try_ytdlp(url, tmp_dir)
@@ -763,8 +846,8 @@ def transcribe_audio(audio_path: str, url: str = "") -> str:
             print(f"  Transcribed via youtube-transcript-api ({len(result)} chars)")
             return result
         except Exception as e:
-            print(f"  ERROR youtube-transcript-api: {e}")
-            sys.exit(1)
+            # Raise so the outer exception handler sends a failure notification email.
+            raise RuntimeError(f"youtube-transcript-api failed for {url}: {e}") from e
 
     if not OPENAI_API_KEY:
         print("  ERROR: OPENAI_API_KEY not set")
@@ -1978,10 +2061,15 @@ def main():
 
     print(f"\n{'='*50}\nCAPTURE PIPELINE v2\nURL: {args.url}\nProject: {args.project.upper()}\nStory ID: {args.story_id}\n{'='*50}")
 
-    # Step 0: Fetch reel metadata via Apify (creator info + videoUrl fallback for IG)
+    # Step 0: Fetch metadata — YouTube Data API for YouTube, Apify for Instagram
     metadata = {}
     is_ig = "instagram.com" in args.url
-    if args.credits or is_ig:
+    is_yt = _is_youtube(args.url)
+    if is_yt:
+        # YouTube: use official Data API (no yt-dlp, no IP blocking)
+        metadata = _fetch_youtube_metadata_via_api(args.url)
+    elif args.credits or is_ig:
+        # Instagram/TikTok: use Apify for creator info + videoUrl fallback
         metadata = fetch_reel_metadata(args.url)
         if metadata and args.credits:
             args.notes = (args.notes or "") + (
@@ -1999,8 +2087,9 @@ def main():
         # Download video file for Content Hub (non-fatal — transcript is the priority)
         video_path = download_video(args.url, tmp)
 
-        # Cookie health check — alert if yt-dlp hit bot-detection, clear if video downloaded OK
-        if _is_youtube(args.url):
+        # Cookie health check — only relevant when yt-dlp is used for YouTube.
+        # When YOUTUBE_API_KEY is set we skip yt-dlp entirely, so no cookie alerts needed.
+        if is_yt and not YOUTUBE_API_KEY:
             if _YT_COOKIE_FAILURE:
                 _yt_cookie_alert(resolved=False)
             elif video_path:

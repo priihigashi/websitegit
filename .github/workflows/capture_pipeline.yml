@@ -78,6 +78,7 @@ jobs:
           SHEETS_TOKEN:      ${{ secrets.SHEETS_TOKEN }}
           GITHUB_TOKEN:     ${{ github.token }}
           APIFY_API_KEY:    ${{ secrets.APIFY_API_KEY }}
+          YOUTUBE_API_KEY:  ${{ secrets.YOUTUBE_API_KEY }}
           PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
           PRI_OP_YT_COOKIES: ${{ secrets.PRI_OP_YT_COOKIES }}
           PRI_OP_IG_COOKIES: ${{ secrets.PRI_OP_IG_COOKIES }}
@@ -106,3 +107,25 @@ jobs:
           name: "capture-${{ inputs.story_id || github.run_id }}-${{ inputs.project }}"
           path: transcripts/
           retention-days: 30
+
+      - name: Send failure notification
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: priscila@oakpark-construction.com
+          password: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          to: priscila@oakpark-construction.com
+          from: Oak Park AI <priscila@oakpark-construction.com>
+          subject: "CAPTURE FAILED — ${{ inputs.project }} / ${{ inputs.story_id || github.run_id }}"
+          body: |
+            The capture pipeline failed.
+
+            URL: ${{ inputs.url }}
+            Project: ${{ inputs.project }}
+            Story ID: ${{ inputs.story_id || 'auto' }}
+
+            Check the run logs:
+            https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}
