@@ -40,7 +40,9 @@ from datetime import datetime, timezone
 
 SHEET_ID  = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 QUEUE_TAB = "📲 Capture Queue"
-MAX_PER_RUN   = int(os.getenv("QUEUE_MAX_PER_RUN", "5"))
+MAX_PER_RUN    = int(os.getenv("QUEUE_MAX_PER_RUN", "5"))
+RETRY_FAILED   = os.getenv("QUEUE_RETRY_FAILED", "false").lower() in ("1", "true", "yes")
+BULK_URLS_RAW  = os.getenv("QUEUE_BULK_URLS", "").strip()
 CAPTURE_SCRIPT = "scripts/capture/capture_pipeline.py"
 
 STATUS_TO_SCORE = {"READY": 5, "NEEDS_REVIEW": 3, "NOT_RELEVANT": 1}
@@ -121,6 +123,74 @@ def _batch_update(token: str, updates: list):
     urllib.request.urlopen(req).read()
 
 
+def _clear_failure_flags(token: str, rows: list):
+    """Clear ⚠️ from column F for all previously-failed rows so they get retried.
+    Called when QUEUE_RETRY_FAILED=true before the main processing loop.
+    """
+    updates = []
+    for i, row in enumerate(rows):
+        row_padded = row + [""] * (8 - len(row))
+        moved_to = row_padded[5].strip()
+        if moved_to.startswith("⚠️"):
+            sheet_row = i + 2
+            updates.append((f"'{QUEUE_TAB}'!F{sheet_row}", ""))
+            updates.append((f"'{QUEUE_TAB}'!G{sheet_row}", ""))
+    if updates:
+        _batch_update(token, updates)
+        print(f"[capture_queue] retry_failed=true: cleared ⚠️ from {len(updates)//2} row(s)")
+    else:
+        print("[capture_queue] retry_failed=true: no failed rows to clear")
+
+
+def _append_bulk_urls(token: str, urls: list):
+    """Append each URL as a new row to the queue tab (DATE + LINK columns only).
+    Duplicate detection: skip URLs already present in column B.
+    Returns the refreshed rows list after appending.
+    """
+    if not urls:
+        return
+
+    # Read existing URLs to avoid duplicates
+    existing_rows = _read_queue(token)
+    existing_urls = set()
+    for r in existing_rows:
+        if len(r) > 1 and r[1].strip():
+            existing_urls.add(r[1].strip().split("?")[0])  # normalise: strip query params
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    appended = 0
+    for raw_url in urls:
+        u = raw_url.strip()
+        if not u:
+            continue
+        norm = u.split("?")[0]
+        if norm in existing_urls:
+            print(f"[capture_queue] bulk_urls: skipping duplicate {u[:60]}")
+            continue
+        # Append row: DATE | URL (leave C-H empty — will be filled by processor)
+        enc = urllib.parse.quote(f"'{QUEUE_TAB}'!A:H", safe="!:'")
+        append_url = (
+            f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
+            f":append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS"
+        )
+        body = {"values": [[today, u]]}
+        req = urllib.request.Request(
+            append_url,
+            data=json.dumps(body).encode(),
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type":  "application/json",
+            },
+        )
+        urllib.request.urlopen(req).read()
+        existing_urls.add(norm)
+        appended += 1
+        print(f"[capture_queue] bulk_urls: added row → {u[:70]}")
+
+    if appended:
+        print(f"[capture_queue] bulk_urls: {appended} new URL(s) added to queue")
+
+
 # ─── RESULT PARSING ───────────────────────────────────────────────────────────
 
 def _parse_result(stdout: str, project: str) -> tuple[int, str, str]:
@@ -182,8 +252,24 @@ def _parse_result(stdout: str, project: str) -> tuple[int, str, str]:
 
 def main():
     token = _get_token()
+
+    # ── Bulk URL ingestion ─────────────────────────────────────────────────────
+    # If QUEUE_BULK_URLS is set, parse the newline-separated list and append any
+    # new URLs as rows before running the normal processing loop.
+    if BULK_URLS_RAW:
+        bulk_list = [u.strip() for u in BULK_URLS_RAW.splitlines() if u.strip()]
+        print(f"[capture_queue] bulk_urls: {len(bulk_list)} URL(s) received")
+        _append_bulk_urls(token, bulk_list)
+
     rows  = _read_queue(token)
     print(f"[capture_queue] {len(rows)} rows found in '{QUEUE_TAB}'")
+
+    # ── Retry mode ─────────────────────────────────────────────────────────────
+    # If QUEUE_RETRY_FAILED=true, clear the ⚠️ flag from all failed rows so the
+    # loop below will pick them up and try again with the updated fallback chain.
+    if RETRY_FAILED:
+        _clear_failure_flags(token, rows)
+        rows = _read_queue(token)  # re-read after clearing flags
 
     processed_count = 0
     for i, row in enumerate(rows):

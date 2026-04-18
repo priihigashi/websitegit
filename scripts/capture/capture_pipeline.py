@@ -306,7 +306,7 @@ def fetch_reel_metadata(url: str) -> dict:
         return {}
 
     print(f"\n[0/3] Fetching reel metadata via Apify...")
-    actor_id = "apify/instagram-scraper"
+    actor_id = "apify~instagram-scraper"
     input_data = {
         "directUrls": [url.split("?")[0]],
         "resultsType": "posts",
@@ -1346,6 +1346,45 @@ STATUS: DRAFT — text ready, art needed"""
     return msg.content[0].text
 
 
+def translate_to_pt(text: str) -> str:
+    """Translate content brief text to Brazilian Portuguese via Claude Haiku.
+    Uses the same urllib pattern as build_render_props.py. Non-fatal — returns
+    the original text unchanged if translation fails or key is missing.
+    """
+    if not ANTHROPIC_API_KEY or not text.strip():
+        return text
+    import urllib.request as _urllib_request
+    prompt = (
+        "Translate this English content brief to Brazilian Portuguese (PT-BR). "
+        "Keep the same structure, section headers, and formatting. "
+        "Rewrite idioms and hooks naturally for Brazilian audiences — do not translate literally. "
+        "Output ONLY the translated text, no commentary.\n\n"
+        + text
+    )
+    payload = json.dumps({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 4000,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    try:
+        req = _urllib_request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+        )
+        resp = json.loads(_urllib_request.urlopen(req, timeout=60).read())
+        translated = resp["content"][0]["text"]
+        print(f"  PT-BR translation: {len(translated)} chars")
+        return translated
+    except Exception as e:
+        print(f"  WARNING: PT translation failed (non-fatal): {e}")
+        return text
+
+
 def save_to_content_hub(story_id: str, url: str, transcript: str, classification: dict, video_path: str = "", notes: str = "") -> str:
     """Save transcript + resources + video (+ optional user notes) to Content Hub story folder. Returns folder URL."""
     drive = get_drive_service()
@@ -1633,6 +1672,10 @@ def create_content_workspace(story_id: str, title: str, transcript: str,
     print("  Generating content brief (Claude)...")
     brief = generate_content_brief(transcript, url, classification, notes)
 
+    # 3b. Translate to PT-BR via Claude Haiku (same pattern as build_render_props.py)
+    print("  Translating brief to PT-BR (Claude Haiku)...")
+    brief_pt = translate_to_pt(brief)
+
     # 4. Create empty Google Doc then write content via Docs API batchUpdate
     doc_url = ""
     try:
@@ -1650,9 +1693,30 @@ def create_content_workspace(story_id: str, title: str, transcript: str,
                 documentId=doc_id,
                 body={"requests": [{"insertText": {"location": {"index": 1}, "text": brief}}]}
             ).execute()
-        print(f"  Content brief doc: {doc_url}")
+        print(f"  Content brief doc (EN): {doc_url}")
     except Exception as e:
         print(f"  WARNING doc creation: {e}")
+
+    # 4b. Create PT-BR content brief doc in same folder
+    doc_url_pt = ""
+    try:
+        doc_pt = drive.files().create(
+            body={"name": f"[CONTENT BRIEF PT] {title}",
+                  "mimeType": "application/vnd.google-apps.document",
+                  "parents": [folder_id]},
+            supportsAllDrives=True, fields="id,webViewLink"
+        ).execute()
+        doc_pt_id = doc_pt["id"]
+        doc_url_pt = doc_pt.get("webViewLink", f"https://docs.google.com/document/d/{doc_pt_id}/edit")
+        docs_pt = get_docs_service()
+        if docs_pt and brief_pt:
+            docs_pt.documents().batchUpdate(
+                documentId=doc_pt_id,
+                body={"requests": [{"insertText": {"location": {"index": 1}, "text": brief_pt}}]}
+            ).execute()
+        print(f"  Content brief doc (PT): {doc_url_pt}")
+    except Exception as e:
+        print(f"  WARNING PT doc creation: {e}")
 
     # 5. Log to Ideas Queue tab in Content Queue spreadsheet
     gc = get_sheets_client()
@@ -1667,7 +1731,7 @@ def create_content_workspace(story_id: str, title: str, transcript: str,
                 classification.get("hook", ""),
                 "DRAFT \u2014 text needed",
                 "HIGH",
-                f"Drive: {folder_url} | Brief: {doc_url} | Captured: {datetime.now().strftime('%Y-%m-%d')}",
+                f"Drive: {folder_url} | Brief EN: {doc_url} | Brief PT: {doc_url_pt} | Captured: {datetime.now().strftime('%Y-%m-%d')}",
                 url,
             ])
             print("  Ideas Queue: row added")

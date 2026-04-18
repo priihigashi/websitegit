@@ -21,6 +21,16 @@ on:
         required: false
         default: "5"
         type: string
+      retry_failed:
+        description: "Re-process ALL rows marked ⚠️ Pipeline failed (clears flag and retries)"
+        required: false
+        default: false
+        type: boolean
+      bulk_urls:
+        description: "Newline-separated list of URLs to add to the queue and process immediately"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   process-queue:
@@ -47,6 +57,7 @@ jobs:
         run: |
           pip install \
             yt-dlp \
+            instaloader \
             openai \
             anthropic \
             gspread \
@@ -66,6 +77,8 @@ jobs:
           PRI_OP_YT_COOKIES:         ${{ secrets.PRI_OP_YT_COOKIES }}
           GITHUB_TOKEN:              ${{ github.token }}
           QUEUE_MAX_PER_RUN:         ${{ inputs.max_per_run || '5' }}
+          QUEUE_RETRY_FAILED:        ${{ inputs.retry_failed || 'false' }}
+          QUEUE_BULK_URLS:           ${{ inputs.bulk_urls || '' }}
         run: python scripts/capture/capture_queue_processor.py
 
       - name: Upload transcripts (artifacts)
