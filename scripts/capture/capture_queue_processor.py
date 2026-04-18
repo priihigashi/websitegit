@@ -48,10 +48,12 @@ CAPTURE_SCRIPT = "scripts/capture/capture_pipeline.py"
 STATUS_TO_SCORE = {"READY": 5, "NEEDS_REVIEW": 3, "NOT_RELEVANT": 1}
 PROJECT_TO_DEST = {
     "brazil":    "Brazil News Drive",
+    "news":      "Brazil News Drive",    # preferred name (was sovereign)
     "usa":       "Inspiration Library",
+    "opc":       "Inspiration Library",  # preferred name (was content)
     "book":      "Book Tracker",
-    "content":   "Inspiration Library",   # legacy alias
-    "sovereign": "Brazil News Drive",     # legacy alias → use brazil
+    "content":   "Inspiration Library",  # legacy alias → use opc
+    "sovereign": "Brazil News Drive",    # legacy alias → use news
 }
 
 
@@ -303,7 +305,15 @@ def main():
         print(f"  project={project}  notes={'yes' if comment else 'none'}")
 
         # Translate user-facing names → capture_pipeline.py internal choices
-        PIPELINE_PROJECT = {"brazil": "sovereign", "usa": "content"}
+        # Accepts new names (news/opc) and legacy names (sovereign/content/brazil/usa)
+        PIPELINE_PROJECT = {
+            "brazil":    "news",      # preferred queue alias for News pipeline
+            "news":      "news",      # explicit new name
+            "usa":       "opc",       # preferred queue alias for OPC pipeline
+            "opc":       "opc",       # explicit new name
+            "sovereign": "news",      # legacy → news
+            "content":   "opc",       # legacy → opc
+        }
         pipeline_project = PIPELINE_PROJECT.get(project, project)
 
         # Build subprocess command — same args as capture_pipeline.yml run step

@@ -814,7 +814,7 @@ def save_transcript(transcript: str, url: str, story_id: str, project: str) -> s
 
 # ─── CLAUDE ANALYSIS ──────────────────────────────────────────────────────────
 
-def analyze_book(transcript: str, url: str, story_id: str, notes: str) -> str:
+def analyze_book(transcript: str, url: str, story_id: str, notes: str) -> str:  # noqa: keep name for backward compat
     if not ANTHROPIC_API_KEY:
         return f"[PENDING — ANTHROPIC_API_KEY required]\n\n{transcript}"
     import anthropic
@@ -892,13 +892,13 @@ BOOK READY: YES / NO / NEEDS MORE RESEARCH"""
     return msg.content[0].text
 
 
-def analyze_sovereign(transcript: str, url: str, story_id: str, notes: str) -> str:
+def analyze_news(transcript: str, url: str, story_id: str, notes: str) -> str:
     if not ANTHROPIC_API_KEY:
         return f"[PENDING — ANTHROPIC_API_KEY required]\n\n{transcript}"
     import anthropic
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    print("  Claude (claude-opus-4-6) SOVEREIGN analysis...")
-    prompt = f"""Analyze this content for the SOVEREIGN political inspiration page.
+    print("  Claude (claude-opus-4-6) News analysis...")
+    prompt = f"""Analyze this content for the News political/civic page.
 Study the format and identify how to do it better — more examples, more teaching, not just negatives.
 
 Story ID: {story_id}
@@ -908,10 +908,10 @@ Notes: {notes or "None"}
 TRANSCRIPT:
 {transcript}
 
-Produce SOVEREIGN CAPTURE DOCUMENT (no markdown tables):
+Produce NEWS CAPTURE DOCUMENT (no markdown tables):
 
 STORY ID: {story_id}
-PROJECT: SOVEREIGN
+PROJECT: NEWS
 DATE: {datetime.now().strftime("%Y-%m-%d")}
 SOURCE URL: {url}
 
@@ -926,9 +926,9 @@ CONTENT ANALYSIS:
   What works: [specific format strengths]
   What's missing: [e.g. no examples, only complaints, no solutions]
 
-SOVEREIGN POST ANGLE:
+NEWS POST ANGLE:
   Hook: [opening line that stops the scroll]
-  Core message: [what SOVEREIGN says differently — with concrete examples]
+  Core message: [what this post says — with concrete examples]
   Teaching moment: [what audience learns and can apply]
   Format: [talking head / carousel / before-after / text overlay]
   CTA: [what action we want]
@@ -950,7 +950,7 @@ CONTENT READY: YES / NO / NEEDS REFINEMENT"""
     return msg.content[0].text
 
 
-def analyze_content(transcript: str, url: str, notes: str) -> dict:
+def analyze_opc(transcript: str, url: str, notes: str) -> dict:
     if not ANTHROPIC_API_KEY:
         return {"niche": "Oak Park", "classification": "NEEDS_REVIEW", "summary": transcript[:150]}
     import anthropic
@@ -1141,6 +1141,69 @@ def create_calendar_task(story_id, project, url, doc_url, preview, notes, hub_ur
         print(f"  WARNING Calendar: {e}")
 
 
+# ─── QUEUE DEDUP ──────────────────────────────────────────────────────────────
+
+def _mark_queue_processed(url: str):
+    """If this URL exists in the '📲 Capture Queue' tab mark it as processed (D=TRUE).
+    Called at the end of every run_* function so manual captures don't get re-run by
+    the daily queue processor. Non-fatal — never blocks pipeline completion.
+    """
+    import urllib.request as _ur
+    import urllib.parse as _up
+    raw = os.getenv("SHEETS_TOKEN", "")
+    if not raw:
+        return
+    try:
+        td = json.loads(raw)
+        data = _up.urlencode({
+            "client_id": td["client_id"], "client_secret": td["client_secret"],
+            "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
+        }).encode()
+        resp = json.loads(_ur.urlopen(
+            _ur.Request("https://oauth2.googleapis.com/token", data=data)
+        ).read())
+        token = resp["access_token"]
+
+        sheet_id = IDEAS_INBOX_ID
+        tab = "📲 Capture Queue"
+        enc = _up.quote(f"'{tab}'!A2:H", safe="!:'")
+        rows_resp = json.loads(_ur.urlopen(
+            _ur.Request(
+                f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc}",
+                headers={"Authorization": f"Bearer {token}"}
+            )
+        ).read())
+        rows = rows_resp.get("values", [])
+
+        # Normalize URL for comparison (strip query params that vary between triggers)
+        norm = url.split("?")[0].rstrip("/")
+        for i, row in enumerate(rows):
+            row_url = (row[1].strip() if len(row) > 1 else "").split("?")[0].rstrip("/")
+            if row_url == norm:
+                sheet_row = i + 2  # 1-indexed, skip header
+                processed = (row[3].strip().upper() if len(row) > 3 else "")
+                if processed == "TRUE":
+                    return  # already marked, skip
+                update_url = (
+                    f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values:batchUpdate"
+                )
+                body = json.dumps({
+                    "valueInputOption": "USER_ENTERED",
+                    "data": [
+                        {"range": f"'{tab}'!D{sheet_row}", "values": [[True]]},
+                        {"range": f"'{tab}'!F{sheet_row}", "values": [["Manual capture"]]},
+                    ],
+                }).encode()
+                _ur.urlopen(_ur.Request(
+                    update_url, data=body,
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+                )).read()
+                print(f"  Queue row {sheet_row} marked processed (manual capture)")
+                return
+    except Exception as e:
+        print(f"  WARNING _mark_queue_processed (non-fatal): {e}")
+
+
 # ─── PIPELINES ────────────────────────────────────────────────────────────────
 
 def run_book(args, transcript):
@@ -1154,6 +1217,7 @@ def run_book(args, transcript):
     update_book_tracker(args.story_id, args.url, doc_url, analysis, args.notes or "")
     create_calendar_task(args.story_id, args.project, args.url, doc_url, transcript[:400], args.notes or "")
     print(f"\n{'='*50}\nBOOK CAPTURE DONE\nStory ID: {args.story_id}\nDoc: {doc_url or 'check artifacts'}\n{'='*50}")
+    _mark_queue_processed(args.url)
     try:
         import sys; sys.path.insert(0, str(Path(__file__).parent.parent))
         from content_tracker import log_run
@@ -1162,10 +1226,10 @@ def run_book(args, transcript):
     except Exception: pass
 
 
-def run_sovereign(args, transcript, video_path: str = "", srt_content: str = ""):
-    print("\n[SOVEREIGN] Running format analysis...")
-    analysis = analyze_sovereign(transcript, args.url, args.story_id, args.notes or "")
-    path = TRANSCRIPTS_DIR / f"{args.story_id}_sovereign.txt"
+def run_news(args, transcript, video_path: str = "", srt_content: str = ""):
+    print("\n[NEWS] Running format analysis...")
+    analysis = analyze_news(transcript, args.url, args.story_id, args.notes or "")
+    path = TRANSCRIPTS_DIR / f"{args.story_id}_news.txt"
     path.write_text(analysis, encoding="utf-8")
 
     # Save SRT captions file alongside transcript (needed by Remotion for timed captions)
@@ -1174,10 +1238,10 @@ def run_sovereign(args, transcript, video_path: str = "", srt_content: str = "")
         srt_path.write_text(srt_content, encoding="utf-8")
         print(f"  SRT saved: {srt_path}")
 
-    doc_url = create_drive_doc(f"{args.story_id} — SOVEREIGN — {datetime.now().strftime('%Y-%m-%d')}", analysis, SOVEREIGN_FOLDER_ID)
+    doc_url = create_drive_doc(f"{args.story_id} — NEWS — {datetime.now().strftime('%Y-%m-%d')}", analysis, SOVEREIGN_FOLDER_ID)
     create_calendar_task(args.story_id, args.project, args.url, doc_url, transcript[:400], args.notes or "")
 
-    # Upload video to SOVEREIGN folder so Remotion can reference it (not lost in tmpdir)
+    # Upload video to News/SOVEREIGN folder so Remotion can reference it (not lost in tmpdir)
     video_drive_url = ""
     if video_path and os.path.exists(video_path):
         try:
@@ -1194,7 +1258,7 @@ def run_sovereign(args, transcript, video_path: str = "", srt_content: str = "")
             )
             drive = build("drive", "v3", credentials=creds)
             size_mb = os.path.getsize(video_path) / (1024 * 1024)
-            print(f"  Uploading video to SOVEREIGN folder ({size_mb:.1f} MB)...")
+            print(f"  Uploading video to News folder ({size_mb:.1f} MB)...")
             file_meta = {"name": f"{args.story_id}_original.mp4", "parents": [SOVEREIGN_FOLDER_ID]}
             media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
             result = drive.files().create(
@@ -1212,31 +1276,72 @@ def run_sovereign(args, transcript, video_path: str = "", srt_content: str = "")
                 drive.files().create(
                     body=srt_meta, media_body=srt_media, supportsAllDrives=True
                 ).execute()
-                print(f"  SRT uploaded to SOVEREIGN folder")
+                print(f"  SRT uploaded to News folder")
         except Exception as e:
             print(f"  WARNING: video upload failed (non-fatal): {e}")
 
-    print(f"\n{'='*50}\nSOVEREIGN CAPTURE DONE\nStory ID: {args.story_id}\nDoc: {doc_url or 'check artifacts'}\nVideo: {video_drive_url or 'upload failed — check artifacts'}\n{'='*50}")
+    # Generate bilingual content brief alongside the deep analysis (ported from run_opc)
+    print("  Generating bilingual content brief for News capture...")
+    news_classification = {"niche": "News", "summary": args.story_id, "content_type": "Carousel"}
+    brief = generate_content_brief(transcript, args.url, news_classification, args.notes or "")
+    brief_pt = translate_to_pt(brief)
+    brief_doc_url = ""
+    try:
+        drive_svc = get_drive_service()
+        docs_svc = get_docs_service()
+        if drive_svc and docs_svc:
+            brief_doc = drive_svc.files().create(
+                body={"name": f"[CONTENT BRIEF] {args.story_id}",
+                      "mimeType": "application/vnd.google-apps.document",
+                      "parents": [SOVEREIGN_FOLDER_ID]},
+                supportsAllDrives=True, fields="id,webViewLink"
+            ).execute()
+            brief_doc_id = brief_doc["id"]
+            brief_doc_url = brief_doc.get("webViewLink", f"https://docs.google.com/document/d/{brief_doc_id}/edit")
+            full_brief = f"{brief}\n\n{'='*60}\nPT-BR VERSION\n{'='*60}\n\n{brief_pt}"
+            docs_svc.documents().batchUpdate(
+                documentId=brief_doc_id,
+                body={"requests": [{"insertText": {"location": {"index": 1}, "text": full_brief}}]}
+            ).execute()
+            print(f"  Bilingual content brief: {brief_doc_url}")
+    except Exception as e:
+        print(f"  WARNING: content brief doc failed (non-fatal): {e}")
+
+    # Add to Inspiration Library so news captures are discoverable (ported from run_opc)
+    news_cl = {"niche": "News", "summary": args.story_id, "content_type": "News Capture",
+               "hook": "", "series_override": "", "fake_news_route": "", "fake_news_confidence": ""}
+    update_inspiration_library(args.url, transcript, news_cl,
+                               hub_url=doc_url or "", doc_url=brief_doc_url,
+                               metadata={}, user_notes=args.notes or "")
+
+    # Trigger topic cluster scraper (ported from run_opc — applies to political/Brazil news)
+    if os.getenv("APIFY_API_KEY"):
+        _trigger_topic_scraper(news_cl)
+
+    print(f"\n{'='*50}\nNEWS CAPTURE DONE\nStory ID: {args.story_id}\nDoc: {doc_url or 'check artifacts'}\nBrief: {brief_doc_url or 'check artifacts'}\nVideo: {video_drive_url or 'upload failed — check artifacts'}\n{'='*50}")
 
     # Send completion email so Priscila knows the capture worked
     send_notification_email(
-        subject=f"SOVEREIGN capture done — {args.story_id}",
+        subject=f"News capture done — {args.story_id}",
         body=(
             f"Story ID: {args.story_id}\n"
             f"Source: {args.url}\n\n"
-            f"Analysis doc: {doc_url or 'check SOVEREIGN Drive folder'}\n"
+            f"Analysis doc: {doc_url or 'check News Drive folder'}\n"
+            f"Content brief (EN+PT): {brief_doc_url or 'check Drive'}\n"
             f"Video in Drive: {video_drive_url or 'not uploaded — check GitHub artifact'}\n"
-            f"SRT captions: {'generated and uploaded' if srt_content else 'not generated (audio issue)'}\n\n"
+            f"SRT captions: {'generated and uploaded' if srt_content else 'not generated (audio issue)'}\n"
+            f"Inspiration Library: row added\n\n"
             f"Next step: trigger render-video.yml with story_id={args.story_id} to build the FORMAT-001 reel.\n\n"
             f"Transcript preview:\n{transcript[:400]}"
         ),
     )
 
+    _mark_queue_processed(args.url)
     try:
         import sys; sys.path.insert(0, str(Path(__file__).parent.parent))
         from content_tracker import log_run
         log_run(pipeline="capture_pipeline", trigger="manual", url=args.url,
-                niche="sovereign", project="sovereign", status="success",
+                niche="news", project="news", status="success",
                 drive_path=doc_url or "", notes=args.story_id)
     except Exception: pass
 
@@ -1482,7 +1587,7 @@ def save_to_news_folder(story_id: str, url: str, transcript: str, classification
           PENDING_translation.md (placeholder until AI translation flow is built)
 
     Returns: (story_folder_url, brief_doc_url) — matches create_content_workspace signature
-    so run_content can use the same return contract.
+    so run_opc can use the same return contract.
     """
     drive = get_drive_service()
     if not drive:
@@ -1753,9 +1858,9 @@ def create_content_workspace(story_id: str, title: str, transcript: str,
     return folder_url, doc_url
 
 
-def run_content(args, transcript, video_path: str = "", metadata: dict = None):
-    print("\n[CONTENT] Running classification...")
-    cl = analyze_content(transcript, args.url, args.notes or "")
+def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = ""):
+    print("\n[OPC] Running classification...")
+    cl = analyze_opc(transcript, args.url, args.notes or "")
     sid = args.story_id or f"CNT-{datetime.now().strftime('%Y%m%d%H%M')}"
 
     # News niche → route to Big Crazy Ideas > News with shared/english/portuguese structure
@@ -1784,13 +1889,36 @@ def run_content(args, transcript, video_path: str = "", metadata: dict = None):
 
     niche = cl.get("niche", "")
     summary = cl.get("summary") or sid
-    print(f"\n{'='*50}\nCONTENT CAPTURE DONE\nNiche: {niche}\nType: {cl.get('content_type')}\nStatus: {cl.get('classification')}\nFolder: {folder_url or 'check artifacts'}\nBrief: {doc_url or 'check artifacts'}\n{'='*50}")
+
+    # Save SRT captions alongside transcript (ported from run_news — useful for Reels editing)
+    if srt_content:
+        srt_path = TRANSCRIPTS_DIR / f"{sid}_captions.srt"
+        srt_path.write_text(srt_content, encoding="utf-8")
+        print(f"  SRT saved: {srt_path}")
+        # Upload SRT to Content Hub folder if we have a hub_url and drive access
+        try:
+            drive_svc = get_drive_service()
+            if drive_svc and hub_url:
+                # Extract folder ID from hub_url to upload SRT there
+                m = re.search(r'/folders/([a-zA-Z0-9_-]+)', hub_url)
+                if m:
+                    from googleapiclient.http import MediaInMemoryUpload
+                    srt_media = MediaInMemoryUpload(srt_content.encode("utf-8"), mimetype="text/plain")
+                    drive_svc.files().create(
+                        body={"name": f"{sid}_captions.srt", "parents": [m.group(1)]},
+                        media_body=srt_media, supportsAllDrives=True, fields="id"
+                    ).execute()
+                    print(f"  SRT uploaded to Content Hub")
+        except Exception as e:
+            print(f"  WARNING: SRT upload failed (non-fatal): {e}")
+
+    print(f"\n{'='*50}\nOPC CAPTURE DONE\nNiche: {niche}\nType: {cl.get('content_type')}\nStatus: {cl.get('classification')}\nFolder: {folder_url or 'check artifacts'}\nBrief: {doc_url or 'check artifacts'}\n{'='*50}")
     score_map = {"READY": 5, "NEEDS_REVIEW": 3, "NOT_RELEVANT": 1}
     try:
         import sys; sys.path.insert(0, str(Path(__file__).parent.parent))
         from content_tracker import log_run
         log_run(pipeline="capture_pipeline", trigger="manual", url=args.url,
-                niche=niche, project="content", status="success",
+                niche=niche, project="opc", status="success",
                 score=score_map.get(cl.get("classification", ""), 3),
                 drive_path=hub_url or folder_url or "",
                 brief_url=doc_url or "", notes=summary[:100])
@@ -1802,26 +1930,27 @@ def run_content(args, transcript, video_path: str = "", metadata: dict = None):
         video_retry_note = ""
     else:
         video_note = "Video: download failed (transcript still captured)"
-        encoded_url = args.url.replace("&", "%26").replace("?", "%3F")
         video_retry_note = (
             f"\nTo retry video only: trigger capture_pipeline.yml with this URL:\n"
             f"  {args.url}\n"
             f"  https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/capture_pipeline.yml\n"
         )
     send_notification_email(
-        subject=f"Capture done — {niche} | {summary[:50]}",
+        subject=f"OPC capture done — {niche} | {summary[:50]}",
         body=(
             f"Content Hub: {hub_url or 'check Drive'}\n"
             f"Content Brief: {doc_url or 'check artifacts'}\n"
             f"Production Folder: {folder_url or 'check Drive'}\n"
             f"{video_note}\n"
             f"{video_retry_note}"
+            f"SRT captions: {'saved to Content Hub' if srt_content else 'not generated'}\n"
             f"Sheets: row added to Inspiration Library\n\n"
             f"Source: {args.url}\n"
             f"Niche: {niche}\n"
             f"Transcript preview:\n{transcript[:400]}"
         ),
     )
+    _mark_queue_processed(args.url)
 
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
@@ -1829,15 +1958,22 @@ def run_content(args, transcript, video_path: str = "", metadata: dict = None):
 def main():
     parser = argparse.ArgumentParser(description="Capture Pipeline v2")
     parser.add_argument("url")
-    parser.add_argument("--project", choices=["book", "sovereign", "content"], default="book")
+    parser.add_argument("--project",
+                        choices=["book", "news", "opc", "sovereign", "content"],
+                        default="book",
+                        help="book=fact-check | news=political/news (was sovereign) | opc=OPC/USA content (was content)")
     parser.add_argument("--story-id", default=None)
     parser.add_argument("--notes", default="")
     parser.add_argument("--credits", action="store_true",
                         help="Fetch creator info via Apify for caption attribution")
     args = parser.parse_args()
 
+    # Normalize legacy project names → canonical names
+    _alias = {"sovereign": "news", "content": "opc"}
+    args.project = _alias.get(args.project, args.project)
+
     if not args.story_id:
-        prefix = {"book": "BCI", "sovereign": "NWS", "content": "CNT"}[args.project]
+        prefix = {"book": "BCI", "news": "NWS", "opc": "CNT"}[args.project]
         args.story_id = f"{prefix}-{datetime.now().strftime('%Y%m%d%H%M')}"
 
     print(f"\n{'='*50}\nCAPTURE PIPELINE v2\nURL: {args.url}\nProject: {args.project.upper()}\nStory ID: {args.story_id}\n{'='*50}")
@@ -1872,12 +2008,14 @@ def main():
 
         if args.project == "book":
             run_book(args, transcript)
-        elif args.project == "sovereign":
+        elif args.project == "news":
             # Generate SRT captions for Remotion rendering (timed subtitle data)
             srt_content = get_caption_srt(audio) if audio else ""
-            run_sovereign(args, transcript, video_path=video_path or "", srt_content=srt_content)
-        else:
-            run_content(args, transcript, video_path=video_path, metadata=metadata)
+            run_news(args, transcript, video_path=video_path or "", srt_content=srt_content)
+        else:  # opc
+            # Generate SRT captions for Reels editing reference (non-fatal)
+            srt_content = get_caption_srt(audio) if audio and not _is_youtube(args.url) else ""
+            run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
 
     # Print credits summary if available
     if metadata:

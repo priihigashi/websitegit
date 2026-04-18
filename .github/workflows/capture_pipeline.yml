@@ -10,12 +10,14 @@ on:
         required: true
         type: string
       project:
-        description: "book (fact-check) | sovereign (political) | content (Oak Park)"
+        description: "book (fact-check) | news (political/news) | opc (OPC/USA content)"
         required: true
         default: "book"
         type: choice
         options:
           - book
+          - news
+          - opc
           - sovereign
           - content
       story_id:
