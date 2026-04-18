@@ -314,3 +314,65 @@ At the start of any session:
 4. Summarize the active rules, flag any conflicts with the task at hand, and propose the next 3 safest steps before editing anything.
 
 Do not claim to save anything to persistent memory — Codex has none. AGENTS.md, CLAUDE.md, SKILL.md files, and the `priihigashi/oak-park-ai-hub` repo are the only durable source of truth.
+
+---
+
+## 2026-04-18 — Capture pipeline audit & fixes
+
+### What we found (problems)
+
+**Dual pipeline confusion**
+- Two email subjects existed ("SOVEREIGN capture done" and "Capture done") — appeared to be different scripts but is ONE script (`capture_pipeline.py`) with two project modes
+- Naming was inconsistent: queue used `brazil`/`usa`, pipeline used `sovereign`/`content` — manual trigger would crash if `brazil` was typed
+
+**Capture queue failures (root causes)**
+- `instaloader` was never installed in the GitHub Actions runner — the fallback bypassing Instagram's `shared_data` block was silently skipped every time
+- Apify actor_id format was wrong: `apify/instagram-scraper` should be `apify~instagram-scraper` — Apify REST API returns 404 with slash format
+- Manual captures never marked their queue row as done → 6AM queue processor retried the same URL, hit Instagram rate limits, and failed
+- 10 rows stuck with ⚠️ failures as a result
+
+**YouTube captures**: GitHub runner IPs are blocked by YouTube — not fixable in pipeline code, needs residential proxy or non-cloud runner
+
+### What we fixed
+
+- **Renamed**: SOVEREIGN → "news" project, content → "opc" project (legacy names still work)
+- **Email subjects**: "News capture done — NWS-..." and "OPC capture done — niche | ..."
+- **Installed instaloader** in `capture_queue.yml` pip install step
+- **Fixed Apify actor_id**: `apify/instagram-scraper` → `apify~instagram-scraper`
+- **Added `_mark_queue_processed(url)`**: called at end of all 3 `run_*()` functions — marks queue row TRUE so 6AM run skips it
+- **Added `retry_failed` input**: triggers retry of all ⚠️ rows in one run
+- **Added `bulk_urls` input**: paste newline-separated URLs, adds + processes immediately
+
+### Features ported between pipelines
+
+**OPC → News (things News was missing):**
+- Bilingual content brief (EN + PT-BR doc in Drive folder)
+- Inspiration Library row written on every capture
+- Topic cluster scraper triggered on capture
+
+**News → OPC (things OPC was missing):**
+- SRT captions generated for non-YouTube captures
+
+### Side-by-side pipeline comparison
+
+| Feature | News (`run_news`) | OPC (`run_opc`) |
+|---|---|---|
+| Story ID prefix | NWS- | CNT- |
+| Drive destination | SOVEREIGN_FOLDER_ID | Content Hub + Content Creation |
+| Sheet written | Calendar + Inspiration Library | Inspiration Library + Ideas Queue |
+| Bilingual brief | ✅ EN + PT-BR docs | ✅ EN + PT-BR docs (added) |
+| SRT captions | ✅ | ✅ (added) |
+| Topic cluster scraper | ✅ | ✅ |
+| Inspiration Library row | ✅ (added) | ✅ |
+| Image concept | Person/event photo (politician, location) | Property/lifestyle photo |
+| Queue dedup | ✅ (added) | ✅ (added) |
+
+### Commits
+- `12ad1c1` — Capture Queue fix (instaloader, Apify actor_id, retry_failed, bulk_urls)
+- `fc557dd` — Pipeline rename + feature sync + dedup fix
+- `eabf921` — PT translation wired into capture pipeline
+
+### Pending
+- Run retry: Actions → Capture Queue Processor → `retry_failed=true` → `max_per_run=10`
+- YouTube failures still need residential proxy / non-cloud runner solution
+- Monitor if instaloader fix holds for the 10 stuck rows
