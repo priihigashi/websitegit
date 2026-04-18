@@ -2,7 +2,8 @@ name: Render Video — News Reel (FORMAT-001)
 # Renders the FORMAT-001 split-screen reel via Remotion.
 # Inputs: story_id from a completed capture run.
 # Outputs: PT + EN MP4 reels uploaded to News drive template folder.
-# Triggered manually OR by the capture pipeline completion email reply "render".
+# ALWAYS triggered manually via workflow_dispatch. The capture pipeline does NOT auto-trigger this.
+# Capture completion email says "Next step: trigger render-video.yml manually via Actions tab."
 
 on:
   workflow_dispatch:
@@ -26,6 +27,10 @@ on:
         description: 'Total reel duration in frames at 30fps (default 900 = 30 seconds)'
         required: false
         default: '900'
+      hook:
+        description: 'HOOK TEXT — bold, large text shown in first 5 seconds (scroll-stopper). e.g. "QUEM REALMENTE DECIDIU ISSO?"'
+        required: false
+        default: ''
       speaker_name:
         description: 'Speaker name shown in lower-third badge (e.g. Marianne Williamson)'
         required: false
@@ -35,9 +40,13 @@ on:
         required: false
         default: ''
       topic_title:
-        description: 'Topic title strip at top of video (e.g. REGIME CHANGE)'
+        description: 'Small topic strip at top of video (e.g. REGIME CHANGE) — visible after hook ends'
         required: false
         default: ''
+      video_offset_y:
+        description: 'Vertical crop % for face framing (default 15% — good for most talking heads). Increase if face is lower in frame.'
+        required: false
+        default: '15%'
       voiceover:
         description: 'Generate ElevenLabs voiceover (EN + PT). Set to false to skip.'
         required: false
@@ -155,9 +164,11 @@ jobs:
           VIDEO_START_FRAME: ${{ github.event.inputs.video_start_frame }}
           TOTAL_FRAMES: ${{ github.event.inputs.total_frames }}
           SRT_FILE: ${{ steps.locate.outputs.srt }}
+          HOOK: ${{ github.event.inputs.hook }}
           SPEAKER_NAME: ${{ github.event.inputs.speaker_name }}
           SPEAKER_ROLE: ${{ github.event.inputs.speaker_role }}
           TOPIC_TITLE: ${{ github.event.inputs.topic_title }}
+          VIDEO_OFFSET_Y: ${{ github.event.inputs.video_offset_y }}
           VOICEOVER: ${{ github.event.inputs.voiceover }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
@@ -172,9 +183,11 @@ jobs:
             --video-start-frame "$VIDEO_START_FRAME" \
             --total-frames "$TOTAL_FRAMES" \
             --srt-file "$SRT_FILE" \
+            --hook "$HOOK" \
             --speaker-name "$SPEAKER_NAME" \
             --speaker-role "$SPEAKER_ROLE" \
             --topic-title "$TOPIC_TITLE" \
+            --video-offset-y "$VIDEO_OFFSET_Y" \
             $VOICEOVER_FLAG \
             > /tmp/props_en.json
           echo "EN props:"
@@ -188,9 +201,11 @@ jobs:
           TOTAL_FRAMES: ${{ github.event.inputs.total_frames }}
           SRT_FILE: ${{ steps.locate.outputs.srt }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          HOOK: ${{ github.event.inputs.hook }}
           SPEAKER_NAME: ${{ github.event.inputs.speaker_name }}
           SPEAKER_ROLE: ${{ github.event.inputs.speaker_role }}
           TOPIC_TITLE: ${{ github.event.inputs.topic_title }}
+          VIDEO_OFFSET_Y: ${{ github.event.inputs.video_offset_y }}
           VOICEOVER: ${{ github.event.inputs.voiceover }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
@@ -206,9 +221,11 @@ jobs:
             --total-frames "$TOTAL_FRAMES" \
             --srt-file "$SRT_FILE" \
             --translate \
+            --hook "$HOOK" \
             --speaker-name "$SPEAKER_NAME" \
             --speaker-role "$SPEAKER_ROLE" \
             --topic-title "$TOPIC_TITLE" \
+            --video-offset-y "$VIDEO_OFFSET_Y" \
             $VOICEOVER_FLAG \
             > /tmp/props_pt.json
 

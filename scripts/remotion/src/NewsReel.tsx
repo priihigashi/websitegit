@@ -32,9 +32,11 @@ export interface NewsReelProps {
   captions: CaptionEntry[];
   language: "en" | "pt";
   totalFrames: number;
+  hook?: string;             // Bold hook text shown in first 5 seconds (frames 0-150). Scroll-stopper.
   speakerName?: string;      // e.g. "Marianne Williamson"
   speakerRole?: string;      // e.g. "Author & Activist"
-  topicTitle?: string;       // e.g. "REGIME CHANGE"
+  topicTitle?: string;       // e.g. "REGIME CHANGE" — small strip at top of video zone
+  videoOffsetY?: string;     // Vertical crop anchor, default "15%". Higher = lower crop start.
   voiceover_url?: string;    // path to /public/vo.mp3 — added by build_render_props when --voiceover flag set
 }
 
@@ -78,6 +80,52 @@ const Caption: React.FC<{ captions: CaptionEntry[]; frame: number }> = ({ captio
       }}
     >
       {active.text}
+    </div>
+  );
+};
+
+// ─── HOOK INTRO (frames 0-150 = 5 seconds) ─────────────────────────────────────
+// Large bold hook text overlaid on the video zone. Scroll-stopper.
+// Only renders if hook prop is non-empty.
+const HOOK_FRAMES = 150;  // 5 seconds at 30fps
+
+const HookIntro: React.FC<{ hook: string; frame: number }> = ({ hook, frame }) => {
+  const opacity = interpolate(
+    frame,
+    [0, 8, 140, HOOK_FRAMES],
+    [0, 1, 1, 0],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: W,
+        height: SPLIT_Y,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(11,11,12,0.72)",
+        opacity,
+        padding: `0 ${PAD}px`,
+        zIndex: 10,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "Fraunces, serif",
+          fontWeight: 700,
+          fontSize: 110,
+          color: C.paper,
+          lineHeight: 1.05,
+          textAlign: "center",
+          textShadow: "0 4px 24px rgba(0,0,0,0.95)",
+        }}
+      >
+        {hook}
+      </div>
     </div>
   );
 };
@@ -175,18 +223,27 @@ export const NewsReel: React.FC<NewsReelProps> = ({
   captions,
   language,
   totalFrames,
+  hook,
   speakerName,
   speakerRole,
   topicTitle,
+  videoOffsetY = "15%",
   voiceover_url,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
+  const hookActive = !!hook && frame < HOOK_FRAMES;
+
   // Active proof slide
   const activeSlide = proofSlides.find(
     (s) => frame >= s.startFrame && frame < s.startFrame + s.durationFrames
   );
+
+  // Video opacity: slightly dimmed during hook so hook text is legible
+  const videoOpacity = hook
+    ? interpolate(frame, [0, HOOK_FRAMES, HOOK_FRAMES + 8], [0.6, 0.6, 1], { extrapolateRight: "clamp" })
+    : 1;
 
   return (
     <AbsoluteFill style={{ background: C.obsidian }}>
@@ -204,7 +261,15 @@ export const NewsReel: React.FC<NewsReelProps> = ({
         <OffthreadVideo
           src={videoSrc}
           startFrom={videoStartFrame}
-          style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center" }}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            // "50% {videoOffsetY}" — centers horizontally, anchors vertically to show face.
+            // 15% from top works well for typical talking-head reels where face is in upper frame.
+            objectPosition: `50% ${videoOffsetY}`,
+            opacity: videoOpacity,
+          }}
         />
         {/* Watermark cover — bottom strip covers IG watermark */}
         <div
@@ -218,8 +283,8 @@ export const NewsReel: React.FC<NewsReelProps> = ({
           }}
         />
 
-        {/* Topic title strip — top of video zone */}
-        {topicTitle && (
+        {/* Topic title strip — top of video zone. Hidden during hook to avoid overlap. */}
+        {topicTitle && !hookActive && (
           <div
             style={{
               position: "absolute",
@@ -296,6 +361,9 @@ export const NewsReel: React.FC<NewsReelProps> = ({
             </div>
           </div>
         )}
+
+        {/* Hook intro overlay — large bold text for first 5 seconds */}
+        {hook && <HookIntro hook={hook} frame={frame} />}
       </div>
 
       {/* ── DIVIDER ── */}

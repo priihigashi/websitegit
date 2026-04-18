@@ -164,9 +164,13 @@ def main():
     parser.add_argument("--srt-file", default="")
     parser.add_argument("--translate", action="store_true",
                         help="Translate captions to PT (use with --language pt)")
+    parser.add_argument("--hook", default="",
+                        help="Bold hook text for the first 5 seconds (frames 0-150). Scroll-stopper.")
     parser.add_argument("--speaker-name", default="")
     parser.add_argument("--speaker-role", default="")
     parser.add_argument("--topic-title", default="")
+    parser.add_argument("--video-offset-y", default="15%",
+                        help="Vertical crop anchor for face framing (default 15%%). Higher = lower in frame.")
     parser.add_argument("--voiceover", action="store_true",
                         help="Generate ElevenLabs voiceover and upload to Drive")
     args = parser.parse_args()
@@ -192,9 +196,11 @@ def main():
         "captions":         captions,
         "language":         args.language,
         "totalFrames":      args.total_frames,
+        "hook":             args.hook or None,
         "speakerName":      args.speaker_name or None,
         "speakerRole":      args.speaker_role or None,
         "topicTitle":       args.topic_title or None,
+        "videoOffsetY":     args.video_offset_y if args.video_offset_y != "15%" else None,  # skip if default
         "voiceover_url":    voiceover_url,
     }
     # strip None values — Remotion ignores missing optional props cleanly
