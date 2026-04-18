@@ -36,7 +36,7 @@ EXPORT_SCRIPT = os.environ.get("EXPORT_SCRIPT", str(Path(__file__).parent / "exp
 # N auto-increments when a slug already has versions. See project_carousel_folder_standard.md.
 OPC_TIP_TEMPLATE_FOLDER         = "1PWrZfuOvyHUbTRlFNqYxdhtg-Zvv_bXb"  # Marketing > OPC > Tip of the Week > _TEMPLATE_CAROUSEL
 BRAZIL_QUEM_TEMPLATE_FOLDER     = "1Ts4OlXT_KxtYNziGmHUcsjHVh8Z7D1ds"  # News > Brazil > Quem decidiu isso > _TEMPLATE_CAROUSEL
-USA_THE_CHAIN_TEMPLATE_FOLDER   = "1sDMyPHVYcOqZ3NK9ch4e48AaJ7KVvxL3"  # News > USA > Content > Series > The Chain > _TEMPLATE_CAROUSEL
+USA_THE_CHAIN_TEMPLATE_FOLDER   = "1fgBbesb_NWgjtPLnM-uoBDJpeiwCRNqp"  # News > USA > The Chain > _TEMPLATE_CAROUSEL (series: 1sDMyPHVYcOqZ3NK9ch4e48AaJ7KVvxL3)
 SOVEREIGN_TEMPLATE_FOLDER       = os.environ.get("SOVEREIGN_TEMPLATE_FOLDER", "")  # News drive > SOVEREIGN > _TEMPLATE_CAROUSEL (set after folder creation)
 VERIFICAMOS_TEMPLATE_FOLDER     = "1QhILiMiIM9WrpHhIqXXrPs6JqoAdDijA"  # News > Brazil > Series > Verificamos > _TEMPLATE_CAROUSEL
 VERIFICAMOS_CONFIDENCE_THRESHOLD = 0.70  # auto-build gate — items below this score go to manual review queue

@@ -34,7 +34,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
-          DRIVE_OAUTH_TOKEN: ${{ secrets.GOOGLE_SA_KEY }}
+          DRIVE_OAUTH_TOKEN: ${{ secrets.SHEETS_TOKEN }}
         run: |
           python scripts/youtube_research.py \
             --topic "${{ github.event.inputs.topic }}" \
