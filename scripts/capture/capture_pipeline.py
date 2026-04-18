@@ -61,6 +61,9 @@ ANTHROPIC_API_KEY  = os.getenv("ANTHROPIC_API_KEY", "")
 # Key stored in GitHub Secrets as APIFY_API_KEY.
 # Get yours at: https://console.apify.com/account/integrations
 APIFY_API_KEY      = os.getenv("APIFY_API_KEY", "")
+# Run-level flag: set True when Apify returns "Monthly usage hard limit exceeded"
+# so we skip all further Apify calls in the same run instead of hammering the endpoint.
+_apify_limit_hit   = False
 YOUTUBE_API_KEY    = os.getenv("YOUTUBE_API_KEY", "")
 YT_COOKIES_RAW     = os.getenv("PRI_OP_YT_COOKIES", "")
 IG_COOKIES_RAW     = os.getenv("PRI_OP_IG_COOKIES", "")
@@ -297,6 +300,11 @@ def fetch_reel_metadata(url: str) -> dict:
     FYI: Uses apify/instagram-scraper actor with directUrls.
     Non-fatal — returns empty dict if Apify unavailable or fails.
     """
+    global _apify_limit_hit
+    if _apify_limit_hit:
+        print("  SKIP Apify metadata: monthly usage limit already hit this run")
+        return {}
+
     if not APIFY_API_KEY:
         print("  SKIP Apify metadata: APIFY_API_KEY not set")
         print("  (Get key at: https://console.apify.com/account/integrations)")
@@ -313,7 +321,9 @@ def fetch_reel_metadata(url: str) -> dict:
         "resultsType": "posts",
         "resultsLimit": 1,
         "addParentData": False,
-        "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["RESIDENTIAL"]},
+        # DATACENTER proxy — much cheaper compute units than RESIDENTIAL.
+        # RESIDENTIAL was burning the STARTER monthly limit rapidly.
+        "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["DATACENTER"]},
     }
 
     try:
@@ -323,6 +333,19 @@ def fetch_reel_metadata(url: str) -> dict:
             json=input_data,
             timeout=30,
         )
+        # Surface the real Apify error before raising — the generic 403 HTTP message
+        # hides useful info like "Monthly usage hard limit exceeded".
+        if run_resp.status_code == 403:
+            err = run_resp.json().get("error", {})
+            err_type = err.get("type", "unknown")
+            err_msg  = err.get("message", run_resp.text)
+            if err_type == "platform-feature-disabled" and "limit" in err_msg.lower():
+                _apify_limit_hit = True
+                print(f"  WARNING Apify: monthly usage hard limit exceeded — skipping Apify for all remaining URLs this run.")
+                print(f"  Fix: go to console.apify.com → Billing → increase limit or wait for monthly reset.")
+                return {}
+            print(f"  WARNING Apify 403: {err_type} — {err_msg}")
+            return {}
         run_resp.raise_for_status()
         run_id = run_resp.json()["data"]["id"]
         print(f"  Apify run started: {run_id}")
@@ -513,6 +536,11 @@ def _try_apify_youtube_download(url: str, tmp_dir: str) -> str:
     Uses bernardo/youtube-scraper actor which can extract audio URLs.
     Falls back to streamers/youtube-scraper for direct download link.
     """
+    global _apify_limit_hit
+    if _apify_limit_hit:
+        print("  SKIP Apify download: monthly usage limit already hit this run")
+        return ""
+
     if not APIFY_API_KEY:
         print("  SKIP Apify download: APIFY_API_KEY not set")
         return ""
@@ -538,6 +566,16 @@ def _try_apify_youtube_download(url: str, tmp_dir: str) -> str:
             json=input_data,
             timeout=30,
         )
+        if run_resp.status_code == 403:
+            err = run_resp.json().get("error", {})
+            err_type = err.get("type", "unknown")
+            err_msg  = err.get("message", run_resp.text)
+            if err_type == "platform-feature-disabled" and "limit" in err_msg.lower():
+                _apify_limit_hit = True
+                print(f"  WARNING Apify: monthly usage hard limit exceeded — skipping Apify for all remaining URLs this run.")
+            else:
+                print(f"  WARNING Apify 403: {err_type} — {err_msg}")
+            return ""
         run_resp.raise_for_status()
         run_id = run_resp.json()["data"]["id"]
         print(f"  Apify run: {run_id}")
