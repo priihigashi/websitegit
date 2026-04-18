@@ -1564,6 +1564,11 @@ def save_to_news_folder(story_id: str, url: str, transcript: str, classification
 
         # 5. Create content brief doc in english subfolder
         brief = generate_content_brief(transcript, url, classification, notes)
+
+        # 5b. Translate to PT-BR via Claude Haiku (same pattern as build_render_props.py)
+        print("  Translating brief to PT-BR (Claude Haiku)...")
+        brief_pt = translate_to_pt(brief)
+
         doc_url = ""
         try:
             doc = drive.files().create(
@@ -1584,19 +1589,26 @@ def save_to_news_folder(story_id: str, url: str, transcript: str, classification
         except Exception as e:
             print(f"  WARNING News brief doc: {e}")
 
-        # 6. Portuguese placeholder (BLOCKED — AI translation flow not built yet)
-        pt_placeholder = (
-            "# Portuguese Variants — PENDING AI TRANSLATION FLOW\n\n"
-            "Status: BLOCKED — awaiting implementation of AI Translation Flow "
-            "(tracked in Flow Plans Tracker).\n\n"
-            "Once translation flow is built, PT-BR carousel + reel scripts will be "
-            "auto-generated from the english/ versions.\n"
-        )
-        drive.files().create(
-            body={"name": "PENDING_translation.md", "parents": [portuguese_id]},
-            media_body=MediaInMemoryUpload(pt_placeholder.encode("utf-8"), mimetype="text/markdown"),
-            supportsAllDrives=True, fields="id"
-        ).execute()
+        # 6. Create PT-BR content brief doc in portuguese subfolder (AI translated via Haiku)
+        pt_doc_url = ""
+        try:
+            doc_pt = drive.files().create(
+                body={"name": f"[CONTENT BRIEF PT] {summary}",
+                      "mimeType": "application/vnd.google-apps.document",
+                      "parents": [portuguese_id]},
+                supportsAllDrives=True, fields="id,webViewLink"
+            ).execute()
+            doc_pt_id = doc_pt["id"]
+            pt_doc_url = doc_pt.get("webViewLink", f"https://docs.google.com/document/d/{doc_pt_id}/edit")
+            docs_pt = get_docs_service()
+            if docs_pt and brief_pt:
+                docs_pt.documents().batchUpdate(
+                    documentId=doc_pt_id,
+                    body={"requests": [{"insertText": {"location": {"index": 1}, "text": brief_pt}}]}
+                ).execute()
+            print(f"  Portuguese content brief: {pt_doc_url}")
+        except Exception as e:
+            print(f"  WARNING PT doc: {e}")
 
         # 7. Log to Ideas Queue (same pattern as content_workspace)
         gc = get_sheets_client()
@@ -1611,7 +1623,7 @@ def save_to_news_folder(story_id: str, url: str, transcript: str, classification
                     classification.get("hook", ""),
                     "DRAFT \u2014 text needed",
                     "HIGH",
-                    f"News folder: {story_url} | Brief: {doc_url} | Captured: {date}",
+                    f"News folder: {story_url} | Brief EN: {doc_url} | Brief PT: {pt_doc_url} | Captured: {date}",
                     url,
                 ])
                 print("  Ideas Queue: row added")
