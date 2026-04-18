@@ -74,6 +74,21 @@ jobs:
           fi
           python scripts/content_creator/carousel_reviewer.py
 
+      - name: AI Content Audit (3 agents)
+        if: always()
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ALERT_EMAIL: priscila@oakpark-construction.com
+          WORK_DIR: /tmp/content_creator_run
+        run: |
+          RESULTS_FILE=/tmp/content_creator_run/results.json
+          if [ -f "$RESULTS_FILE" ]; then
+            export CONTENT_CREATOR_RUN=$(cat "$RESULTS_FILE")
+          else
+            export CONTENT_CREATOR_RUN='[]'
+          fi
+          python scripts/content/content_auditor.py
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -159,6 +174,21 @@ jobs:
             export CONTENT_CREATOR_RUN='[]'
           fi
           python scripts/content_creator/carousel_reviewer.py
+
+      - name: AI Content Audit (3 agents)
+        if: always()
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ALERT_EMAIL: priscila@oakpark-construction.com
+          WORK_DIR: /tmp/content_creator_run
+        run: |
+          RESULTS_FILE=/tmp/content_creator_run/results.json
+          if [ -f "$RESULTS_FILE" ]; then
+            export CONTENT_CREATOR_RUN=$(cat "$RESULTS_FILE")
+          else
+            export CONTENT_CREATOR_RUN='[]'
+          fi
+          python scripts/content/content_auditor.py
 
       - name: Upload retry artifacts
         if: always()
