@@ -161,12 +161,15 @@ def get_published_links():
 
 # ── Step 4: Read existing In Production rows (dedup) ─────────────────────────
 def get_existing_in_production():
-    """Return {drive_folder_link: row_number} for rows already in In Production."""
-    rows = _sheets_get(_CC_SHEET_ID, f"'{IN_PROD_TAB}'!A:H")
+    """Return {drive_folder_link: row_number} for rows already in In Production.
+    New layout: A=#Reviews B=Title C=PostType D=Format E=ContentType F=Status G=DriveLink ...
+    Drive Folder Link is now col G (index 6).
+    """
+    rows = _sheets_get(_CC_SHEET_ID, f"'{IN_PROD_TAB}'!A:K")
     result = {}
     for i, row in enumerate(rows):
-        if len(row) > 3 and "drive.google.com" in row[3]:
-            result[row[3].strip()] = i + 1  # 1-based row number
+        if len(row) > 6 and "drive.google.com" in row[6]:
+            result[row[6].strip()] = i + 1  # 1-based row number
     return result
 
 
@@ -183,7 +186,7 @@ def _sheets_batch_update(data_list):
 
 def _sheets_append(values_list):
     token = _token()
-    enc = urllib.parse.quote(f"'{IN_PROD_TAB}'!A:H", safe="!:'")
+    enc = urllib.parse.quote(f"'{IN_PROD_TAB}'!A:K", safe="!:'")
     url = (f"https://sheets.googleapis.com/v4/spreadsheets/{_CC_SHEET_ID}/values/{enc}"
            f":append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS")
     payload = json.dumps({"values": values_list}).encode()
@@ -229,12 +232,14 @@ def sync_in_production(dry_run=False):
             raw = catalog[link]["status"]
             # Normalize to human-readable
             status_map = {
-                "pending_approval": "Pending Approval",
+                "pending_approval": "Built",
+                "in_review": "Built",
+                "email_sent": "Built",
                 "approved": "Approved",
-                "in_review": "In Review",
-                "skipped": "Skipped",
+                "needs_revision": "Needs Revision",
+                "scheduled": "Scheduled",
+                "skipped": "Built",
                 "built": "Built",
-                "email_sent": "Email Sent",
                 "published": "Published",
             }
             status = status_map.get(raw.lower().replace(" ", "_"), raw.title())
@@ -247,14 +252,16 @@ def sync_in_production(dry_run=False):
         if link in existing:
             row_num = existing[link]
             if not dry_run:
+                # New layout: F=Status, J=Output Link
                 _sheets_batch_update([
-                    {"range": f"'{IN_PROD_TAB}'!C{row_num}", "values": [[status]]},
-                    {"range": f"'{IN_PROD_TAB}'!G{row_num}", "values": [[motion]]},
+                    {"range": f"'{IN_PROD_TAB}'!F{row_num}", "values": [[status]]},
+                    {"range": f"'{IN_PROD_TAB}'!J{row_num}", "values": [[motion]]},
                 ])
             print(f"  UPDATE row {row_num}: {name[:40]} → {status}")
             updated += 1
         else:
-            row = [title[:100], "Carousel", status, link, "", "", motion, created]
+            # New layout: #Reviews | Title | PostType | Format | ContentType | Status | DriveLink | Caption | Hashtags | OutputLink | Date
+            row = [1, title[:100], "", "", "Carousel", status, link, "", "", motion, created]
             if not dry_run:
                 _sheets_append([row])
             print(f"  ADD: {name[:40]} → {status}")
