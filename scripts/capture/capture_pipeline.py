@@ -2141,7 +2141,12 @@ def main():
         save_transcript(transcript, args.url, args.story_id, args.project)
 
         # Download video file for Content Hub (non-fatal — transcript is the priority)
-        video_path = download_video(args.url, tmp)
+        # Skip for YouTube transcript-only path — GitHub runner IPs are blocked by YouTube,
+        # so download always fails and just produces a spurious failure notification.
+        if audio == "__youtube_transcript_fallback__":
+            video_path = ""
+        else:
+            video_path = download_video(args.url, tmp)
 
         # Cookie health check — only relevant when yt-dlp is used for YouTube.
         # When YOUTUBE_API_KEY is set we skip yt-dlp entirely, so no cookie alerts needed.
