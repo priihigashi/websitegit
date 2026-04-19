@@ -1103,7 +1103,7 @@ TRANSCRIPT: {transcript}
 Fake news / misinformation detection: Does this content contain or spread a specific false or misleading claim (viral myth, fabricated statistic, doctored quote, out-of-context clip)? If yes, set fake_news_route to "A" if the source clip of the spreader is available, or "B" if an expert/outlet has already debunked it. If the niche is Brazil or bilingual, use series_override "Verificamos". If the niche is USA, use series_override "Fact-Checked".
 
 Respond with JSON only:
-{{"niche": "Oak Park" or "Brazil" or "UGC" or "News", "content_type": "Talking Head/Expert" or "Project Progress/Before-After" or "Product Tips" or "Other", "classification": "READY" or "NEEDS_REVIEW" or "NOT_RELEVANT", "summary": "one sentence", "hook": "suggested hook for repost or inspiration", "notes": "why classified this way", "series_override": "Verificamos" or "Fact-Checked" or "", "fake_news_route": "A" or "B" or "", "fake_news_confidence": "high" or "medium" or "low" or ""}}"""
+{{"niche": "Oak Park" or "Brazil" or "UGC" or "News", "content_type": "Talking Head/Expert" or "Project Progress/Before-After" or "Product Tips" or "Other", "classification": "READY" or "NEEDS_REVIEW" or "NOT_RELEVANT", "summary": "one sentence", "hook": "suggested hook for repost or inspiration", "notes": "why classified this way", "series_override": "Verificamos" or "Fact-Checked" or "", "fake_news_route": "A" or "B" or "", "fake_news_confidence": "high" or "medium" or "low" or "", "additional_niches": [] or ["Brazil"] or ["News"] or ["Brazil", "News"] — list of OTHER niches this content should ALSO be captured for. Rules: (1) if user notes say "both", "bilingual", "brazil and usa", "for both" → include the other niche; (2) if topic is international (foreign elections, global leaders, geopolitics affecting multiple language audiences) → add both "Brazil" and "News"; (3) Brazil-only domestic politics → empty list; (4) USA-only domestic → empty list; (5) construction/OPC → empty list}}"""
     msg = client.messages.create(
         model="claude-sonnet-4-6", max_tokens=500,
         messages=[{"role": "user", "content": prompt}]
@@ -1459,6 +1459,12 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
     update_inspiration_library(args.url, transcript, news_cl,
                                hub_url=doc_url or "", doc_url=brief_doc_url,
                                metadata={}, user_notes=args.notes or "")
+    for _extra_niche in news_cl.get("additional_niches", []):
+        if _extra_niche and _extra_niche.lower() != news_cl.get("niche", "").lower():
+            _extra_cl = dict(news_cl); _extra_cl["niche"] = _extra_niche
+            _extra_notes = f"[CROSS-NICHE — also for {_extra_niche}] " + (args.notes or "")
+            update_inspiration_library(args.url, transcript, _extra_cl, hub_url=doc_url or "",
+                                       doc_url=brief_doc_url, metadata={}, user_notes=_extra_notes.strip())
 
     # Trigger topic cluster scraper (ported from run_opc — applies to political/Brazil news)
     if os.getenv("APIFY_API_KEY"):
@@ -2210,6 +2216,12 @@ def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_c
     # as a permanent safety net — survives even if I (Claude) forget to merge into the brief.
     update_inspiration_library(args.url, transcript, cl, hub_url=hub_url, doc_url=doc_url,
                                 metadata=metadata, user_notes=args.notes or "")
+    for _extra_niche in cl.get("additional_niches", []):
+        if _extra_niche and _extra_niche.lower() != cl.get("niche", "").lower():
+            _extra_cl = dict(cl); _extra_cl["niche"] = _extra_niche
+            _extra_notes = f"[CROSS-NICHE — also for {_extra_niche}] " + (args.notes or "")
+            update_inspiration_library(args.url, transcript, _extra_cl, hub_url=hub_url, doc_url=doc_url,
+                                       metadata=metadata, user_notes=_extra_notes.strip())
 
     create_calendar_task(sid, args.project, args.url, doc_url or "", transcript[:400], args.notes or "", hub_url=hub_url)
     # Auto-trigger Topic Cluster Scraper for Brazil captures
