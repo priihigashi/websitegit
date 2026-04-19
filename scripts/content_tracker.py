@@ -232,8 +232,10 @@ def update_in_production(
         return False
 
 
-# ── News In Production tab (Brazil / USA content) ─────────────────────────────
-_NEWS_PROD_TAB = "🌎 News In Production"
+# ── News In Production tabs (Brazil / USA — News Content Control sheet) ────────
+_NEWS_CC_SHEET_ID  = "1QFHa_xcuLOqbbYbtzeMVhb5ypfHIbAkVJyyInCKlgcM"  # News — Content Control
+_NEWS_BRAZIL_TAB   = "🇧🇷 Brazil In Production"
+_NEWS_USA_TAB      = "🇺🇸 USA In Production"
 
 
 def update_news_in_production(
@@ -249,9 +251,11 @@ def update_news_in_production(
     post_type: str = "",
 ) -> bool:
     """
-    Write or update a row in '🌎 News In Production' tab of Content Control sheet.
-    Columns: #Reviews | Title | Niche | Format | Post Type | Content Type | Status | Drive Folder Link | Output Link | Caption | Date Created
-    Deduplicates by Drive Folder Link (col H = index 7). Auto-increments # Reviews.
+    Write or update a row in the News — Content Control spreadsheet.
+    Routes Brazil niche → '🇧🇷 Brazil In Production', all others → '🇺🇸 USA In Production'.
+    Columns match OPC exactly: #Reviews | Title | Post Type | Format | Content Type | Status |
+                                Drive Folder Link | Caption | Hashtags | Output Link | Date Created
+    Deduplicates by Drive Folder Link (col G = index 6). Auto-increments # Reviews.
     Non-fatal — never crashes caller.
     """
     token = _access_token()
@@ -262,8 +266,10 @@ def update_news_in_production(
     if not date_created:
         date_created = datetime.now(ET).strftime("%Y-%m-%d")
 
-    enc = urllib.parse.quote(f"'{_NEWS_PROD_TAB}'!A:K", safe="!:'")
-    url = f"https://sheets.googleapis.com/v4/spreadsheets/{_CC_SHEET_ID}/values/{enc}"
+    tab = _NEWS_BRAZIL_TAB if niche.lower() == "brazil" else _NEWS_USA_TAB
+
+    enc = urllib.parse.quote(f"'{tab}'!A:K", safe="!:'")
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{_NEWS_CC_SHEET_ID}/values/{enc}"
     try:
         rows = json.loads(urllib.request.urlopen(
             urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
@@ -272,11 +278,11 @@ def update_news_in_production(
         print(f"[content_tracker] WARNING update_news_in_production read: {e}")
         rows = []
 
-    # Deduplicate by Drive Folder Link (col H = index 7)
+    # Deduplicate by Drive Folder Link (col G = index 6, same as OPC)
     existing_row_num = None
     existing_reviews = 1
     for i, row in enumerate(rows):
-        if len(row) > 7 and row[7].strip() == drive_folder_link.strip():
+        if len(row) > 6 and row[6].strip() == drive_folder_link.strip():
             existing_row_num = i + 1
             try:
                 existing_reviews = int(row[0]) if row[0] else 1
@@ -287,34 +293,35 @@ def update_news_in_production(
     try:
         if existing_row_num:
             batch = [
-                {"range": f"'{_NEWS_PROD_TAB}'!A{existing_row_num}", "values": [[existing_reviews + 1]]},
-                {"range": f"'{_NEWS_PROD_TAB}'!G{existing_row_num}", "values": [[status]]},
+                {"range": f"'{tab}'!A{existing_row_num}", "values": [[existing_reviews + 1]]},
+                {"range": f"'{tab}'!F{existing_row_num}", "values": [[status]]},
             ]
             if output_link:
-                batch.append({"range": f"'{_NEWS_PROD_TAB}'!I{existing_row_num}", "values": [[output_link]]})
+                batch.append({"range": f"'{tab}'!J{existing_row_num}", "values": [[output_link]]})
             if caption:
-                batch.append({"range": f"'{_NEWS_PROD_TAB}'!J{existing_row_num}", "values": [[caption]]})
+                batch.append({"range": f"'{tab}'!H{existing_row_num}", "values": [[caption]]})
             if fmt:
-                batch.append({"range": f"'{_NEWS_PROD_TAB}'!D{existing_row_num}", "values": [[fmt]]})
+                batch.append({"range": f"'{tab}'!D{existing_row_num}", "values": [[fmt]]})
             payload = json.dumps({"valueInputOption": "USER_ENTERED", "data": batch}).encode()
             urllib.request.urlopen(urllib.request.Request(
-                f"https://sheets.googleapis.com/v4/spreadsheets/{_CC_SHEET_ID}/values:batchUpdate",
+                f"https://sheets.googleapis.com/v4/spreadsheets/{_NEWS_CC_SHEET_ID}/values:batchUpdate",
                 data=payload,
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
             )).read()
             print(f"[content_tracker] ✓ News In Production updated — {title[:40]} → {status} (reviews: {existing_reviews+1})")
         else:
-            # New row: #Reviews=1 | Title | Niche | Format | PostType | ContentType | Status | DriveLink | OutputLink | Caption | Date
-            new_row = [1, title, niche, fmt, post_type, content_type, status, drive_folder_link, output_link, caption, date_created]
-            enc2 = urllib.parse.quote(f"'{_NEWS_PROD_TAB}'!A:K", safe="!:'")
-            url2 = (f"https://sheets.googleapis.com/v4/spreadsheets/{_CC_SHEET_ID}/values/{enc2}"
+            # New row: same column order as OPC
+            # #Reviews | Title | PostType | Format | ContentType | Status | DriveLink | Caption | Hashtags | OutputLink | Date
+            new_row = [1, title, post_type, fmt, content_type, status, drive_folder_link, caption, "", output_link, date_created]
+            enc2 = urllib.parse.quote(f"'{tab}'!A:K", safe="!:'")
+            url2 = (f"https://sheets.googleapis.com/v4/spreadsheets/{_NEWS_CC_SHEET_ID}/values/{enc2}"
                     f":append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS")
             payload = json.dumps({"values": [new_row]}).encode()
             urllib.request.urlopen(urllib.request.Request(
                 url2, data=payload,
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
             )).read()
-            print(f"[content_tracker] ✓ News In Production added — {title[:40]} ({niche}) → {status}")
+            print(f"[content_tracker] ✓ News In Production added — {title[:40]} ({tab}) → {status}")
         return True
     except Exception as e:
         print(f"[content_tracker] WARNING update_news_in_production write: {e}")

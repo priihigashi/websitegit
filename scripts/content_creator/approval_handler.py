@@ -443,6 +443,23 @@ def re_render_post(post, feedback):
         print(f"  re_render: no ANTHROPIC_API_KEY — cannot regenerate content")
         return False
 
+    # Signal re-render is in progress → "Approved — Rebuild" in In Production tab
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(Path(__file__).parent.parent))
+        if niche == "opc":
+            from content_tracker import update_in_production
+            update_in_production(title=topic[:100], content_type="Carousel",
+                                 status="Approved — Rebuild",
+                                 drive_folder_link=post.get("static_link", ""))
+        else:
+            from content_tracker import update_news_in_production
+            update_news_in_production(title=topic[:100], niche=niche.upper(),
+                                      content_type="Carousel", status="Approved — Rebuild",
+                                      drive_folder_link=post.get("static_link", ""))
+    except Exception as _te:
+        print(f"  In Production pre-render status update skipped: {_te}")
+
     content = generate_carousel_content(topic, niche, brief=f"Revision feedback:\n{feedback}")
     if not content:
         print(f"  re_render: content generation failed")
