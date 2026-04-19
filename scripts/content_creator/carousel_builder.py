@@ -503,14 +503,35 @@ entry, 2-column grid, face crop first, name second, role tag third."""
 
 
 def _fetch_person_photo(search_query, dest_dir, filename):
-    """Try to download a CC-licensed photo from Wikimedia Commons.
+    """Try to download a CC-licensed photo for a named person.
+    Route A: Drive cache (already downloaded this run) — instant.
+    Route B: Wikipedia REST API thumbnail — fastest for politicians/public figures.
+    Route C: Wikimedia Commons search — broader CC library.
     Returns relative path 'resources/images/<filename>' if downloaded, else empty string.
-    Safe: all exceptions are caught — caller falls back to placeholder on any failure.
+    Caller must use .bio-initials fallback when this returns empty — never a raw placeholder.
     """
     dest_path = Path(dest_dir) / "resources" / "images" / filename
     dest_path.parent.mkdir(parents=True, exist_ok=True)
+    # Route A: cache hit
     if dest_path.exists() and dest_path.stat().st_size > 1000:
         return f"resources/images/{filename}"
+    # Route B: Wikipedia REST API thumbnail
+    try:
+        wiki_name = urllib.parse.quote(search_query.replace(" ", "_"))
+        wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{wiki_name}"
+        wiki_req = urllib.request.Request(wiki_url, headers={"User-Agent": "oak-park-carousel/1.0 (github.com/priihigashi)"})
+        wiki_data = json.loads(urllib.request.urlopen(wiki_req, timeout=10).read())
+        thumb = wiki_data.get("thumbnail", {}).get("source", "")
+        if thumb:
+            with urllib.request.urlopen(thumb, timeout=15) as r:
+                raw = r.read()
+            if len(raw) > 2000:
+                dest_path.write_bytes(raw)
+                print(f"  Photo fetched (Wikipedia): {filename} ({len(raw)//1024}KB)")
+                return f"resources/images/{filename}"
+    except Exception as _e:
+        print(f"  Wikipedia photo miss ({search_query}): {_e}")
+    # Route C: Wikimedia Commons search
     try:
         q = urllib.parse.quote_plus(search_query)
         # Search Wikimedia Commons file namespace (ns=6)
@@ -838,7 +859,14 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
                     f'background-position:center top;border:none;border-radius:4px;"></div>'
                 )
             else:
-                sticker_el = f'<div class="sticker-slot"><div class="sticker-placeholder">@{sticker}_STICKER</div></div>'
+                # Route D: .bio-initials fallback — always looks intentional, never a raw placeholder
+                initials = "".join(w[0].upper() for w in sticker.replace("_", " ").split() if w)[:2] or "??"
+                sticker_el = (
+                    f'<div class="sticker-slot sticker-initials">'
+                    f'<div class="bio-initials">{initials}</div>'
+                    f'<div class="bio-init-name">{sticker.replace("_", " ").title()}</div>'
+                    f'</div>'
+                )
 
             slides_html += f"""
 <div class="slide slide-profile">
@@ -974,6 +1002,9 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px;font-fam
 .profile-layout{{display:flex;gap:40px;align-items:flex-start;flex:1}}
 .sticker-slot{{width:260px;min-height:360px;border:2px dashed var(--gr);display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:4px}}
 .sticker-placeholder{{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--gr);text-align:center;padding:16px;word-break:break-all}}
+.sticker-initials{{flex-direction:column;background:rgba(244,196,48,.06);border-color:rgba(244,196,48,.4)}}
+.bio-initials{{font-family:'Fraunces',serif;font-weight:700;font-size:90px;color:var(--ca);letter-spacing:.05em;line-height:1}}
+.bio-init-name{{font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--gr);text-align:center;margin-top:14px;text-transform:uppercase;letter-spacing:.1em;padding:0 8px}}
 .fact-list{{list-style:none;flex:1}}
 .fact-list li{{font-size:34px;font-weight:500;padding:16px 0;border-bottom:1px solid rgba(242,236,224,.12);line-height:1.3}}
 .fact-list li::before{{content:"▸ ";color:var(--ca)}}
@@ -1016,6 +1047,15 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px;font-fam
 
 
 def render_pngs(html_path, output_dir):
+    # Pre-export gate: block if any raw placeholder pattern is still in the HTML
+    _html_text = Path(html_path).read_text()
+    _bad = [p for p in ("_STICKER", "FACE STICKER", "bg-removed PNG") if p in _html_text]
+    if _bad:
+        raise ValueError(
+            f"Export blocked — unresolved placeholder(s) in {html_path}: {_bad}. "
+            "Source real photos or use .bio-initials fallback before exporting."
+        )
+
     os.makedirs(output_dir, exist_ok=True)
     script = os.environ.get("EXPORT_SCRIPT", "export_variants.js")
     result = subprocess.run(
