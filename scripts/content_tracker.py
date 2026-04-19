@@ -142,6 +142,15 @@ def log_run(
         return False
 
 
+# ── Routing — single source of truth ─────────────────────────────────────────
+import sys as _sys, pathlib as _pl
+_sys.path.insert(0, str(_pl.Path(__file__).parent))
+try:
+    from routing import content_control as _content_control
+except ImportError:
+    def _content_control(niche):  # fallback if routing.py not importable
+        return ("1C1CAZ8lSgeVLSSCYIg-D9XPJcSLHyIOh1okKtvhZZQg", "🎬 In Production")
+
 # ── In Production tab (Content Control sheet) ─────────────────────────────────
 _CC_SHEET_ID    = "1C1CAZ8lSgeVLSSCYIg-D9XPJcSLHyIOh1okKtvhZZQg"
 _IN_PROD_TAB    = "🎬 In Production"
@@ -325,4 +334,98 @@ def update_news_in_production(
         return True
     except Exception as e:
         print(f"[content_tracker] WARNING update_news_in_production write: {e}")
+        return False
+
+
+# ── Generic router — works for ALL niches via routing.py ─────────────────────
+
+def update_status_by_niche(
+    niche: str,
+    title: str,
+    content_type: str,
+    status: str,
+    drive_folder_link: str,
+    output_link: str = "",
+    caption: str = "",
+    date_created: str = "",
+    fmt: str = "",
+    post_type: str = "",
+) -> bool:
+    """
+    Route to the correct Content Control spreadsheet + tab for ANY niche.
+    Uses routing.py as the single source of truth.
+    Replaces the niche-specific update_in_production() / update_news_in_production() calls.
+    Non-fatal — never crashes caller.
+    """
+    niche_key = niche.lower().strip()
+
+    # Legacy / canonical mapping handled by routing.py
+    ss_id, tab = _content_control(niche_key)
+    if not ss_id:
+        print(f"[content_tracker] SKIP update_status_by_niche — no content control for niche '{niche}'")
+        return False
+
+    token = _access_token()
+    if not token:
+        print(f"[content_tracker] SKIP update_status_by_niche — no SHEETS_TOKEN")
+        return False
+
+    if not date_created:
+        date_created = datetime.now(ET).strftime("%Y-%m-%d")
+
+    enc = urllib.parse.quote(f"'{tab}'!A:K", safe="!:'")
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{ss_id}/values/{enc}"
+    try:
+        rows = json.loads(urllib.request.urlopen(
+            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        ).read()).get("values", [])
+    except Exception as e:
+        print(f"[content_tracker] WARNING update_status_by_niche read: {e}")
+        rows = []
+
+    existing_row_num = None
+    existing_reviews = 1
+    for i, row in enumerate(rows):
+        if len(row) > 6 and row[6].strip() == drive_folder_link.strip():
+            existing_row_num = i + 1
+            try:
+                existing_reviews = int(row[0]) if row[0] else 1
+            except (ValueError, IndexError):
+                existing_reviews = 1
+            break
+
+    try:
+        if existing_row_num:
+            batch = [
+                {"range": f"'{tab}'!A{existing_row_num}", "values": [[existing_reviews + 1]]},
+                {"range": f"'{tab}'!F{existing_row_num}", "values": [[status]]},
+            ]
+            if output_link:
+                batch.append({"range": f"'{tab}'!J{existing_row_num}", "values": [[output_link]]})
+            if caption:
+                batch.append({"range": f"'{tab}'!H{existing_row_num}", "values": [[caption]]})
+            if fmt:
+                batch.append({"range": f"'{tab}'!D{existing_row_num}", "values": [[fmt]]})
+            payload = json.dumps({"valueInputOption": "USER_ENTERED", "data": batch}).encode()
+            urllib.request.urlopen(urllib.request.Request(
+                f"https://sheets.googleapis.com/v4/spreadsheets/{ss_id}/values:batchUpdate",
+                data=payload,
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            )).read()
+            print(f"[content_tracker] ✓ {niche} In Production updated — {title[:40]} → {status} (reviews: {existing_reviews+1})")
+        else:
+            new_row = [1, title, post_type, fmt, content_type, status,
+                       drive_folder_link, caption, "", output_link, date_created]
+            enc2 = urllib.parse.quote(f"'{tab}'!A:K", safe="!:'")
+            url2 = (f"https://sheets.googleapis.com/v4/spreadsheets/{ss_id}/values/{enc2}"
+                    f":append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS")
+            payload = json.dumps({"values": [new_row]}).encode()
+            urllib.request.urlopen(urllib.request.Request(
+                url2, data=payload,
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            )).read()
+            print(f"[content_tracker] ✓ {niche} In Production added — {title[:40]} → {status}")
+        return True
+    except Exception as e:
+        print(f"[content_tracker] WARNING update_status_by_niche write: {e}")
         return False

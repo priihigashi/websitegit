@@ -46,18 +46,10 @@ BULK_URLS_RAW  = os.getenv("QUEUE_BULK_URLS", "").strip()
 CAPTURE_SCRIPT = "scripts/capture/capture_pipeline.py"
 
 STATUS_TO_SCORE = {"READY": 5, "NEEDS_REVIEW": 3, "NOT_RELEVANT": 1}
-PROJECT_TO_DEST = {
-    "brazil":    "Brazil News Drive",
-    "news":      "Brazil News Drive",    # preferred name (was sovereign)
-    "usa":       "USA News Drive",       # USA news → News pipeline
-    "opc":       "Inspiration Library",  # preferred name (was content)
-    "ugc":       "UGC Drive",           # UGC → UGC pipeline
-    "stocks":    "Stocks Drive",        # Stocks → Stocks pipeline
-    "higashi":   "Higashi Drive",       # Higashi RE → Higashi pipeline
-    "book":      "Book Tracker",
-    "content":   "Inspiration Library",  # legacy alias → use opc
-    "sovereign": "Brazil News Drive",    # legacy alias → use news
-}
+
+import sys as _sys, pathlib as _pl
+_sys.path.insert(0, str(_pl.Path(__file__).parent.parent))
+from routing import pipeline_project as _pipeline_project, queue_dest as _queue_dest
 
 
 # ─── AUTH ─────────────────────────────────────────────────────────────────────
@@ -249,7 +241,7 @@ def _parse_result(stdout: str, project: str) -> tuple[int, str, str]:
         if m:
             hub_path = m.group(1).strip()
 
-    moved_to = PROJECT_TO_DEST.get(project, "Inspiration Library")
+    moved_to = _queue_dest(project)
     return score, moved_to, hub_path
 
 
@@ -307,20 +299,7 @@ def main():
         print(f"\n[capture_queue] Row {sheet_row}: {url[:70]}")
         print(f"  project={project}  notes={'yes' if comment else 'none'}")
 
-        # Translate user-facing names → capture_pipeline.py internal choices
-        # Accepts new names (news/opc) and legacy names (sovereign/content/brazil/usa)
-        PIPELINE_PROJECT = {
-            "brazil":    "news",      # preferred queue alias for News pipeline
-            "news":      "news",      # explicit new name
-            "usa":       "news",      # USA news → News pipeline
-            "opc":       "opc",       # explicit new name
-            "ugc":       "ugc",       # UGC → UGC pipeline
-            "stocks":    "stocks",    # Stocks → Stocks pipeline
-            "higashi":   "higashi",   # Higashi RE → Higashi pipeline
-            "sovereign": "news",      # legacy → news
-            "content":   "opc",       # legacy → opc
-        }
-        pipeline_project = PIPELINE_PROJECT.get(project, project)
+        pipeline_project = _pipeline_project(project)  # routing.py is the source of truth
 
         # Dispatch each URL as a separate capture_pipeline.yml workflow run.
         # Each run gets a fresh GitHub Actions runner IP, avoiding Instagram rate limits.
@@ -331,7 +310,7 @@ def main():
                 "--field", f"url={url}",
                 "--field", f"project={pipeline_project}",
             ], check=True, capture_output=True, text=True, timeout=30)
-            moved_to = PROJECT_TO_DEST.get(project, "Inspiration Library")
+            moved_to = _queue_dest(project)
             _write_success(token, sheet_row, 3, moved_to, "")
             print(f"  ✓ DISPATCHED — project={pipeline_project}")
 

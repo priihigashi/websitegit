@@ -2294,15 +2294,36 @@ def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_c
     _mark_queue_processed(args.url)
 
 
+# ─── UGC / STOCKS / HIGASHI — thin wrappers around run_opc() ─────────────────
+# Same pipeline, different niche label + story prefix + email subject.
+# Folder routing uses env var from routing.py (UGC_FOLDER_ID / STOCKS_FOLDER_ID /
+# HIGASHI_FOLDER_ID) — falls back to CONTENT_HUB_FOLDER_ID until those GitHub
+# secrets are added.
+
+def run_ugc(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = ""):
+    args.project = "ugc"
+    run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
+
+
+def run_stocks(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = ""):
+    args.project = "stocks"
+    run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
+
+
+def run_higashi(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = ""):
+    args.project = "higashi"
+    run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
+
+
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="Capture Pipeline v2")
     parser.add_argument("url")
     parser.add_argument("--project",
-                        choices=["book", "news", "opc", "sovereign", "content"],
+                        choices=["book", "news", "opc", "ugc", "stocks", "higashi", "usa", "sovereign", "content"],
                         default="book",
-                        help="book=fact-check | news=political/news (was sovereign) | opc=OPC/USA content (was content)")
+                        help="book | news/brazil | opc | ugc | stocks | higashi | usa (routing.py is source of truth)")
     parser.add_argument("--story-id", default=None)
     parser.add_argument("--notes", default="")
     parser.add_argument("--credits", action="store_true",
@@ -2310,11 +2331,13 @@ def main():
     args = parser.parse_args()
 
     # Normalize legacy project names → canonical names
-    _alias = {"sovereign": "news", "content": "opc"}
+    _alias = {"sovereign": "news", "content": "opc", "brazil": "news", "usa": "news"}
     args.project = _alias.get(args.project, args.project)
 
     if not args.story_id:
-        prefix = {"book": "BCI", "news": "NWS", "opc": "CNT"}[args.project]
+        _prefixes = {"book": "BCI", "news": "NWS", "opc": "CNT",
+                     "ugc": "UGC", "stocks": "STK", "higashi": "HIG"}
+        prefix = _prefixes.get(args.project, "CNT")
         args.story_id = f"{prefix}-{datetime.now().strftime('%Y%m%d%H%M')}"
 
     print(f"\n{'='*50}\nCAPTURE PIPELINE v2\nURL: {args.url}\nProject: {args.project.upper()}\nStory ID: {args.story_id}\n{'='*50}")
@@ -2358,15 +2381,19 @@ def main():
             elif video_path:
                 _yt_cookie_alert(resolved=True)
 
+        srt_content = get_caption_srt(audio) if audio and not _is_youtube(args.url) else ""
         if args.project == "book":
             run_book(args, transcript)
         elif args.project == "news":
-            # Generate SRT captions for Remotion rendering (timed subtitle data)
             srt_content = get_caption_srt(audio) if audio else ""
             run_news(args, transcript, video_path=video_path or "", srt_content=srt_content, creator_name=metadata.get("creator_name", ""))
-        else:  # opc
-            # Generate SRT captions for Reels editing reference (non-fatal)
-            srt_content = get_caption_srt(audio) if audio and not _is_youtube(args.url) else ""
+        elif args.project == "ugc":
+            run_ugc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
+        elif args.project == "stocks":
+            run_stocks(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
+        elif args.project == "higashi":
+            run_higashi(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
+        else:  # opc (default)
             run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
 
     # Print credits summary if available
