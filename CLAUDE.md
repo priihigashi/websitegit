@@ -49,11 +49,13 @@ Canva: mcp__claude_ai_Canva__ tools ✅ (DEFERRED — load via ToolSearch)
 Full details: ~/.claude/projects/-Users-priscilahigashi/memory/reference_active_connections.md
 
 ## BEFORE TOUCHING ANY SCRIPT
+0. Read NONNEGOTIABLES.md (repo root) FIRST — verify your change does not break a locked rule
 1. Read the full script first
 2. Extract and list every spreadsheet ID, folder ID, file path, and env var referenced
 3. Show what you are about to change and why BEFORE making any change
 4. Never assume a variable value — verify it from the source file
 → See memory: feedback_script_investigation_rule.md
+→ See NONNEGOTIABLES.md for locked features that must never be removed
 
 ## REPORT FORMAT (every status update)
 ✅ Done — completed (specific)

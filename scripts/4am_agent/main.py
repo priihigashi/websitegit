@@ -21,6 +21,7 @@ Execution order:
 import json
 import os
 import time
+from pathlib import Path
 import pytz
 from datetime import datetime
 
@@ -50,6 +51,13 @@ def main():
     log_pfx  = f"4AM_{now_et.strftime('%Y-%m-%d_%H%M')}"
 
     print(f"[{log_pfx}] --- 4AM Content Agent starting ---")
+
+    # Print NONNEGOTIABLES for audit trail in every run log
+    nonneg_path = Path(__file__).parent.parent.parent / "NONNEGOTIABLES.md"
+    if nonneg_path.exists():
+        print(f"\n===== NONNEGOTIABLES.md =====")
+        print(nonneg_path.read_text()[:3000])
+        print("=====")
 
     log = {
         "status":           "success",

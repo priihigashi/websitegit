@@ -52,6 +52,12 @@ jobs:
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      - name: Print NONNEGOTIABLES (locked rules audit trail)
+        run: |
+          echo "===== NONNEGOTIABLES.md ====="
+          cat NONNEGOTIABLES.md
+          echo "============================="
+
       - name: Run content creator
         working-directory: scripts/content_creator
         run: python main.py
