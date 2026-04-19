@@ -217,7 +217,11 @@ Built from live script audit 2026-04-19. Update it when scripts change.
 ## PENDING EXTRACTION
 _(rules identified in handoffs but not yet verified/formatted)_
 
-- OPC image injection in `_build_opc_html()` — cover image slot not yet implemented (2026-04-19)
 - Build Tracker auto-update from all 15 workflows — wired for content_creator only (2026-04-19)
-- USA The Chain _TEMPLATE_CAROUSEL ID discrepancy: CLAUDE.md says 1sDMyPHVYcOqZ3NK9ch4e48AaJ7KVvxL3, main.py has 1fgBbesb_NWgjtPLnM-uoBDJpeiwCRNqp — verify and lock correct ID (2026-04-19)
-- 3-route fallback not yet verified in code for: Drive upload, email send, scraping (only image gen confirmed) — audit each script (2026-04-19)
+- 3-route fallback not yet verified in code for: Drive upload, email send, scraping — audit each script (2026-04-19)
+
+## RESOLVED EXTRACTIONS
+_(items confirmed implemented — moved from PENDING)_
+
+- OPC cover image slot — IMPLEMENTED. `_build_opc_html()` line 685: `cover_img = (media_paths or {}).get("cover","")` renders `bg_photo_el`. `.sticker-slot` with "ON-SITE · SWAP-IN" is intentional placeholder for real project photos, NOT an unresolved image slot. (resolved 2026-04-19)
+- USA The Chain _TEMPLATE_CAROUSEL ID — FIXED. main.py line 39 now `1sDMyPHVYcOqZ3NK9ch4e48AaJ7KVvxL3`. Democrat folder + shortcuts moved to USA The Chain. (resolved 2026-04-19)
