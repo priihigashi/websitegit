@@ -52,6 +52,8 @@ PROJECT_TO_DEST = {
     "usa":       "USA News Drive",       # USA news → News pipeline
     "opc":       "Inspiration Library",  # preferred name (was content)
     "ugc":       "UGC Drive",           # UGC → UGC pipeline
+    "stocks":    "Stocks Drive",        # Stocks → Stocks pipeline
+    "higashi":   "Higashi Drive",       # Higashi RE → Higashi pipeline
     "book":      "Book Tracker",
     "content":   "Inspiration Library",  # legacy alias → use opc
     "sovereign": "Brazil News Drive",    # legacy alias → use news
@@ -313,6 +315,8 @@ def main():
             "usa":       "news",      # USA news → News pipeline
             "opc":       "opc",       # explicit new name
             "ugc":       "ugc",       # UGC → UGC pipeline
+            "stocks":    "stocks",    # Stocks → Stocks pipeline
+            "higashi":   "higashi",   # Higashi RE → Higashi pipeline
             "sovereign": "news",      # legacy → news
             "content":   "opc",       # legacy → opc
         }

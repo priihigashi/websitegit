@@ -10,7 +10,7 @@ on:
         required: true
         type: string
       project:
-        description: "book (fact-check) | news (political/news) | opc (OPC content) | ugc (UGC content) | usa (USA news)"
+        description: "book | news | opc | ugc | usa | stocks | higashi"
         required: true
         default: "book"
         type: choice
@@ -20,6 +20,8 @@ on:
           - opc
           - ugc
           - usa
+          - stocks
+          - higashi
           - sovereign
           - content
       story_id:
