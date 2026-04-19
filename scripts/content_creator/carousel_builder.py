@@ -255,6 +255,14 @@ Return ONLY a JSON object with these fields:
     "Question triggered by the stat or claim",
     "Question about what to do / what this means for them"
   ],
+  "cover_visual": {{
+    "option_a": {{
+      "search_query": "Wikimedia Commons search term for a CC-licensed photo (material, process, or tool — e.g. 'rebar concrete construction', 'shiplap wood wall', 'kitchen cabinet frameless')"
+    }},
+    "option_b": {{
+      "prompt": "DALL-E 3 image prompt if no CC photo found — editorial photo style, construction/interior context, no text in image"
+    }}
+  }},
   "receipts_needed": ["URL or description of primary source to screenshot as evidence slide"],
   "opposition_confirmation": "Name the opposing political side or outlet that also confirms this fact (leave empty string if not applicable)"
 }}
@@ -542,15 +550,15 @@ def _fetch_person_photo(search_query, dest_dir, filename):
     return ""
 
 
-def _generate_ai_cover(prompt, work_dir):
-    """Generate cover image via DALL-E 3. Returns relative path or empty string.
+def _generate_ai_cover(prompt, work_dir, filename="cover.jpg"):
+    """Generate image via DALL-E 3. Returns relative path or empty string.
     Falls back silently on any error — caller uses placeholder if empty."""
     if not OPENAI_KEY or not prompt:
         return ""
-    dest_path = Path(work_dir) / "resources" / "images" / "cover.jpg"
+    dest_path = Path(work_dir) / "resources" / "images" / filename
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     if dest_path.exists() and dest_path.stat().st_size > 5000:
-        return "resources/images/cover.jpg"
+        return f"resources/images/{filename}"
     try:
         payload = json.dumps({
             "model": "dall-e-3",
@@ -571,8 +579,8 @@ def _generate_ai_cover(prompt, work_dir):
         if len(raw) < 5000:
             return ""
         dest_path.write_bytes(raw)
-        print(f"  AI cover generated: cover.jpg ({len(raw)//1024}KB via DALL-E 3)")
-        return "resources/images/cover.jpg"
+        print(f"  AI image generated: {filename} ({len(raw)//1024}KB via DALL-E 3)")
+        return f"resources/images/{filename}"
     except Exception as e:
         print(f"  AI cover generation failed (non-fatal): {e}")
         return ""
@@ -587,9 +595,6 @@ def fetch_all_media(content, niche, work_dir):
     Safe: all failures are caught and return empty string for that slot.
     """
     paths = {"cover": "", "slides": {}}
-    if niche not in ("brazil", "usa", "sovereign"):
-        # OPC: no context-image slots in current HTML template — skip for now
-        return paths
 
     # Cover image — try CC photo (option_a), fall back to AI generation (option_b)
     cv = content.get("cover_visual", {})
@@ -602,17 +607,24 @@ def fetch_all_media(content, niche, work_dir):
             opt_b = cv.get("option_b", {})
             ai_prompt = opt_b.get("prompt", "")
             if ai_prompt:
-                paths["cover"] = _generate_ai_cover(ai_prompt, work_dir)
+                paths["cover"] = _generate_ai_cover(ai_prompt, work_dir, "cover.jpg")
 
-    # Middle slides — context images
+    # Middle slides — context images. CC photo first; AI fallback if it fails.
     for i, slide in enumerate(content.get("slides", []), start=2):
         if slide.get("visual_hint") == "context-image":
             cq = slide.get("context_image_query", "").strip()
-            if cq:
-                fname = f"slide_{i}_context.jpg"
-                img_path = _fetch_person_photo(cq, work_dir, fname)
+            if not cq:
+                continue
+            fname = f"slide_{i}_context.jpg"
+            img_path = _fetch_person_photo(cq, work_dir, fname)
+            if not img_path and OPENAI_KEY:
+                # AI fallback: simple editorial prompt from the context query
+                ai_prompt = f"Editorial documentary photograph, {cq}, high contrast journalistic style, no text"
+                img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
                 if img_path:
-                    paths["slides"][i] = img_path
+                    print(f"  Slide {i}: used AI fallback image for '{cq[:50]}'")
+            if img_path:
+                paths["slides"][i] = img_path
 
     fetched_total = (1 if paths["cover"] else 0) + len(paths["slides"])
     print(f"  Media fetch: {fetched_total} image(s) ready (cover={bool(paths['cover'])}, slides={list(paths['slides'].keys())})")
