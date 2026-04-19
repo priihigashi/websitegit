@@ -743,7 +743,30 @@ def download_audio(url: str, tmp_dir: str, metadata: dict = None) -> str:
         print("  All download methods failed — falling back to transcript API (text only)")
         return "__youtube_transcript_fallback__"
 
-    # Instagram/TikTok Tier 1b: retry yt-dlp with mobile user-agent (bypasses shared_data block)
+    # Instagram/TikTok Tier 1b: Apify videoUrl — cookie-free, always fresh (fetched seconds ago)
+    # Promoted to tier 1b so we never depend on session cookies staying valid.
+    # yt-dlp + instaloader remain as fallbacks in case Apify CDN URL is missing or expires.
+    if not is_yt:
+        video_url = (metadata or {}).get("video_url", "")
+        if video_url:
+            print("  Trying Apify videoUrl (cookie-free CDN)...")
+            try:
+                audio_path = os.path.join(tmp_dir, "audio.mp4")
+                resp = requests.get(video_url, timeout=120, stream=True,
+                                    headers={"User-Agent": "Mozilla/5.0"})
+                resp.raise_for_status()
+                with open(audio_path, "wb") as f:
+                    for chunk in resp.iter_content(8192):
+                        f.write(chunk)
+                size = os.path.getsize(audio_path) / 1024
+                if size > 100:
+                    print(f"  Downloaded via Apify videoUrl ({size:.0f} KB)")
+                    return audio_path
+                print(f"  Apify videoUrl: file too small ({size:.0f} KB) — falling back")
+            except Exception as e:
+                print(f"  Apify videoUrl failed: {e} — falling back to yt-dlp")
+
+    # Instagram/TikTok Tier 2: yt-dlp with mobile user-agent
     if not is_yt:
         print("  Retrying yt-dlp with mobile user-agent...")
         audio = _try_ytdlp(url, tmp_dir, [
@@ -755,32 +778,11 @@ def download_audio(url: str, tmp_dir: str, metadata: dict = None) -> str:
             print(f"  Downloaded via yt-dlp mobile UA ({size:.0f} KB)")
             return audio
 
-    # Instagram/TikTok Tier 1c: instaloader (uses GraphQL API — not shared_data scraping)
-    # Works on public reels with zero credentials. Bypasses the shared_data block entirely.
+    # Instagram/TikTok Tier 3: instaloader (uses GraphQL API — not shared_data scraping)
     if not is_yt:
         audio = _try_instaloader(url, tmp_dir)
         if audio:
             return audio
-
-    # Instagram/TikTok Tier 2: use videoUrl from Apify metadata (already fetched, no extra cost)
-    video_url = (metadata or {}).get("video_url", "")
-    if video_url:
-        print("  yt-dlp blocked — downloading via Apify videoUrl...")
-        try:
-            audio_path = os.path.join(tmp_dir, "audio.mp4")
-            resp = requests.get(video_url, timeout=120, stream=True,
-                                headers={"User-Agent": "Mozilla/5.0"})
-            resp.raise_for_status()
-            with open(audio_path, "wb") as f:
-                for chunk in resp.iter_content(8192):
-                    f.write(chunk)
-            size = os.path.getsize(audio_path) / 1024
-            if size > 100:
-                print(f"  Downloaded via Apify videoUrl ({size:.0f} KB)")
-                return audio_path
-            print(f"  Apify videoUrl: file too small ({size:.0f} KB), skipping")
-        except Exception as e:
-            print(f"  Apify videoUrl download failed: {e}")
 
     print("  ERROR: all download methods failed for this URL")
     sys.exit(1)
