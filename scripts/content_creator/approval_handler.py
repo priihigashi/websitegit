@@ -9,7 +9,7 @@ Handles:
   - "skip" → mark skipped in catalog
   - anything else → treat as change request, flag for next content_creator run
 """
-import json, os, re, time, urllib.request, urllib.parse
+import json, os, re, time, urllib.request, urllib.parse, urllib.error
 from datetime import datetime, timedelta
 import pytz
 
@@ -166,10 +166,69 @@ def _get_variant_image_urls(drive, folder_id, variant):
     return urls
 
 
-def schedule_to_buffer(variant, drive_folder_id, caption="", platform="instagram"):
+# Buffer expiry: BUFFER_API_KEY_EXP04092027 expires 2027-04-09
+_BUFFER_EXPIRY = datetime(2027, 4, 9, tzinfo=pytz.UTC)
+
+
+def _buffer_expiry_check():
+    """Send an alert email if the Buffer token expires within 30 days."""
+    days_left = (_BUFFER_EXPIRY - datetime.now(pytz.UTC)).days
+    if days_left <= 30:
+        import subprocess, shutil
+        gh = shutil.which("gh") or os.path.expanduser("~/bin/gh")
+        try:
+            subprocess.run([
+                gh, "workflow", "run", "send_email.yml",
+                "--repo", "priihigashi/oak-park-ai-hub",
+                "-f", "to=priscila@oakpark-construction.com",
+                "-f", "subject=⚠️ Buffer API Key Expires in {} Days".format(days_left),
+                "-f", "body=Buffer API key expires in {} days on 2027-04-09. Renew at buffer.com → Settings → Apps → Generate new token. Update BUFFER_API_KEY_EXP04092027 secret in GitHub.".format(days_left),
+            ], check=False, capture_output=True, timeout=30)
+            print(f"  ⚠️ Buffer expiry alert sent: {days_left} days remaining")
+        except Exception as exc:
+            print(f"  Buffer expiry check failed: {exc}")
+
+
+def _buffer_find_slot(profile_id, min_ts=None):
+    """
+    Return scheduled_at Unix timestamp for the next available slot (max 3/day).
+    Posting times: 9am / 1pm / 6pm ET. Searches up to 60 days ahead.
+    min_ts: start searching from this Unix timestamp (default = now).
+    """
+    from collections import defaultdict
+    try:
+        url = f"{BUFFER_API}/profiles/{profile_id}/updates/pending.json?access_token={BUFFER_KEY}"
+        updates = json.loads(urllib.request.urlopen(url, timeout=15).read()).get("updates", [])
+        day_counts = defaultdict(int)
+        for u in updates:
+            ts = u.get("scheduled_at") or u.get("due_at") or 0
+            if ts:
+                day_counts[datetime.fromtimestamp(int(ts), ET).strftime("%Y-%m-%d")] += 1
+        slot_hours = [9, 13, 18]
+        if min_ts:
+            start = datetime.fromtimestamp(min_ts, ET).replace(
+                hour=0, minute=0, second=0, microsecond=0)
+        else:
+            start = datetime.now(ET).replace(hour=0, minute=0, second=0, microsecond=0)
+        for _ in range(60):
+            day_str = start.strftime("%Y-%m-%d")
+            count = day_counts[day_str]
+            if count < 3:
+                h = slot_hours[min(count, 2)]
+                return int(start.replace(hour=h, minute=0, second=0, microsecond=0).timestamp())
+            start += timedelta(days=1)
+    except Exception as exc:
+        print(f"  _buffer_find_slot error: {exc}")
+    return None
+
+
+def schedule_to_buffer(variant, drive_folder_id, caption="", platform="instagram",
+                       _repeat=True, _min_ts=None):
     if not BUFFER_KEY:
         print("  No BUFFER_API_KEY — cannot schedule")
         return False
+
+    _buffer_expiry_check()
 
     profiles_url = f"{BUFFER_API}/profiles.json?access_token={BUFFER_KEY}"
     try:
@@ -194,12 +253,16 @@ def schedule_to_buffer(variant, drive_folder_id, caption="", platform="instagram
         print(f"  No {variant} images found in Drive folder {drive_folder_id}")
         return False
 
+    slot_ts = _buffer_find_slot(profile_id, min_ts=_min_ts)
+
     params = [
         ("access_token", BUFFER_KEY),
         ("text", caption),
         ("now", "false"),
     ]
     params.append(("profile_ids[]", profile_id))
+    if slot_ts:
+        params.append(("scheduled_at", str(slot_ts)))
 
     if len(image_urls) == 1:
         params.append(("media[picture]", image_urls[0]))
@@ -213,16 +276,41 @@ def schedule_to_buffer(variant, drive_folder_id, caption="", platform="instagram
         data=payload,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
-    try:
-        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
-        if resp.get("success") or resp.get("id") or "updates" in resp:
-            print(f"  Buffer scheduled: {variant} ({len(image_urls)} slides)")
-            return True
-        print(f"  Buffer rejected: {resp}")
-        return False
-    except Exception as e:
-        print(f"  Buffer error: {e}")
-        return False
+
+    last_error = None
+    for attempt in range(3):
+        try:
+            resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+            if resp.get("success") or resp.get("id") or "updates" in resp:
+                slot_info = (datetime.fromtimestamp(slot_ts, ET).strftime("%Y-%m-%d %H:%M ET")
+                             if slot_ts else "queue")
+                print(f"  Buffer scheduled: {variant} ({len(image_urls)} slides) → {slot_info}")
+                if _repeat and slot_ts:
+                    repeat_min = slot_ts + 30 * 24 * 3600
+                    schedule_to_buffer(variant, drive_folder_id, caption=caption,
+                                       platform=platform, _repeat=False, _min_ts=repeat_min)
+                    rdt = datetime.fromtimestamp(repeat_min, ET).strftime("%Y-%m-%d")
+                    print(f"  Buffer 30-day repeat queued → earliest slot from {rdt}")
+                return True
+            print(f"  Buffer rejected: {resp}")
+            return False
+        except urllib.error.HTTPError as he:
+            last_error = he
+            if he.code in (429, 500, 502, 503, 504):
+                wait = 2 ** attempt
+                print(f"  Buffer attempt {attempt + 1} failed (HTTP {he.code}) — retry in {wait}s")
+                time.sleep(wait)
+            else:
+                print(f"  Buffer HTTP {he.code}: {he}")
+                return False
+        except Exception as exc:
+            last_error = exc
+            wait = 2 ** attempt
+            print(f"  Buffer attempt {attempt + 1} error: {exc} — retry in {wait}s")
+            time.sleep(wait)
+
+    print(f"  Buffer failed after 3 attempts: {last_error}")
+    return False
 
 
 def copy_to_ready_folder(variant, source_folder_id, niche):
