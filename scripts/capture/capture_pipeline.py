@@ -1579,27 +1579,50 @@ Rules:
         print(f"  research_from_notes: parse step failed ({e}) — skipping research")
         return empty
 
-    # ── Step 2: execute each research question (Sonnet — quality matters) ──
+    # ── Step 2: build niche-aware researcher persona, then run each question ──
+    niche_lower = niche.lower()
+    if any(x in niche_lower for x in ("news", "brazil", "usa", "sovereign", "book")):
+        researcher_persona = (
+            "You are a research assistant for a bilingual investigative content creator "
+            "covering Brazil and USA political news.\n"
+            "Include: specific dates, numbers, official figures, political party affiliations, "
+            "what the official narrative says vs. documented evidence, credible sources "
+            "(newspaper names, government reports, NGO names), hidden connections or "
+            "underreported angles. Flag clearly if events occurred after August 2025."
+        )
+    elif any(x in niche_lower for x in ("opc", "oak park", "construction", "contractor")):
+        researcher_persona = (
+            "You are a research assistant for Oak Park Construction, a residential remodeling "
+            "and construction company in Florida.\n"
+            "Include: specific materials, techniques, building codes, product recommendations, "
+            "common mistakes and how to avoid them, cost ranges, timelines, industry standards, "
+            "safety considerations, permit requirements. Cite trade associations or manufacturer specs."
+        )
+    elif any(x in niche_lower for x in ("ugc", "amazon", "product")):
+        researcher_persona = (
+            "You are a research assistant for a UGC/product content creator.\n"
+            "Include: product specs, alternatives, price ranges, user pain points, "
+            "competing products, common complaints or red flags from reviews."
+        )
+    else:
+        researcher_persona = (
+            "You are a research assistant for a bilingual social media content creator.\n"
+            "Provide specific facts, dates, numbers, and credible sources. "
+            "Flag clearly if you are uncertain."
+        )
+
     research_tasks = []
     for question in categories.get("research", []):
         if not question.strip():
             continue
-        research_prompt = f"""You are a research assistant for a bilingual investigative content creator covering Brazil and USA political news.
+        research_prompt = f"""{researcher_persona}
 
 Research question: {question}
 
 Video transcript context:
 {transcript[:1200]}
 
-Provide a thorough, factual answer. Include:
-- Specific dates, numbers, official figures
-- Political party affiliations and key players
-- What the official/mainstream narrative says vs. what documented evidence shows
-- Credible sources to cite (newspaper names, government reports, NGO names)
-- Any contradictions, hidden connections, or underreported angles
-- Flag clearly if you are uncertain or if this may involve events after August 2025
-
-This will be embedded directly into a journalist/creator content brief. Be direct and factual."""
+This will be embedded directly into a content brief. Be direct and factual."""
 
         try:
             resp = client.messages.create(
