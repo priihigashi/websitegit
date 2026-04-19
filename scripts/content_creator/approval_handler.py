@@ -503,14 +503,14 @@ def re_render_post(post, feedback):
                 "valueInputOption": "USER_ENTERED",
                 "data": [
                     {"range": f"'{CATALOG_TAB}'!I{row_num}", "values": [[new_static_link]]},
-                    {"range": f"'{CATALOG_TAB}'!M{row_num}", "values": [["in_review"]]},
+                    {"range": f"'{CATALOG_TAB}'!M{row_num}", "values": [["pending_approval"]]},
                 ],
             }).encode()
             req2 = urllib.request.Request(batch_url, data=batch_payload,
                                           headers={"Authorization": f"Bearer {token}",
                                                     "Content-Type": "application/json"})
             urllib.request.urlopen(req2)
-            print(f"  Catalog updated: {post_id} → in_review, v{new_ver} static link")
+            print(f"  Catalog updated: {post_id} → pending_approval, v{new_ver} static link")
             break
 
     from email_preview import send_preview, make_cover_thumbnails_public
@@ -596,7 +596,7 @@ def _get_pending_posts():
             idx = header_map.get(name.lower())
             return row[idx].strip() if idx is not None and idx < len(row) else ""
         VALID_NICHES = {"opc", "brazil", "usa", "ugc", "news", "sovereign"}
-        if v("status") in ("pending_approval", "in_review"):
+        if v("status") == "pending_approval":
             raw_niche = v("niche") or ""
             post_id = v("post_id") or (row[0] if len(row) > 0 else "")
             # Infer niche from post_id prefix when catalog has no niche col or invalid value
