@@ -161,6 +161,7 @@ def update_in_production(
     """
     Write or update a row in '🎬 In Production' tab (OPC).
     Columns: #Reviews | Title | Post Type | Format | Content Type | Status | Drive Folder Link | Caption | Hashtags | Output Link | Date Created
+    Status lifecycle: Built → Approved / Needs Revision → Scheduled → Published
     Deduplicates by Drive Folder Link (col G = index 6). Auto-increments # Reviews on each update.
     Non-fatal — never crashes caller.
     """

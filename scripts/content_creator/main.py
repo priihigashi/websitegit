@@ -727,7 +727,7 @@ def process_one_topic(topic_entry, run_date, drive):
             update_in_production(
                 title=topic[:100],
                 content_type="Carousel",
-                status="Pending Approval",
+                status="Built",
                 drive_folder_link=folder_link,
                 output_link=motion_link,
                 date_created=datetime.now(ET).strftime("%Y-%m-%d"),
@@ -738,7 +738,7 @@ def process_one_topic(topic_entry, run_date, drive):
                 title=topic[:100],
                 niche=niche.upper(),
                 content_type="Carousel",
-                status="Pending Approval",
+                status="Built",
                 drive_folder_link=folder_link,
                 output_link=motion_link,
                 date_created=datetime.now(ET).strftime("%Y-%m-%d"),
