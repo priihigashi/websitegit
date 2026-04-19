@@ -1013,7 +1013,7 @@ BOOK READY: YES / NO / NEEDS MORE RESEARCH"""
     return msg.content[0].text
 
 
-def analyze_news(transcript: str, url: str, story_id: str, notes: str) -> str:
+def analyze_news(transcript: str, url: str, story_id: str, notes: str, creator_name: str = "") -> str:
     if not ANTHROPIC_API_KEY:
         return f"[PENDING — ANTHROPIC_API_KEY required]\n\n{transcript}"
     import anthropic
@@ -1037,7 +1037,8 @@ DATE: {datetime.now().strftime("%Y-%m-%d")}
 SOURCE URL: {url}
 
 SPEAKER ANALYSIS:
-  Who: [name, title, platform/following]
+  Known speaker (from Apify metadata): {creator_name or "UNKNOWN — identify from transcript context"}
+  Who: [name, title, platform/following — confirm or correct the above]
   Credibility: HIGH / MEDIUM / LOW / UNVERIFIED
   Red flags: [vague? no sources? only negatives?]
 
@@ -1347,9 +1348,9 @@ def run_book(args, transcript):
     except Exception: pass
 
 
-def run_news(args, transcript, video_path: str = "", srt_content: str = ""):
+def run_news(args, transcript, video_path: str = "", srt_content: str = "", creator_name: str = ""):
     print("\n[NEWS] Running format analysis...")
-    analysis = analyze_news(transcript, args.url, args.story_id, args.notes or "")
+    analysis = analyze_news(transcript, args.url, args.story_id, args.notes or "", creator_name=creator_name)
     path = TRANSCRIPTS_DIR / f"{args.story_id}_news.txt"
     path.write_text(analysis, encoding="utf-8")
 
@@ -2138,7 +2139,7 @@ def main():
         elif args.project == "news":
             # Generate SRT captions for Remotion rendering (timed subtitle data)
             srt_content = get_caption_srt(audio) if audio else ""
-            run_news(args, transcript, video_path=video_path or "", srt_content=srt_content)
+            run_news(args, transcript, video_path=video_path or "", srt_content=srt_content, creator_name=metadata.get("creator_name", ""))
         else:  # opc
             # Generate SRT captions for Reels editing reference (non-fatal)
             srt_content = get_caption_srt(audio) if audio and not _is_youtube(args.url) else ""
