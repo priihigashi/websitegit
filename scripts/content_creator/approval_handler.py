@@ -443,8 +443,7 @@ def re_render_post(post, feedback):
         print(f"  re_render: no ANTHROPIC_API_KEY — cannot regenerate content")
         return False
 
-    topic_with_feedback = f"{topic}\n\nRevision feedback: {feedback}"
-    content = generate_carousel_content(topic_with_feedback, niche)
+    content = generate_carousel_content(topic, niche, brief=f"Revision feedback:\n{feedback}")
     if not content:
         print(f"  re_render: content generation failed")
         return False
