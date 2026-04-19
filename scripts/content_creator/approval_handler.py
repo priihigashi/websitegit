@@ -613,19 +613,60 @@ def _get_pending_posts():
                 "static_link": v("static folder") or (row[8] if len(row) > 8 else ""),
                 "motion_link": v("motion folder") or (row[9] if len(row) > 9 else ""),
                 "topic": v("topic") or (row[13] if len(row) > 13 else ""),
+                "date_created": v("date_created") or v("date") or (row[6] if len(row) > 6 else ""),
             })
     return pending
+
+
+def _send_approval_reminder(stale_posts):
+    """Nudge email for posts that have been pending approval for >24h."""
+    if not stale_posts:
+        return
+    import subprocess, shutil
+    gh = shutil.which("gh") or os.path.expanduser("~/bin/gh")
+    lines = []
+    for p in stale_posts:
+        lines.append(
+            f"- {p['topic'][:80]} ({p['niche'].upper()})\n  Drive: {p['static_link']}"
+        )
+    count = len(stale_posts)
+    subject = f"\u23f0 {count} post{'s' if count != 1 else ''} waiting for your approval"
+    body = (
+        "The following posts are waiting for your approval:\n\n"
+        + "\n\n".join(lines)
+        + "\n\nReply 'black approved', 'cream approved', or 'skip' to the original preview email."
+    )
+    try:
+        subprocess.run(
+            [gh, "workflow", "run", "send_email.yml",
+             "--repo", "priihigashi/oak-park-ai-hub",
+             "-f", "to=priscila@oakpark-construction.com",
+             "-f", f"subject={subject}",
+             "-f", f"body={body}"],
+            check=False, capture_output=True, timeout=30,
+        )
+        print(f"  Approval reminder sent: {count} stale post(s)")
+    except Exception as exc:
+        print(f"  Approval reminder failed (non-fatal): {exc}")
+
+
+def _check_stale_reminders(pending):
+    today = datetime.now(ET).strftime("%Y-%m-%d")
+    stale = [p for p in pending if p.get("date_created") and p["date_created"] < today]
+    if stale:
+        _send_approval_reminder(stale)
 
 
 def process_replies():
     token, _ = get_gmail_token()
     replies = search_gmail_replies(token)
+    pending = _get_pending_posts()
 
     if not replies:
         print("  No approval replies found")
+        _check_stale_reminders(pending)
         return {"approved": 0, "changes": 0, "skipped": 0}
 
-    pending = _get_pending_posts()
     if not pending:
         print("  No pending_approval posts in catalog")
         return {"approved": 0, "changes": 0, "skipped": 0}
@@ -704,6 +745,9 @@ def process_replies():
                         print(f"  Re-render failed: {post['post_id']}")
                 except Exception as exc:
                     print(f"  Re-render crashed for {post['post_id']}: {exc}")
+
+    if stats["approved"] == 0 and stats["skipped"] == 0:
+        _check_stale_reminders(pending)
 
     return stats
 
