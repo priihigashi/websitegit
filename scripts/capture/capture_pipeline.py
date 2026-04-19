@@ -1419,10 +1419,17 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
         except Exception as e:
             print(f"  WARNING: video upload failed (non-fatal): {e}")
 
+    # Research notes before writing the brief — facts land IN the doc, not lost
+    print("  Researching user notes before brief generation...")
+    news_research = research_from_notes(args.notes or "", transcript, "News", args.story_id)
+    if news_research.get("manual_tasks"):
+        _write_manual_tasks_to_inbox(news_research["manual_tasks"], args.story_id, args.url)
+
     # Generate bilingual content brief alongside the deep analysis (ported from run_opc)
     print("  Generating bilingual content brief for News capture...")
     news_classification = {"niche": "News", "summary": args.story_id, "content_type": "Carousel"}
-    brief = generate_content_brief(transcript, args.url, news_classification, args.notes or "")
+    brief = generate_content_brief(transcript, args.url, news_classification, args.notes or "",
+                                   research=news_research)
     brief_pt = translate_to_pt(brief)
     brief_doc_url = ""
     try:
@@ -1516,8 +1523,126 @@ def _trigger_topic_scraper(classification):
 
 # ─── CONTENT WORKSPACE ────────────────────────────────────────────────────────
 
-def generate_content_brief(transcript: str, url: str, classification: dict, notes: str) -> str:
+def research_from_notes(notes: str, transcript: str, niche: str, story_id: str = "") -> dict:
+    """Parse user notes and execute research BEFORE the brief is written.
+
+    Step 1 (Haiku): classify notes → research questions / structure hints /
+                    format flags / manual tasks Claude cannot do.
+    Step 2 (Sonnet): run each research question and return findings.
+    Manual tasks are returned separately so the caller can write them to Inbox.
+
+    Returns dict with keys: research_tasks, structure_hints, format_flags, manual_tasks.
+    Returns empty dict on no notes or no API key.
+    """
+    empty = {"research_tasks": [], "structure_hints": [], "format_flags": {}, "manual_tasks": []}
+    if not notes or notes.strip().lower() in ("none", "n/a", ""):
+        return empty
+    if not ANTHROPIC_API_KEY:
+        return empty
+
+    import anthropic, re as _re
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    # ── Step 1: parse notes into categories (Haiku — fast + cheap) ──
+    parse_prompt = f"""Analyze these user notes from a video capture and categorize every instruction.
+
+Notes: {notes}
+Niche: {niche}
+Transcript excerpt: {transcript[:600]}
+
+Output ONLY valid JSON — no explanation, no markdown fences:
+{{
+  "research": ["specific question requiring fact-finding", ...],
+  "structure": ["guidance on content approach/layout", ...],
+  "format": {{"bilingual": bool, "format_code": "FORMAT-001 or empty", "motion": bool, "series": "Verificamos or empty", "remotion": bool}},
+  "manual": ["task Claude cannot automate, e.g. find specific clip/video", ...]
+}}
+
+Rules:
+- research = politician actions, statistics, debunking claims, historical facts, network connections
+- structure = "not a repost", "first slide video", "use facial data", approach hints
+- format = FORMAT-001/002, bilingual, Remotion, motion, series name
+- manual = finding a specific asset/clip/image that requires human search"""
+
+    try:
+        parse_resp = client.messages.create(
+            model="claude-haiku-4-5-20251001", max_tokens=800,
+            messages=[{"role": "user", "content": parse_prompt}]
+        )
+        raw = parse_resp.content[0].text.strip()
+        m = _re.search(r'\{.*\}', raw, _re.DOTALL)
+        if not m:
+            print(f"  research_from_notes: could not parse JSON — skipping research")
+            return empty
+        categories = json.loads(m.group())
+    except Exception as e:
+        print(f"  research_from_notes: parse step failed ({e}) — skipping research")
+        return empty
+
+    # ── Step 2: execute each research question (Sonnet — quality matters) ──
+    research_tasks = []
+    for question in categories.get("research", []):
+        if not question.strip():
+            continue
+        research_prompt = f"""You are a research assistant for a bilingual investigative content creator covering Brazil and USA political news.
+
+Research question: {question}
+
+Video transcript context:
+{transcript[:1200]}
+
+Provide a thorough, factual answer. Include:
+- Specific dates, numbers, official figures
+- Political party affiliations and key players
+- What the official/mainstream narrative says vs. what documented evidence shows
+- Credible sources to cite (newspaper names, government reports, NGO names)
+- Any contradictions, hidden connections, or underreported angles
+- Flag clearly if you are uncertain or if this may involve events after August 2025
+
+This will be embedded directly into a journalist/creator content brief. Be direct and factual."""
+
+        try:
+            resp = client.messages.create(
+                model="claude-sonnet-4-6", max_tokens=1500,
+                messages=[{"role": "user", "content": research_prompt}]
+            )
+            result = resp.content[0].text.strip()
+            research_tasks.append({"question": question, "result": result})
+            print(f"  Researched: {question[:70]}...")
+        except Exception as e:
+            print(f"  research_from_notes: research failed for '{question[:50]}': {e}")
+            research_tasks.append({"question": question, "result": f"[Research failed: {e}]"})
+
+    return {
+        "research_tasks": research_tasks,
+        "structure_hints": categories.get("structure", []),
+        "format_flags": categories.get("format", {}),
+        "manual_tasks": categories.get("manual", []),
+    }
+
+
+def _write_manual_tasks_to_inbox(manual_tasks: list, story_id: str, url: str):
+    """Write tasks Claude cannot automate to 📥 Inbox tab for human follow-up."""
+    if not manual_tasks:
+        return
+    gc = get_sheets_client()
+    if not gc:
+        return
+    try:
+        sh = gc.open_by_key(IDEAS_INBOX_ID)
+        inbox = sh.worksheet("📥 Inbox")
+        for task in manual_tasks:
+            row = [url, f"[MANUAL — {story_id}] {task}", "Pending capture task"]
+            inbox.append_row(row, value_input_option="USER_ENTERED")
+            print(f"  Inbox: manual task added → {task[:70]}")
+    except Exception as e:
+        print(f"  _write_manual_tasks_to_inbox failed (non-fatal): {e}")
+
+
+def generate_content_brief(transcript: str, url: str, classification: dict, notes: str,
+                           research: dict = None) -> str:
     """Ask Claude to generate carousel + reel + topic breakdowns from transcript.
+    research: optional dict from research_from_notes() — embedded before slides.
     Returns plain text content brief (no markdown tables — avoids Docs API 400 errors).
     Falls back to transcript + classification JSON if ANTHROPIC_API_KEY not set.
     """
@@ -1526,14 +1651,47 @@ def generate_content_brief(transcript: str, url: str, classification: dict, note
     import anthropic
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     niche = classification.get("niche", "General")
+
+    # Build research block to inject into prompt
+    research_block = ""
+    if research and research.get("research_tasks"):
+        lines = ["RESEARCH FINDINGS (fact-checked before this brief was written):"]
+        for i, rt in enumerate(research["research_tasks"], 1):
+            lines.append(f"\nQ{i}: {rt['question']}")
+            lines.append(f"A{i}: {rt['result']}")
+        research_block = "\n".join(lines)
+
+    structure_block = ""
+    if research and research.get("structure_hints"):
+        structure_block = "CREATOR STRUCTURE NOTES:\n" + "\n".join(f"- {h}" for h in research["structure_hints"])
+
+    format_block = ""
+    if research and research.get("format_flags"):
+        ff = research["format_flags"]
+        flags = []
+        if ff.get("format_code"): flags.append(f"FORMAT: {ff['format_code']}")
+        if ff.get("bilingual"):   flags.append("BILINGUAL: PT + EN required")
+        if ff.get("series"):      flags.append(f"SERIES: {ff['series']}")
+        if ff.get("remotion"):    flags.append("REMOTION: motion version required")
+        if flags:
+            format_block = "FORMAT FLAGS:\n" + "\n".join(f"- {f}" for f in flags)
+
     prompt = f"""You are a bilingual content creator (EN + PT-BR). Analyze this transcript and produce a CONTENT BRIEF.
 
 Source URL: {url}
 Niche: {niche}
-Notes: {notes or 'None'}
+Creator Notes: {notes or 'None'}
+
+{research_block}
+
+{structure_block}
+
+{format_block}
 
 TRANSCRIPT:
 {transcript}
+
+IMPORTANT: Use the RESEARCH FINDINGS above as verified facts — embed them into the slides and key facts section. Follow the CREATOR STRUCTURE NOTES and FORMAT FLAGS exactly.
 
 Output plain text only — NO markdown tables. Use this structure:
 
@@ -1543,7 +1701,7 @@ Source: {url}
 Niche: {niche}
 Status: DRAFT
 
-KEY FACTS (list the 5-8 most important verifiable claims from the transcript with sources if mentioned):
+KEY FACTS (5-8 verifiable claims — pull from transcript AND research findings above):
 
 HOOK EN: [scroll-stopping first line in English]
 HOOK PT-BR: [same in Brazilian Portuguese — rewrite, do not translate literally]
@@ -1576,7 +1734,7 @@ CAPTION EN:
 CAPTION PT-BR:
 [full caption text]
 
-SOURCES (list from transcript or verified):
+SOURCES (list from transcript + research findings):
 1.
 2.
 3.
@@ -1712,7 +1870,7 @@ def save_to_content_hub(story_id: str, url: str, transcript: str, classification
 
 
 def save_to_news_folder(story_id: str, url: str, transcript: str, classification: dict,
-                         video_path: str = "", notes: str = "") -> tuple:
+                         video_path: str = "", notes: str = "", research: dict = None) -> tuple:
     """News niche routing — saves to Big Crazy Ideas > News with shared/english/portuguese structure.
 
     Structure created:
@@ -1807,7 +1965,7 @@ def save_to_news_folder(story_id: str, url: str, transcript: str, classification
             print(f"  Video uploaded to News _shared")
 
         # 5. Create content brief doc in english subfolder
-        brief = generate_content_brief(transcript, url, classification, notes)
+        brief = generate_content_brief(transcript, url, classification, notes, research=research)
 
         # 5b. Translate to PT-BR via Claude Haiku (same pattern as build_render_props.py)
         print("  Translating brief to PT-BR (Claude Haiku)...")
@@ -1881,7 +2039,8 @@ def save_to_news_folder(story_id: str, url: str, transcript: str, classification
 
 
 def create_content_workspace(story_id: str, title: str, transcript: str,
-                              classification: dict, url: str, notes: str = "") -> tuple:
+                              classification: dict, url: str, notes: str = "",
+                              research: dict = None) -> tuple:
     """Creates Drive workspace for a content piece.
 
     Structure created:
@@ -1926,7 +2085,7 @@ def create_content_workspace(story_id: str, title: str, transcript: str,
 
     # 3. Generate content brief via Claude
     print("  Generating content brief (Claude)...")
-    brief = generate_content_brief(transcript, url, classification, notes)
+    brief = generate_content_brief(transcript, url, classification, notes, research=research)
 
     # 3b. Translate to PT-BR via Claude Haiku (same pattern as build_render_props.py)
     print("  Translating brief to PT-BR (Claude Haiku)...")
@@ -2002,18 +2161,26 @@ def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_c
     cl = analyze_opc(transcript, args.url, args.notes or "")
     sid = args.story_id or f"CNT-{datetime.now().strftime('%Y%m%d%H%M')}"
 
+    # Research notes before writing the brief — facts land IN the doc, not lost
+    print("  Researching user notes before brief generation...")
+    opc_research = research_from_notes(args.notes or "", transcript, cl.get("niche", "OPC"), sid)
+    if opc_research.get("manual_tasks"):
+        _write_manual_tasks_to_inbox(opc_research["manual_tasks"], sid, args.url)
+
     # News niche → route to Big Crazy Ideas > News with shared/english/portuguese structure
     # Other niches (Oak Park, Brazil content, UGC) → standard Content Hub + Content Creation flow
     if cl.get("niche", "").lower() == "news":
         hub_url, doc_url = save_to_news_folder(sid, args.url, transcript, cl,
-                                                 video_path=video_path, notes=args.notes or "")
+                                                 video_path=video_path, notes=args.notes or "",
+                                                 research=opc_research)
         folder_url = hub_url  # Same folder contains both archive (_shared) and production (english/portuguese)
     else:
         # Save raw transcript + resources + video to Content Hub (permanent home)
         hub_url = save_to_content_hub(sid, args.url, transcript, cl, video_path=video_path, notes=args.notes or "")
         # Create Drive workspace: folder + Art/Caption/Reel subfolders + content brief doc + Ideas Queue row
         title = (cl.get("summary") or sid)[:60].strip()
-        folder_url, doc_url = create_content_workspace(sid, title, transcript, cl, args.url, args.notes or "")
+        folder_url, doc_url = create_content_workspace(sid, title, transcript, cl, args.url, args.notes or "",
+                                                        research=opc_research)
 
     # Log to Inspiration Library WITH Drive links (must come after hub + workspace created)
     # Pass user_notes so Priscila's verbatim /capture ARGUMENTS text lands in the 'My Raw Notes' column
