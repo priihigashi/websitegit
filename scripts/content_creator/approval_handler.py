@@ -45,8 +45,8 @@ def search_gmail_replies(token, after_date=None):
     if not after_date:
         after_date = (datetime.now(ET) - timedelta(days=1)).strftime("%Y/%m/%d")
 
-    query = urllib.parse.quote(f'subject:"DAILY CONTENT" after:{after_date}')
-    url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages?q={query}&maxResults=10"
+    query = urllib.parse.quote(f'subject:"Re: DAILY CONTENT" after:{after_date}')
+    url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages?q={query}&maxResults=20"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
 
     try:
