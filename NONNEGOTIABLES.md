@@ -197,8 +197,27 @@ _(mark here instead of deleting)_
 
 ---
 
+## LOCKED — Pipeline Resilience
+
+**3-ROUTE MINIMUM FOR EXTERNAL SERVICE CALLS (added 2026-04-19)**
+Any external API call in a pipeline script must have at least 3 fallback routes coded in.
+Order: most reliable / most accurate first → cheaper/simpler fallback → offline/placeholder last.
+Never let a single failed API kill the whole pipeline step.
+Current implementation: image generation (CC photo → DALL-E 3 → bio-initials). Verify and apply to: Drive upload, email send, scraping, video render.
+Source: Priscila request 2026-04-19 — "the pipeline may need more than one two options... we need to have everything at least three options"
+
+**PIPELINE REFERENCE DOC IS THE SOURCE OF TRUTH (added 2026-04-19)**
+Before asking "what does X script do" or "which folder does Y go to" — read the pipeline doc first.
+Doc: https://docs.google.com/document/d/1XGmbnvyS_WomKl3USVFz-pPg-3agTn5Bl0QpyMbeHs4/edit
+Covers: all scripts, triggers, I/O, folder IDs, spreadsheet IDs, credentials, failure playbook, manual gaps.
+Built from live script audit 2026-04-19. Update it when scripts change.
+
+---
+
 ## PENDING EXTRACTION
 _(rules identified in handoffs but not yet verified/formatted)_
 
 - OPC image injection in `_build_opc_html()` — cover image slot not yet implemented (2026-04-19)
 - Build Tracker auto-update from all 15 workflows — wired for content_creator only (2026-04-19)
+- USA The Chain _TEMPLATE_CAROUSEL ID discrepancy: CLAUDE.md says 1sDMyPHVYcOqZ3NK9ch4e48AaJ7KVvxL3, main.py has 1fgBbesb_NWgjtPLnM-uoBDJpeiwCRNqp — verify and lock correct ID (2026-04-19)
+- 3-route fallback not yet verified in code for: Drive upload, email send, scraping (only image gen confirmed) — audit each script (2026-04-19)
