@@ -1,0 +1,46 @@
+name: OPC Content Inventory Sync
+
+on:
+  schedule:
+    # 3:00 AM ET daily (before 4AM agent at 4:00 AM ET)
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — print changes without writing'
+        required: false
+        default: 'false'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pytz google-auth google-auth-oauthlib google-api-python-client
+
+      - name: Sync In Production tab
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          FLAGS=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then FLAGS="--dry-run"; fi
+          python3 scripts/opc_content_inventory.py $FLAGS
+
+      - name: Alert on failure
+        if: failure()
+        run: |
+          gh workflow run send_email.yml \
+            --repo priihigashi/oak-park-ai-hub \
+            -f to="priscila@oakpark-construction.com" \
+            -f subject="[opc_inventory] Sync failed — $(date +%Y-%m-%d)" \
+            -f body="OPC inventory sync failed. Check: https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/opc_inventory.yml"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

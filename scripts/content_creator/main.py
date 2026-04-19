@@ -719,6 +719,21 @@ def process_one_topic(topic_entry, run_date, drive):
     )
     add_catalog_row(post_id, niche, series, topic, folder_link, motion_link, get_oauth_token())
 
+    # Mirror to 🎬 In Production tab (Content Control) so Priscila can see what needs review
+    try:
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from content_tracker import update_in_production
+        update_in_production(
+            title=topic[:100],
+            content_type="Carousel",
+            status="Pending Approval",
+            drive_folder_link=folder_link,
+            output_link=motion_link,
+            date_created=datetime.now(ET).strftime("%Y-%m-%d"),
+        )
+    except Exception as _e:
+        print(f"  In Production write skipped (non-fatal): {_e}")
+
     # Collect mentioned people + cover_visual for reply guide in preview email
     mentioned_people = []
     for slide in content.get("slides", []):

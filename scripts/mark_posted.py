@@ -201,6 +201,21 @@ def main():
             (f"{post['status_col']}{post['row']}", "Posted"),
         ])
 
+        # Mirror status to 🎬 In Production (Content Control)
+        try:
+            import sys
+            from pathlib import Path as _Path
+            sys.path.insert(0, str(_Path(__file__).parent))
+            from content_tracker import update_in_production
+            update_in_production(
+                title=post["project"],
+                content_type="Carousel",
+                status="Published",
+                drive_folder_link=post["drive_link"],
+            )
+        except Exception as _e:
+            print(f"  In Production update skipped (non-fatal): {_e}")
+
         # Log to Analytics
         log_row = [
             now_et.strftime("%Y-%m-%d %I:%M %p ET"),
