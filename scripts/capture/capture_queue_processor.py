@@ -49,7 +49,7 @@ STATUS_TO_SCORE = {"READY": 5, "NEEDS_REVIEW": 3, "NOT_RELEVANT": 1}
 PROJECT_TO_DEST = {
     "brazil":    "Brazil News Drive",
     "news":      "Brazil News Drive",    # preferred name (was sovereign)
-    "usa":       "Inspiration Library",
+    "usa":       "USA News Drive",       # USA news → News pipeline, not OPC
     "opc":       "Inspiration Library",  # preferred name (was content)
     "book":      "Book Tracker",
     "content":   "Inspiration Library",  # legacy alias → use opc
@@ -309,7 +309,7 @@ def main():
         PIPELINE_PROJECT = {
             "brazil":    "news",      # preferred queue alias for News pipeline
             "news":      "news",      # explicit new name
-            "usa":       "opc",       # preferred queue alias for OPC pipeline
+            "usa":       "news",      # USA news → News pipeline
             "opc":       "opc",       # explicit new name
             "sovereign": "news",      # legacy → news
             "content":   "opc",       # legacy → opc
