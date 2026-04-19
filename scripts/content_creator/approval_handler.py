@@ -395,7 +395,7 @@ def re_render_post(post, feedback):
     import sys, shutil
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent))
-    from carousel_builder import generate_carousel_content, build_html, render_pngs
+    from carousel_builder import generate_carousel_content, build_html, render_pngs, fetch_all_media
     from googleapiclient.http import MediaFileUpload
 
     post_id = post["post_id"]
@@ -454,7 +454,8 @@ def re_render_post(post, feedback):
     work.mkdir(parents=True)
 
     slug = post_id.replace("opc-tip-", "").replace("brazil-", "")[:30]
-    html_path = build_html(content, niche, slug, str(work))
+    media_paths = fetch_all_media(content, niche, str(work))
+    html_path = build_html(content, niche, slug, str(work), media_paths=media_paths)
     if not html_path:
         print(f"  re_render: HTML build failed")
         shutil.rmtree(work, ignore_errors=True)

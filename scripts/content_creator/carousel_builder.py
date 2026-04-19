@@ -7,8 +7,10 @@ Also generates Instagram caption following Priscila's copy rules.
 import gzip, json, os, re, subprocess, time, urllib.request, urllib.parse
 from pathlib import Path
 
-ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-OPENAI_KEY    = os.environ.get("OPENAI_API_KEY", "")
+ANTHROPIC_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
+OPENAI_KEY     = os.environ.get("OPENAI_API_KEY", "")
+GEMINI_KEY     = os.environ.get("GEMINI_API_KEY", "")
+PEXELS_KEY     = os.environ.get("PEXELS_API_KEY", "")
 
 OPC_TEMPLATE = "tip"
 BRAZIL_TEMPLATE = "quem-decidiu"
@@ -607,6 +609,68 @@ def _generate_ai_cover(prompt, work_dir, filename="cover.jpg"):
         return ""
 
 
+def _generate_gemini_image(prompt, work_dir, filename):
+    """Generate image via Gemini Imagen. Fallback when DALL-E fails/rate-limits.
+    Returns relative path or empty string."""
+    if not GEMINI_KEY or not prompt:
+        return ""
+    dest_path = Path(work_dir) / "resources" / "images" / filename
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    if dest_path.exists() and dest_path.stat().st_size > 5000:
+        return f"resources/images/{filename}"
+    try:
+        payload = json.dumps({
+            "instances": [{"prompt": prompt[:1000]}],
+            "parameters": {"sampleCount": 1, "aspectRatio": "1:1", "outputMimeType": "image/jpeg"},
+        }).encode()
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key={GEMINI_KEY}"
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        resp = json.loads(urllib.request.urlopen(req, timeout=60).read())
+        b64 = resp["predictions"][0].get("bytesBase64Encoded", "")
+        if not b64:
+            return ""
+        import base64
+        raw = base64.b64decode(b64)
+        if len(raw) < 5000:
+            return ""
+        dest_path.write_bytes(raw)
+        print(f"  AI image generated: {filename} ({len(raw)//1024}KB via Gemini Imagen)")
+        return f"resources/images/{filename}"
+    except Exception as e:
+        print(f"  Gemini image generation failed (non-fatal): {e}")
+        return ""
+
+
+def _fetch_pexels_image(query, work_dir, filename):
+    """Search Pexels for a royalty-free stock photo. Last-resort fallback for context images.
+    Returns relative path or empty string."""
+    if not PEXELS_KEY or not query:
+        return ""
+    dest_path = Path(work_dir) / "resources" / "images" / filename
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    if dest_path.exists() and dest_path.stat().st_size > 2000:
+        return f"resources/images/{filename}"
+    try:
+        q = urllib.parse.quote_plus(query[:100])
+        search_url = f"https://api.pexels.com/v1/search?query={q}&per_page=3&orientation=portrait"
+        req = urllib.request.Request(search_url, headers={"Authorization": PEXELS_KEY})
+        data = json.loads(urllib.request.urlopen(req, timeout=10).read())
+        photos = data.get("photos", [])
+        if not photos:
+            return ""
+        img_url = photos[0]["src"]["large"]
+        with urllib.request.urlopen(img_url, timeout=20) as r:
+            raw = r.read()
+        if len(raw) < 5000:
+            return ""
+        dest_path.write_bytes(raw)
+        print(f"  Pexels image fetched: {filename} ({len(raw)//1024}KB) ← '{query[:40]}'")
+        return f"resources/images/{filename}"
+    except Exception as e:
+        print(f"  Pexels fetch failed (non-fatal): {e}")
+        return ""
+
+
 def fetch_all_media(content, niche, work_dir):
     """Download/generate all images needed by this carousel BEFORE build_html().
     Returns dict:
@@ -629,6 +693,11 @@ def fetch_all_media(content, niche, work_dir):
             ai_prompt = opt_b.get("prompt", "")
             if ai_prompt:
                 paths["cover"] = _generate_ai_cover(ai_prompt, work_dir, "cover.jpg")
+        if not paths["cover"] and cv.get("option_b", {}).get("prompt"):
+            ai_prompt = cv["option_b"]["prompt"]
+            paths["cover"] = _generate_gemini_image(ai_prompt, work_dir, "cover.jpg")
+        if not paths["cover"] and search_q:
+            paths["cover"] = _fetch_pexels_image(search_q, work_dir, "cover.jpg")
 
     # Middle slides — context images. CC photo first; AI fallback if it fails.
     for i, slide in enumerate(content.get("slides", []), start=2):
@@ -639,11 +708,19 @@ def fetch_all_media(content, niche, work_dir):
             fname = f"slide_{i}_context.jpg"
             img_path = _fetch_person_photo(cq, work_dir, fname)
             if not img_path and OPENAI_KEY:
-                # AI fallback: simple editorial prompt from the context query
                 ai_prompt = f"Editorial documentary photograph, {cq}, high contrast journalistic style, no text"
                 img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
                 if img_path:
-                    print(f"  Slide {i}: used AI fallback image for '{cq[:50]}'")
+                    print(f"  Slide {i}: DALL-E fallback image for '{cq[:50]}'")
+            if not img_path and GEMINI_KEY:
+                ai_prompt = f"Editorial documentary photograph, {cq}, high contrast journalistic style, no text"
+                img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
+                if img_path:
+                    print(f"  Slide {i}: Gemini fallback image for '{cq[:50]}'")
+            if not img_path and PEXELS_KEY:
+                img_path = _fetch_pexels_image(cq, work_dir, fname)
+                if img_path:
+                    print(f"  Slide {i}: Pexels fallback image for '{cq[:50]}'")
             if img_path:
                 paths["slides"][i] = img_path
 
