@@ -49,8 +49,9 @@ STATUS_TO_SCORE = {"READY": 5, "NEEDS_REVIEW": 3, "NOT_RELEVANT": 1}
 PROJECT_TO_DEST = {
     "brazil":    "Brazil News Drive",
     "news":      "Brazil News Drive",    # preferred name (was sovereign)
-    "usa":       "USA News Drive",       # USA news → News pipeline, not OPC
+    "usa":       "USA News Drive",       # USA news → News pipeline
     "opc":       "Inspiration Library",  # preferred name (was content)
+    "ugc":       "UGC Drive",           # UGC → UGC pipeline
     "book":      "Book Tracker",
     "content":   "Inspiration Library",  # legacy alias → use opc
     "sovereign": "Brazil News Drive",    # legacy alias → use news
@@ -311,6 +312,7 @@ def main():
             "news":      "news",      # explicit new name
             "usa":       "news",      # USA news → News pipeline
             "opc":       "opc",       # explicit new name
+            "ugc":       "ugc",       # UGC → UGC pipeline
             "sovereign": "news",      # legacy → news
             "content":   "opc",       # legacy → opc
         }
