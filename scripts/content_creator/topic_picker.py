@@ -88,7 +88,10 @@ def insert_queue_row(topic_entry, inspo_status):
     from datetime import datetime
     today = datetime.utcnow().strftime("%Y-%m-%d")
     niche = topic_entry["niche"]
-    status = "Approved" if inspo_status.strip().lower() == "approved" else "Draft"
+    # OPC house content auto-approves (no fact-check gate needed).
+    # Brazil/USA news require Inspiration status = "approved" explicitly.
+    niche = topic_entry.get("niche", "")
+    status = "Approved" if (niche == "opc" or inspo_status.strip().lower() == "approved") else "Draft"
     # series_override allows per-topic routing to Verificamos / Fact-Checked / etc.
     series = topic_entry.get("series_override") or (
         "Tip of the Week" if niche == "opc" else ("The Chain" if niche == "usa" else "Quem Decidiu Isso?")
@@ -297,3 +300,4 @@ def pick_topics(count_opc=2, count_brazil=1, count_usa=1):
 if __name__ == "__main__":
     topics = pick_topics()
     print(json.dumps(topics, indent=2))
+
