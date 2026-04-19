@@ -15,6 +15,7 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY_EXP04092027 }}
       CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
       BRAZIL_TEMPLATES_FOLDER: '1gDOjtW_X-_jWtu94pffbDaUsw6VGCKuA'
 
@@ -44,6 +45,16 @@ jobs:
       - name: Run approval handler
         working-directory: scripts/content_creator
         run: python approval_handler.py
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow approval_check.yml \
+            --status "${{ job.status }}"
 
       - name: Alert on failure
         if: failure()

@@ -719,6 +719,24 @@ def process_one_topic(topic_entry, run_date, drive):
     )
     add_catalog_row(post_id, niche, series, topic, folder_link, motion_link, get_oauth_token())
 
+    # Classify post type + format for In Production tab
+    _series_lower = (series_override or series or "").lower()
+    if niche == "opc":
+        _post_type = "General Tip"  # all auto-built OPC posts are tips; Before & After / Project Showcase set manually
+    elif series_override == "VERIFICAMOS" or "verificamos" in _series_lower:
+        _post_type = "Fake News"
+    elif "quem" in _series_lower or "decidiu" in _series_lower:
+        _post_type = "Who Decided"
+    elif "conta" in _series_lower or "money" in _series_lower:
+        _post_type = "Money"
+    elif "history" in _series_lower or "arquivo" in _series_lower or "sovereign" in _series_lower:
+        _post_type = "History"
+    elif "explainer" in _series_lower or "o que" in _series_lower or "what is" in _series_lower:
+        _post_type = "Explainer"
+    else:
+        _post_type = "Breaking"
+    _fmt = "Both"  # motion is always built (NONNEGOTIABLES: MOTION IS DEFAULT ON)
+
     # Mirror to the correct In Production tab based on niche
     try:
         sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -731,6 +749,8 @@ def process_one_topic(topic_entry, run_date, drive):
                 drive_folder_link=folder_link,
                 output_link=motion_link,
                 date_created=datetime.now(ET).strftime("%Y-%m-%d"),
+                fmt=_fmt,
+                post_type=_post_type,
             )
         else:
             from content_tracker import update_news_in_production
@@ -742,6 +762,8 @@ def process_one_topic(topic_entry, run_date, drive):
                 drive_folder_link=folder_link,
                 output_link=motion_link,
                 date_created=datetime.now(ET).strftime("%Y-%m-%d"),
+                fmt=_fmt,
+                post_type=_post_type,
             )
     except Exception as _e:
         print(f"  In Production write skipped (non-fatal): {_e}")

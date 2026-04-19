@@ -561,7 +561,7 @@ def process_replies():
                     print(f"  No static folder ID for {post_id} — skipping")
                     continue
 
-                if niche == "opc" and BUFFER_KEY:
+                if BUFFER_KEY:
                     caption = post.get("topic", "")
                     schedule_to_buffer(variant, static_folder_id, caption=caption)
 
