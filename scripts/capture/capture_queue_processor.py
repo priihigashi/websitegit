@@ -217,9 +217,9 @@ def _parse_result(stdout: str, project: str) -> tuple[int, str, str]:
     score    = 3  # safe default
     hub_path = ""
 
-    # Score from classification status (content project only).
-    # Anchor to the CONTENT CAPTURE DONE block to avoid matching stray "Status:" lines in logs.
-    m = re.search(r'CONTENT CAPTURE DONE.*?Status:\s*(\w+)', stdout, re.DOTALL)
+    # Score from classification status (opc project only).
+    # Anchor to the capture DONE block — handles both current label (OPC) and legacy (CONTENT).
+    m = re.search(r'(?:OPC|CONTENT) CAPTURE DONE.*?Status:\s*(\w+)', stdout, re.DOTALL)
     if m:
         score = STATUS_TO_SCORE.get(m.group(1).strip().upper(), 3)
 
