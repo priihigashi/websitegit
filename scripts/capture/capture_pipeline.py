@@ -1049,15 +1049,30 @@ CONTENT ANALYSIS:
   What's missing: [e.g. no examples, only complaints, no solutions]
 
 NEWS POST ANGLE:
-  Hook: [opening line that stops the scroll]
   Core message: [what this post says — with concrete examples]
   Teaching moment: [what audience learns and can apply]
   Format: [talking head / carousel / before-after / text overlay]
   CTA: [what action we want]
 
-PORTUGUESE ANGLE:
-  Relevant to Brazilian audience: YES / NO
-  PT-BR hook: [if YES]
+HOOK OPTIONS — write 3, each a different Hormozi category. For each: EN line + PT-BR line + why it works (1 sentence).
+
+  HOOK A — Contrarian (challenge a belief the audience holds):
+    EN: [hook]
+    PT-BR: [hook]
+    Why: [1 sentence]
+
+  HOOK B — Curiosity Gap (open an information gap they must close):
+    EN: [hook]
+    PT-BR: [hook]
+    Why: [1 sentence]
+
+  HOOK C — Pain Agitate or Pattern Interrupt:
+    EN: [hook]
+    PT-BR: [hook]
+    Why: [1 sentence]
+
+  RECOMMENDED FOR REEL COVER: [A / B / C] — reason
+  RECOMMENDED FOR CAROUSEL SLIDE 1: [A / B / C] — reason
 
 STUDY NOTES (3 specific ways to do it better):
   1. [Improvement]
@@ -1066,7 +1081,7 @@ STUDY NOTES (3 specific ways to do it better):
 
 CONTENT READY: YES / NO / NEEDS REFINEMENT"""
     msg = client.messages.create(
-        model="claude-opus-4-6", max_tokens=2000,
+        model="claude-opus-4-6", max_tokens=3000,
         messages=[{"role": "user", "content": prompt}]
     )
     return msg.content[0].text
