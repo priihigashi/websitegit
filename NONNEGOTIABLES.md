@@ -4,7 +4,7 @@
 > Any change that removes or breaks a locked rule requires an explicit note in the commit message.
 > Auto-updated nightly by `scripts/nonnegotiables_updater.py`.
 
-_Last updated: 2026-04-19 (seeded from CLAUDE.md)_
+_Last updated: 2026-04-19 (auto-updated by nonnegotiables_updater.py)_
 
 ---
 
@@ -174,7 +174,26 @@ Source: CLAUDE.md — SESSION EXIT LOG
 ## RETIRED RULES
 _(mark here instead of deleting)_
 
-_(none yet)_
+
+- **CREATING CALENDAR EVENTS — try in order, never give up:** (from repo CLAUDE.md, 2026-04-19)
+  ROUTE A: mcp__claude_ai_Google_Calendar__ tools (preferred) ROUTE B: Composio MCP — GOOGLECALENDAR_CREATE_EVENT action ROUTE C: Python OAuth — build('calendar','v3',credentials=creds).events().insert(
+
+
+- **DRIVE — SHARED DRIVE IS DEFAULT, NEVER MY DRIVE** (from repo CLAUDE.md, 2026-04-19)
+  ROUTING BY PROJECT — always check which drive before creating anything: - Higashi / Hig Negócios / mom's site / Alexandra → Shared Drive "Higashi Imobiliária - Claude" (ID: 0AN7aea2IZzE0Uk9PVA) → Clau
+
+
+- **EMAIL SENDING — 3 ROUTES (added 2026-04-12 — prevents "Gmail blocked" from stopp** (from repo CLAUDE.md, 2026-04-19)
+  Gmail MCP = DRAFT only (no send tool exists). For actual sending, use GitHub Actions. - ROUTE A (draft): Load ToolSearch first → mcp__claude_ai_Gmail__gmail_create_draft → Priscila clicks Send - ROUTE
+
+
+- **AIOX AGENT AUDIT — REQUIRED BEFORE AUTOMATION IS "DONE"** (from repo CLAUDE.md, 2026-04-19)
+  Any new automation, workflow, or script is NOT done until audited by the relevant AIOX agents: - /AIOX-architect — system design, API routing, architecture decisions - /AIOX-devops — GitHub Actions wo
+
+
+- **SCRIPT / CODE EDITING RULE — NON-NEGOTIABLE** (from repo CLAUDE.md, 2026-04-19)
+  Never rewrite a working script from scratch. Only change what is strictly necessary. Before any edit: read the full file, list what you're changing and why. Good things already in the script must be p
+
 
 ---
 
