@@ -316,42 +316,27 @@ def main():
         }
         pipeline_project = PIPELINE_PROJECT.get(project, project)
 
-        # Build subprocess command — same args as capture_pipeline.yml run step
-        cmd = [sys.executable, CAPTURE_SCRIPT, url, "--project", pipeline_project]
-        if comment:
-            cmd += ["--notes", comment]
-
+        # Dispatch each URL as a separate capture_pipeline.yml workflow run.
+        # Each run gets a fresh GitHub Actions runner IP, avoiding Instagram rate limits.
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=1500,   # 25 min per capture (matches pipeline expectations)
-                env={**os.environ},
-            )
-            combined = result.stdout + "\n" + result.stderr
-            # Log tail so GitHub Actions shows progress
-            print(combined[-3000:] if len(combined) > 3000 else combined)
-
-            if result.returncode == 0:
-                score, dest, hub = _parse_result(combined, project)
-                _write_success(token, sheet_row, score, dest, hub)
-                print(f"  ✓ DONE — score={score}, dest={dest}, hub={hub[:70] if hub else '(none)'}")
-                try:
-                    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-                    from content_tracker import log_run
-                    log_run(pipeline="capture_queue", trigger="queue", url=url,
-                            project=project, status="success", score=score,
-                            drive_path=hub or "", notes=f"queue row {sheet_row}")
-                except Exception: pass
-            else:
-                err_msg = (result.stderr or result.stdout or "unknown error")[-200:]
-                _write_failure(token, sheet_row, f"rc={result.returncode}: {err_msg}")
-                print(f"  ✗ FAILED — rc={result.returncode}")
+            subprocess.run([
+                "gh", "workflow", "run", "capture_pipeline.yml",
+                "--repo", "priihigashi/oak-park-ai-hub",
+                "--field", f"url={url}",
+                "--field", f"project={pipeline_project}",
+            ], check=True, capture_output=True, text=True, timeout=30)
+            moved_to = PROJECT_TO_DEST.get(project, "Inspiration Library")
+            _write_success(token, sheet_row, 3, moved_to, "")
+            print(f"  ✓ DISPATCHED — project={pipeline_project}")
 
         except subprocess.TimeoutExpired:
-            _write_failure(token, sheet_row, "Timeout after 25 minutes")
-            print(f"  ✗ TIMEOUT after 25 min")
+            _write_failure(token, sheet_row, "Timeout dispatching workflow")
+            print(f"  ✗ TIMEOUT dispatching")
+
+        except subprocess.CalledProcessError as exc:
+            err_msg = (exc.stderr or exc.stdout or "unknown error")[-200:]
+            _write_failure(token, sheet_row, f"dispatch failed: {err_msg}")
+            print(f"  ✗ DISPATCH FAILED — rc={exc.returncode}")
 
         except Exception as exc:
             _write_failure(token, sheet_row, str(exc)[:200])

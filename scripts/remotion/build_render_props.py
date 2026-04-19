@@ -199,7 +199,7 @@ def main():
         "hook":             args.hook or None,
         "speakerName":      args.speaker_name or None,
         "speakerRole":      args.speaker_role or None,
-        "topicTitle":       args.topic_title or None,
+        "topicTitle":       args.topic_title,
         "videoOffsetY":     args.video_offset_y if args.video_offset_y != "15%" else None,  # skip if default
         "voiceover_url":    voiceover_url,
     }
