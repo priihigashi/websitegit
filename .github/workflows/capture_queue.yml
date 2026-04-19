@@ -88,3 +88,13 @@ jobs:
           name: "capture-queue-${{ github.run_id }}"
           path: transcripts/
           retention-days: 14
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow capture_queue.yml \
+            --status "${{ job.status }}"

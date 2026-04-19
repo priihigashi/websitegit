@@ -136,6 +136,41 @@ Source: memory feedback_shadow_ban_caption_rules.md + CONTENT_FORMATS.md
 
 ---
 
+## LOCKED — Workflow & Tracking
+
+**SPREADSHEET HUB — LOG EVERY TAB**
+Any new spreadsheet created OR any new tab added to an existing spreadsheet → immediately add a row to the Hub.
+Hub ID: 1qDbO6JQX0cKbZ9rHjiM7a4U_p7OOddZ3k3Sp30JJoqo. Columns: SPREADSHEET | TAB | PURPOSE | LINK | SPREADSHEET ID.
+Never skip this step. One row per tab.
+Source: CLAUDE.md — SPREADSHEET HUB
+
+**FLOW PLANS TRACKER — LOG EVERY NEW DOC**
+Every new flow doc, master plan, process doc, or niche strategy created → add a row immediately.
+Tracker ID: 1fggy918FgPfnMQ-dzGQk2zx9uhi2_-uWXMKGW4MA47k. Tab: All Docs. 4AM agent reads this as its plan manifest.
+Columns: NAME | TYPE | NICHE | STATUS | DESCRIPTION | OPEN | DOC_ID | TABS | LAST UPDATED.
+Source: CLAUDE.md — FLOW PLANS TRACKER
+
+**CAPTURE OUTPUT MINIMUM**
+Every video capture must produce: 1 carousel idea (angle + slide structure outline) + 1 reel idea (hook + format) + 2-3 topic breakdowns. Never just download a clip.
+Topics = raw material. Posts = original. Never use captured person's clip unless explicitly asked.
+Source: CLAUDE.md — CAPTURE
+
+**CONTENT FORMATS REGISTRY**
+Read CONTENT_FORMATS.md (Drive ID: 1XqXSyJC_iHMTrmMxpM5ZR7S-WQxz19HhDJO1HomdncM) before producing any content (carousel, reel, hooks, copy).
+Never create a format that already exists. Write to it whenever Priscila names a new format.
+Current formats: FORMAT-001 (Split Screen+Sources Below), FORMAT-002 (Quem decidiu isso?).
+Source: CLAUDE.md — CONTENT FORMATS
+
+**SESSION EXIT — 3 MANDATORY STEPS**
+Every session exit (exit/closing/done for today) must complete all 3:
+1. Chat log → Chat Logs folder (Drive ID: 1qitnbz5_8tfZI2rnTogV1zLLLLOwFVCw)
+2. Productivity & Routine doc (ID: 1wVBuNOuOufT8WP4KCrrlVbKWRmQZjKvqmia1soUEBZE) — mark done, add new tasks
+3. Handoff doc → Productivity & Routine folder (ID: 1b8Cfc8lJhu5unDaxDQIdo4xdN6X7n1nS) if context near limit
+All 3. Every exit. No exceptions.
+Source: CLAUDE.md — SESSION EXIT LOG
+
+---
+
 ## RETIRED RULES
 _(mark here instead of deleting)_
 

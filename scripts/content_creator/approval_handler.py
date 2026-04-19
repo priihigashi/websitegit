@@ -570,19 +570,31 @@ def process_replies():
                 _delete_old_versions(post_id, static_folder_id)
                 print(f"  Approved: {post_id} ({variant})")
 
-                # Mirror status to 🎬 In Production (Content Control)
+                # Mirror status to correct In Production tab (Content Control)
                 try:
                     import sys
                     from pathlib import Path as _Path
                     sys.path.insert(0, str(_Path(__file__).parent.parent))
-                    from content_tracker import update_in_production
-                    update_in_production(
-                        title=post.get("topic", post_id)[:100],
-                        content_type="Carousel",
-                        status="Approved",
-                        drive_folder_link=post.get("static_link", ""),
-                        output_link=post.get("motion_link", ""),
-                    )
+                    _post_niche = post.get("niche", "opc").lower()
+                    if _post_niche == "opc":
+                        from content_tracker import update_in_production
+                        update_in_production(
+                            title=post.get("topic", post_id)[:100],
+                            content_type="Carousel",
+                            status="Approved",
+                            drive_folder_link=post.get("static_link", ""),
+                            output_link=post.get("motion_link", ""),
+                        )
+                    else:
+                        from content_tracker import update_news_in_production
+                        update_news_in_production(
+                            title=post.get("topic", post_id)[:100],
+                            niche=_post_niche.upper(),
+                            content_type="Carousel",
+                            status="Approved",
+                            drive_folder_link=post.get("static_link", ""),
+                            output_link=post.get("motion_link", ""),
+                        )
                 except Exception as _e:
                     print(f"  In Production update skipped (non-fatal): {_e}")
 

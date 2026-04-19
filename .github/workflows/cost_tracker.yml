@@ -49,3 +49,13 @@ jobs:
           echo "## AI Cost Tracker — Weekly Run" >> $GITHUB_STEP_SUMMARY
           echo "- **Spreadsheet:** [Ideas & Inbox → 💰 Cost Tracker](https://docs.google.com/spreadsheets/d/1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU)" >> $GITHUB_STEP_SUMMARY
           echo "- **Tabs updated:** Claude (estimated), OpenAI, Apify, GitHub Actions, 💰 Cost Tracker (dashboard)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow cost_tracker.yml \
+            --status "${{ job.status }}"

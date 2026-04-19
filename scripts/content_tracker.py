@@ -218,3 +218,79 @@ def update_in_production(
     except Exception as e:
         print(f"[content_tracker] WARNING update_in_production write: {e}")
         return False
+
+
+# ── News In Production tab (Brazil / USA content) ─────────────────────────────
+_NEWS_PROD_TAB = "🌎 News In Production"
+
+
+def update_news_in_production(
+    title: str,
+    niche: str,
+    content_type: str,
+    status: str,
+    drive_folder_link: str,
+    output_link: str = "",
+    caption: str = "",
+    date_created: str = "",
+) -> bool:
+    """
+    Write or update a row in '🌎 News In Production' tab of Content Control sheet.
+    Columns: Title | Niche | Content Type | Status | Drive Folder Link | Output Link | Caption | Date Created
+    Deduplicates by Drive Folder Link (col E). Updates status + output_link if row exists.
+    Non-fatal — never crashes caller.
+    """
+    token = _access_token()
+    if not token:
+        print("[content_tracker] SKIP update_news_in_production — no SHEETS_TOKEN")
+        return False
+
+    if not date_created:
+        date_created = datetime.now(ET).strftime("%Y-%m-%d")
+
+    enc = urllib.parse.quote(f"'{_NEWS_PROD_TAB}'!A:H", safe="!:'")
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{_CC_SHEET_ID}/values/{enc}"
+    try:
+        rows = json.loads(urllib.request.urlopen(
+            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        ).read()).get("values", [])
+    except Exception as e:
+        print(f"[content_tracker] WARNING update_news_in_production read: {e}")
+        rows = []
+
+    # Deduplicate by Drive Folder Link (col E = index 4)
+    existing_row_num = None
+    for i, row in enumerate(rows):
+        if len(row) > 4 and row[4].strip() == drive_folder_link.strip():
+            existing_row_num = i + 1
+            break
+
+    try:
+        if existing_row_num:
+            batch = [{"range": f"'{_NEWS_PROD_TAB}'!D{existing_row_num}", "values": [[status]]}]
+            if output_link:
+                batch.append({"range": f"'{_NEWS_PROD_TAB}'!F{existing_row_num}", "values": [[output_link]]})
+            if caption:
+                batch.append({"range": f"'{_NEWS_PROD_TAB}'!G{existing_row_num}", "values": [[caption]]})
+            payload = json.dumps({"valueInputOption": "USER_ENTERED", "data": batch}).encode()
+            urllib.request.urlopen(urllib.request.Request(
+                f"https://sheets.googleapis.com/v4/spreadsheets/{_CC_SHEET_ID}/values:batchUpdate",
+                data=payload,
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            )).read()
+            print(f"[content_tracker] ✓ News In Production updated — {title[:40]} → {status}")
+        else:
+            new_row = [title, niche, content_type, status, drive_folder_link, output_link, caption, date_created]
+            enc2 = urllib.parse.quote(f"'{_NEWS_PROD_TAB}'!A:H", safe="!:'")
+            url2 = (f"https://sheets.googleapis.com/v4/spreadsheets/{_CC_SHEET_ID}/values/{enc2}"
+                    f":append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS")
+            payload = json.dumps({"values": [new_row]}).encode()
+            urllib.request.urlopen(urllib.request.Request(
+                url2, data=payload,
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            )).read()
+            print(f"[content_tracker] ✓ News In Production added — {title[:40]} ({niche}) → {status}")
+        return True
+    except Exception as e:
+        print(f"[content_tracker] WARNING update_news_in_production write: {e}")
+        return False

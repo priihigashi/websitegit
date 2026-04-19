@@ -107,3 +107,13 @@ jobs:
               body:  'The 4AM content agent failed.\n\nView run: ' + context.serverUrl + '/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + '\n\nCheck the Runs Log tab in the spreadsheet for details.',
               labels: ['automation', 'bug'],
             });
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow 4am_agent.yml \
+            --status "${{ job.status }}"

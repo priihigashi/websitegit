@@ -50,3 +50,13 @@ jobs:
             -f body="Nonnegotiables updater failed. Check: https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/nonnegotiables.yml"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow nonnegotiables.yml \
+            --status "${{ job.status }}"

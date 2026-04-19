@@ -633,13 +633,13 @@ def fetch_all_media(content, niche, work_dir):
 
 def build_html(content, niche, topic_slug, work_dir, handle="@HANDLE_PLACEHOLDER", media_paths=None):
     if niche == "opc":
-        return _build_opc_html(content, topic_slug, work_dir)
+        return _build_opc_html(content, topic_slug, work_dir, media_paths=media_paths)
     if niche in ("brazil", "usa", "sovereign"):
         return _build_brazil_html(content, topic_slug, work_dir, handle=handle, media_paths=media_paths)
     return None
 
 
-def _build_opc_html(content, slug, work_dir):
+def _build_opc_html(content, slug, work_dir, media_paths=None):
     hl = content["headline"]
     accent = content.get("accent_word", hl.split()[-1])
     hl_html = hl.replace(accent, f'<span class="accent">{accent}</span>')
@@ -661,11 +661,17 @@ def _build_opc_html(content, slug, work_dir):
 
     cta = content.get("cta", "SAVE THIS.")
 
+    cover_img = (media_paths or {}).get("cover", "")
+    bg_photo_el = (
+        f'<div class="bg-photo" style="background-image:url(\'{cover_img}\');"></div>'
+        if cover_img else '<div class="bg-photo"></div>'
+    )
+
     def variant_block(v_class, cover_accent_style, s4_accent_style, src_accent_style):
         return f"""
 <!-- {v_class.upper()} -->
 <div class="slide slide-cover {v_class}">
-  <div class="bg-photo"></div>
+  {bg_photo_el}
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">Tip of the Week · Oak Park Construction</div>
   <div class="headline">{hl_html}</div>
