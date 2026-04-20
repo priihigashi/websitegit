@@ -42,14 +42,16 @@ WORKFLOW_FILE = "capture_pipeline.yml"
 REF = "main"
 
 NICHE_TO_PROJECT = {
-    "brazil news": "sovereign",
-    "usa news": "sovereign",
-    "news": "sovereign",
-    "opc": "content",
-    "higashi": "content",
-    "ugc": "content",
-    "ai content": "content",
-    "stocks": "book",
+    "brazil news": "brazil",
+    "brazil": "brazil",
+    "usa news": "usa",
+    "usa": "usa",
+    "news": "brazil",
+    "opc": "opc",
+    "higashi": "higashi",
+    "ugc": "ugc",
+    "ai content": "opc",
+    "stocks": "stocks",
 }
 
 SKIP_STATUS = {"captured", "queued", "error", "skip", "done"}

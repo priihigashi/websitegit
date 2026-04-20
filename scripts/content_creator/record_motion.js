@@ -19,7 +19,7 @@ async function run(htmlPath, outputPath, duration) {
   const outputDir = path.dirname(path.resolve(outputPath));
   fs.mkdirSync(outputDir, { recursive: true });
 
-  const browser = await chromium.launch({ headless: true, channel: 'chrome' });
+  const browser = await chromium.launch({ headless: true });
 
   // Playwright recordVideo writes to a dir with a generated filename — we rename after
   const videoDir = path.join(outputDir, `_rec_${Date.now()}`);
@@ -34,10 +34,11 @@ async function run(htmlPath, outputPath, duration) {
   });
 
   const page = await context.newPage();
-  await page.goto(`file://${abs}`, { waitUntil: 'networkidle' });
+  // networkidle can hang forever when <video autoplay> keeps connections open; use domcontentloaded + explicit wait
+  await page.goto(`file://${abs}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
   // Wait for fonts + CSS animations to start, then let the clip play
-  await page.waitForTimeout(500);  // font load buffer
+  await page.waitForTimeout(800);  // font load buffer + video element init
   await page.waitForTimeout(duration * 1000);  // animation duration
 
   await context.close();  // finalizes the video file

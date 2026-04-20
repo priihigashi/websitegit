@@ -12,7 +12,7 @@ Tab columns (A–M):
   D  TRIGGER      manual | scheduled | queue | 4am | webhook
   E  URL          source URL (or empty)
   F  NICHE        Brazil | OPC | UGC | News | Stocks | (empty)
-  G  PROJECT      content | sovereign | book | (empty)
+  G  PROJECT      opc | brazil | usa | ugc | stocks | higashi | book | (empty)
   H  STATUS       success | failed | pending | skipped | queued
   I  SCORE        1-5 (empty if not applicable)
   J  DRIVE_PATH   folder or doc URL where content landed
@@ -28,7 +28,7 @@ Usage:
         trigger="manual",
         url="https://www.instagram.com/reel/...",
         niche="Brazil",
-        project="sovereign",
+        project="brazil",
         status="success",
         score=4,
         drive_path="https://drive.google.com/...",

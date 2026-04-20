@@ -376,8 +376,11 @@ def create_story_doc(parent_folder_id, slug, version, topic, niche, brief, conte
 def record_motion_slides(clip_html_files, output_dir, duration=5):
     """Record each per-slide motion HTML via Playwright → MP4 + GIF.
     clip_html_files: list of (slide_idx, html_path) from build_motion_html().
-    Saves: <output_dir>/black_NN_<name>_motion.mp4 + .gif per clip slot.
-    Falls back silently per slot — never raises. Ken Burns still runs after this.
+    Saves canonical names so Ken Burns won't overwrite:
+      slide_idx == 1 (cover): black_01_cover_motion.mp4 + .gif
+      slide_idx >= 2 (middle): black_<NN>_slide_<N>_motion.mp4 + .gif
+    Returns list of (slide_idx, mp4_path) — main loop skips these indices when running Ken Burns.
+    Falls back silently per slot; Ken Burns is safety net for every other slide.
     """
     os.makedirs(output_dir, exist_ok=True)
     record_script = Path(__file__).parent / "record_motion.js"
@@ -388,17 +391,18 @@ def record_motion_slides(clip_html_files, output_dir, duration=5):
     recorded = []
     for slide_idx, html_path in clip_html_files:
         nn = f"{slide_idx:02d}"
-        slug_name = Path(html_path).stem  # e.g. clip_slide_1
-        webm_path = Path(output_dir) / f"black_{nn}_{slug_name}_motion.webm"
-        mp4_path  = Path(output_dir) / f"black_{nn}_{slug_name}_motion.mp4"
-        gif_path  = Path(output_dir) / f"black_{nn}_{slug_name}_motion.gif"
+        base = "cover" if slide_idx == 1 else f"slide_{slide_idx}"
+        webm_path = Path(output_dir) / f"black_{nn}_{base}_motion.webm"
+        mp4_path  = Path(output_dir) / f"black_{nn}_{base}_motion.mp4"
+        gif_path  = Path(output_dir) / f"black_{nn}_{base}_motion.gif"
         try:
             r = subprocess.run(
                 ["node", str(record_script), html_path, str(webm_path), str(duration)],
                 capture_output=True, timeout=120
             )
             if r.returncode != 0 or not webm_path.exists():
-                print(f"  Playwright recording failed for slide {slide_idx}: {r.stderr.decode()[:200]}")
+                stderr_txt = r.stderr.decode("utf-8", errors="replace")[:300] if r.stderr else ""
+                print(f"  Playwright recording failed for slide {slide_idx}: {stderr_txt}")
                 continue
             # Convert webm → mp4
             subprocess.run([
@@ -415,17 +419,26 @@ def record_motion_slides(clip_html_files, output_dir, duration=5):
             webm_path.unlink(missing_ok=True)
             if mp4_path.exists():
                 print(f"  Motion recorded: {mp4_path.name} ({mp4_path.stat().st_size//1024}KB)")
-                recorded.append(mp4_path)
+                recorded.append((slide_idx, mp4_path))
         except Exception as e:
             print(f"  record_motion_slides slide {slide_idx} error: {e}")
     return recorded
 
 
 def render_motion_cover(cover_png_path, output_dir, variant):
+    """Ken Burns ffmpeg zoom on ONE static PNG → MP4 + GIF.
+    Output MP4 inherits PNG name so every slide gets its own motion file:
+      black_01_cover_html.png → black_01_cover_motion.mp4
+      black_02_why_html.png   → black_02_why_motion.mp4
+    Preview frame (used by email) is written only for slide 01 (cover).
+    """
     os.makedirs(output_dir, exist_ok=True)
-    mp4_path = os.path.join(output_dir, f"{variant}_01_cover_motion.mp4")
-    gif_path = os.path.join(output_dir, f"{variant}_01_cover_motion.gif")
-    preview_path = os.path.join(output_dir, f"{variant}_preview_frame.jpg")
+    # Strip _html suffix and replace with _motion to keep naming 1:1 with PNGs
+    base = Path(cover_png_path).stem
+    if base.endswith("_html"):
+        base = base[:-5]
+    mp4_path = os.path.join(output_dir, f"{base}_motion.mp4")
+    gif_path = os.path.join(output_dir, f"{base}_motion.gif")
 
     subprocess.run([
         "ffmpeg", "-y", "-loop", "1", "-i", cover_png_path,
@@ -439,7 +452,10 @@ def render_motion_cover(cover_png_path, output_dir, variant):
         "-vf", "fps=15,scale=540:-1:flags=lanczos", gif_path,
     ], capture_output=True, timeout=60)
 
-    shutil.copy2(cover_png_path, preview_path)
+    # Only write preview frame for cover (slide 01) — email_preview.py expects one per variant
+    if "_01_" in base:
+        preview_path = os.path.join(output_dir, f"{variant}_preview_frame.jpg")
+        shutil.copy2(cover_png_path, preview_path)
     return mp4_path
 
 
@@ -642,17 +658,29 @@ def process_one_topic(topic_entry, run_date, drive):
 
     # 4. Render motion:
     #    4a. Playwright video recording for slides with real clips (rachadinha style)
-    #    4b. Ken Burns ffmpeg fallback for cover + all other slides (always runs)
+    #    4b. Ken Burns ffmpeg fallback for cover + all other slides (safety net)
     print("  Rendering motion...")
     recorded_mp4s = []
+    recorded_indices = set()
     if clip_html_files:
         print(f"  Recording {len(clip_html_files)} clip slide(s) via Playwright...")
         recorded_mp4s = record_motion_slides(clip_html_files, str(motion_dir), duration=5)
-        print(f"  Playwright recorded: {len(recorded_mp4s)} MP4(s)")
+        recorded_indices = {idx for idx, _ in recorded_mp4s}
+        print(f"  Playwright recorded: {len(recorded_mp4s)} MP4(s) (slides {sorted(recorded_indices)})")
 
-    # Ken Burns fallback: always run for all slides — covers remaining slides + is safety net
+    # Ken Burns fallback — runs ONLY for slides NOT already recorded by Playwright.
+    # This prevents overwriting Playwright MP4 (real clip + Ken Burns bg) with a plain ffmpeg Ken Burns.
+    # PNG filenames are formatted: <variant>_<NN>_<name>_html.png — NN is slide_idx.
+    import re as _re_nn
     for variant in ["black", "cream", "lime"]:
         for png in sorted(png_dir.glob(f"{variant}_*_html.png")):
+            m = _re_nn.match(rf"^{variant}_(\d{{2}})_", png.name)
+            if not m:
+                continue
+            png_idx = int(m.group(1))
+            # Skip only black variant when Playwright already recorded — cream/lime still get Ken Burns for variety
+            if variant == "black" and png_idx in recorded_indices:
+                continue
             render_motion_cover(str(png), str(motion_dir), variant)
 
     # 4b. Kling I2V animation for primary (black) cover via Replicate kwai-kolors/kling-video.
@@ -750,6 +778,8 @@ def process_one_topic(topic_entry, run_date, drive):
         print(f"  image_suggestions.txt upload failed (non-fatal): {e}")
 
     # Upload any CC photos downloaded by _fetch_person_photo() into resources/images/
+    # Filenames are human-readable slugs (slide1_trump_oval_office.jpg, slide2_congress_vote.jpg)
+    # so Priscila can scan resources/images/ and see who/what each slide references.
     local_images = work / "resources" / "images"
     if local_images.exists():
         try:
@@ -758,6 +788,18 @@ def process_one_topic(topic_entry, run_date, drive):
             print(f"  resources/images/ → Drive ({sum(1 for _ in local_images.iterdir())} file(s))")
         except Exception as e:
             print(f"  resources/images/ upload failed (non-fatal): {e}")
+
+    # Upload raw YouTube/Pexels clips downloaded by fetch_clips() into resources/clips/
+    # Keeps source MP4s archived alongside images — Priscila can review the actual footage
+    # that went into each motion slide, not just the composited output.
+    local_clips = work / "clips"
+    if local_clips.exists() and any(local_clips.iterdir()):
+        try:
+            clips_sub = create_subfolder(resources_sub, "clips", drive)
+            upload_dir_contents(local_clips, clips_sub, drive)
+            print(f"  resources/clips/ → Drive ({sum(1 for _ in local_clips.iterdir())} file(s))")
+        except Exception as e:
+            print(f"  resources/clips/ upload failed (non-fatal): {e}")
 
     folder_link = f"https://drive.google.com/drive/folders/{version_folder_id}"
     motion_link = f"https://drive.google.com/drive/folders/{motion_sub}"

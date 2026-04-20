@@ -14,13 +14,13 @@ WHAT IT DOES:
   2. Downloads audio from Instagram/TikTok/YouTube using yt-dlp
   3. Transcribes with OpenAI Whisper API (whisper-1)
   4. Saves transcript locally (uploaded as artifact)
-  5. Routes based on --project:
-     book      → Claude fact-checks → story doc in The Book Drive folder
-                → Book Tracker Stories tab → Calendar task
-     sovereign → Claude analyses   → study doc in SOVEREIGN Drive folder
-                → Calendar task
-     content   → Claude classifies niche → Inspiration Library tab
-                → Calendar task
+  5. Routes based on --project (routing.py is source of truth):
+     book          → Claude fact-checks → story doc in The Book Drive folder
+                    → Book Tracker Stories tab → Calendar task
+     brazil | usa  → Claude analyses → study doc in News/{Brazil,USA}/Captures
+                    → Calendar task, Inspiration Library row, content brief (EN+PT)
+     opc           → Claude classifies niche → Content Hub → Inspiration Library
+                    → Calendar task
 
 CREDITS / ATTRIBUTION:
   When --credits flag is set, the pipeline fetches the original creator's info
@@ -109,10 +109,8 @@ IDEAS_INBOX_ID     = os.getenv("IDEAS_INBOX_ID",     "1IrFrCNGVIF7cvAr9cIuAXvCtU
 BOOK_FOLDER_ID              = "1HlY1tmUHmRZ_ZfPUzGpY_j7sHbe_OCz1"
 CONTENT_CREATION_FOLDER_ID = "1um7y2Yt8zi9KGxev6kfFJYgrkMYwrCNh"  # Drive > Marketing > Claude Code Workspace > Content Creation
 
-# Capture destinations — now driven by routing.py (capture_folder_id per niche).
-# Call get_capture_folder(project) at runtime instead of using these constants.
-# Legacy constants kept for render-video.yml compatibility — do not use in new code.
-SOVEREIGN_FOLDER_ID = "1L89dLiVYfjNu3uz3l3S_rvZPxd2I8xjZ"   # LEGACY — wrong My Drive folder, do not use
+# Capture destinations — driven by routing.py (capture_folder_id per niche).
+# Call get_capture_folder(project) at runtime — do NOT hardcode folder IDs here.
 CONTENT_HUB_FOLDER_ID = "1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq" # OPC Content Hub — kept for reference
 
 # Spreadsheet IDs for content pipeline
@@ -918,7 +916,7 @@ def transcribe_audio(audio_path: str, url: str = "") -> str:
 
 def get_caption_srt(audio_path: str) -> str:
     """Get timestamped SRT captions from Whisper. Separate from transcribe_audio to avoid
-    breaking callers that expect plain text. Only called for sovereign/news projects that
+    breaking callers that expect plain text. Only called for news (Brazil/USA) projects that
     need timed captions for Remotion rendering."""
     if not OPENAI_API_KEY:
         return ""
@@ -1007,7 +1005,7 @@ VISUAL SUGGESTIONS:
   - [Image/screenshot idea 1]
   - [Image/screenshot idea 2]
 
-SOVEREIGN POST ANGLE:
+NEWS POST ANGLE:
   Hook: [scroll-stopping opening line]
   Core message: [concrete examples, not just negatives]
   Format: [talking head / carousel / before-after]
@@ -1271,7 +1269,15 @@ def create_calendar_task(story_id, project, url, doc_url, preview, notes, hub_ur
     cal = get_calendar_service()
     if not cal:
         return
-    labels = {"book": "BOOK CAPTURE", "sovereign": "SOVEREIGN CAPTURE", "content": "CONTENT CAPTURE"}
+    labels = {
+        "book": "BOOK CAPTURE",
+        "brazil": "BRAZIL NEWS CAPTURE",
+        "usa": "USA NEWS CAPTURE",
+        "opc": "OPC CAPTURE",
+        "ugc": "UGC CAPTURE",
+        "stocks": "STOCKS CAPTURE",
+        "higashi": "HIGASHI CAPTURE",
+    }
     label = labels.get(project, "CAPTURE")
     tomorrow = (datetime.now() + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
     try:
@@ -1361,7 +1367,23 @@ def _mark_queue_processed(url: str):
 
 def run_book(args, transcript):
     print("\n[BOOK] Running fact-check pipeline...")
-    analysis = analyze_book(transcript, args.url, args.story_id, args.notes or "")
+
+    # Research user notes BEFORE fact-check so findings land in the story doc.
+    # Manual tasks (ex: "find clip of XYZ") go to Inbox instead of being lost.
+    print("  Researching user notes before fact-check...")
+    book_research = research_from_notes(args.notes or "", transcript, "Book", args.story_id)
+    if book_research.get("manual_tasks"):
+        _write_manual_tasks_to_inbox(book_research["manual_tasks"], args.story_id, args.url)
+
+    # Feed research findings into analysis context so the book fact-checker sees them.
+    enriched_notes = args.notes or ""
+    if book_research.get("research_tasks"):
+        research_block = "\n\nPRE-RESEARCH FINDINGS:\n" + "\n".join(
+            f"- Q: {t.get('question','')}\n  A: {t.get('answer','')}" for t in book_research["research_tasks"]
+        )
+        enriched_notes = (enriched_notes + research_block).strip()
+
+    analysis = analyze_book(transcript, args.url, args.story_id, enriched_notes)
     path = TRANSCRIPTS_DIR / f"{args.story_id}_analysis.txt"
     path.write_text(analysis, encoding="utf-8")
     print(f"  Analysis saved: {path}")
@@ -1602,7 +1624,7 @@ Rules:
 
     # ── Step 2: build niche-aware researcher persona, then run each question ──
     niche_lower = niche.lower()
-    if any(x in niche_lower for x in ("news", "brazil", "usa", "sovereign", "book")):
+    if any(x in niche_lower for x in ("news", "brazil", "usa", "book")):
         researcher_persona = (
             "You are a research assistant for a bilingual investigative content creator "
             "covering Brazil and USA political news.\n"
@@ -2336,21 +2358,26 @@ def main():
     parser = argparse.ArgumentParser(description="Capture Pipeline v2")
     parser.add_argument("url")
     parser.add_argument("--project",
-                        choices=["book", "news", "opc", "ugc", "stocks", "higashi", "usa", "brazil", "sovereign", "content"],
+                        choices=["book", "brazil", "usa", "opc", "ugc", "stocks", "higashi",
+                                 # legacy aliases — normalized to canonical names below
+                                 "news", "sovereign", "content"],
                         default="book",
-                        help="book | news/brazil | opc | ugc | stocks | higashi | usa (routing.py is source of truth)")
+                        help="book | brazil | usa | opc | ugc | stocks | higashi (routing.py is source of truth)")
     parser.add_argument("--story-id", default=None)
     parser.add_argument("--notes", default="")
     parser.add_argument("--credits", action="store_true",
                         help="Fetch creator info via Apify for caption attribution")
     args = parser.parse_args()
 
-    # Normalize legacy project names → canonical names
-    _alias = {"sovereign": "news", "content": "opc", "brazil": "news", "usa": "news"}
+    # Normalize legacy project names → canonical names.
+    # Brazil and USA are DISTINCT projects with DIFFERENT Drive folders (routing.py).
+    # Both use the News pipeline flow (run_news) but keep project="brazil" or "usa"
+    # so get_capture_folder(args.project) routes to the correct niche folder.
+    _alias = {"sovereign": "brazil", "content": "opc", "news": "brazil"}
     args.project = _alias.get(args.project, args.project)
 
     if not args.story_id:
-        _prefixes = {"book": "BCI", "news": "NWS", "opc": "CNT",
+        _prefixes = {"book": "BCI", "brazil": "NWS", "usa": "NWS", "opc": "CNT",
                      "ugc": "UGC", "stocks": "STK", "higashi": "HIG"}
         prefix = _prefixes.get(args.project, "CNT")
         args.story_id = f"{prefix}-{datetime.now().strftime('%Y%m%d%H%M')}"
@@ -2399,7 +2426,9 @@ def main():
         srt_content = get_caption_srt(audio) if audio and not _is_youtube(args.url) else ""
         if args.project == "book":
             run_book(args, transcript)
-        elif args.project == "news":
+        elif args.project in ("brazil", "usa"):
+            # Both niches share the News pipeline flow but land in separate Drive folders
+            # (routing.py::capture_folder returns the correct Brazil or USA folder).
             srt_content = get_caption_srt(audio) if audio else ""
             run_news(args, transcript, video_path=video_path or "", srt_content=srt_content, creator_name=metadata.get("creator_name", ""))
         elif args.project == "ugc":

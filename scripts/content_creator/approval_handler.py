@@ -587,7 +587,7 @@ def _delete_old_versions(post_id, approved_folder_id):
 def _normalize_niche(raw):
     """Map any catalog niche value to the 3 canonical values carousel_builder expects."""
     r = (raw or "").lower().strip()
-    if any(x in r for x in ("brazil", "brasil", "quem", "news-brazil")):
+    if any(x in r for x in ("brazil", "brasil", "quem", "news-brazil", "sovereign", "news")):
         return "brazil"
     if any(x in r for x in ("usa", "united", "news-usa", "news-us", "the chain")):
         return "usa"
@@ -613,7 +613,7 @@ def _get_pending_posts():
         def v(name):
             idx = header_map.get(name.lower())
             return row[idx].strip() if idx is not None and idx < len(row) else ""
-        VALID_NICHES = {"opc", "brazil", "usa", "ugc", "news", "sovereign"}
+        VALID_NICHES = {"opc", "brazil", "usa", "ugc", "stocks", "higashi", "book"}
         if v("status") == "pending_approval":
             raw_niche = v("niche") or ""
             post_id = v("post_id") or (row[0] if len(row) > 0 else "")

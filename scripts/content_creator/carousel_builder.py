@@ -205,7 +205,7 @@ def _web_research(topic, lang="en"):
 
 
 def generate_carousel_content(topic, niche, template_key=None, brief=""):
-    if niche in ("brazil", "usa", "sovereign"):
+    if niche in ("brazil", "usa"):
         return generate_brazil_content(topic, brief)
     if not template_key:
         template_key = OPC_TEMPLATE if niche == "opc" else BRAZIL_TEMPLATE
@@ -683,30 +683,36 @@ def fetch_all_media(content, niche, work_dir):
     paths = {"cover": "", "slides": {}}
 
     # Cover image — try CC photo (option_a), fall back to AI generation (option_b)
+    # Filename slugs the subject so resources/images/ is self-documenting (slide1_trump_oval_office.jpg).
     cv = content.get("cover_visual", {})
     if cv:
         search_q = cv.get("option_a", {}).get("search_query", "")
+        cover_slug = re.sub(r"[^a-z0-9]+", "_", (search_q or "cover").lower()).strip("_")[:40] or "cover"
+        cover_fname = f"slide1_{cover_slug}.jpg"
         if search_q:
-            cover_path = _fetch_person_photo(search_q, work_dir, "cover.jpg")
+            cover_path = _fetch_person_photo(search_q, work_dir, cover_fname)
             paths["cover"] = cover_path
         if not paths["cover"]:
             opt_b = cv.get("option_b", {})
             ai_prompt = opt_b.get("prompt", "")
             if ai_prompt:
-                paths["cover"] = _generate_ai_cover(ai_prompt, work_dir, "cover.jpg")
+                paths["cover"] = _generate_ai_cover(ai_prompt, work_dir, cover_fname)
         if not paths["cover"] and cv.get("option_b", {}).get("prompt"):
             ai_prompt = cv["option_b"]["prompt"]
-            paths["cover"] = _generate_gemini_image(ai_prompt, work_dir, "cover.jpg")
+            paths["cover"] = _generate_gemini_image(ai_prompt, work_dir, cover_fname)
         if not paths["cover"] and search_q:
-            paths["cover"] = _fetch_pexels_image(search_q, work_dir, "cover.jpg")
+            paths["cover"] = _fetch_pexels_image(search_q, work_dir, cover_fname)
 
     # Middle slides — context images. CC photo first; AI fallback if it fails.
+    # Filename includes a slug of the query so resources/images/ is self-documenting
+    # (e.g. slide2_trump_oval_office.jpg instead of slide_2_context.jpg).
     for i, slide in enumerate(content.get("slides", []), start=2):
         if slide.get("visual_hint") == "context-image":
             cq = slide.get("context_image_query", "").strip()
             if not cq:
                 continue
-            fname = f"slide_{i}_context.jpg"
+            slug = re.sub(r"[^a-z0-9]+", "_", cq.lower()).strip("_")[:40] or "context"
+            fname = f"slide{i}_{slug}.jpg"
             img_path = _fetch_person_photo(cq, work_dir, fname)
             if not img_path and OPENAI_KEY:
                 ai_prompt = f"Editorial documentary photograph, {cq}, high contrast journalistic style, no text"
@@ -815,9 +821,15 @@ def _fetch_youtube_clip_apify(youtube_query, dest_dir, filename):
             return ""
         print(f"  Apify found: {video_url[:60]} for '{youtube_query[:40]}'")
 
-        # Step 2: download the video via downloader actor
+        # Step 2: download the video via downloader actor.
+        # streamers~youtube-video-downloader accepts slightly different shapes across versions —
+        # pass videoUrls (array), quality AND resolution to maximize hit rate.
         dl_items = _apify_run("streamers~youtube-video-downloader",
-                               {"url": video_url, "format": "mp4", "quality": "360p"}, wait=180)
+                               {"videoUrls": [{"url": video_url}],
+                                "url": video_url,
+                                "format": "mp4",
+                                "quality": "360p",
+                                "resolution": "360p"}, wait=180)
         download_url = ""
         for item in dl_items:
             download_url = (item.get("downloadUrl") or item.get("url") or
@@ -867,11 +879,14 @@ def fetch_clips(content, work_dir):
         clip_slots.append(("cover", 1, cover_suggestion.get("youtube_query", ""),
                            cover_suggestion.get("visual_hint", "bio-card")))
 
-    # Middle slots — all non-cover, non-sources suggestions, pick up to 2 evenly
+    # Middle slots — all non-cover, non-sources suggestions, pick up to 2 evenly spaced.
+    # Truly even spacing: for N candidates pick first + middle (N//2). With N=3 → [0,1]. N=4 → [0,2]. N=5 → [0,2].
     middle_candidates = [c for c in suggestions if c.get("slide", 0) not in (1, n_slides + 1)]
     if len(middle_candidates) >= 2:
-        step = max(1, len(middle_candidates) // 2)
-        chosen_middle = [middle_candidates[0], middle_candidates[min(step, len(middle_candidates)-1)]]
+        mid_idx = len(middle_candidates) // 2
+        chosen_middle = [middle_candidates[0]]
+        if mid_idx != 0 and middle_candidates[mid_idx] is not chosen_middle[0]:
+            chosen_middle.append(middle_candidates[mid_idx])
     elif middle_candidates:
         chosen_middle = middle_candidates
     else:
@@ -910,7 +925,7 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
       - Ken Burns CSS zoom animation on the background image
       - <video> element playing the clip inside the newspaper/sticker frame slot
     Returns list of (slide_idx, html_path) tuples — one per clip slot that has a clip.
-    Only implemented for brazil/usa/sovereign. OPC returns [] (no motion clips for OPC yet).
+    Only implemented for brazil/usa. OPC returns [] (no motion clips for OPC yet).
     Existing cover.html (static) is NOT modified.
     """
     if niche == "opc" or not clips:
@@ -963,8 +978,12 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
   </div>
 </div>"""
         else:
-            # Middle slide — find the slide data
-            slide_data = slides[slide_idx - 2] if (slide_idx - 2) < len(slides) else {}
+            # Middle slide — content["slides"] holds middle slides only (cover/sources are separate fields).
+            # Builder enumerates them with start=2, so slide_idx=2 → slides[0]. Clamp to avoid off-by-one silent empty.
+            data_idx = max(0, min(slide_idx - 2, len(slides) - 1)) if slides else 0
+            if data_idx != slide_idx - 2:
+                print(f"  build_motion_html: slide_idx {slide_idx} clamped to slides[{data_idx}] (out of range)")
+            slide_data = slides[data_idx] if slides else {}
             h_pt = esc(slide_data.get("heading_pt", ""))
             h_en = esc(slide_data.get("heading_en", ""))
             slide_img = (media_paths or {}).get("slides", {}).get(slide_idx, "")
@@ -1003,7 +1022,7 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
 
         fname = f"clip_slide_{slide_idx}.html"
         out_path = Path(work_dir) / fname
-        out_path.write_text(html)
+        out_path.write_text(html, encoding="utf-8")
         results.append((slide_idx, str(out_path)))
         print(f"  Motion HTML: {fname} (clip: {os.path.basename(clip_path)})")
 
@@ -1043,7 +1062,7 @@ body{background:var(--ob);overflow:hidden}
 def build_html(content, niche, topic_slug, work_dir, handle="@HANDLE_PLACEHOLDER", media_paths=None):
     if niche == "opc":
         return _build_opc_html(content, topic_slug, work_dir, media_paths=media_paths)
-    if niche in ("brazil", "usa", "sovereign"):
+    if niche in ("brazil", "usa"):
         return _build_brazil_html(content, topic_slug, work_dir, handle=handle, media_paths=media_paths)
     return None
 
