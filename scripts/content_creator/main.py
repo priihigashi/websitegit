@@ -424,6 +424,81 @@ def record_motion_slides(clip_html_files, output_dir, duration=5):
     return recorded
 
 
+def render_motion_remotion(cover_png_path, clip_path, output_dir, variant,
+                            hook_text="", slide_idx=1):
+    """Renderer tier #1 — Remotion programmatic render of CarouselMotion composition.
+
+    Produces <variant>_<NN>_<base>_motion.mp4 (+ gif) at 1080x1350, 5s loop.
+    Uses the CarouselMotion composition registered in scripts/remotion/src/Root.tsx.
+
+    Falls back silently (returns None) when:
+      • Remotion project missing / node_modules not installed
+      • npx remotion render exits non-zero
+      • Output file never appears
+
+    Philosophy: this is the preferred cover renderer. If it fails, main.py
+    falls through to Playwright, then to Ken Burns (ffmpeg zoompan on PNG).
+    """
+    remotion_root = Path(__file__).resolve().parents[1] / "remotion"
+    if not (remotion_root / "package.json").exists():
+        return None
+    if not (remotion_root / "node_modules").exists():
+        print("  Remotion: node_modules missing — skipping (Playwright/Ken Burns will handle)")
+        return None
+
+    os.makedirs(output_dir, exist_ok=True)
+    base = Path(cover_png_path).stem
+    if base.endswith("_html"):
+        base = base[:-5]
+    nn = f"{slide_idx:02d}"
+    mp4_path = Path(output_dir) / f"{variant}_{nn}_{base}_motion.mp4"
+    gif_path = Path(output_dir) / f"{variant}_{nn}_{base}_motion.gif"
+
+    # Write props JSON — Remotion accepts --props=<file> for complex payloads
+    props = {
+        "posterPng": str(Path(cover_png_path).resolve()),
+        "clipSrc": str(Path(clip_path).resolve()) if clip_path and Path(clip_path).exists() else None,
+        "hookText": hook_text or "",
+        "accentColor": "#F4C430",
+    }
+    props_file = Path(output_dir) / f".remotion_props_{variant}_{nn}.json"
+    props_file.write_text(json.dumps(props))
+
+    try:
+        r = subprocess.run(
+            ["npx", "remotion", "render",
+             "src/Root.tsx", "CarouselMotion",
+             str(mp4_path.resolve()),
+             f"--props={props_file.resolve()}",
+             "--codec=h264",
+             "--log=error"],
+            cwd=str(remotion_root),
+            capture_output=True, timeout=180
+        )
+        props_file.unlink(missing_ok=True)
+        if r.returncode != 0 or not mp4_path.exists():
+            err = r.stderr.decode("utf-8", errors="replace")[:300] if r.stderr else ""
+            print(f"  Remotion render miss ({base}): {err}")
+            return None
+
+        # Also emit the GIF for feed preview
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(mp4_path),
+             "-vf", "fps=15,scale=540:-1:flags=lanczos", str(gif_path)],
+            capture_output=True, timeout=60
+        )
+        # Preview frame (only cover slide)
+        if slide_idx == 1:
+            preview_path = Path(output_dir) / f"{variant}_preview_frame.jpg"
+            shutil.copy2(cover_png_path, preview_path)
+        print(f"  Remotion → {mp4_path.name} ({mp4_path.stat().st_size//1024}KB)")
+        return str(mp4_path)
+    except Exception as e:
+        props_file.unlink(missing_ok=True)
+        print(f"  Remotion exception ({base}): {e}")
+        return None
+
+
 def render_motion_cover(cover_png_path, output_dir, variant):
     """Ken Burns ffmpeg zoom on ONE static PNG → MP4 + GIF.
     Output MP4 inherits PNG name so every slide gets its own motion file:
@@ -655,17 +730,42 @@ def process_one_topic(topic_entry, run_date, drive):
         print("  FAILED: PNG render")
         return None
 
-    # 4. Render motion:
-    #    4a. Playwright video recording for slides with real clips (rachadinha style)
-    #    4b. Ken Burns ffmpeg fallback for cover + all other slides (safety net)
-    print("  Rendering motion...")
+    # 4. Render motion — RENDERER CASCADE: Remotion → Playwright → Ken Burns
+    #    Each tier is a fallback for the one above. Motion is default-ON; Ken Burns is the floor.
+    #    4a. Remotion render for the black cover — React-source, highest quality.
+    #    4b. Playwright video recording for slides with clips + HTML-source templates.
+    #    4c. Ken Burns ffmpeg zoom for every slide not already covered above.
+    print("  Rendering motion (cascade: Remotion → Playwright → Ken Burns)...")
     recorded_mp4s = []
     recorded_indices = set()
+
+    # 4a — Remotion cover render (if Remotion project present). Uses the clip from slide 1 if we got one.
+    clip_suggestions = content.get("clip_suggestions", [])
+    cover_sugg = next((c for c in clip_suggestions if c.get("slide", 0) == 1),
+                     (clip_suggestions[0] if clip_suggestions else {}))
+    cover_motion_prompt = cover_sugg.get("motion_prompt", "")
+    cover_renderer_pref = cover_sugg.get("motion_renderer", "remotion")  # default: remotion for cover
+    black_covers = sorted(png_dir.glob("black_01_*_html.png"))
+    remotion_cover_done = False
+    if black_covers and cover_renderer_pref == "remotion":
+        remotion_clip = clips.get(1, "")
+        r_path = render_motion_remotion(
+            str(black_covers[0]), remotion_clip, str(motion_dir), "black",
+            hook_text=(content.get("hook") or "")[:48], slide_idx=1
+        )
+        if r_path:
+            remotion_cover_done = True
+            recorded_indices.add(1)
+
+    # 4b — Playwright recording for any clip slide (cover included if Remotion missed + HTML clip file exists).
     if clip_html_files:
-        print(f"  Recording {len(clip_html_files)} clip slide(s) via Playwright...")
-        recorded_mp4s = record_motion_slides(clip_html_files, str(motion_dir), duration=5)
-        recorded_indices = {idx for idx, _ in recorded_mp4s}
-        print(f"  Playwright recorded: {len(recorded_mp4s)} MP4(s) (slides {sorted(recorded_indices)})")
+        pw_inputs = [(idx, h) for idx, h in clip_html_files
+                     if not (idx == 1 and remotion_cover_done)]
+        if pw_inputs:
+            print(f"  Recording {len(pw_inputs)} clip slide(s) via Playwright...")
+            recorded_mp4s = record_motion_slides(pw_inputs, str(motion_dir), duration=5)
+            recorded_indices |= {idx for idx, _ in recorded_mp4s}
+            print(f"  Playwright recorded: {len(recorded_mp4s)} MP4(s) (slides {sorted({idx for idx,_ in recorded_mp4s})})")
 
     # Ken Burns fallback — runs ONLY for slides NOT already recorded by Playwright.
     # This prevents overwriting Playwright MP4 (real clip + Ken Burns bg) with a plain ffmpeg Ken Burns.

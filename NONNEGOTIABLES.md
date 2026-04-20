@@ -46,6 +46,23 @@ Every carousel lands at: `<Series>/_TEMPLATE_CAROUSEL/v<N>_<slug>/` with `png/` 
 - Static and motion are SIBLINGS inside `_TEMPLATE_CAROUSEL`, never nested
 Source: CLAUDE.md — CAROUSEL FOLDER STANDARD
 
+**MOTION RENDERER CASCADE (added 2026-04-20)**
+Motion rendering tries renderers in this order, falling through on failure. Ken Burns is the floor, never the default.
+1. Remotion (`scripts/remotion/src/CarouselMotion.tsx`, composition id `CarouselMotion`) — React-source deterministic animation, used when `cover_renderer_pref == "remotion"` or the design is template-driven.
+2. Playwright `record_motion.js` — HTML-source captures for slides whose motion comes from the HTML itself.
+3. ffmpeg Ken Burns zoompan — last-resort animation of the poster PNG. Always succeeds. Guarantees every cover gets motion even if every external source fails.
+Never skip tiers silently. Never substitute an AI video tool (Kling / Runway / Pika) unless Priscila explicitly approves per post.
+Source: CLAUDE.md — MOTION RENDERER CASCADE + scripts/content_creator/MOTION_SOURCES_RESEARCH.md
+
+**VIDEO SOURCE CASCADE — 8 TIERS (added 2026-04-20)**
+For any slide that needs a live clip (speech / event / institutional b-roll), `motion_sources.fetch_clip_with_fallback` tries 8 sources before Ken Burns:
+YouTube (Apify) → Instagram (Apify) → Pexels → Pixabay → Archive.org → Wikimedia Commons → Stock scrapers → Ken Burns floor.
+- Haiku must emit DIFFERENT query phrasing per tier (`youtube_query` ≠ `pexels_query` ≠ `pixabay_query`).
+- Every successful fetch writes `<clip>.source.txt` sidecar with tier, url, license, attribution, query, fetched_at.
+- Stock tiers (Pexels/Pixabay/Archive/Wikimedia) skip for `visual_hint == "bio-card"` — faces never come from generic stock.
+- If every tier fails, Ken Burns animates the poster. Never empty motion folder.
+Source: scripts/content_creator/motion_sources.py + MOTION_SOURCES_RESEARCH.md
+
 **VISUAL-EVERY-OTHER-SLIDE**
 Never ship 3+ consecutive text-only slides. At least every other middle slide carries a visual anchor.
 News = face for named person OR contextual image (institution, event).

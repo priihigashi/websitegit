@@ -418,7 +418,17 @@ Return ONLY a valid JSON object with this exact structure:
     }}
   ],
   "clip_suggestions": [
-    {{"person_or_topic": "name or topic", "youtube_query": "specific YouTube search for a relevant clip", "slide": 3, "duration_hint": "5-8 seconds", "reason": "why this clip fits this slide"}}
+    {{"person_or_topic": "name or topic", "slide": 3, "duration_hint": "5-8 seconds", "reason": "why this clip fits this slide",
+      "youtube_query": "specific YouTube search — proper names OK, best for speeches/press",
+      "instagram_query": "IG-style phrasing — lowercase hashtag-friendly, creator reels",
+      "pexels_query": "stock-style phrasing — place/event/institution, NO proper names",
+      "pixabay_query": "alt stock phrasing — different wording than pexels_query",
+      "archive_query": "archival phrasing for public-domain footage (Archive.org)",
+      "wikimedia_query": "CC-licensed historical/institutional footage query",
+      "motion_prompt": "5s visual direction for the animated cover (Remotion/Kling): camera, mood, framing",
+      "motion_renderer": "remotion|playwright|kenburns",
+      "visual_hint": "bio-card|context-image|place|event|product-photo|none"
+    }}
   ],
   "sources": ["Source 1", "Source 2", "Source 3", "Source 4"],
   "cta_pt": "Salva pra não esquecer.",
@@ -449,8 +459,21 @@ visual_hint values:
   "none" → text-only, max 1 consecutive allowed
 First choice for Brazilian institutions: Agência Brasil CC BY 3.0 search terms. International subjects: English search terms.
 
-CLIP SUGGESTIONS RULE:
-If the topic involves a famous speech, public statement, historical moment, or iconic event that is available on YouTube (e.g. "I Have a Dream", Lula inauguration speech, Orbán victory speech, Lei Áurea signing ceremony), add an entry to clip_suggestions for the most relevant slide. YouTube clips will be cut to 5-8 sec and added to that slide's motion version. If no relevant clip exists, return an empty array.
+CLIP SUGGESTIONS + MOTION PROMPTS RULE (non-negotiable):
+The motion pipeline runs an 8-tier source cascade per clip: YouTube (Apify) → Instagram (Apify) → Pexels → Pixabay → Archive.org → Wikimedia Commons → stock scrapers → Ken Burns zoom (last resort). You must write DIFFERENT phrasing per tier so each tier can succeed even if the others fail.
+
+For every slide that would benefit from motion (cover + any slide naming a speech, law, institution, event, leader, or iconic moment):
+  - youtube_query   → proper names OK (best for speeches, press conferences, hearings)
+  - instagram_query → lowercase, hashtag-friendly, creator-reel phrasing
+  - pexels_query    → stock-safe: place/institution/event, NO proper names, NO party names
+  - pixabay_query   → different wording than pexels_query (avoid duplicate failure)
+  - archive_query   → public-domain / archival phrasing (vintage footage, historical film)
+  - wikimedia_query → CC-licensed historical or institutional footage
+  - motion_prompt   → 5-second directorial note: camera move + mood + framing (e.g. "slow push-in on Brasília facade, dusk, cinematic, 24mm", "archival grain, slight zoom on signing ceremony"). This drives Remotion animation + serves as AI-video prompt if we escalate to Runway/Kling.
+  - motion_renderer → "remotion" (default for cover/template slides), "playwright" (HTML-driven motion), or "kenburns" (photo-only). Never omit.
+  - visual_hint     → same values as slides.visual_hint. Determines whether stock tiers are allowed (stock skips for bio-card).
+
+If NO tier could plausibly succeed (hyper-local story, no public footage, no place to film) return an empty clip_suggestions array — do not invent false queries. Ken Burns floor will still animate the poster image, so every cover gets motion regardless.
 
 NAMED-PERSON → FACE RULE (non-negotiable):
 For every slide, populate `mentioned_people` with EVERY named person referenced in that
@@ -854,11 +877,22 @@ def _fetch_youtube_clip_apify(youtube_query, dest_dir, filename):
 
 def fetch_clips(content, work_dir):
     """Download video clips for motion version. Returns dict {slide_idx: abs_clip_path}.
-    Distribution: cover (idx 0 = cover, idx 2..N-1 = middle slides, last = sources).
-    Target: 3 clip slots — cover + 2 evenly spaced middle slides (never sources).
-    Fallback chain per slot: Apify YouTube → Pexels video (places only) → skip (Ken Burns fallback).
-    slide_idx matches _build_brazil_html enumerate: cover=special, slides start at 2.
+
+    Distribution: cover + up to 2 evenly spaced middle slides (never sources).
+    Source chain per slot is delegated to motion_sources.fetch_clip_with_fallback:
+      1. Apify YouTube  →  2. Apify Instagram  →  3. Pexels
+      4. Pixabay        →  5. Archive.org      →  6. Wikimedia Commons
+      7. (stock scrapers — placeholder)         →  empty = Ken Burns fallback by caller.
+
+    Philosophy (Priscila, 2026-04-20): "so many fallbacks that something will go through."
+    Legacy keep-alive: _fetch_youtube_clip_apify and _fetch_pexels_video remain as
+    the engines for tiers 1 and 3 and are still called directly by motion_sources.
     """
+    try:
+        from motion_sources import fetch_clip_with_fallback
+    except ImportError:
+        from scripts.content_creator.motion_sources import fetch_clip_with_fallback  # type: ignore
+
     clips = {}
     suggestions = content.get("clip_suggestions", [])
     if not suggestions:
@@ -867,20 +901,14 @@ def fetch_clips(content, work_dir):
     slides = content.get("slides", [])
     n_slides = len(slides)
 
-    # Build candidate list: [{"slide_idx": N, "query": "...", "visual_hint": "..."}]
-    # cover is slide_idx=1 (special), middle slides are 2..n_slides, last is sources
     by_slide = {c.get("slide", 0): c for c in suggestions}
 
-    # Distribution: cover always first. Then pick 2 evenly from middle slides (not last).
+    # Distribution: cover always first. Then pick up to 2 evenly from middle slides (not last).
     clip_slots = []
-    # Cover
     cover_suggestion = by_slide.get(1) or (suggestions[0] if suggestions else None)
     if cover_suggestion:
-        clip_slots.append(("cover", 1, cover_suggestion.get("youtube_query", ""),
-                           cover_suggestion.get("visual_hint", "bio-card")))
+        clip_slots.append(("cover", 1, cover_suggestion))
 
-    # Middle slots — all non-cover, non-sources suggestions, pick up to 2 evenly spaced.
-    # Truly even spacing: for N candidates pick first + middle (N//2). With N=3 → [0,1]. N=4 → [0,2]. N=5 → [0,2].
     middle_candidates = [c for c in suggestions if c.get("slide", 0) not in (1, n_slides + 1)]
     if len(middle_candidates) >= 2:
         mid_idx = len(middle_candidates) // 2
@@ -893,27 +921,22 @@ def fetch_clips(content, work_dir):
         chosen_middle = []
 
     for c in chosen_middle:
-        clip_slots.append((f"slide_{c.get('slide',0)}", c.get("slide", 0),
-                           c.get("youtube_query", ""), c.get("visual_hint", "context-image")))
+        clip_slots.append((f"slide_{c.get('slide',0)}", c.get("slide", 0), c))
 
-    # Fetch each slot with fallback chain
-    for slot_name, slide_idx, query, visual_hint in clip_slots:
-        if not query:
+    # Fetch each slot through the unified 7-tier chain
+    for slot_name, slide_idx, sugg in clip_slots:
+        # Require at least one query string
+        if not any(sugg.get(k) for k in ("youtube_query", "instagram_query",
+                                          "pexels_query", "pixabay_query",
+                                          "archive_query", "wikimedia_query", "query")):
             continue
+        visual_hint = sugg.get("visual_hint", "context-image")
         fname = f"{slot_name}.mp4"
-
-        # Route A: Apify YouTube (works for people + places)
-        path = _fetch_youtube_clip_apify(query, work_dir, fname)
-
-        # Route B: Pexels video — only for places/events/institutions (not specific people)
-        if not path and visual_hint in ("context-image", "place", "event"):
-            path = _fetch_pexels_video(query, work_dir, fname)
-
-        # Route C: empty → caller uses Ken Burns on static image (always available)
+        path = fetch_clip_with_fallback(sugg, work_dir, fname, visual_hint=visual_hint)
         if path:
             clips[slide_idx] = path
         else:
-            print(f"  Clip slot '{slot_name}': no clip found — Ken Burns fallback")
+            print(f"  Clip slot '{slot_name}': every tier missed — Ken Burns floor on PNG")
 
     print(f"  fetch_clips: {len(clips)}/{len(clip_slots)} clip(s) ready: {list(clips.keys())}")
     return clips

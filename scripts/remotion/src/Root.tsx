@@ -1,6 +1,7 @@
 import React from "react";
 import { Composition, registerRoot } from "remotion";
 import { NewsReel, NewsReelProps } from "./NewsReel";
+import { CarouselMotion, CarouselMotionProps } from "./CarouselMotion";
 
 // Default props for development previews — overridden by --props in CI render
 const defaultProps: NewsReelProps = {
@@ -23,6 +24,15 @@ const defaultProps: NewsReelProps = {
   topicTitle: "REGIME CHANGE",
 };
 
+// CarouselMotion default props — overridden by --props in CI render.
+// 1080x1350 matches Instagram carousel slide dimensions; 150 frames @ 30fps = 5s loop.
+const carouselDefaultProps: CarouselMotionProps = {
+  posterPng: "./public/poster_placeholder.png",
+  clipSrc: undefined,
+  hookText: undefined,
+  accentColor: "#F4C430",
+};
+
 const RemotionRoot: React.FC = () => {
   return (
     <>
@@ -43,6 +53,15 @@ const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         defaultProps={{ ...defaultProps, language: "pt" }}
+      />
+      <Composition
+        id="CarouselMotion"
+        component={CarouselMotion}
+        durationInFrames={150}
+        fps={30}
+        width={1080}
+        height={1350}
+        defaultProps={carouselDefaultProps}
       />
     </>
   );

@@ -445,6 +445,60 @@ When she says "do we have a skill for X" → check this tab first before saying 
 13. Gmail MCP used when task required SENDING email → Gmail MCP CANNOT send, only creates drafts. For actual sending: trigger GitHub Actions `send_email.yml` via `~/bin/gh workflow run send_email.yml --repo priihigashi/oak-park-ai-hub -f to=... -f subject=... -f body=...`. This uses PRI_OP_GMAIL_APP_PASSWORD (already set) and actually delivers the email. Same pattern as 4am_agent.yml. → this is a server-side failure from the gdrive MCP server, NOT a query formatting issue. Do NOT retry it. Immediately switch to `mcp__claude_ai_Google_Drive__search_files` (Route A). If that also fails, use OAuth Python Drive API (Route C). Never report Drive search as blocked without trying all 3 routes. See: reference_active_connections.md → "Drive Search & Access — 3 Routes"
 
 
+## MOTION CHAIN — RENDERERS + SOURCES (added 2026-04-20)
+
+Every motion render (carousel cover, reel, any animated slide) goes through TWO cascading chains. Ken Burns is always the floor so rendering never fails silently.
+
+### Renderer cascade (order matters)
+1. **Remotion** — `scripts/remotion/src/CarouselMotion.tsx`, composition id `CarouselMotion`, 1080×1350 @ 30fps. Used when `cover_renderer_pref == "remotion"` or the series is template-driven. Writes MP4 + GIF + preview frame.
+2. **Playwright** — `scripts/remotion/record_motion.js` or equivalent HTML recorder. Used for slides whose motion lives in the HTML itself.
+3. **ffmpeg Ken Burns zoompan** — always-succeeds floor. Animates the poster PNG. Never skipped.
+
+Never substitute AI-video tools (Kling / Runway / Pika) unless Priscila explicitly says so per post.
+
+### Video source cascade — 8 tiers
+Module: `scripts/content_creator/motion_sources.py` → `fetch_clip_with_fallback(slide_cfg, work_dir, filename, visual_hint)`.
+
+Order: YouTube (Apify) → Instagram (Apify) → Pexels → Pixabay → Archive.org → Wikimedia Commons → stock scrapers → Ken Burns poster animation.
+
+Rules:
+- Every tier gets its OWN query string (`youtube_query`, `instagram_query`, `pexels_query`, `pixabay_query`, `archive_query`, `wikimedia_query`). Haiku emits them in `clip_suggestions[*]`.
+- Every fetched clip writes a `<clip>.source.txt` sidecar with tier, url, license, attribution, query, fetched_at.
+- Stock tiers (Pexels/Pixabay/Archive/Wikimedia) are gated — they skip automatically when `visual_hint == "bio-card"` so faces never come from generic stock.
+- Clips live in `<work_dir>/resources/clips/` alongside `png/` and `motion/`.
+- Silent-fail per tier with one-line log. Never raise until every tier exhausted.
+
+### Env / secret requirements
+- `APIFY_API_KEY` — YouTube + Instagram scraping (GitHub secret ✅)
+- `PEXELS_API_KEY` — stock video (GitHub secret ✅)
+- `PIXABAY_API_KEY` — stock video (optional; skips tier if missing)
+- `ANTHROPIC_API_KEY` — Haiku content generation (unchanged)
+
+### Per-slide JSON schema (extension in `clip_suggestions`)
+```
+{
+  "slide": 3, "duration_hint": "5-8 seconds",
+  "youtube_query": "proper names OK — speeches, press",
+  "instagram_query": "lowercase hashtag-friendly phrasing",
+  "pexels_query": "place/event/institution — NO proper names",
+  "pixabay_query": "different wording than pexels_query",
+  "archive_query": "archival / public-domain phrasing",
+  "wikimedia_query": "CC-licensed institutional/historical",
+  "motion_prompt": "5s direction: camera move + mood + framing",
+  "motion_renderer": "remotion|playwright|kenburns",
+  "visual_hint": "bio-card|context-image|place|event|product-photo|none"
+}
+```
+
+### When to read this
+- Any edit to `scripts/content_creator/carousel_builder.py`, `main.py`, `motion_sources.py`, or `scripts/remotion/src/`.
+- Any new niche pipeline. Motion chain rules apply cross-niche: Brazil News, USA News, OPC, UGC, Higashi.
+- Any new Haiku prompt — it MUST populate all 6 tier queries + motion_prompt + motion_renderer.
+
+Full research + schema + testing matrix: `scripts/content_creator/MOTION_SOURCES_RESEARCH.md`.
+
+---
+
 ## CAPTURE PIPELINE — PROJECT ROUTING (updated 2026-04-17)
 
 When triggering capture_pipeline.yml, always use the correct `project` input:
