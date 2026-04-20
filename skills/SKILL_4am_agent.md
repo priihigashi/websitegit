@@ -23,7 +23,7 @@ Runs the full daily content automation pipeline for Oak Park Construction:
 ```bash
 cd /tmp && git clone https://github.com/priihigashi/oak-park-ai-hub.git && cd oak-park-ai-hub/scripts/4am_agent
 pip install anthropic google-auth google-auth-httplib2 google-api-python-client requests pytz
-export APIFY_API_KEY=... PEXELS_API_KEY=... ANTHROPIC_API_KEY=... GOOGLE_SA_KEY=... NTFY_TOPIC=...
+export APIFY_API_KEY=... PEXELS_API_KEY=... CLAUDE_KEY_4_CONTENT=... GOOGLE_SA_KEY=... NTFY_TOPIC=...
 python main.py
 ```
 
@@ -64,7 +64,7 @@ Runs automatically at **4 AM ET every day**
 |---|---|
 | APIFY_API_KEY | ✅ Set |
 | PEXELS_API_KEY | ✅ Set |
-| ANTHROPIC_API_KEY | ✅ Set |
+| CLAUDE_KEY_4_CONTENT | ✅ Set |
 | GOOGLE_SA_KEY | ✅ Set |
 | NTFY_TOPIC | ⚠️ Must be set — see setup below |
 

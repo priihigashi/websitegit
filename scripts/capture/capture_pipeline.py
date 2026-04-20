@@ -898,8 +898,36 @@ def transcribe_audio(audio_path: str, url: str = "") -> str:
             print(f"  Transcribed via youtube-transcript-api ({len(result)} chars)")
             return result
         except Exception as e:
-            # Raise so the outer exception handler sends a failure notification email.
-            raise RuntimeError(f"youtube-transcript-api failed for {url}: {e}") from e
+            # youtube-transcript-api hits InnerTube directly and is blocked at the network
+            # layer when GitHub runners use Azure IPs. Cookies don't apply to this library.
+            # Fall through to yt-dlp + Whisper using PRI_OP_YT_COOKIES (already set as secret).
+            print(f"  youtube-transcript-api failed ({e}) — trying yt-dlp + Whisper fallback...")
+            import tempfile as _tmp
+            with _tmp.TemporaryDirectory() as _td:
+                fallback_audio = _try_ytdlp(url, _td)
+                if not fallback_audio and _is_youtube(url):
+                    print("  Retrying yt-dlp with iOS client trick...")
+                    fallback_audio = _try_ytdlp(url, _td, [
+                        "--extractor-args", "youtube:player_client=ios,web_creator",
+                    ])
+                if not fallback_audio and _is_youtube(url):
+                    print("  Trying Apify YouTube download...")
+                    fallback_audio = _try_apify_youtube_download(url, _td)
+                if not fallback_audio:
+                    raise RuntimeError(
+                        f"All YouTube paths failed for {url}: transcript-api blocked + "
+                        f"yt-dlp + Apify all returned no audio"
+                    ) from e
+                if not OPENAI_API_KEY:
+                    raise RuntimeError("OPENAI_API_KEY not set — cannot Whisper-transcribe yt-dlp audio") from e
+                from openai import OpenAI as _OAI
+                _client = _OAI(api_key=OPENAI_API_KEY)
+                with open(fallback_audio, "rb") as _f:
+                    result = _client.audio.transcriptions.create(
+                        model="whisper-1", file=_f, response_format="text"
+                    )
+                print(f"  Transcribed via yt-dlp + Whisper fallback ({len(result)} chars)")
+                return result
 
     if not OPENAI_API_KEY:
         print("  ERROR: OPENAI_API_KEY not set")
@@ -1936,7 +1964,8 @@ def save_to_content_hub(story_id: str, url: str, transcript: str, classification
 
 
 def save_to_news_folder(story_id: str, url: str, transcript: str, classification: dict,
-                         video_path: str = "", notes: str = "", research: dict = None) -> tuple:
+                         video_path: str = "", notes: str = "", research: dict = None,
+                         project: str = "brazil") -> tuple:
     """News niche routing — saves to Big Crazy Ideas > News with shared/english/portuguese structure.
 
     Structure created:
@@ -1963,10 +1992,10 @@ def save_to_news_folder(story_id: str, url: str, transcript: str, classification
         slug = re.sub(r"[^a-z0-9]+", "-", summary.lower()).strip("-")[:50] or story_id.lower()
         folder_name = f"{date}_{slug}"
 
-        # 1. Create story folder under News
+        # 1. Create story folder under News (routing.py supplies the per-niche capture folder)
         story_folder = drive.files().create(
             body={"name": folder_name, "mimeType": "application/vnd.google-apps.folder",
-                  "parents": [NEWS_FOLDER_ID]},
+                  "parents": [get_capture_folder(project)]},
             supportsAllDrives=True, fields="id,webViewLink"
         ).execute()
         story_id_drive = story_folder["id"]
@@ -2238,7 +2267,7 @@ def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_c
     if cl.get("niche", "").lower() == "news":
         hub_url, doc_url = save_to_news_folder(sid, args.url, transcript, cl,
                                                  video_path=video_path, notes=args.notes or "",
-                                                 research=opc_research)
+                                                 research=opc_research, project=args.project)
         folder_url = hub_url  # Same folder contains both archive (_shared) and production (english/portuguese)
     else:
         # Save raw transcript + resources + video to Content Hub (permanent home)

@@ -979,6 +979,15 @@ def process_one_topic(topic_entry, run_date, drive):
         mentioned_people.extend(slide.get("mentioned_people", []))
     mentioned_people = list(dict.fromkeys(mentioned_people))  # dedupe, preserve order
 
+    # F6 fix: populate cover_urls so first-pass preview email shows real images.
+    # make_cover_thumbnails_public scans direct children only — pass png_sub (not version_folder_id).
+    cover_urls = {}
+    try:
+        from email_preview import make_cover_thumbnails_public
+        cover_urls = make_cover_thumbnails_public(png_sub, get_oauth_token())
+    except Exception as _cover_err:
+        print(f"  cover_urls fetch failed (non-fatal): {_cover_err}")
+
     return {
         "post_id": post_id,
         "topic": topic,
@@ -996,6 +1005,8 @@ def process_one_topic(topic_entry, run_date, drive):
         "motion_folder_id": motion_sub,
         "static_link": folder_link,
         "motion_link": motion_link,
+        # cover thumbnails for first-pass preview email
+        "cover_urls": cover_urls,
         # reply guide data
         "cover_visual": content.get("cover_visual", {}),
         "clip_suggestions": content.get("clip_suggestions", []),

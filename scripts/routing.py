@@ -98,9 +98,9 @@ ROUTES = {
     "book": {
         "label":              "Book",
         "pipeline":           "book",
-        "drive_id":           "0AIPzwsJD_qqzUk9PVA",
-        "drive_name":         "Marketing",
-        "capture_folder_env": "",
+        "drive_id":           "0AH7_C87G0ZwgUk9PVA",
+        "drive_name":         "News",
+        "capture_folder_id":  "15_mV965QoGsi3Y9gd45NDiUiig4eeGe9",  # News/Book/Captures
         "content_control_id": "",
         "content_control_tab":"",
         "published_tab":      "",

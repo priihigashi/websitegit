@@ -472,7 +472,7 @@ Rules:
 - `APIFY_API_KEY` — YouTube + Instagram scraping (GitHub secret ✅)
 - `PEXELS_API_KEY` — stock video (GitHub secret ✅)
 - `PIXABAY_API_KEY` — stock video (optional; skips tier if missing)
-- `ANTHROPIC_API_KEY` — Haiku content generation (unchanged)
+- `CLAUDE_KEY_4_CONTENT` — Haiku content generation (separate billing from blog)
 
 ### Per-slide JSON schema (extension in `clip_suggestions`)
 ```
