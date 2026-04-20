@@ -16,6 +16,12 @@ from datetime import datetime, timedelta
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 import anthropic
+import sys, pathlib as _pl
+sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent / "capture"))
+try:
+    from _llm_fallback import llm_text as _llm_text_cascade
+except Exception:
+    _llm_text_cascade = None
 
 CHAT_LOGS_FOLDER = "1qitnbz5_8tfZI2rnTogV1zLLLLOwFVCw"
 SPREADSHEET_ID   = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
@@ -25,6 +31,18 @@ GITHUB_REPO      = "priihigashi/oak-park-ai-hub"
 GITHUB_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
 et               = pytz.timezone("America/New_York")
 client           = anthropic.Anthropic(api_key=os.environ["CLAUDE_KEY_4_CONTENT"])
+
+
+def _llm(prompt, *, tier, max_tokens, context):
+    """Cascade through Claude → OpenAI → Gemini. Falls back to direct Claude if module missing."""
+    if _llm_text_cascade:
+        return _llm_text_cascade(prompt, model_tier=tier, max_tokens=max_tokens, context=context)
+    model = "claude-sonnet-4-6" if tier == "sonnet" else "claude-haiku-4-5-20251001"
+    resp = client.messages.create(
+        model=model, max_tokens=max_tokens,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return resp.content[0].text
 
 def _creds():
     raw = os.environ["SHEETS_TOKEN"]
@@ -133,12 +151,7 @@ Return ONLY valid JSON:
 auto_actionable = true means Claude can create the Calendar task without asking Priscila.
 Return empty arrays if nothing found."""
 
-    resp = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1000,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = resp.content[0].text.strip()
+    text = _llm(prompt, tier="haiku", max_tokens=1000, context="chat_log_reader: extract carry-forwards").strip()
     if "```json" in text:
         text = text.split("```json")[1].split("```")[0].strip()
     elif "```" in text:

@@ -12,13 +12,22 @@ Dedup state files (W1/W2 fix):
   healed_modules.json    — tracks Calendar tasks created per module (skip if <7 days)
   researched_modules.json — tracks research triggers per module (skip if <7 days)
 """
-import os, json, base64, requests
+import os, sys, json, base64, requests
 import urllib.request, urllib.parse
+import pathlib as _pl
 import pytz
 from datetime import datetime
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 import anthropic
+
+# Shared LLM fallback cascade (Claude → OpenAI → Gemini). Keeps self-healing alive on quota exhaustion.
+sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent / "capture"))
+try:
+    from _llm_fallback import llm_text
+except Exception as _e:
+    print(f"[self_healer] _llm_fallback import failed ({_e}) — using Claude direct")
+    llm_text = None
 
 FAILURES_FILE    = ".github/agent_state/module_failures.json"
 HEALED_FILE      = ".github/agent_state/healed_modules.json"
@@ -27,6 +36,15 @@ GITHUB_REPO      = "priihigashi/oak-park-ai-hub"
 GITHUB_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
 et               = pytz.timezone("America/New_York")
 client           = anthropic.Anthropic(api_key=os.environ["CLAUDE_KEY_4_CONTENT"])
+
+
+def _llm(prompt: str, *, tier: str = "haiku", max_tokens: int = 800, context: str = "") -> str:
+    if llm_text is not None:
+        return llm_text(prompt, model_tier=tier, max_tokens=max_tokens, context=context)
+    model = "claude-sonnet-4-6" if tier == "sonnet" else "claude-haiku-4-5-20251001"
+    resp = client.messages.create(model=model, max_tokens=max_tokens,
+                                  messages=[{"role": "user", "content": prompt}])
+    return resp.content[0].text
 
 TRANSIENT = ["timeout", "connection", "503", "502", "rate limit", "429", "network", "socket"]
 CONFIG    = ["not found", "missing secret", "401", "403", "credential", "permission", "forbidden"]
@@ -118,10 +136,7 @@ def _categorize(error, tb):
 
 def _haiku_fix(module_name, error, tb):
     """Ask Haiku for a minimal fix. Returns fix dict or confidence=0."""
-    resp = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=600,
-        messages=[{"role": "user", "content": f"""Python module failed in GitHub Actions.
+    prompt = f"""Python module failed in GitHub Actions.
 Module: {module_name}
 Error: {error}
 Traceback: {tb[:1500]}
@@ -132,9 +147,8 @@ Return JSON only:
   "file_to_edit": "scripts/4am_agent/{module_name}.py",
   "old_code": "exact string to replace", "new_code": "replacement"}}
 If confidence < 70, return {{"confidence": 0, "fix_description": "cannot auto-fix",
-  "file_to_edit": null, "old_code": null, "new_code": null}}"""}],
-    )
-    text = resp.content[0].text.strip()
+  "file_to_edit": null, "old_code": null, "new_code": null}}"""
+    text = _llm(prompt, tier="haiku", max_tokens=600, context=f"self_healer.haiku_fix({module_name})").strip()
     if "```json" in text: text = text.split("```json")[1].split("```")[0].strip()
     elif "```" in text:   text = text.split("```")[1].split("```")[0].strip()
     try:
@@ -204,10 +218,7 @@ def _schema_aware_haiku_fix(module_name, error, tb):
 
     live_headers = _fetch_live_headers(sheet_key) if sheet_key else "(sheet key unknown)"
 
-    resp = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=800,
-        messages=[{"role": "user", "content": f"""Python module failed in GitHub Actions — likely a schema/column mismatch.
+    prompt = f"""Python module failed in GitHub Actions — likely a schema/column mismatch.
 
 Module: {module_name}
 Error: {error}
@@ -224,9 +235,8 @@ Return JSON only:
   "file_to_edit": "scripts/4am_agent/{module_name}.py",
   "old_code": "exact string to replace", "new_code": "replacement"}}
 If confidence < 70, return {{"confidence": 0, "fix_description": "cannot auto-fix",
-  "file_to_edit": null, "old_code": null, "new_code": null}}"""}],
-    )
-    text = resp.content[0].text.strip()
+  "file_to_edit": null, "old_code": null, "new_code": null}}"""
+    text = _llm(prompt, tier="haiku", max_tokens=800, context=f"self_healer.schema_fix({module_name})").strip()
     if "```json" in text: text = text.split("```json")[1].split("```")[0].strip()
     elif "```" in text:   text = text.split("```")[1].split("```")[0].strip()
     try:
@@ -416,12 +426,7 @@ def _autonomous_solve(module_name, error, tb, run_id=None):
     )
 
     try:
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=800,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = resp.content[0].text.strip()
+        text = _llm(prompt, tier="haiku", max_tokens=800, context=f"self_healer.autonomous_solve({module_name})").strip()
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0].strip()
         elif "```" in text:

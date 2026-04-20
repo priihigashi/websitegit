@@ -24,7 +24,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install anthropic google-auth google-auth-httplib2 google-api-python-client requests pytz
+        run: pip install anthropic openai google-generativeai replicate google-auth google-auth-httplib2 google-api-python-client requests pytz
 
       - name: Restore CLAUDE.md for mirror step
         env:
@@ -56,6 +56,9 @@ jobs:
           PEXELS_API_KEY:      ${{ secrets.PEXELS_API_KEY }}
           YOUTUBE_API_KEY:     ${{ secrets.YOUTUBE_API_KEY }}
           CLAUDE_KEY_4_CONTENT:   ${{ secrets.CLAUDE_KEY_4_CONTENT }}
+          OPENAI_API_KEY:         ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY:         ${{ secrets.GEMINI_API_KEY }}
+          PRI_OP_REPLICATE_API_KEY: ${{ secrets.PRI_OP_REPLICATE_API_KEY }}
           SHEETS_TOKEN:        ${{ secrets.SHEETS_TOKEN }}
           BUFFER_API_KEY:      ${{ secrets.BUFFER_API_KEY_EXP04092027 }}
           CONTENT_SHEET_ID:         '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'

@@ -5,8 +5,26 @@ Scripts must be under 60 seconds (~130 words).
 """
 import os, json
 import anthropic
+import sys, pathlib as _pl
+sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent / "capture"))
+try:
+    from _llm_fallback import llm_text as _llm_text_cascade
+except Exception:
+    _llm_text_cascade = None
 
 client = anthropic.Anthropic(api_key=os.environ["CLAUDE_KEY_4_CONTENT"], timeout=120.0)
+
+
+def _llm(prompt, *, tier, max_tokens, system=None, context=""):
+    """Cascade through Claude → OpenAI → Gemini. Falls back to direct Claude if module missing."""
+    if _llm_text_cascade:
+        return _llm_text_cascade(prompt, model_tier=tier, max_tokens=max_tokens, system=system, context=context)
+    model = "claude-sonnet-4-6" if tier == "sonnet" else "claude-haiku-4-5-20251001"
+    kwargs = {"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]}
+    if system:
+        kwargs["system"] = system
+    resp = client.messages.create(**kwargs)
+    return resp.content[0].text
 
 SYSTEM = """You are a content strategist for Oak Park Construction, a licensed general contractor
 based in Pompano Beach, Florida, serving Broward County and South Florida.
@@ -82,14 +100,7 @@ Return ONLY a valid JSON array with exactly 2 objects:
   {{ ... }}
 ]"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2500,
-        system=SYSTEM,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    text = response.content[0].text.strip()
+    text = _llm(prompt, tier="sonnet", max_tokens=2500, system=SYSTEM, context="script_generator: pick 2 talking-head topics").strip()
     # Strip markdown code fences if present
     if "```json" in text:
         text = text.split("```json")[1].split("```")[0].strip()

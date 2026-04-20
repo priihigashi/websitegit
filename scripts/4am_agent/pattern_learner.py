@@ -13,14 +13,23 @@ It answers TWO questions:
   Tier 3 (Haiku LLM, only if meaningful): extract actionable rules → write to Claude Rules tab
   Result: 90%+ of nights = zero LLM cost on plan improvement path.
 """
-import os, json, base64, requests
+import os, sys, json, base64, requests
 import urllib.request, urllib.parse
+import pathlib as _pl
 import context_reader
 import pytz
 import anthropic
 from datetime import datetime
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
+
+# Shared LLM fallback (Claude → OpenAI → Gemini). Never stops the flow on quota.
+sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent / "capture"))
+try:
+    from _llm_fallback import llm_text
+except Exception as _e:
+    print(f"[pattern_learner] _llm_fallback import failed ({_e}) — falling back to Claude-only")
+    llm_text = None
 
 SPREADSHEET_ID        = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 FLOW_PLANS_TRACKER_ID = "1fggy918FgPfnMQ-dzGQk2zx9uhi2_-uWXMKGW4MA47k"
@@ -31,6 +40,16 @@ ANTHROPIC_KEY         = os.environ["CLAUDE_KEY_4_CONTENT"]
 et                    = pytz.timezone("America/New_York")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+
+
+def _llm(prompt: str, *, tier: str = "sonnet", max_tokens: int = 2000, context: str = "") -> str:
+    """Use the shared fallback cascade if available, else direct Claude call (preserves prior behavior)."""
+    if llm_text is not None:
+        return llm_text(prompt, model_tier=tier, max_tokens=max_tokens, context=context)
+    model = "claude-sonnet-4-6" if tier == "sonnet" else "claude-haiku-4-5-20251001"
+    resp = client.messages.create(model=model, max_tokens=max_tokens,
+                                  messages=[{"role": "user", "content": prompt}])
+    return resp.content[0].text
 
 
 def _oauth_creds():
@@ -148,13 +167,7 @@ Return a JSON array (can be empty [] if no patterns found):
   }}
 ]"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4000,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    text = response.content[0].text.strip()
+    text = _llm(prompt, tier="sonnet", max_tokens=4000, context="pattern_learner: pattern detection").strip()
     if "```json" in text:
         text = text.split("```json")[1].split("```")[0].strip()
     elif "```" in text:
@@ -164,12 +177,10 @@ Return a JSON array (can be empty [] if no patterns found):
         return json.loads(text)
     except json.JSONDecodeError:
         print("[pattern_learner] JSON parse failed — retrying with tighter prompt...")
-        resp2 = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=5000,
-            messages=[{"role": "user", "content": prompt + "\n\nReturn ONLY the JSON array. No explanation, no markdown."}],
-        )
-        text2 = resp2.content[0].text.strip()
+        text2 = _llm(
+            prompt + "\n\nReturn ONLY the JSON array. No explanation, no markdown.",
+            tier="sonnet", max_tokens=5000, context="pattern_learner: retry strict JSON",
+        ).strip()
         if "```json" in text2: text2 = text2.split("```json")[1].split("```")[0].strip()
         elif "```" in text2:   text2 = text2.split("```")[1].split("```")[0].strip()
         try:
@@ -383,13 +394,7 @@ Output ONLY a JSON array (empty [] if nothing actionable):
   {{"doc_id": "...", "rule": "One-sentence rule Claude should follow."}}
 ]"""
 
-    response = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=500,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    text = response.content[0].text.strip()
+    text = _llm(prompt, tier="haiku", max_tokens=500, context="pattern_learner: flow-plan rule extraction").strip()
     if "```json" in text:
         text = text.split("```json")[1].split("```")[0].strip()
     elif "```" in text:
