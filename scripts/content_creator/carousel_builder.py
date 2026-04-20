@@ -4,14 +4,43 @@ carousel_builder.py — Generates carousel HTML from template + topic, renders P
 Uses Claude Haiku for content generation, Playwright for rendering.
 Also generates Instagram caption following Priscila's copy rules.
 """
-import gzip, json, os, re, subprocess, time, urllib.request, urllib.parse
+import gzip, json, os, re, subprocess, sys, time, urllib.request, urllib.parse
 from pathlib import Path
+import pathlib as _pl
+sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent / "capture"))
+try:
+    from _llm_fallback import llm_text as _llm_text_cascade
+except Exception:
+    _llm_text_cascade = None
 
 ANTHROPIC_KEY  = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
 OPENAI_KEY     = os.environ.get("OPENAI_API_KEY", "")
 GEMINI_KEY     = os.environ.get("GEMINI_API_KEY", "")
 PEXELS_KEY     = os.environ.get("PEXELS_API_KEY", "")
 APIFY_KEY      = os.environ.get("APIFY_API_KEY", "")
+
+
+def _claude_with_fallback(prompt, *, max_tokens, timeout=60, context=""):
+    """Try the Claude→OpenAI→Gemini cascade; if the shared module is unavailable,
+    fall back to the raw HTTP call this script originally used."""
+    if _llm_text_cascade:
+        try:
+            return _llm_text_cascade(prompt, model_tier="haiku",
+                                     max_tokens=max_tokens, context=context)
+        except Exception as e:
+            print(f"  [carousel_builder] cascade failed ({e}) — trying raw Claude HTTP")
+    payload = json.dumps({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages", data=payload,
+        headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01",
+                 "content-type": "application/json"},
+    )
+    resp = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
+    return resp["content"][0]["text"]
 
 OPC_TEMPLATE = "tip"
 BRAZIL_TEMPLATE = "quem-decidiu"
@@ -291,25 +320,13 @@ Rules:
                 "Do not invent. Do not contradict your knowledge.\n\n"
             ) + prompt
 
-        payload = json.dumps({
-            "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 1500,
-            "messages": [{"role": "user", "content": _prompt}],
-        }).encode()
-        req = urllib.request.Request(
-            "https://api.anthropic.com/v1/messages",
-            data=payload,
-            headers={
-                "x-api-key": ANTHROPIC_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-        )
         try:
-            resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
-            text = resp["content"][0]["text"]
+            text = _claude_with_fallback(
+                _prompt, max_tokens=1500, timeout=30,
+                context=f"carousel_builder.opc(attempt {attempt+1})",
+            )
         except Exception as e:
-            print(f"  HTTP/JSON error from Claude API (OPC, attempt {attempt+1}): {e}")
+            print(f"  LLM cascade failed (OPC, attempt {attempt+1}): {e}")
             continue
 
         json_match = re.search(r'\{[\s\S]*\}', text)
@@ -498,22 +515,13 @@ entry, 2-column grid, face crop first, name second, role tag third."""
             else:
                 print("  Brazil: no research found — retrying with fresh call")
 
-        payload = json.dumps({
-            "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 4000,
-            "messages": [{"role": "user", "content": prompt}],
-        }).encode()
-        req = urllib.request.Request(
-            "https://api.anthropic.com/v1/messages",
-            data=payload,
-            headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01",
-                     "content-type": "application/json"},
-        )
         try:
-            resp = json.loads(urllib.request.urlopen(req, timeout=60).read())
-            text = resp["content"][0]["text"]
+            text = _claude_with_fallback(
+                prompt, max_tokens=4000, timeout=60,
+                context=f"carousel_builder.brazil(attempt {attempt+1})",
+            )
         except Exception as e:
-            print(f"  HTTP/JSON error from Claude API (Brazil, attempt {attempt+1}): {e}")
+            print(f"  LLM cascade failed (Brazil, attempt {attempt+1}): {e}")
             continue
         m = re.search(r'\{[\s\S]*\}', text)
         if not m:
