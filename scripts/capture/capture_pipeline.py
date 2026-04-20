@@ -53,6 +53,17 @@ try:
 except ImportError:
     pass
 
+# Routing — single source of truth for per-niche Drive destinations
+import sys as _sys, pathlib as _pl
+_sys.path.insert(0, str(_pl.Path(__file__).parent.parent))
+try:
+    from routing import capture_folder as _capture_folder_fn
+    def get_capture_folder(project: str) -> str:
+        return _capture_folder_fn(project)
+except ImportError:
+    def get_capture_folder(project: str) -> str:
+        return "1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq"  # fallback: OPC Content Hub
+
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
 OPENAI_API_KEY     = os.getenv("OPENAI_API_KEY", "")
@@ -96,10 +107,13 @@ IDEAS_INBOX_ID     = os.getenv("IDEAS_INBOX_ID",     "1IrFrCNGVIF7cvAr9cIuAXvCtU
 
 # Drive folder IDs — hardcoded as defaults
 BOOK_FOLDER_ID              = "1HlY1tmUHmRZ_ZfPUzGpY_j7sHbe_OCz1"
-SOVEREIGN_FOLDER_ID         = "1L89dLiVYfjNu3uz3l3S_rvZPxd2I8xjZ"
 CONTENT_CREATION_FOLDER_ID = "1um7y2Yt8zi9KGxev6kfFJYgrkMYwrCNh"  # Drive > Marketing > Claude Code Workspace > Content Creation
-CONTENT_HUB_FOLDER_ID     = "1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq"  # Drive > Marketing > Claude Code Workspace > Content Hub (transcripts + resources + video)
-NEWS_FOLDER_ID             = "1mei5rT868SfwFVzVmZo_TG3mwlQtN-ea"  # Big Crazy Ideas > News — political/news captures route here (USA + Brazil shared topic)
+
+# Capture destinations — now driven by routing.py (capture_folder_id per niche).
+# Call get_capture_folder(project) at runtime instead of using these constants.
+# Legacy constants kept for render-video.yml compatibility — do not use in new code.
+SOVEREIGN_FOLDER_ID = "1L89dLiVYfjNu3uz3l3S_rvZPxd2I8xjZ"   # LEGACY — wrong My Drive folder, do not use
+CONTENT_HUB_FOLDER_ID = "1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq" # OPC Content Hub — kept for reference
 
 # Spreadsheet IDs for content pipeline
 CONTENT_QUEUE_ID = "1C1CAZ8lSgeVLSSCYIg-D9XPJcSLHyIOh1okKtvhZZQg"  # Ideas Queue tab
@@ -1377,10 +1391,11 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
         srt_path.write_text(srt_content, encoding="utf-8")
         print(f"  SRT saved: {srt_path}")
 
-    doc_url = create_drive_doc(f"{args.story_id} — NEWS — {datetime.now().strftime('%Y-%m-%d')}", analysis, SOVEREIGN_FOLDER_ID)
+    _news_capture_folder = get_capture_folder(args.project)
+    doc_url = create_drive_doc(f"{args.story_id} — NEWS — {datetime.now().strftime('%Y-%m-%d')}", analysis, _news_capture_folder)
     create_calendar_task(args.story_id, args.project, args.url, doc_url, transcript[:400], args.notes or "")
 
-    # Upload video to News/SOVEREIGN folder so Remotion can reference it (not lost in tmpdir)
+    # Upload video to niche Captures folder so Remotion can reference it (not lost in tmpdir)
     video_drive_url = ""
     if video_path and os.path.exists(video_path):
         try:
@@ -1397,8 +1412,8 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
             )
             drive = build("drive", "v3", credentials=creds)
             size_mb = os.path.getsize(video_path) / (1024 * 1024)
-            print(f"  Uploading video to News folder ({size_mb:.1f} MB)...")
-            file_meta = {"name": f"{args.story_id}_original.mp4", "parents": [SOVEREIGN_FOLDER_ID]}
+            print(f"  Uploading video to Captures folder ({size_mb:.1f} MB)...")
+            file_meta = {"name": f"{args.story_id}_original.mp4", "parents": [_news_capture_folder]}
             media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
             result = drive.files().create(
                 body=file_meta, media_body=media, supportsAllDrives=True, fields="id,webViewLink"
@@ -1410,12 +1425,12 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
             if srt_content:
                 srt_tmp = Path("/tmp") / f"{args.story_id}_captions.srt"
                 srt_tmp.write_text(srt_content, encoding="utf-8")
-                srt_meta = {"name": f"{args.story_id}_captions.srt", "parents": [SOVEREIGN_FOLDER_ID]}
+                srt_meta = {"name": f"{args.story_id}_captions.srt", "parents": [_news_capture_folder]}
                 srt_media = MediaFileUpload(str(srt_tmp), mimetype="text/plain")
                 drive.files().create(
                     body=srt_meta, media_body=srt_media, supportsAllDrives=True
                 ).execute()
-                print(f"  SRT uploaded to News folder")
+                print(f"  SRT uploaded to Captures folder")
         except Exception as e:
             print(f"  WARNING: video upload failed (non-fatal): {e}")
 
@@ -1439,7 +1454,7 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
             brief_doc = drive_svc.files().create(
                 body={"name": f"[CONTENT BRIEF] {args.story_id}",
                       "mimeType": "application/vnd.google-apps.document",
-                      "parents": [SOVEREIGN_FOLDER_ID]},
+                      "parents": [_news_capture_folder]},
                 supportsAllDrives=True, fields="id,webViewLink"
             ).execute()
             brief_doc_id = brief_doc["id"]
@@ -1816,7 +1831,7 @@ def translate_to_pt(text: str) -> str:
         return text
 
 
-def save_to_content_hub(story_id: str, url: str, transcript: str, classification: dict, video_path: str = "", notes: str = "") -> str:
+def save_to_content_hub(story_id: str, url: str, transcript: str, classification: dict, video_path: str = "", notes: str = "", project: str = "opc") -> str:
     """Save transcript + resources + video (+ optional user notes) to Content Hub story folder. Returns folder URL."""
     drive = get_drive_service()
     if not drive:
@@ -1846,7 +1861,7 @@ def save_to_content_hub(story_id: str, url: str, transcript: str, classification
         folder_name = f"{date}_{niche}_{slug}"
         folder = drive.files().create(
             body={"name": folder_name, "mimeType": "application/vnd.google-apps.folder",
-                  "parents": [CONTENT_HUB_FOLDER_ID]},
+                  "parents": [get_capture_folder(project)]},
             supportsAllDrives=True, fields="id,webViewLink"
         ).execute()
         folder_id = folder["id"]
@@ -2205,7 +2220,7 @@ def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_c
         folder_url = hub_url  # Same folder contains both archive (_shared) and production (english/portuguese)
     else:
         # Save raw transcript + resources + video to Content Hub (permanent home)
-        hub_url = save_to_content_hub(sid, args.url, transcript, cl, video_path=video_path, notes=args.notes or "")
+        hub_url = save_to_content_hub(sid, args.url, transcript, cl, video_path=video_path, notes=args.notes or "", project=args.project)
         # Create Drive workspace: folder + Art/Caption/Reel subfolders + content brief doc + Ideas Queue row
         title = (cl.get("summary") or sid)[:60].strip()
         folder_url, doc_url = create_content_workspace(sid, title, transcript, cl, args.url, args.notes or "",

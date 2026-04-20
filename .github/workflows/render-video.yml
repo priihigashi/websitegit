@@ -11,6 +11,14 @@ on:
       story_id:
         description: 'Story ID (e.g. NWS-202604171927)'
         required: true
+      project:
+        description: 'brazil or usa — determines which Captures folder to search for video'
+        required: false
+        default: 'brazil'
+        type: choice
+        options:
+          - brazil
+          - usa
       capture_run_id:
         description: 'Unused — video is downloaded from Drive by story_id'
         required: false
@@ -106,7 +114,18 @@ jobs:
               client_secret=token_data.get("client_secret"),
           )
           drive = build("drive", "v3", credentials=creds)
-          SOVEREIGN_FOLDER_ID = "1L89dLiVYfjNu3uz3l3S_rvZPxd2I8xjZ"
+          # Capture folder per project — mirrors routing.py capture_folder_id
+          CAPTURE_FOLDERS = {
+              "brazil": "1DZWbS4bF4XF_OjJSnD02WD2N83ljXwHd",  # News/Brazil/Captures
+              "news":   "1DZWbS4bF4XF_OjJSnD02WD2N83ljXwHd",  # alias
+              "usa":    "1ZzrEmj3Smt0chr8CxiCOyroFCRzE-zU1",  # News/USA/Captures
+              "opc":    "1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq",  # Marketing/Content Hub
+              "ugc":    "1b5fCmWn6cUkZSjhaZKGFmaKDc4MafY3U",  # UGC/Captures
+              "stocks": "17oazrbMM1lBeFAGNCaFp8sjnAMWbVdSI",  # Stocks/Captures
+              "higashi":"1by4guSe46XK0DwIJwmNUEtbzmvQFOXOv",  # Higashi/Captures
+          }
+          project_key = "${{ inputs.project }}".lower()
+          CAPTURE_FOLDER_ID = CAPTURE_FOLDERS.get(project_key, CAPTURE_FOLDERS["brazil"])
 
           def download_file(file_id, dest_path):
               import io
@@ -125,7 +144,7 @@ jobs:
               (f"{story_id}_captions.srt", "/tmp/captions.srt"),
           ]:
               results = drive.files().list(
-                  q=f"name='{name_pat}' and '{SOVEREIGN_FOLDER_ID}' in parents and trashed=false",
+                  q=f"name='{name_pat}' and '{CAPTURE_FOLDER_ID}' in parents and trashed=false",
                   supportsAllDrives=True,
                   includeItemsFromAllDrives=True,
                   fields="files(id,name,size)"

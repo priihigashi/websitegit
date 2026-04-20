@@ -17,7 +17,7 @@ ROUTES = {
         "pipeline":           "news",
         "drive_id":           "0AH7_C87G0ZwgUk9PVA",
         "drive_name":         "News",
-        "capture_folder_env": "SOVEREIGN_FOLDER_ID",    # env var holding the capture dest folder
+        "capture_folder_id":  "1DZWbS4bF4XF_OjJSnD02WD2N83ljXwHd",  # News/Brazil/Captures
         "content_control_id": "1QFHa_xcuLOqbbYbtzeMVhb5ypfHIbAkVJyyInCKlgcM",
         "content_control_tab":"🇧🇷 Brazil In Production",
         "published_tab":      "✅ Published",
@@ -30,7 +30,7 @@ ROUTES = {
         "pipeline":           "news",
         "drive_id":           "0AH7_C87G0ZwgUk9PVA",
         "drive_name":         "News",
-        "capture_folder_env": "SOVEREIGN_FOLDER_ID",
+        "capture_folder_id":  "1ZzrEmj3Smt0chr8CxiCOyroFCRzE-zU1",  # News/USA/Captures
         "content_control_id": "1QFHa_xcuLOqbbYbtzeMVhb5ypfHIbAkVJyyInCKlgcM",
         "content_control_tab":"🇺🇸 USA In Production",
         "published_tab":      "✅ Published",
@@ -44,7 +44,7 @@ ROUTES = {
         "pipeline":           "opc",
         "drive_id":           "0AJp3Phs0wIBOUk9PVA",
         "drive_name":         "Oak Park Construction",
-        "capture_folder_env": "CONTENT_HUB_FOLDER_ID",
+        "capture_folder_id":  "1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq",  # Marketing/Content Hub (existing)
         "content_control_id": "1C1CAZ8lSgeVLSSCYIg-D9XPJcSLHyIOh1okKtvhZZQg",
         "content_control_tab":"🎬 In Production",
         "published_tab":      "✅ Published",
@@ -58,7 +58,7 @@ ROUTES = {
         "pipeline":           "ugc",
         "drive_id":           "0AEz0NlGr3tlLUk9PVA",
         "drive_name":         "UGC",
-        "capture_folder_env": "UGC_FOLDER_ID",          # add as GitHub secret when UGC drive subfolder is created
+        "capture_folder_id":  "1b5fCmWn6cUkZSjhaZKGFmaKDc4MafY3U",  # UGC/Captures
         "content_control_id": "1yVUcXbq085eB-vC-ieL1vkblfLOkvIW_R9AU_I4a1TY",
         "content_control_tab":"🎬 In Production",
         "published_tab":      "✅ Published",
@@ -72,7 +72,7 @@ ROUTES = {
         "pipeline":           "stocks",
         "drive_id":           "0AF6S_f8PH2_aUk9PVA",
         "drive_name":         "Stocks",
-        "capture_folder_env": "STOCKS_FOLDER_ID",       # add as GitHub secret when Stocks subfolder is created
+        "capture_folder_id":  "17oazrbMM1lBeFAGNCaFp8sjnAMWbVdSI",  # Stocks/Captures
         "content_control_id": "1eeAgy70rxit4_WJN-msArg9mHVLZqpnFVHcDPnpTZ9c",
         "content_control_tab":"🎬 In Production",
         "published_tab":      "✅ Published",
@@ -86,7 +86,7 @@ ROUTES = {
         "pipeline":           "higashi",
         "drive_id":           "0AN7aea2IZzE0Uk9PVA",
         "drive_name":         "Higashi",
-        "capture_folder_env": "HIGASHI_FOLDER_ID",      # add as GitHub secret; Claude Flow: 100f_O62MvH61Htv2ykjebJeDcfV_zSf0
+        "capture_folder_id":  "1by4guSe46XK0DwIJwmNUEtbzmvQFOXOv",  # Higashi/Captures
         "content_control_id": "1yrGU3Y8AdthtxkLqhL31taqHjjBPRND8lh8qKkV5iKo",
         "content_control_tab":"🎬 In Production",
         "published_tab":      "✅ Published",
@@ -141,3 +141,8 @@ def content_control(niche: str) -> tuple[str, str]:
     """Return (spreadsheet_id, tab_name) for the In Production tracker of this niche."""
     r = get_route(niche)
     return r["content_control_id"], r["content_control_tab"]
+
+
+def capture_folder(project: str) -> str:
+    """Return the Drive folder ID where captures for this project should be saved."""
+    return get_route(project)["capture_folder_id"]
