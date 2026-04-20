@@ -298,7 +298,10 @@ def main():
         comment   = row[2].strip()           # C — COMMENT
         processed = row[3].strip().upper()   # D — PROCESSED (checkbox)
         moved_to  = row[5].strip()           # F — MOVED TO  (used to detect prior failure)
-        project   = row[7].strip() or "content"  # H — PROJECT
+        # H — PROJECT. Default to "brazil" (primary use case); empty used to default
+        # to "content" which aliases to "opc" and silently dumped Brazil reels into the
+        # OPC/Marketing drive. Override by filling column H with usa/opc/ugc/stocks/higashi.
+        project   = row[7].strip() or "brazil"  # H — PROJECT
 
         sheet_row = i + 2  # 1-indexed, skip header
 

@@ -17,6 +17,8 @@ ANTHROPIC_KEY  = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
 OPENAI_KEY     = os.environ.get("OPENAI_API_KEY", "")
 GEMINI_KEY     = os.environ.get("GEMINI_API_KEY", "")
 PEXELS_KEY     = os.environ.get("PEXELS_API_KEY", "")
+PIXABAY_KEY    = os.environ.get("PIXABAY_API_KEY", "")
+REPLICATE_KEY  = os.environ.get("PRI_OP_REPLICATE_API_KEY", "")
 APIFY_KEY      = os.environ.get("APIFY_API_KEY", "")
 
 
@@ -703,6 +705,123 @@ def _fetch_pexels_image(query, work_dir, filename):
         return ""
 
 
+def _fetch_pixabay_image(query, work_dir, filename):
+    """Search Pixabay for a royalty-free stock photo. Free-tier backup for Pexels.
+    Returns relative path or empty string."""
+    if not PIXABAY_KEY or not query:
+        return ""
+    dest_path = Path(work_dir) / "resources" / "images" / filename
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    if dest_path.exists() and dest_path.stat().st_size > 2000:
+        return f"resources/images/{filename}"
+    try:
+        q = urllib.parse.quote_plus(query[:100])
+        search_url = (
+            f"https://pixabay.com/api/?key={PIXABAY_KEY}&q={q}"
+            f"&image_type=photo&orientation=vertical&per_page=3&safesearch=true"
+        )
+        with urllib.request.urlopen(search_url, timeout=15) as r:
+            data = json.loads(r.read())
+        hits = data.get("hits", [])
+        if not hits:
+            return ""
+        img_url = hits[0].get("largeImageURL") or hits[0].get("webformatURL", "")
+        if not img_url:
+            return ""
+        with urllib.request.urlopen(img_url, timeout=20) as r:
+            raw = r.read()
+        if len(raw) < 5000:
+            return ""
+        dest_path.write_bytes(raw)
+        print(f"  Pixabay image fetched: {filename} ({len(raw)//1024}KB) ← '{query[:40]}'")
+        return f"resources/images/{filename}"
+    except Exception as e:
+        print(f"  Pixabay fetch failed (non-fatal): {e}")
+        return ""
+
+
+def _replicate_run(version_or_slug, input_dict, work_dir, filename, timeout=120, model_label=""):
+    """Shared Replicate helper: create prediction, poll until done, download output[0].
+    Returns relative path or empty string."""
+    if not REPLICATE_KEY or not input_dict:
+        return ""
+    dest_path = Path(work_dir) / "resources" / "images" / filename
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    if dest_path.exists() and dest_path.stat().st_size > 5000:
+        return f"resources/images/{filename}"
+    try:
+        # Two Replicate call shapes:
+        # - Official models: POST /v1/models/<owner>/<name>/predictions (no "version" needed)
+        # - Community models: POST /v1/predictions with {"version": "<sha>", ...}
+        if "/" in version_or_slug and len(version_or_slug) < 80:
+            api_url = f"https://api.replicate.com/v1/models/{version_or_slug}/predictions"
+            payload = json.dumps({"input": input_dict}).encode()
+        else:
+            api_url = "https://api.replicate.com/v1/predictions"
+            payload = json.dumps({"version": version_or_slug, "input": input_dict}).encode()
+        req = urllib.request.Request(
+            api_url, data=payload,
+            headers={"Authorization": f"Bearer {REPLICATE_KEY}",
+                     "Content-Type": "application/json",
+                     "Prefer": "wait=60"},
+        )
+        resp = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
+        status = resp.get("status", "")
+        pid = resp.get("id", "")
+        # poll if not already done (Prefer: wait=60 covers most cases)
+        started = time.time()
+        while status in ("starting", "processing") and (time.time() - started) < timeout:
+            time.sleep(2)
+            poll_req = urllib.request.Request(
+                f"https://api.replicate.com/v1/predictions/{pid}",
+                headers={"Authorization": f"Bearer {REPLICATE_KEY}"},
+            )
+            resp = json.loads(urllib.request.urlopen(poll_req, timeout=15).read())
+            status = resp.get("status", "")
+        if status != "succeeded":
+            print(f"  Replicate {model_label} status={status} (non-fatal)")
+            return ""
+        output = resp.get("output")
+        if isinstance(output, list):
+            output = output[0] if output else ""
+        if not output:
+            return ""
+        with urllib.request.urlopen(output, timeout=30) as r:
+            raw = r.read()
+        if len(raw) < 5000:
+            return ""
+        dest_path.write_bytes(raw)
+        print(f"  AI image generated: {filename} ({len(raw)//1024}KB via Replicate {model_label})")
+        return f"resources/images/{filename}"
+    except Exception as e:
+        print(f"  Replicate {model_label} failed (non-fatal): {e}")
+        return ""
+
+
+def _generate_seedream_image(prompt, work_dir, filename):
+    """Generate image via Seedream 4 on Replicate (photoreal, strong with people/places)."""
+    if not REPLICATE_KEY or not prompt:
+        return ""
+    return _replicate_run(
+        "bytedance/seedream-4",
+        {"prompt": prompt[:1000], "aspect_ratio": "4:5"},
+        work_dir, filename, timeout=120, model_label="Seedream 4",
+    )
+
+
+def _generate_replicate_sdxl(prompt, work_dir, filename):
+    """Generate image via Replicate SDXL (cheapest ultimate fallback)."""
+    if not REPLICATE_KEY or not prompt:
+        return ""
+    # stability-ai/sdxl pinned version (public, stable)
+    return _replicate_run(
+        "7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
+        {"prompt": prompt[:1000], "width": 864, "height": 1080,
+         "num_inference_steps": 25, "guidance_scale": 7.5},
+        work_dir, filename, timeout=180, model_label="SDXL",
+    )
+
+
 def fetch_all_media(content, niche, work_dir):
     """Download/generate all images needed by this carousel BEFORE build_html().
     Returns dict:
@@ -713,54 +832,93 @@ def fetch_all_media(content, niche, work_dir):
     """
     paths = {"cover": "", "slides": {}}
 
-    # Cover image — try CC photo (option_a), fall back to AI generation (option_b)
-    # Filename slugs the subject so resources/images/ is self-documenting (slide1_trump_oval_office.jpg).
+    # ── COVER IMAGE CASCADE ────────────────────────────────────────────────
+    # Named-person covers: Wiki REST → Wikimedia Commons → bio-initials (NO AI).
+    #   Editorial rule: never AI-generate a politician's/public figure's face.
+    # Non-person covers (place/event/concept): Wiki CC → Pexels → Pixabay
+    #   → Gemini Imagen → Seedream 4 → DALL-E 3 → Replicate SDXL.
+    # Filename slugs the subject so resources/images/ is self-documenting.
     cv = content.get("cover_visual", {})
     if cv:
         search_q = cv.get("option_a", {}).get("search_query", "")
+        subject_type = (cv.get("subject_type") or "").strip().lower()
+        ai_prompt = cv.get("option_b", {}).get("prompt", "")
         cover_slug = re.sub(r"[^a-z0-9]+", "_", (search_q or "cover").lower()).strip("_")[:40] or "cover"
         cover_fname = f"slide1_{cover_slug}.jpg"
-        if search_q:
-            cover_path = _fetch_person_photo(search_q, work_dir, cover_fname)
-            paths["cover"] = cover_path
-        if not paths["cover"]:
-            opt_b = cv.get("option_b", {})
-            ai_prompt = opt_b.get("prompt", "")
-            if ai_prompt:
-                paths["cover"] = _generate_ai_cover(ai_prompt, work_dir, cover_fname)
-        if not paths["cover"] and cv.get("option_b", {}).get("prompt"):
-            ai_prompt = cv["option_b"]["prompt"]
-            paths["cover"] = _generate_gemini_image(ai_prompt, work_dir, cover_fname)
-        if not paths["cover"] and search_q:
-            paths["cover"] = _fetch_pexels_image(search_q, work_dir, cover_fname)
 
-    # Middle slides — context images. CC photo first; AI fallback if it fails.
-    # Filename includes a slug of the query so resources/images/ is self-documenting
-    # (e.g. slide2_trump_oval_office.jpg instead of slide_2_context.jpg).
+        # Step 1 — real photo (Wiki REST + Wikimedia Commons)
+        if search_q:
+            paths["cover"] = _fetch_person_photo(search_q, work_dir, cover_fname)
+
+        # Step 2 — stock photos (skip if cover is a named person; bio-initials is safer)
+        if not paths["cover"] and subject_type != "person":
+            if search_q:
+                paths["cover"] = _fetch_pexels_image(search_q, work_dir, cover_fname)
+            if not paths["cover"] and search_q:
+                paths["cover"] = _fetch_pixabay_image(search_q, work_dir, cover_fname)
+
+        # Step 3 — AI cascade (again skipped for named persons per editorial rule)
+        if not paths["cover"] and subject_type != "person" and ai_prompt:
+            paths["cover"] = _generate_gemini_image(ai_prompt, work_dir, cover_fname)
+            if not paths["cover"]:
+                paths["cover"] = _generate_seedream_image(ai_prompt, work_dir, cover_fname)
+            if not paths["cover"]:
+                paths["cover"] = _generate_ai_cover(ai_prompt, work_dir, cover_fname)  # DALL-E
+            if not paths["cover"]:
+                paths["cover"] = _generate_replicate_sdxl(ai_prompt, work_dir, cover_fname)
+
+        # If cover is a person and all photo tiers missed, leave empty — the HTML
+        # renderer falls back to .bio-initials card (see build_html step D).
+
+    # ── MIDDLE SLIDES — CONTEXT IMAGES ────────────────────────────────────
+    # Cascade: Wiki CC photo → Pexels photo → Pixabay photo → Gemini Imagen
+    # → Seedream 4 → DALL-E 3 → Replicate SDXL.
+    # Applies only to slides with visual_hint == "context-image"; bio-cards
+    # are rendered separately from mentioned_people[*].image_hint.
     for i, slide in enumerate(content.get("slides", []), start=2):
-        if slide.get("visual_hint") == "context-image":
-            cq = slide.get("context_image_query", "").strip()
-            if not cq:
-                continue
-            slug = re.sub(r"[^a-z0-9]+", "_", cq.lower()).strip("_")[:40] or "context"
-            fname = f"slide{i}_{slug}.jpg"
-            img_path = _fetch_person_photo(cq, work_dir, fname)
-            if not img_path and OPENAI_KEY:
-                ai_prompt = f"Editorial documentary photograph, {cq}, high contrast journalistic style, no text"
-                img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
-                if img_path:
-                    print(f"  Slide {i}: DALL-E fallback image for '{cq[:50]}'")
-            if not img_path and GEMINI_KEY:
-                ai_prompt = f"Editorial documentary photograph, {cq}, high contrast journalistic style, no text"
-                img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
-                if img_path:
-                    print(f"  Slide {i}: Gemini fallback image for '{cq[:50]}'")
-            if not img_path and PEXELS_KEY:
-                img_path = _fetch_pexels_image(cq, work_dir, fname)
-                if img_path:
-                    print(f"  Slide {i}: Pexels fallback image for '{cq[:50]}'")
+        if slide.get("visual_hint") != "context-image":
+            continue
+        cq = slide.get("context_image_query", "").strip()
+        if not cq:
+            continue
+        slug = re.sub(r"[^a-z0-9]+", "_", cq.lower()).strip("_")[:40] or "context"
+        fname = f"slide{i}_{slug}.jpg"
+        ai_prompt = f"Editorial documentary photograph, {cq}, high contrast journalistic style, no text"
+
+        # Tier 1–3: real / royalty-free photos (never hallucinates)
+        img_path = _fetch_person_photo(cq, work_dir, fname)
+        if img_path:
+            print(f"  Slide {i}: Wikimedia photo for '{cq[:50]}'")
+        if not img_path:
+            img_path = _fetch_pexels_image(cq, work_dir, fname)
             if img_path:
-                paths["slides"][i] = img_path
+                print(f"  Slide {i}: Pexels photo for '{cq[:50]}'")
+        if not img_path:
+            img_path = _fetch_pixabay_image(cq, work_dir, fname)
+            if img_path:
+                print(f"  Slide {i}: Pixabay photo for '{cq[:50]}'")
+        # Tier 4: Gemini Imagen (free quota, Priscila's preferred AI)
+        if not img_path:
+            img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
+            if img_path:
+                print(f"  Slide {i}: Gemini image for '{cq[:50]}'")
+        # Tier 5: Seedream 4 (photoreal, strong with people/places)
+        if not img_path:
+            img_path = _generate_seedream_image(ai_prompt, work_dir, fname)
+            if img_path:
+                print(f"  Slide {i}: Seedream image for '{cq[:50]}'")
+        # Tier 6: DALL-E 3 (demoted — paid + less consistent)
+        if not img_path:
+            img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
+            if img_path:
+                print(f"  Slide {i}: DALL-E image for '{cq[:50]}'")
+        # Tier 7: Replicate SDXL (cheapest last resort)
+        if not img_path:
+            img_path = _generate_replicate_sdxl(ai_prompt, work_dir, fname)
+            if img_path:
+                print(f"  Slide {i}: SDXL image for '{cq[:50]}'")
+        if img_path:
+            paths["slides"][i] = img_path
 
     fetched_total = (1 if paths["cover"] else 0) + len(paths["slides"])
     print(f"  Media fetch: {fetched_total} image(s) ready (cover={bool(paths['cover'])}, slides={list(paths['slides'].keys())})")
