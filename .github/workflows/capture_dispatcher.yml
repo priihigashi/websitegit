@@ -51,6 +51,12 @@ jobs:
           URL=$(printf '%s' "$BODY" | grep -oE 'https?://[^[:space:]]+' | head -n 1 || true)
           PROJECT=$(printf '%s' "$BODY" | grep -oE '\b(brazil|usa|opc|ugc|stocks|higashi|book|sovereign|news|content)\b' | head -n 1 || true)
           PROJECT=${PROJECT:-opc}
+          # Normalize legacy aliases to canonical names — capture_pipeline.yml workflow_dispatch
+          # only accepts: book|brazil|opc|ugc|usa|stocks|higashi. Anything else → silent fail.
+          case "$PROJECT" in
+            sovereign|news) PROJECT=brazil ;;
+            content)        PROJECT=opc ;;
+          esac
           CREDITS=false
           if printf '%s' "$BODY" | grep -q -- '--credits'; then CREDITS=true; fi
           STORY_ID=$(printf '%s' "$BODY" | grep -oE -- '--story-id[[:space:]]+[A-Za-z0-9_-]+' | awk '{print $2}' || true)
