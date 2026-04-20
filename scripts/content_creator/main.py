@@ -24,7 +24,7 @@ ET = pytz.timezone("America/New_York")
 
 sys.path.insert(0, str(Path(__file__).parent))
 from topic_picker import pick_topics
-from carousel_builder import generate_carousel_content, build_html, render_pngs, generate_image_suggestions, visual_audit, fetch_all_media
+from carousel_builder import generate_carousel_content, build_html, render_pngs, generate_image_suggestions, visual_audit, fetch_all_media, fetch_clips, build_motion_html
 import urllib.request, urllib.parse
 from email_preview import send_preview, update_catalog_status
 
@@ -373,6 +373,54 @@ def create_story_doc(parent_folder_id, slug, version, topic, niche, brief, conte
     return doc
 
 
+def record_motion_slides(clip_html_files, output_dir, duration=5):
+    """Record each per-slide motion HTML via Playwright → MP4 + GIF.
+    clip_html_files: list of (slide_idx, html_path) from build_motion_html().
+    Saves: <output_dir>/black_NN_<name>_motion.mp4 + .gif per clip slot.
+    Falls back silently per slot — never raises. Ken Burns still runs after this.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    record_script = Path(__file__).parent / "record_motion.js"
+    if not record_script.exists():
+        print("  record_motion.js not found — skipping Playwright motion recording")
+        return []
+
+    recorded = []
+    for slide_idx, html_path in clip_html_files:
+        nn = f"{slide_idx:02d}"
+        slug_name = Path(html_path).stem  # e.g. clip_slide_1
+        webm_path = Path(output_dir) / f"black_{nn}_{slug_name}_motion.webm"
+        mp4_path  = Path(output_dir) / f"black_{nn}_{slug_name}_motion.mp4"
+        gif_path  = Path(output_dir) / f"black_{nn}_{slug_name}_motion.gif"
+        try:
+            r = subprocess.run(
+                ["node", str(record_script), html_path, str(webm_path), str(duration)],
+                capture_output=True, timeout=120
+            )
+            if r.returncode != 0 or not webm_path.exists():
+                print(f"  Playwright recording failed for slide {slide_idx}: {r.stderr.decode()[:200]}")
+                continue
+            # Convert webm → mp4
+            subprocess.run([
+                "ffmpeg", "-y", "-i", str(webm_path),
+                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "18",
+                str(mp4_path)
+            ], capture_output=True, timeout=60)
+            # Convert mp4 → gif
+            subprocess.run([
+                "ffmpeg", "-y", "-i", str(mp4_path),
+                "-vf", "fps=15,scale=540:-1:flags=lanczos", str(gif_path)
+            ], capture_output=True, timeout=60)
+            # Clean up webm
+            webm_path.unlink(missing_ok=True)
+            if mp4_path.exists():
+                print(f"  Motion recorded: {mp4_path.name} ({mp4_path.stat().st_size//1024}KB)")
+                recorded.append(mp4_path)
+        except Exception as e:
+            print(f"  record_motion_slides slide {slide_idx} error: {e}")
+    return recorded
+
+
 def render_motion_cover(cover_png_path, output_dir, variant):
     os.makedirs(output_dir, exist_ok=True)
     mp4_path = os.path.join(output_dir, f"{variant}_01_cover_motion.mp4")
@@ -573,20 +621,36 @@ def process_one_topic(topic_entry, run_date, drive):
     print("  Fetching context images + cover...")
     media_paths = fetch_all_media(content, niche, str(work))
 
+    # 1d. Fetch video clips for motion version (Apify YouTube → Pexels → skip)
+    print("  Fetching video clips for motion...")
+    clips = fetch_clips(content, str(work))
+
     html_path = build_html(content, niche, slug, str(work), media_paths=media_paths)
     if not html_path:
         print("  FAILED: HTML build")
         return None
 
-    # 3. Render PNGs
+    # 2b. Build per-slide motion HTML files (one per clip slot, separate from cover.html)
+    clip_html_files = build_motion_html(content, niche, slug, str(work), clips, media_paths=media_paths)
+
+    # 3. Render PNGs (uses static cover.html — unchanged)
     print("  Rendering PNGs...")
     os.environ["EXPORT_SCRIPT"] = EXPORT_SCRIPT
     if not render_pngs(html_path, str(png_dir)):
         print("  FAILED: PNG render")
         return None
 
-    # 4. Render motion — cover AND all middle slides get slow-zoom (Ken Burns)
+    # 4. Render motion:
+    #    4a. Playwright video recording for slides with real clips (rachadinha style)
+    #    4b. Ken Burns ffmpeg fallback for cover + all other slides (always runs)
     print("  Rendering motion...")
+    recorded_mp4s = []
+    if clip_html_files:
+        print(f"  Recording {len(clip_html_files)} clip slide(s) via Playwright...")
+        recorded_mp4s = record_motion_slides(clip_html_files, str(motion_dir), duration=5)
+        print(f"  Playwright recorded: {len(recorded_mp4s)} MP4(s)")
+
+    # Ken Burns fallback: always run for all slides — covers remaining slides + is safety net
     for variant in ["black", "cream", "lime"]:
         for png in sorted(png_dir.glob(f"{variant}_*_html.png")):
             render_motion_cover(str(png), str(motion_dir), variant)

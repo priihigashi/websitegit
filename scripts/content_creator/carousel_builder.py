@@ -11,6 +11,7 @@ ANTHROPIC_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
 OPENAI_KEY     = os.environ.get("OPENAI_API_KEY", "")
 GEMINI_KEY     = os.environ.get("GEMINI_API_KEY", "")
 PEXELS_KEY     = os.environ.get("PEXELS_API_KEY", "")
+APIFY_KEY      = os.environ.get("APIFY_API_KEY", "")
 
 OPC_TEMPLATE = "tip"
 BRAZIL_TEMPLATE = "quem-decidiu"
@@ -727,6 +728,316 @@ def fetch_all_media(content, niche, work_dir):
     fetched_total = (1 if paths["cover"] else 0) + len(paths["slides"])
     print(f"  Media fetch: {fetched_total} image(s) ready (cover={bool(paths['cover'])}, slides={list(paths['slides'].keys())})")
     return paths
+
+
+def _fetch_pexels_video(query, dest_dir, filename):
+    """Download a Pexels stock video clip (portrait orientation preferred).
+    Good for places, events, institutions — NOT specific people.
+    Returns absolute path if downloaded, else empty string.
+    """
+    if not PEXELS_KEY:
+        return ""
+    dest_path = Path(dest_dir) / "clips" / filename
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    if dest_path.exists() and dest_path.stat().st_size > 10000:
+        return str(dest_path)
+    try:
+        q = urllib.parse.urlencode({"query": query, "per_page": "5", "size": "medium", "orientation": "portrait"})
+        req = urllib.request.Request(
+            f"https://api.pexels.com/videos/search?{q}",
+            headers={"Authorization": PEXELS_KEY}
+        )
+        data = json.loads(urllib.request.urlopen(req, timeout=15).read())
+        videos = data.get("videos", [])
+        if not videos:
+            return ""
+        # Pick first video with a portrait MP4 file
+        for v in videos:
+            for vf in sorted(v.get("video_files", []), key=lambda x: x.get("width", 0)):
+                if vf.get("file_type") == "video/mp4" and vf.get("height", 0) >= vf.get("width", 1):
+                    url = vf.get("link", "")
+                    if not url:
+                        continue
+                    raw = urllib.request.urlopen(url, timeout=60).read()
+                    if len(raw) < 10000:
+                        continue
+                    dest_path.write_bytes(raw)
+                    print(f"  Pexels video: {filename} ({len(raw)//1024}KB) ← '{query[:40]}'")
+                    return str(dest_path)
+    except Exception as e:
+        print(f"  Pexels video miss ({query[:40]}): {e}")
+    return ""
+
+
+def _fetch_youtube_clip_apify(youtube_query, dest_dir, filename):
+    """Route A: Apify streamers~youtube-scraper → search → get URL.
+    Route B: Apify streamers~youtube-video-downloader → download MP4.
+    Returns absolute path if downloaded, else empty string.
+    """
+    if not APIFY_KEY:
+        return ""
+    dest_path = Path(dest_dir) / "clips" / filename
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    if dest_path.exists() and dest_path.stat().st_size > 10000:
+        return str(dest_path)
+
+    def _apify_run(actor_id, input_body, wait=120):
+        """Synchronous Apify actor run. Returns dataset items list or []."""
+        try:
+            actor_slug = actor_id.replace("/", "~")
+            run_url = f"https://api.apify.com/v2/acts/{actor_slug}/runs?token={APIFY_KEY}&waitForFinish={wait}"
+            body = json.dumps(input_body).encode()
+            req = urllib.request.Request(run_url, data=body,
+                                          headers={"Content-Type": "application/json"}, method="POST")
+            resp = json.loads(urllib.request.urlopen(req, timeout=wait + 30).read())
+            run_data = resp.get("data", {})
+            if run_data.get("status") not in ("SUCCEEDED",):
+                print(f"  Apify {actor_id}: status={run_data.get('status')} — skipping")
+                return []
+            dataset_id = run_data.get("defaultDatasetId", "")
+            if not dataset_id:
+                return []
+            items_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?token={APIFY_KEY}"
+            items = json.loads(urllib.request.urlopen(items_url, timeout=30).read())
+            return items if isinstance(items, list) else []
+        except Exception as e:
+            print(f"  Apify {actor_id} run error: {e}")
+            return []
+
+    try:
+        # Step 1: search YouTube for the query → get video URL
+        search_items = _apify_run("streamers~youtube-scraper",
+                                   {"searchTerms": [youtube_query], "maxResults": 1, "saveVideos": False})
+        if not search_items:
+            return ""
+        video_url = search_items[0].get("url") or search_items[0].get("videoUrl") or ""
+        if not video_url or "youtube" not in video_url:
+            return ""
+        print(f"  Apify found: {video_url[:60]} for '{youtube_query[:40]}'")
+
+        # Step 2: download the video via downloader actor
+        dl_items = _apify_run("streamers~youtube-video-downloader",
+                               {"url": video_url, "format": "mp4", "quality": "360p"}, wait=180)
+        download_url = ""
+        for item in dl_items:
+            download_url = (item.get("downloadUrl") or item.get("url") or
+                            item.get("videoUrl") or item.get("link") or "")
+            if download_url:
+                break
+        if not download_url:
+            print(f"  Apify downloader returned no URL for {video_url[:60]}")
+            return ""
+
+        raw = urllib.request.urlopen(download_url, timeout=120).read()
+        if len(raw) < 10000:
+            return ""
+        dest_path.write_bytes(raw)
+        print(f"  YouTube clip via Apify: {filename} ({len(raw)//1024}KB)")
+        return str(dest_path)
+
+    except Exception as e:
+        print(f"  Apify YouTube clip error ({youtube_query[:40]}): {e}")
+        return ""
+
+
+def fetch_clips(content, work_dir):
+    """Download video clips for motion version. Returns dict {slide_idx: abs_clip_path}.
+    Distribution: cover (idx 0 = cover, idx 2..N-1 = middle slides, last = sources).
+    Target: 3 clip slots — cover + 2 evenly spaced middle slides (never sources).
+    Fallback chain per slot: Apify YouTube → Pexels video (places only) → skip (Ken Burns fallback).
+    slide_idx matches _build_brazil_html enumerate: cover=special, slides start at 2.
+    """
+    clips = {}
+    suggestions = content.get("clip_suggestions", [])
+    if not suggestions:
+        return clips
+
+    slides = content.get("slides", [])
+    n_slides = len(slides)
+
+    # Build candidate list: [{"slide_idx": N, "query": "...", "visual_hint": "..."}]
+    # cover is slide_idx=1 (special), middle slides are 2..n_slides, last is sources
+    by_slide = {c.get("slide", 0): c for c in suggestions}
+
+    # Distribution: cover always first. Then pick 2 evenly from middle slides (not last).
+    clip_slots = []
+    # Cover
+    cover_suggestion = by_slide.get(1) or (suggestions[0] if suggestions else None)
+    if cover_suggestion:
+        clip_slots.append(("cover", 1, cover_suggestion.get("youtube_query", ""),
+                           cover_suggestion.get("visual_hint", "bio-card")))
+
+    # Middle slots — all non-cover, non-sources suggestions, pick up to 2 evenly
+    middle_candidates = [c for c in suggestions if c.get("slide", 0) not in (1, n_slides + 1)]
+    if len(middle_candidates) >= 2:
+        step = max(1, len(middle_candidates) // 2)
+        chosen_middle = [middle_candidates[0], middle_candidates[min(step, len(middle_candidates)-1)]]
+    elif middle_candidates:
+        chosen_middle = middle_candidates
+    else:
+        chosen_middle = []
+
+    for c in chosen_middle:
+        clip_slots.append((f"slide_{c.get('slide',0)}", c.get("slide", 0),
+                           c.get("youtube_query", ""), c.get("visual_hint", "context-image")))
+
+    # Fetch each slot with fallback chain
+    for slot_name, slide_idx, query, visual_hint in clip_slots:
+        if not query:
+            continue
+        fname = f"{slot_name}.mp4"
+
+        # Route A: Apify YouTube (works for people + places)
+        path = _fetch_youtube_clip_apify(query, work_dir, fname)
+
+        # Route B: Pexels video — only for places/events/institutions (not specific people)
+        if not path and visual_hint in ("context-image", "place", "event"):
+            path = _fetch_pexels_video(query, work_dir, fname)
+
+        # Route C: empty → caller uses Ken Burns on static image (always available)
+        if path:
+            clips[slide_idx] = path
+        else:
+            print(f"  Clip slot '{slot_name}': no clip found — Ken Burns fallback")
+
+    print(f"  fetch_clips: {len(clips)}/{len(clip_slots)} clip(s) ready: {list(clips.keys())}")
+    return clips
+
+
+def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=None):
+    """Generate per-clip-slot motion HTML files for Playwright video recording.
+    Each file shows ONE slide at full 1080x1350 viewport with:
+      - Ken Burns CSS zoom animation on the background image
+      - <video> element playing the clip inside the newspaper/sticker frame slot
+    Returns list of (slide_idx, html_path) tuples — one per clip slot that has a clip.
+    Only implemented for brazil/usa/sovereign. OPC returns [] (no motion clips for OPC yet).
+    Existing cover.html (static) is NOT modified.
+    """
+    if niche == "opc" or not clips:
+        return []
+
+    results = []
+    slides = content.get("slides", [])
+    n_slides = len(slides)
+    css = _brazil_motion_css()
+
+    def esc(s):
+        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+    for slide_idx, clip_path in clips.items():
+        rel_clip = os.path.relpath(clip_path, work_dir)
+        html_body = ""
+
+        if slide_idx == 1:
+            # Cover slide
+            cover_img = (media_paths or {}).get("cover", "")
+            bg_style = (
+                f'style="background-image:url(\'{cover_img}\');background-size:cover;'
+                f'background-position:center top;"' if cover_img else ""
+            )
+            cover_pt = esc(content.get("cover_pt", "TÍTULO"))
+            cover_en = esc(content.get("cover_en", ""))
+            cover_accent = esc(content.get("cover_accent", ""))
+            raw_cover = content.get("cover_pt", "")
+            if cover_accent and cover_accent in raw_cover:
+                cover_hl = cover_pt.replace(cover_accent,
+                    f'<span class="accent">{cover_accent}</span>', 1)
+            else:
+                cover_hl = cover_pt
+            cover_date = esc(content.get("cover_date", ""))
+            html_body = f"""
+<div class="slide slide-cover motion-slide">
+  <div class="kb-bg" {bg_style}></div>
+  <div class="slide-content">
+    <div class="tag">Quem decidiu isso?</div>
+    <div class="cover-date">{cover_date}</div>
+    <div class="cover-hl">{cover_hl}</div>
+    <div class="cover-en">{cover_en}</div>
+    <div class="clip-frame">
+      <div class="clip-stamp">ARQUIVADO · {cover_date or '2024'}</div>
+      <video class="clip-video" autoplay muted loop playsinline>
+        <source src="{rel_clip}" type="video/mp4">
+      </video>
+    </div>
+    <div class="swipe">SWIPE →</div>
+  </div>
+</div>"""
+        else:
+            # Middle slide — find the slide data
+            slide_data = slides[slide_idx - 2] if (slide_idx - 2) < len(slides) else {}
+            h_pt = esc(slide_data.get("heading_pt", ""))
+            h_en = esc(slide_data.get("heading_en", ""))
+            slide_img = (media_paths or {}).get("slides", {}).get(slide_idx, "")
+            bg_style = (
+                f'style="background-image:url(\'{slide_img}\');background-size:cover;'
+                f'background-position:center top;opacity:0.3;"' if slide_img else ""
+            )
+            html_body = f"""
+<div class="slide motion-slide">
+  <div class="kb-bg" {bg_style}></div>
+  <div class="slide-content">
+    <div class="slide-hl">{h_pt}</div>
+    <div class="slide-en">{h_en}</div>
+    <div class="clip-frame clip-frame-mid">
+      <video class="clip-video" autoplay muted loop playsinline>
+        <source src="{rel_clip}" type="video/mp4">
+      </video>
+    </div>
+    <div class="swipe">SWIPE →</div>
+  </div>
+</div>"""
+
+        html = f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;1,9..144,700&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+{css}
+</style>
+</head>
+<body style="margin:0;padding:0;background:#0E0D0B;">
+{html_body}
+</body>
+</html>"""
+
+        fname = f"clip_slide_{slide_idx}.html"
+        out_path = Path(work_dir) / fname
+        out_path.write_text(html)
+        results.append((slide_idx, str(out_path)))
+        print(f"  Motion HTML: {fname} (clip: {os.path.basename(clip_path)})")
+
+    return results
+
+
+def _brazil_motion_css():
+    """CSS for per-slide motion HTML files — Ken Burns animation + clip frame styling."""
+    return """
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ob:#0E0D0B;--pa:#F2ECE0;--ca:#F4C430;--gr:#7A7267;--W:1080px;--H:1350px;--P:108px}
+body{background:var(--ob);overflow:hidden}
+.slide{width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);position:relative;overflow:hidden;font-family:'Inter',sans-serif}
+.kb-bg{position:absolute;inset:0;background-size:cover;background-position:center top;
+       animation:kb-zoom 5s ease-in-out forwards;transform-origin:center center;}
+@keyframes kb-zoom{0%{transform:scale(1);}100%{transform:scale(1.08);}}
+.slide-content{position:relative;z-index:2;padding:var(--P);height:100%;display:flex;flex-direction:column;}
+.tag{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--gr);letter-spacing:.06em;text-transform:uppercase;margin-bottom:28px}
+.accent{color:var(--ca)}
+.cover-date{font-family:'JetBrains Mono',monospace;font-size:24px;color:var(--gr);margin-bottom:40px}
+.cover-hl{font-family:'Fraunces',serif;font-weight:700;font-size:88px;line-height:1.0;text-transform:uppercase;margin-bottom:20px;text-shadow:0 2px 20px rgba(0,0,0,.8);}
+.cover-en{font-family:'Inter',sans-serif;font-style:italic;font-size:30px;color:var(--gr)}
+.slide-hl{font-family:'Fraunces',serif;font-weight:700;font-size:68px;line-height:1.1;text-transform:uppercase;margin-bottom:12px;text-shadow:0 2px 20px rgba(0,0,0,.8);}
+.slide-en{font-family:'Inter',sans-serif;font-style:italic;font-size:26px;color:var(--gr);margin-bottom:28px}
+.swipe{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);right:var(--P)}
+/* CLIP FRAME — newspaper/polaroid style matching rachadinha */
+.clip-frame{position:absolute;top:120px;right:var(--P);width:340px;height:420px;
+            border:3px solid var(--ca);background:#000;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.7);}
+.clip-frame-mid{top:auto;bottom:200px;}
+.clip-stamp{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--ca);
+            background:var(--ob);padding:6px 12px;position:absolute;top:-1px;right:-1px;
+            border:1px solid var(--ca);z-index:3;letter-spacing:.05em;}
+.clip-video{width:100%;height:100%;object-fit:cover;display:block;}
+"""
 
 
 def build_html(content, niche, topic_slug, work_dir, handle="@HANDLE_PLACEHOLDER", media_paths=None):
