@@ -38,6 +38,16 @@ import urllib.request
 import urllib.parse
 from datetime import datetime, timezone
 
+# Shared quota-error classifier (classify_error, short_sheet_message, send_quota_alert_email)
+import sys as __sys, pathlib as __pl
+__sys.path.insert(0, str(__pl.Path(__file__).parent))
+try:
+    from _quota_errors import classify_error, short_sheet_message, send_quota_alert_email
+except Exception:
+    def classify_error(t):        return None
+    def short_sheet_message(c, url=""): return "⚠️ Pipeline failed"
+    def send_quota_alert_email(*a, **kw): pass
+
 SHEET_ID  = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 QUEUE_TAB = "📲 Capture Queue"
 MAX_PER_RUN    = int(os.getenv("QUEUE_MAX_PER_RUN", "5"))
@@ -92,10 +102,18 @@ def _write_success(token: str, row_num: int, score: int, moved_to: str, hub_path
     ])
 
 
-def _write_failure(token: str, row_num: int, reason: str):
-    """On failure: leave D empty (checkbox intact, will not retry next run due to ⚠️ in F)."""
+def _write_failure(token: str, row_num: int, reason: str, url: str = ""):
+    """On failure: leave D empty. Try to classify the reason for a specific sheet message.
+    classify_error returns a dict (service/type/fix_action) when the error text matches a
+    known quota/billing/auth pattern — that short tag replaces the generic "⚠️ Pipeline failed"
+    so Priscila sees the actual cause without opening the logs.
+    """
+    classified   = classify_error(reason)
+    sheet_label  = short_sheet_message(classified, url=url) if classified else "⚠️ Pipeline failed"
+    if classified:
+        send_quota_alert_email(classified, context="Capture Queue dispatch", url=url)
     _batch_update(token, [
-        (f"'{QUEUE_TAB}'!F{row_num}", f"⚠️ Pipeline failed"),
+        (f"'{QUEUE_TAB}'!F{row_num}", sheet_label),
         (f"'{QUEUE_TAB}'!G{row_num}", reason[:200]),
     ])
 
@@ -322,16 +340,16 @@ def main():
             print(f"  ✓ DISPATCHED — project={pipeline_project}")
 
         except subprocess.TimeoutExpired:
-            _write_failure(token, sheet_row, "Timeout dispatching workflow")
+            _write_failure(token, sheet_row, "Timeout dispatching workflow", url=url)
             print(f"  ✗ TIMEOUT dispatching")
 
         except subprocess.CalledProcessError as exc:
             err_msg = (exc.stderr or exc.stdout or "unknown error")[-200:]
-            _write_failure(token, sheet_row, f"dispatch failed: {err_msg}")
+            _write_failure(token, sheet_row, f"dispatch failed: {err_msg}", url=url)
             print(f"  ✗ DISPATCH FAILED — rc={exc.returncode}")
 
         except Exception as exc:
-            _write_failure(token, sheet_row, str(exc)[:200])
+            _write_failure(token, sheet_row, str(exc)[:200], url=url)
             print(f"  ✗ EXCEPTION: {exc}")
 
         processed_count += 1

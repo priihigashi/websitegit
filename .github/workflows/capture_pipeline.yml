@@ -65,6 +65,8 @@ jobs:
             yt-dlp \
             openai \
             anthropic \
+            google-generativeai \
+            faster-whisper \
             gspread \
             google-auth \
             google-api-python-client \
@@ -81,6 +83,7 @@ jobs:
           GITHUB_TOKEN:     ${{ github.token }}
           APIFY_API_KEY:    ${{ secrets.APIFY_API_KEY }}
           YOUTUBE_API_KEY:  ${{ secrets.YOUTUBE_API_KEY }}
+          GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
           PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
           PRI_OP_YT_COOKIES: ${{ secrets.PRI_OP_YT_COOKIES }}
           PRI_OP_IG_COOKIES: ${{ secrets.PRI_OP_IG_COOKIES }}

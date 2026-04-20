@@ -68,10 +68,21 @@ except ImportError:
 
 OPENAI_API_KEY     = os.getenv("OPENAI_API_KEY", "")
 CLAUDE_KEY_4_CONTENT  = os.getenv("CLAUDE_KEY_4_CONTENT", "")
+GEMINI_API_KEY     = os.getenv("GEMINI_API_KEY", "")  # fallback transcription tier
 # FYI: Apify API is used to fetch reel metadata (creator, caption, stats).
 # Key stored in GitHub Secrets as APIFY_API_KEY.
 # Get yours at: https://console.apify.com/account/integrations
 APIFY_API_KEY      = os.getenv("APIFY_API_KEY", "")
+
+# Shared quota / billing error helpers — see _quota_errors.py for patterns.
+try:
+    from _quota_errors import classify_error, short_sheet_message, send_quota_alert_email
+except ImportError:
+    # Safety net: if the module is missing, define no-ops so the pipeline never crashes
+    # on an import error. The fallback behavior is still exercised on exception text.
+    def classify_error(_): return None
+    def short_sheet_message(_c, url=""): return ""
+    def send_quota_alert_email(_c, context="", url=""): pass
 # Run-level flag: set True when Apify returns "Monthly usage hard limit exceeded"
 # so we skip all further Apify calls in the same run instead of hammering the endpoint.
 _apify_limit_hit   = False
@@ -306,6 +317,51 @@ def send_notification_email(subject: str, body: str):
 
 APIFY_BASE = "https://api.apify.com/v2"
 
+
+def _metadata_via_yt_dlp(url: str) -> dict:
+    """Fallback IG metadata extraction via yt-dlp's --print-json. Free, no quota.
+    yt-dlp already downloads IG audio successfully in this pipeline, so its metadata
+    path is a reliable fallback when Apify is out. Returns {} on any failure.
+    """
+    try:
+        proc = subprocess.run(
+            ["yt-dlp", "--skip-download", "--dump-single-json", "--no-warnings", url],
+            capture_output=True, text=True, timeout=60, check=False,
+        )
+        if proc.returncode != 0 or not proc.stdout.strip():
+            print(f"  yt-dlp metadata fallback returned rc={proc.returncode}, stderr[:200]={proc.stderr[:200]}")
+            return {}
+        info = json.loads(proc.stdout.strip().splitlines()[-1])
+        handle = info.get("uploader_id") or info.get("channel_id") or info.get("uploader") or ""
+        name   = info.get("uploader") or info.get("channel") or handle
+        caption = (info.get("description") or info.get("title") or "")[:500]
+        return {
+            "creator_handle": handle,
+            "creator_name":   name,
+            "caption":        caption,
+            "likes":          info.get("like_count", 0) or 0,
+            "comments":       info.get("comment_count", 0) or 0,
+            "views":          info.get("view_count", 0) or 0,
+            "timestamp":      info.get("timestamp", "") or "",
+            "source_url":     url,
+            "video_url":      info.get("url") or "",
+        }
+    except Exception as e:
+        print(f"  yt-dlp metadata fallback failed: {type(e).__name__}: {e}")
+        return {}
+
+
+def _ig_metadata_fallback(url: str, reason: str) -> dict:
+    """Fallback cascade when Apify fails: yt-dlp → (future: instaloader with IG_COOKIES) → {}."""
+    md = _metadata_via_yt_dlp(url)
+    if md.get("creator_handle"):
+        print(f"  Metadata via yt-dlp fallback — @{md['creator_handle']} (reason: {reason})")
+        return md
+    # Future: instaloader with PRI_OP_IG_COOKIES could slot here as tier-2 fallback.
+    print(f"  Metadata fallback returned nothing (reason: {reason})")
+    return {}
+
+
 def fetch_reel_metadata(url: str) -> dict:
     """Fetch reel metadata via Apify. Returns dict with creator info + stats.
 
@@ -314,13 +370,12 @@ def fetch_reel_metadata(url: str) -> dict:
     """
     global _apify_limit_hit
     if _apify_limit_hit:
-        print("  SKIP Apify metadata: monthly usage limit already hit this run")
-        return {}
+        print("  SKIP Apify (limit already hit this run) — using yt-dlp metadata fallback")
+        return _ig_metadata_fallback(url, reason="Apify limit (cached)")
 
     if not APIFY_API_KEY:
-        print("  SKIP Apify metadata: APIFY_API_KEY not set")
-        print("  (Get key at: https://console.apify.com/account/integrations)")
-        return {}
+        print("  SKIP Apify metadata: APIFY_API_KEY not set — using yt-dlp fallback")
+        return _ig_metadata_fallback(url, reason="APIFY_API_KEY missing")
 
     if "instagram.com" not in url:
         print("  SKIP Apify metadata: not an Instagram URL")
@@ -353,11 +408,13 @@ def fetch_reel_metadata(url: str) -> dict:
             err_msg  = err.get("message", run_resp.text)
             if err_type == "platform-feature-disabled" and "limit" in err_msg.lower():
                 _apify_limit_hit = True
-                print(f"  WARNING Apify: monthly usage hard limit exceeded — skipping Apify for all remaining URLs this run.")
-                print(f"  Fix: go to console.apify.com → Billing → increase limit or wait for monthly reset.")
-                return {}
+                print(f"  WARNING Apify: monthly usage hard limit exceeded — switching to yt-dlp fallback for the rest of this run.")
+                classified = classify_error(f"{err_type}: {err_msg}")
+                if classified:
+                    send_quota_alert_email(classified, context="Apify IG metadata", url=url)
+                return _ig_metadata_fallback(url, reason="Apify monthly limit")
             print(f"  WARNING Apify 403: {err_type} — {err_msg}")
-            return {}
+            return _ig_metadata_fallback(url, reason=f"Apify 403 {err_type}")
         run_resp.raise_for_status()
         run_id = run_resp.json()["data"]["id"]
         print(f"  Apify run started: {run_id}")
@@ -375,8 +432,8 @@ def fetch_reel_metadata(url: str) -> dict:
                 break
 
         if status != "SUCCEEDED":
-            print(f"  WARNING: Apify run ended with status: {status}")
-            return {}
+            print(f"  WARNING: Apify run ended with status: {status} — falling back to yt-dlp")
+            return _ig_metadata_fallback(url, reason=f"Apify run {status}")
 
         items_resp = requests.get(
             f"{APIFY_BASE}/actor-runs/{run_id}/dataset/items",
@@ -385,8 +442,8 @@ def fetch_reel_metadata(url: str) -> dict:
         )
         items = items_resp.json()
         if not items:
-            print("  WARNING: Apify returned no results")
-            return {}
+            print("  WARNING: Apify returned no results — falling back to yt-dlp")
+            return _ig_metadata_fallback(url, reason="Apify empty result")
 
         item = items[0]
         metadata = {
@@ -884,6 +941,105 @@ def download_video(url: str, tmp_dir: str) -> str:
 
 
 # ─── STEP 2: TRANSCRIBE ───────────────────────────────────────────────────────
+#
+# Transcription cascade — never relies on a single provider:
+#   Tier 1: OpenAI Whisper API            (fastest, costs credits)
+#   Tier 2: faster-whisper (local CPU)    (free, runs in GH runner, no quota)
+#   Tier 3: Gemini 1.5 Flash (audio in)   (free tier, text-only — no SRT)
+# Every tier logs a line; _whisper_with_fallback emails a quota alert on tier-1
+# billing failure so Priscila knows WHY we fell back.
+
+
+def _try_openai_whisper(audio_path: str, fmt: str) -> str:
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY not set")
+    from openai import OpenAI
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    with open(audio_path, "rb") as f:
+        return client.audio.transcriptions.create(
+            model="whisper-1",
+            file=f,
+            response_format=("srt" if fmt == "srt" else "text"),
+        )
+
+
+def _try_faster_whisper(audio_path: str, fmt: str) -> str:
+    """Local CPU-based Whisper replacement. No API, no quota, no billing."""
+    from faster_whisper import WhisperModel
+    # "base" = 74MB model, good enough for <60s reels. Upgrade to "small" if accuracy lacks.
+    model = WhisperModel("base", device="cpu", compute_type="int8")
+    segments, _info = model.transcribe(audio_path, beam_size=5)
+    segments = list(segments)
+    if fmt == "srt":
+        def _ts(t: float) -> str:
+            h = int(t // 3600); m = int((t % 3600) // 60); s = t - h * 3600 - m * 60
+            return f"{h:02d}:{m:02d}:{s:06.3f}".replace(".", ",")
+        return "\n".join(
+            f"{i}\n{_ts(seg.start)} --> {_ts(seg.end)}\n{seg.text.strip()}\n"
+            for i, seg in enumerate(segments, 1)
+        )
+    return " ".join(seg.text.strip() for seg in segments)
+
+
+def _try_gemini_transcribe(audio_path: str, fmt: str) -> str:
+    """Gemini 1.5 Flash accepts audio input — free tier 15 req/min. Text-only; no SRT."""
+    if not GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY not set")
+    if fmt == "srt":
+        raise RuntimeError("Gemini does not support SRT output")
+    import google.generativeai as genai
+    genai.configure(api_key=GEMINI_API_KEY)
+    audio_file = genai.upload_file(audio_path)
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    resp  = model.generate_content([
+        "Transcribe this audio exactly as spoken. Output ONLY the transcript text — no commentary, no timestamps, no speaker labels.",
+        audio_file,
+    ])
+    return resp.text
+
+
+def _whisper_with_fallback(audio_path: str, *, fmt: str = "text", url: str = "") -> str:
+    """Cascade: OpenAI → faster-whisper → Gemini. fmt='text'|'srt'. Emails quota alerts."""
+    last_err = None
+
+    # Tier 1 — OpenAI Whisper API
+    try:
+        result = _try_openai_whisper(audio_path, fmt)
+        print(f"  Transcribed via OpenAI Whisper ({len(result)} chars, fmt={fmt})")
+        return result
+    except Exception as e:
+        last_err = e
+        err_text   = f"{type(e).__name__}: {e}"
+        classified = classify_error(err_text)
+        if classified:
+            print(f"  OpenAI Whisper → {classified['service']}:{classified['type']} — falling back")
+            send_quota_alert_email(classified, context=f"Whisper transcription (fmt={fmt})", url=url)
+        else:
+            print(f"  OpenAI Whisper failed ({err_text}) — falling back")
+
+    # Tier 2 — faster-whisper (local, free)
+    try:
+        result = _try_faster_whisper(audio_path, fmt)
+        print(f"  Transcribed via faster-whisper local ({len(result)} chars, fmt={fmt})")
+        return result
+    except Exception as e:
+        last_err = e
+        print(f"  faster-whisper fallback failed: {type(e).__name__}: {e}")
+
+    # Tier 3 — Gemini (text only)
+    if fmt == "text":
+        try:
+            result = _try_gemini_transcribe(audio_path, fmt)
+            print(f"  Transcribed via Gemini 1.5 Flash ({len(result)} chars)")
+            return result
+        except Exception as e:
+            last_err = e
+            print(f"  Gemini fallback failed: {type(e).__name__}: {e}")
+
+    if fmt == "srt":
+        return ""  # non-fatal — SRT is optional
+    raise RuntimeError(f"All transcription providers failed. Last error: {last_err}") from last_err
+
 
 def transcribe_audio(audio_path: str, url: str = "") -> str:
     print("\n[2/3] Transcribing...")
@@ -918,47 +1074,20 @@ def transcribe_audio(audio_path: str, url: str = "") -> str:
                         f"All YouTube paths failed for {url}: transcript-api blocked + "
                         f"yt-dlp + Apify all returned no audio"
                     ) from e
-                if not OPENAI_API_KEY:
-                    raise RuntimeError("OPENAI_API_KEY not set — cannot Whisper-transcribe yt-dlp audio") from e
-                from openai import OpenAI as _OAI
-                _client = _OAI(api_key=OPENAI_API_KEY)
-                with open(fallback_audio, "rb") as _f:
-                    result = _client.audio.transcriptions.create(
-                        model="whisper-1", file=_f, response_format="text"
-                    )
-                print(f"  Transcribed via yt-dlp + Whisper fallback ({len(result)} chars)")
-                return result
+                return _whisper_with_fallback(fallback_audio, fmt="text", url=url)
 
-    if not OPENAI_API_KEY:
-        print("  ERROR: OPENAI_API_KEY not set")
-        sys.exit(1)
-    from openai import OpenAI
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    with open(audio_path, "rb") as f:
-        result = client.audio.transcriptions.create(
-            model="whisper-1", file=f, response_format="text"
-        )
-    print(f"  Transcribed via Whisper ({len(result)} chars)")
-    return result
+    return _whisper_with_fallback(audio_path, fmt="text", url=url)
 
 
 def get_caption_srt(audio_path: str) -> str:
-    """Get timestamped SRT captions from Whisper. Separate from transcribe_audio to avoid
-    breaking callers that expect plain text. Only called for news (Brazil/USA) projects that
-    need timed captions for Remotion rendering."""
-    if not OPENAI_API_KEY:
-        return ""
-    from openai import OpenAI
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    """Get timestamped SRT captions via the Whisper cascade. Returns '' on total failure
+    (non-fatal — SRT captions are only used for Remotion news renders).
+    Note: Gemini tier does not support SRT, so this effectively cascades OpenAI → faster-whisper.
+    """
     try:
-        with open(audio_path, "rb") as f:
-            result = client.audio.transcriptions.create(
-                model="whisper-1", file=f, response_format="srt"
-            )
-        print(f"  SRT captions generated ({len(result)} chars)")
-        return result
+        return _whisper_with_fallback(audio_path, fmt="srt", url="")
     except Exception as e:
-        print(f"  WARNING: SRT generation failed (non-fatal): {e}")
+        print(f"  WARNING: SRT generation failed across all providers (non-fatal): {e}")
         return ""
 
 

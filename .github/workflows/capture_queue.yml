@@ -64,6 +64,8 @@ jobs:
             instaloader \
             openai \
             anthropic \
+            google-generativeai \
+            faster-whisper \
             gspread \
             google-auth \
             google-api-python-client \
@@ -77,6 +79,7 @@ jobs:
           OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
           CLAUDE_KEY_4_CONTENT:         ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           APIFY_API_KEY:             ${{ secrets.APIFY_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
           PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
           PRI_OP_YT_COOKIES:         ${{ secrets.PRI_OP_YT_COOKIES }}
           GITHUB_TOKEN:              ${{ secrets.GITHUB_TOKEN }}
