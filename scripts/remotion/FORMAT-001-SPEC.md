@@ -124,7 +124,7 @@ Never wire capture → render automatically without an explicit approved `render
 
 ## What Was Approved (git reference)
 
-- `850f53c` — SOVEREIGN FORMAT-001 initial build (split-screen, captions, proof zone)
+- `850f53c` — News FORMAT-001 initial build (split-screen, captions, proof zone) — originally tagged "SOVEREIGN"
 - `523f1f1` — Renamed to NewsReel, added speaker/topic strip params
 
 The `topicTitle` strip was always small (28px). The **hook intro sequence** is NEW (not in original). It was missing — this spec adds it for the first time.

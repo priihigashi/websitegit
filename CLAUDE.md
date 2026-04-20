@@ -449,7 +449,7 @@ When she says "do we have a skill for X" → check this tab first before saying 
 
 When triggering capture_pipeline.yml, always use the correct `project` input:
 
-- `brazil` → Brazil/SOVEREIGN civic content (default for Brazilian reels)
+- `brazil` → Brazil civic content (default for Brazilian reels)
 - `usa` → USA news/content  
 - `book` → RECEIPTS fact-check book
 
@@ -462,8 +462,8 @@ RULE: Never default to `book` for Brazil reels. Always ask "brazil, usa, or book
 ### What We Found (Problems)
 
 **Dual Pipeline Confusion**
-- There were two email types: "SOVEREIGN capture done" and "Capture done" — appeared to be different scripts but is actually ONE script (`capture_pipeline.py`) with two project modes
-- The naming was inconsistent: queue used `brazil`/`usa`, pipeline used `sovereign`/`content` — caused confusion and would crash if `brazil` was typed in the manual trigger
+- There were two email types: "News capture done" and "OPC capture done" — appeared to be different scripts but is actually ONE script (`capture_pipeline.py`) with two project modes
+- The naming was inconsistent: queue used `brazil`/`usa`, pipeline used legacy `sovereign`/`content` aliases — caused confusion and would crash if `brazil` was typed in the manual trigger
 
 **Capture Queue Failures (Root Causes)**
 - `instaloader` was never installed in the GitHub Actions runner — the fallback that bypasses Instagram's shared_data block was silently skipped every time
@@ -475,7 +475,7 @@ RULE: Never default to `book` for Brazil reels. Always ask "brazil, usa, or book
 
 ### What We Fixed
 
-- **Renamed**: SOVEREIGN → "news" project, content → "opc" project (legacy names still work)
+- **Renamed**: SOVEREIGN → "brazil"/"usa" canonical projects (news alias = brazil), content → "opc" project (legacy names still work via alias)
 - **Email subjects**: "News capture done — NWS-..." and "OPC capture done — niche | ..."
 - **Installed instaloader** in capture_queue.yml pip install step
 - **Fixed Apify actor_id**: `apify/instagram-scraper` → `apify~instagram-scraper`

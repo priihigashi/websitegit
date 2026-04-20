@@ -37,7 +37,7 @@ EXPORT_SCRIPT = os.environ.get("EXPORT_SCRIPT", str(Path(__file__).parent / "exp
 OPC_TIP_TEMPLATE_FOLDER         = "1PWrZfuOvyHUbTRlFNqYxdhtg-Zvv_bXb"  # Marketing > OPC > Tip of the Week > _TEMPLATE_CAROUSEL
 BRAZIL_QUEM_TEMPLATE_FOLDER     = "1Ts4OlXT_KxtYNziGmHUcsjHVh8Z7D1ds"  # News > Brazil > Quem decidiu isso > _TEMPLATE_CAROUSEL
 USA_THE_CHAIN_TEMPLATE_FOLDER   = "1sDMyPHVYcOqZ3NK9ch4e48AaJ7KVvxL3"  # News > USA > The Chain > _TEMPLATE_CAROUSEL (confirmed 2026-04-19)
-SOVEREIGN_TEMPLATE_FOLDER       = os.environ.get("SOVEREIGN_TEMPLATE_FOLDER", "")  # News drive > SOVEREIGN > _TEMPLATE_CAROUSEL (set after folder creation)
+HISTORY_TEMPLATE_FOLDER         = os.environ.get("HISTORY_TEMPLATE_FOLDER", "") or os.environ.get("SOVEREIGN_TEMPLATE_FOLDER", "")  # News drive > USA > The History They Left Out > _TEMPLATE_CAROUSEL (legacy secret: SOVEREIGN_TEMPLATE_FOLDER)
 VERIFICAMOS_TEMPLATE_FOLDER     = "1QhILiMiIM9WrpHhIqXXrPs6JqoAdDijA"  # News > Brazil > Series > Verificamos > _TEMPLATE_CAROUSEL
 VERIFICAMOS_CONFIDENCE_THRESHOLD = 0.70  # auto-build gate — items below this score go to manual review queue
 
@@ -47,7 +47,6 @@ SHORTCUT_FOLDERS = {
     "opc":     {"carousels": "13pqneqeDy1-LAtGsRJDg9gmNl07Ye41g", "videos": "1LKS51EfDxrR3ib6TsR2DADMpt3der36D"},
     "brazil":  {"carousels": "1texYwliSc2eJjjVxSmY3bfV-f39USbJg", "videos": "1d5lJi5exZK_vhNVB6MWyjdFotMBBgPVd"},
     "usa":     {"carousels": "1jPB6TjbV8Bu2k3zeN3uT7EIvspwIrWtQ", "videos": "126K6N9UDOFj_zS-h3e4dD30GwZOviugT"},
-    "sovereign": {"carousels": "1texYwliSc2eJjjVxSmY3bfV-f39USbJg", "videos": "1d5lJi5exZK_vhNVB6MWyjdFotMBBgPVd"},
 }
 
 SHEET_ID    = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
@@ -717,8 +716,8 @@ def process_one_topic(topic_entry, run_date, drive):
         parent = OPC_TIP_TEMPLATE_FOLDER
     elif niche == "usa":
         parent = USA_THE_CHAIN_TEMPLATE_FOLDER
-    elif niche == "sovereign":
-        parent = SOVEREIGN_TEMPLATE_FOLDER or BRAZIL_QUEM_TEMPLATE_FOLDER
+    elif series_override == "HISTORY":
+        parent = HISTORY_TEMPLATE_FOLDER or USA_THE_CHAIN_TEMPLATE_FOLDER
     elif series_override == "VERIFICAMOS":
         parent = VERIFICAMOS_TEMPLATE_FOLDER
     else:
@@ -835,7 +834,7 @@ def process_one_topic(topic_entry, run_date, drive):
         _post_type = "Who Decided"
     elif "conta" in _series_lower or "money" in _series_lower:
         _post_type = "Money"
-    elif "history" in _series_lower or "arquivo" in _series_lower or "sovereign" in _series_lower:
+    elif "history" in _series_lower or "arquivo" in _series_lower:
         _post_type = "History"
     elif "explainer" in _series_lower or "o que" in _series_lower or "what is" in _series_lower:
         _post_type = "Explainer"

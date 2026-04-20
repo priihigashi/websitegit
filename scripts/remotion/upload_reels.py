@@ -36,7 +36,7 @@ def main():
     args = parser.parse_args()
 
     if not args.folder_id:
-        print("ERROR: --folder-id is empty. Set SOVEREIGN_TEMPLATE_FOLDER secret.", file=sys.stderr)
+        print("ERROR: --folder-id is empty. Set HISTORY_TEMPLATE_FOLDER (or legacy SOVEREIGN_TEMPLATE_FOLDER) secret.", file=sys.stderr)
         sys.exit(1)
 
     token_data = json.loads(os.environ.get("SHEETS_TOKEN", "{}"))

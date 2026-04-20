@@ -1,11 +1,11 @@
 {
   "name": "oak-park-remotion",
   "version": "1.0.0",
-  "description": "Remotion compositions for SOVEREIGN FORMAT-001 split-screen reels",
+  "description": "Remotion compositions for News FORMAT-001 split-screen reels",
   "scripts": {
     "start": "npx remotion studio",
-    "render:en": "npx remotion render SovereignReelEN",
-    "render:pt": "npx remotion render SovereignReelPT"
+    "render:en": "npx remotion render NewsReelEN",
+    "render:pt": "npx remotion render NewsReelPT"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.0",

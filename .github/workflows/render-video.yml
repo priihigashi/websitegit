@@ -93,7 +93,7 @@ jobs:
           mkdir -p /tmp/creds
           echo "$SHEETS_TOKEN" > /tmp/creds/sheets_token.json
 
-      - name: Download video + SRT from SOVEREIGN Drive folder
+      - name: Download video + SRT from News Drive folder (USA History/Brazil series)
         env:
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
           STORY_ID: ${{ github.event.inputs.story_id }}

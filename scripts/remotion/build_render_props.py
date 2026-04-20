@@ -124,9 +124,9 @@ def generate_voiceover(text, lang, story_id):
 
 
 def upload_audio_to_drive(local_path, story_id, lang):
-    """Upload MP3 to SOVEREIGN_TEMPLATE_FOLDER for archiving. Non-fatal."""
+    """Upload MP3 to HISTORY_TEMPLATE_FOLDER (or legacy SOVEREIGN_TEMPLATE_FOLDER) for archiving. Non-fatal."""
     token_env = os.environ.get("SHEETS_TOKEN", "")
-    folder_id = os.environ.get("SOVEREIGN_TEMPLATE_FOLDER", "")
+    folder_id = os.environ.get("HISTORY_TEMPLATE_FOLDER", "") or os.environ.get("SOVEREIGN_TEMPLATE_FOLDER", "")
     if not token_env or not folder_id:
         return
     try:

@@ -3,7 +3,7 @@ name: Capture Dispatcher (issue-comment)
 # Lets Claude (or anyone with repo-owner login) fire workflows by posting
 # GitHub issue/PR comments. Supported commands:
 #
-#   /capture <url> [sovereign|book|content] [--credits] [--story-id X] [--notes ...]
+#   /capture <url> [brazil|usa|opc|ugc|stocks|higashi|book] [--credits] [--story-id X] [--notes ...]
 #     Fires capture_pipeline.yml
 #
 #   /series <name> | <description> | [niche] | [YYYY-MM-DD]
@@ -49,8 +49,8 @@ jobs:
           BODY: ${{ github.event.comment.body }}
         run: |
           URL=$(printf '%s' "$BODY" | grep -oE 'https?://[^[:space:]]+' | head -n 1 || true)
-          PROJECT=$(printf '%s' "$BODY" | grep -oE '\b(sovereign|book|content)\b' | head -n 1 || true)
-          PROJECT=${PROJECT:-content}
+          PROJECT=$(printf '%s' "$BODY" | grep -oE '\b(brazil|usa|opc|ugc|stocks|higashi|book|sovereign|news|content)\b' | head -n 1 || true)
+          PROJECT=${PROJECT:-opc}
           CREDITS=false
           if printf '%s' "$BODY" | grep -q -- '--credits'; then CREDITS=true; fi
           STORY_ID=$(printf '%s' "$BODY" | grep -oE -- '--story-id[[:space:]]+[A-Za-z0-9_-]+' | awk '{print $2}' || true)
@@ -75,7 +75,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: "No URL found in `/capture` command.\n\nUsage: `/capture <url> [sovereign|book|content] [--credits] [--story-id XXX] [--notes text]`"
+              body: "No URL found in `/capture` command.\n\nUsage: `/capture <url> [brazil|usa|opc|ugc|stocks|higashi|book] [--credits] [--story-id XXX] [--notes text]`"
             });
 
       - name: Dispatch capture_pipeline.yml

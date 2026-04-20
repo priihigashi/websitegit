@@ -1,6 +1,6 @@
 name: Generate Video
 # ⚠️  NOT for FORMAT-001 split-screen reels — this routes to HeyGen/Veo/Kling (AI-generated).
-# For SOVEREIGN FORMAT-001 source-clip + proof-item reels → use render-video.yml (Remotion).
+# For News FORMAT-001 source-clip + proof-item reels → use render-video.yml (Remotion).
 
 on:
   workflow_dispatch:

@@ -327,8 +327,8 @@ Do not claim to save anything to persistent memory — Codex has none. AGENTS.md
 ### What we found (problems)
 
 **Dual pipeline confusion**
-- Two email subjects existed ("SOVEREIGN capture done" and "Capture done") — appeared to be different scripts but is ONE script (`capture_pipeline.py`) with two project modes
-- Naming was inconsistent: queue used `brazil`/`usa`, pipeline used `sovereign`/`content` — manual trigger would crash if `brazil` was typed
+- Two email subjects existed ("News capture done" and "OPC capture done") — appeared to be different scripts but is ONE script (`capture_pipeline.py`) with two project modes
+- Naming was inconsistent: queue used `brazil`/`usa`, pipeline used legacy `sovereign`/`content` aliases — manual trigger would crash if `brazil` was typed
 
 **Capture queue failures (root causes)**
 - `instaloader` was never installed in the GitHub Actions runner — the fallback bypassing Instagram's `shared_data` block was silently skipped every time
@@ -340,7 +340,7 @@ Do not claim to save anything to persistent memory — Codex has none. AGENTS.md
 
 ### What we fixed
 
-- **Renamed**: SOVEREIGN → "news" project, content → "opc" project (legacy names still work)
+- **Renamed**: SOVEREIGN → "brazil"/"usa" canonical projects (news alias = brazil), content → "opc" project (legacy names still work via alias)
 - **Email subjects**: "News capture done — NWS-..." and "OPC capture done — niche | ..."
 - **Installed instaloader** in `capture_queue.yml` pip install step
 - **Fixed Apify actor_id**: `apify/instagram-scraper` → `apify~instagram-scraper`

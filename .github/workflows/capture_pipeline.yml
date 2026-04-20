@@ -10,22 +10,20 @@ on:
         required: true
         type: string
       project:
-        description: "book | news | opc | ugc | usa | stocks | higashi"
+        description: "book | brazil | opc | ugc | usa | stocks | higashi"
         required: true
         default: "book"
         type: choice
         options:
           - book
-          - news
+          - brazil
           - opc
           - ugc
           - usa
           - stocks
           - higashi
-          - sovereign
-          - content
       story_id:
-        description: "Story ID e.g. BCI-002 or SVG-001 (blank = auto-generate)"
+        description: "Story ID e.g. BCI-002 or NWS-001 (blank = auto-generate)"
         required: false
         type: string
         default: ""

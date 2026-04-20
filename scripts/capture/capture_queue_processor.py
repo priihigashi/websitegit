@@ -201,8 +201,8 @@ def _parse_result(stdout: str, project: str) -> tuple[int, str, str]:
       Folder: https://...
       Brief: https://...
 
-    Sovereign/Book output block:
-      SOVEREIGN CAPTURE DONE  /  BOOK CAPTURE DONE
+    News/Book output block:
+      NEWS CAPTURE DONE  /  BOOK CAPTURE DONE
       Story ID: ...
       Doc: https://...
 
@@ -229,7 +229,7 @@ def _parse_result(stdout: str, project: str) -> tuple[int, str, str]:
         if m:
             hub_path = m.group(1).strip()
 
-    # Fallback: Doc line (sovereign/book)
+    # Fallback: Doc line (news/book)
     if not hub_path:
         m = re.search(r'Doc:\s*(https?://\S+)', stdout)
         if m:
