@@ -19,7 +19,7 @@ Environment variables required:
   HEYGEN_API_KEY      — for talking-head
   VEO_API_KEY         — for house-tour and walk-person (Vertex AI)
   KLING_API_KEY       — for job-site and from-scratch (Atlas Cloud or direct Kling)
-  ANTHROPIC_API_KEY   — for prompt optimization (optional)
+  CLAUDE_KEY_4_CONTENT   — for prompt optimization (optional)
 """
 import os, sys, json, argparse, requests, time
 from datetime import datetime

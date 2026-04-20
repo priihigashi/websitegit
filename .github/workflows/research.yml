@@ -28,7 +28,7 @@ jobs:
 
       - name: Run research script
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           YOUTUBE_API_KEY:   ${{ secrets.YOUTUBE_API_KEY }}
           NEWS_API_KEY:      ${{ secrets.NEWS_API_KEY }}
           SERP_API_KEY:      ${{ secrets.SERP_API_KEY }}

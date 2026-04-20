@@ -26,7 +26,7 @@ FLOW_PLANS_TRACKER_ID = "1fggy918FgPfnMQ-dzGQk2zx9uhi2_-uWXMKGW4MA47k"
 LAST_SEEN_PATH        = ".github/agent_state/last_seen.json"
 GITHUB_REPO           = "priihigashi/oak-park-ai-hub"
 GITHUB_TOKEN          = os.environ.get("GITHUB_TOKEN", "")
-ANTHROPIC_KEY         = os.environ["ANTHROPIC_API_KEY"]
+ANTHROPIC_KEY         = os.environ["CLAUDE_KEY_4_CONTENT"]
 GOOGLE_SA_KEY         = os.environ["GOOGLE_SA_KEY"]
 SCOPES                = ["https://www.googleapis.com/auth/spreadsheets",
                          "https://www.googleapis.com/auth/calendar"]

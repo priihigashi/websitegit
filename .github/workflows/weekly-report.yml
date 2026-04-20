@@ -23,7 +23,7 @@ jobs:
       - name: Generate Weekly Report
         env:
           SHEETS_TOKEN:              ${{ secrets.SHEETS_TOKEN }}
-          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_KEY_4_CONTENT:         ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           GITHUB_TOKEN:              ${{ secrets.GITHUB_TOKEN }}
           CONTENT_SHEET_ID:          ${{ secrets.CONTENT_SHEET_ID }}
           WEEKLY_REPORTS_FOLDER_ID:  "1gETNHiEtbkjYRimJOccDR9zssWSM4vNM"

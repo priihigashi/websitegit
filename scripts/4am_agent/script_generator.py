@@ -6,7 +6,7 @@ Scripts must be under 60 seconds (~130 words).
 import os, json
 import anthropic
 
-client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], timeout=120.0)
+client = anthropic.Anthropic(api_key=os.environ["CLAUDE_KEY_4_CONTENT"], timeout=120.0)
 
 SYSTEM = """You are a content strategist for Oak Park Construction, a licensed general contractor
 based in Pompano Beach, Florida, serving Broward County and South Florida.

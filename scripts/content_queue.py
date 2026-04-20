@@ -291,9 +291,9 @@ Only return the JSON array, no extra text."""
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     env = load_env()
-    api_key = env.get("ANTHROPIC_API_KEY", "")
+    api_key = env.get("CLAUDE_KEY_4_CONTENT", "")
     if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY not found in .env")
+        raise RuntimeError("CLAUDE_KEY_4_CONTENT not found in .env")
 
     print("🔐 Authenticating with Google...")
     creds = get_credentials()

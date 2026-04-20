@@ -17,7 +17,7 @@ Env vars:
   APIFY_API_KEY         — Apify API key
   GH_TOKEN              — GitHub token with repo billing scope
   COST_TRACKER_SHEET_ID — override sheet ID (optional)
-  ANTHROPIC_API_KEY     — not used for billing (no public endpoint); cost estimated from logs
+  CLAUDE_KEY_4_CONTENT     — not used for billing (no public endpoint); cost estimated from logs
 
 Anthropic model pricing (per 1M tokens, as of April 2026):
   claude-haiku-4-5-20251001:  input $0.80 / output $4.00

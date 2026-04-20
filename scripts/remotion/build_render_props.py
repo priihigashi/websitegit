@@ -56,7 +56,7 @@ def parse_srt(srt_path: str) -> list:
 
 def translate_captions(captions: list, target_lang: str = "pt") -> list:
     """Translate caption text to target language via Claude Haiku. Non-fatal if fails."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    api_key = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
     if not api_key or not captions:
         return captions
     try:

@@ -23,7 +23,7 @@ QUOTAS RESPECTED (GA4 Data API v1 limits):
 ENVIRONMENT (GitHub Secrets needed):
   SHEETS_TOKEN        - OAuth token JSON for Sheets + Drive
   OPENAI_API_KEY      - For Whisper transcription
-  ANTHROPIC_API_KEY   - For Claude extraction + Vision
+  CLAUDE_KEY_4_CONTENT   - For Claude extraction + Vision
   CONTENT_SHEET_ID    - The Ideas & Inbox spreadsheet ID
   GOOGLE_SA_KEY       - Service account JSON for Drive uploads (optional)
 """
@@ -36,7 +36,7 @@ from pathlib import Path
 SHEET_ID        = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
 INSPO_TAB       = "📱 Content Inspo"
 OPENAI_KEY      = os.environ.get("OPENAI_API_KEY", "")
-ANTHROPIC_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_KEY   = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
 SHEETS_TOKEN_PATH = os.environ.get("SHEETS_TOKEN_PATH", "/tmp/oak_park_creds/sheets_token.json")
 DRIVE_FOLDER_ID = "1Y2ymfzpE4mZOFrIwWrFQHEfFeYK5sDmG"  # Content - Reels & TikTok
 MAX_PER_RUN     = 20  # don't over-process

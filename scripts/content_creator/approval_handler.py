@@ -439,8 +439,8 @@ def re_render_post(post, feedback):
 
     # Normalize niche for carousel_builder
     niche = _normalize_niche(niche)
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print(f"  re_render: no ANTHROPIC_API_KEY — cannot regenerate content")
+    if not os.environ.get("CLAUDE_KEY_4_CONTENT"):
+        print(f"  re_render: no CLAUDE_KEY_4_CONTENT — cannot regenerate content")
         return False
 
     # Signal re-render is in progress → "Approved — Rebuild" in In Production tab

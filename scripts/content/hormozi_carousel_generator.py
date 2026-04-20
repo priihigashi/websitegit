@@ -16,7 +16,7 @@ TRIGGER:
   GitHub Actions → generate-carousel-content.yml → phone-first
 
 REQUIRED SECRETS:
-  ANTHROPIC_API_KEY
+  CLAUDE_KEY_4_CONTENT
   SHEETS_TOKEN (OAuth JSON for carousel sheet, same as build-carousels.yml)
 
 OPTIONAL SECRETS:
@@ -33,7 +33,7 @@ from datetime import datetime, timedelta
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+CLAUDE_KEY_4_CONTENT = os.getenv("CLAUDE_KEY_4_CONTENT", "")
 CONTENT_SHEET_ID  = os.getenv("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
 QUEUE_TAB         = "📋 Content Queue"
 
@@ -208,8 +208,8 @@ def sheet_append(token, row: list):
 
 def generate_with_claude(topic: str, niche: str, hook_style: str) -> dict:
     """Call Claude with Hormozi frameworks to generate carousel content."""
-    if not ANTHROPIC_API_KEY:
-        raise RuntimeError("ANTHROPIC_API_KEY not set")
+    if not CLAUDE_KEY_4_CONTENT:
+        raise RuntimeError("CLAUDE_KEY_4_CONTENT not set")
 
     user_prompt = f"""Create a 5-slide Instagram carousel for Oak Park Construction.
 
@@ -233,7 +233,7 @@ Return only the JSON object. No markdown, no explanation."""
         "https://api.anthropic.com/v1/messages",
         data=payload,
         headers={
-            "x-api-key": ANTHROPIC_API_KEY,
+            "x-api-key": CLAUDE_KEY_4_CONTENT,
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
         }

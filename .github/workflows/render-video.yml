@@ -219,7 +219,7 @@ jobs:
           VIDEO_START_FRAME: ${{ github.event.inputs.video_start_frame }}
           TOTAL_FRAMES: ${{ github.event.inputs.total_frames }}
           SRT_FILE: ${{ steps.locate.outputs.srt }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           HOOK: ${{ github.event.inputs.hook }}
           SPEAKER_NAME: ${{ github.event.inputs.speaker_name }}
           SPEAKER_ROLE: ${{ github.event.inputs.speaker_role }}

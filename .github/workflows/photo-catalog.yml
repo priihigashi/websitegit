@@ -31,7 +31,7 @@ jobs:
 
       - name: Run photo catalog + idea generation
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
           SHEETS_TOKEN_PATH: /tmp/oak_park_creds/sheets_token.json
         run: python scripts/photo_catalog_cloud.py

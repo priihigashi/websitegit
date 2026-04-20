@@ -76,7 +76,7 @@ jobs:
       - name: Run capture pipeline
         env:
           OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           SHEETS_TOKEN:      ${{ secrets.SHEETS_TOKEN }}
           GITHUB_TOKEN:     ${{ github.token }}
           APIFY_API_KEY:    ${{ secrets.APIFY_API_KEY }}

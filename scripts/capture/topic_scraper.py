@@ -19,7 +19,7 @@ TRIGGER:
 
 REQUIRED ENV VARS (GitHub Secrets):
   OPENAI_API_KEY
-  ANTHROPIC_API_KEY
+  CLAUDE_KEY_4_CONTENT
   GOOGLE_SA_KEY
   APIFY_API_KEY   ← ADD THIS: https://console.apify.com/account/integrations
 
@@ -51,7 +51,7 @@ except ImportError:
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 
 OPENAI_API_KEY    = os.getenv("OPENAI_API_KEY", "")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+CLAUDE_KEY_4_CONTENT = os.getenv("CLAUDE_KEY_4_CONTENT", "")
 APEFY_API_KEY     = os.getenv("APIFY_API_KEY", "")
 
 IDEAS_INBOX_ID = os.getenv("IDEAS_INBOX_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
@@ -237,10 +237,10 @@ def transcribe_audio(audio_path: str) -> str:
 
 def classify_content(transcript: str, url: str, niche: str, cluster_id: str) -> dict:
     """Classify transcript using Claude Sonnet."""
-    if not ANTHROPIC_API_KEY:
+    if not CLAUDE_KEY_4_CONTENT:
         return {"niche": niche, "classification": "NEEDS_REVIEW", "summary": transcript[:150]}
     import anthropic
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
     prompt = f"""Classify this video transcript for Oak Park Construction content pipeline.
 Niche hint: {niche}
 URL: {url}

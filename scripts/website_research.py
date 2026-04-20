@@ -39,7 +39,7 @@ except ImportError:
     from google.oauth2 import service_account
 
 # ── CONFIG ──────────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+CLAUDE_KEY_4_CONTENT = os.environ.get("CLAUDE_KEY_4_CONTENT")
 GOOGLE_SA_KEY     = os.environ.get("GOOGLE_SA_KEY")          # JSON string
 SHEET_ID          = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 MASTER_PLAN_DOC   = "1uxHmQtYfqel6X9MgFoXF-L_Y3rBhlenhG9sZo9ifuGU"
@@ -138,7 +138,7 @@ def scrape_url(url):
 # ── CLAUDE ANALYSIS ─────────────────────────────────────────────────────────
 def analyze_with_claude(scraped, site_type):
     """Use Claude to extract design/UX insights from scraped content."""
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
 
     prompt = f"""You are analyzing a website for design/UX inspiration for a {site_type} website.
 

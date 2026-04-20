@@ -29,7 +29,7 @@ CREDITS / ATTRIBUTION:
 
 REQUIRED ENV VARS (all stored as GitHub Secrets in oak-park-ai-hub):
   OPENAI_API_KEY
-  ANTHROPIC_API_KEY
+  CLAUDE_KEY_4_CONTENT
   SHEETS_TOKEN    (OAuth refresh token JSON — same secret used by all other workflows)
   APIFY_API_KEY   — Used for fetching reel metadata (creator, caption, stats)
 """
@@ -67,7 +67,7 @@ except ImportError:
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
 OPENAI_API_KEY     = os.getenv("OPENAI_API_KEY", "")
-ANTHROPIC_API_KEY  = os.getenv("ANTHROPIC_API_KEY", "")
+CLAUDE_KEY_4_CONTENT  = os.getenv("CLAUDE_KEY_4_CONTENT", "")
 # FYI: Apify API is used to fetch reel metadata (creator, caption, stats).
 # Key stored in GitHub Secrets as APIFY_API_KEY.
 # Get yours at: https://console.apify.com/account/integrations
@@ -950,10 +950,10 @@ def save_transcript(transcript: str, url: str, story_id: str, project: str) -> s
 # ─── CLAUDE ANALYSIS ──────────────────────────────────────────────────────────
 
 def analyze_book(transcript: str, url: str, story_id: str, notes: str) -> str:  # noqa: keep name for backward compat
-    if not ANTHROPIC_API_KEY:
-        return f"[PENDING — ANTHROPIC_API_KEY required]\n\n{transcript}"
+    if not CLAUDE_KEY_4_CONTENT:
+        return f"[PENDING — CLAUDE_KEY_4_CONTENT required]\n\n{transcript}"
     import anthropic
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
     print("  Claude (claude-opus-4-6) fact-checking...")
     prompt = f"""Run capture_crazy_ideas skill for RECEIPTS book.
 
@@ -1028,10 +1028,10 @@ BOOK READY: YES / NO / NEEDS MORE RESEARCH"""
 
 
 def analyze_news(transcript: str, url: str, story_id: str, notes: str, creator_name: str = "") -> str:
-    if not ANTHROPIC_API_KEY:
-        return f"[PENDING — ANTHROPIC_API_KEY required]\n\n{transcript}"
+    if not CLAUDE_KEY_4_CONTENT:
+        return f"[PENDING — CLAUDE_KEY_4_CONTENT required]\n\n{transcript}"
     import anthropic
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
     print("  Claude (claude-opus-4-6) News analysis...")
     prompt = f"""Analyze this content for the News political/civic page.
 Study the format and identify how to do it better — more examples, more teaching, not just negatives.
@@ -1102,10 +1102,10 @@ CONTENT READY: YES / NO / NEEDS REFINEMENT"""
 
 
 def analyze_opc(transcript: str, url: str, notes: str) -> dict:
-    if not ANTHROPIC_API_KEY:
+    if not CLAUDE_KEY_4_CONTENT:
         return {"niche": "Oak Park", "classification": "NEEDS_REVIEW", "summary": transcript[:150]}
     import anthropic
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
     print("  Claude (claude-sonnet-4-6) classifying...")
     prompt = f"""Classify this video transcript for Oak Park Construction content pipeline.
 URL: {url}
@@ -1580,11 +1580,11 @@ def research_from_notes(notes: str, transcript: str, niche: str, story_id: str =
     empty = {"research_tasks": [], "structure_hints": [], "format_flags": {}, "manual_tasks": []}
     if not notes or notes.strip().lower() in ("none", "n/a", ""):
         return empty
-    if not ANTHROPIC_API_KEY:
+    if not CLAUDE_KEY_4_CONTENT:
         return empty
 
     import anthropic, re as _re
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
 
     # ── Step 1: parse notes into categories (Haiku — fast + cheap) ──
     parse_prompt = f"""Analyze these user notes from a video capture and categorize every instruction.
@@ -1710,12 +1710,12 @@ def generate_content_brief(transcript: str, url: str, classification: dict, note
     """Ask Claude to generate carousel + reel + topic breakdowns from transcript.
     research: optional dict from research_from_notes() — embedded before slides.
     Returns plain text content brief (no markdown tables — avoids Docs API 400 errors).
-    Falls back to transcript + classification JSON if ANTHROPIC_API_KEY not set.
+    Falls back to transcript + classification JSON if CLAUDE_KEY_4_CONTENT not set.
     """
-    if not ANTHROPIC_API_KEY:
+    if not CLAUDE_KEY_4_CONTENT:
         return f"SOURCE: {url}\nNOTES: {notes or 'None'}\n\nTRANSCRIPT:\n{transcript}\n\nClassification:\n{json.dumps(classification, indent=2)}"
     import anthropic
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
     niche = classification.get("niche", "General")
 
     # Build research block to inject into prompt
@@ -1819,7 +1819,7 @@ def translate_to_pt(text: str) -> str:
     Uses the same urllib pattern as build_render_props.py. Non-fatal — returns
     the original text unchanged if translation fails or key is missing.
     """
-    if not ANTHROPIC_API_KEY or not text.strip():
+    if not CLAUDE_KEY_4_CONTENT or not text.strip():
         return text
     import urllib.request as _urllib_request
     prompt = (
@@ -1839,7 +1839,7 @@ def translate_to_pt(text: str) -> str:
             "https://api.anthropic.com/v1/messages",
             data=payload,
             headers={
-                "x-api-key": ANTHROPIC_API_KEY,
+                "x-api-key": CLAUDE_KEY_4_CONTENT,
                 "anthropic-version": "2023-06-01",
                 "content-type": "application/json",
             },

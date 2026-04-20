@@ -7,7 +7,7 @@ Also generates Instagram caption following Priscila's copy rules.
 import gzip, json, os, re, subprocess, time, urllib.request, urllib.parse
 from pathlib import Path
 
-ANTHROPIC_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_KEY  = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
 OPENAI_KEY     = os.environ.get("OPENAI_API_KEY", "")
 GEMINI_KEY     = os.environ.get("GEMINI_API_KEY", "")
 PEXELS_KEY     = os.environ.get("PEXELS_API_KEY", "")

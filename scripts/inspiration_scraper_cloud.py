@@ -89,7 +89,7 @@ def load_env():
                 k, v = line.split("=", 1)
                 env[k.strip()] = v.strip()
     # env vars override file
-    for k in ["APIFY_API_KEY", "YOUTUBE_API_KEY", "ANTHROPIC_API_KEY"]:
+    for k in ["APIFY_API_KEY", "YOUTUBE_API_KEY", "CLAUDE_KEY_4_CONTENT"]:
         if os.environ.get(k):
             env[k] = os.environ[k]
     return env

@@ -55,7 +55,7 @@ jobs:
           APIFY_API_KEY:       ${{ secrets.APIFY_API_KEY }}
           PEXELS_API_KEY:      ${{ secrets.PEXELS_API_KEY }}
           YOUTUBE_API_KEY:     ${{ secrets.YOUTUBE_API_KEY }}
-          ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_KEY_4_CONTENT:   ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           GOOGLE_SA_KEY:       ${{ secrets.GOOGLE_SA_KEY }}
           SHEETS_TOKEN:        ${{ secrets.SHEETS_TOKEN }}
           BUFFER_API_KEY:      ${{ secrets.BUFFER_API_KEY_EXP04092027 }}

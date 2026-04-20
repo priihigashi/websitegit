@@ -58,7 +58,7 @@ jobs:
 
       - name: Generate carousel content
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           SHEETS_TOKEN:      ${{ secrets.SHEETS_TOKEN }}
           CONTENT_SHEET_ID:  ${{ secrets.CONTENT_SHEET_ID }}
         run: |

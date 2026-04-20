@@ -37,5 +37,5 @@ jobs:
           SHEETS_TOKEN_PATH: /tmp/oak_park_creds/sheets_token.json
           CONTENT_SHEET_ID: ${{ secrets.CONTENT_SHEET_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
         run: python scripts/daily_content_processor.py

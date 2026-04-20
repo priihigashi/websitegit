@@ -28,7 +28,7 @@ jobs:
 
       - name: Fill missing columns
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           GOOGLE_SHEET_ID:   ${{ secrets.GOOGLE_SHEET_ID }}
           SHEETS_TOKEN:      ${{ secrets.SHEETS_TOKEN }}
         run: node scripts/fill-missing.js

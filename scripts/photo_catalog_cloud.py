@@ -3,7 +3,7 @@
 photo_catalog_cloud.py — Cloud version for GitHub Actions
 Same logic as photo_catalog.py but reads credentials from env vars.
 Env vars injected by GitHub Actions workflow:
-  ANTHROPIC_API_KEY    — Anthropic API key
+  CLAUDE_KEY_4_CONTENT    — Anthropic API key
   SHEETS_TOKEN_PATH    — path to sheets_token.json written from secret
   SHEET_ID             — Google Sheet ID (optional override)
 """
@@ -289,7 +289,7 @@ def generate_ideas_from_catalog(sheets, api_key: str):
     and marks 'Ideas Generated?' = 'Yes' in the catalog.
     """
     if not api_key:
-        print("[ideas] ANTHROPIC_API_KEY not set — skipping idea generation")
+        print("[ideas] CLAUDE_KEY_4_CONTENT not set — skipping idea generation")
         return
 
     result = sheets.spreadsheets().values().get(
@@ -389,7 +389,7 @@ def generate_ideas_from_catalog(sheets, api_key: str):
 
 def main():
     from googleapiclient.discovery import build
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    api_key = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
     print(f"\n🏗️  Photo Catalog — Cloud Run — {date.today()}")
     creds = get_credentials()
     drive  = build("drive",  "v3", credentials=creds)

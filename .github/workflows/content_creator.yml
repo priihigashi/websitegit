@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 30
     env:
       SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
@@ -86,7 +86,7 @@ jobs:
       - name: AI Content Audit (3 agents)
         if: always()
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           ALERT_EMAIL: priscila@oakpark-construction.com
           WORK_DIR: /tmp/content_creator_run
         run: |
@@ -140,7 +140,7 @@ jobs:
     timeout-minutes: 35
     env:
       SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
@@ -200,7 +200,7 @@ jobs:
       - name: AI Content Audit (3 agents)
         if: always()
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           ALERT_EMAIL: priscila@oakpark-construction.com
           WORK_DIR: /tmp/content_creator_run
         run: |

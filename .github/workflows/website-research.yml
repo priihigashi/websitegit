@@ -41,7 +41,7 @@ jobs:
 
       - name: Run research
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
         run: |
           python scripts/website_research.py \

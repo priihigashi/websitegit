@@ -23,7 +23,7 @@ CARRIES_FILE     = ".github/agent_state/carry_forwards.json"
 GITHUB_REPO      = "priihigashi/oak-park-ai-hub"
 GITHUB_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
 et               = pytz.timezone("America/New_York")
-client           = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+client           = anthropic.Anthropic(api_key=os.environ["CLAUDE_KEY_4_CONTENT"])
 
 SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly",

@@ -23,7 +23,7 @@ Skip rules:
 Env vars (all already in oak-park-ai-hub GitHub Secrets):
   SHEETS_TOKEN            — OAuth refresh token JSON
   OPENAI_API_KEY          — forwarded to capture_pipeline.py
-  ANTHROPIC_API_KEY       — forwarded to capture_pipeline.py
+  CLAUDE_KEY_4_CONTENT       — forwarded to capture_pipeline.py
   APIFY_API_KEY           — forwarded to capture_pipeline.py (optional)
   PRI_OP_GMAIL_APP_PASSWORD — forwarded to capture_pipeline.py (optional)
 """

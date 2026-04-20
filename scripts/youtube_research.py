@@ -53,7 +53,7 @@ import urllib.request
 import urllib.parse
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+CLAUDE_KEY_4_CONTENT = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
 GOOGLE_SA_KEY     = os.environ.get("GOOGLE_SA_KEY", "")
 GITHUB_TOKEN      = os.environ.get("GITHUB_TOKEN", "")
 SHEET_ID          = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
@@ -111,9 +111,9 @@ def get_transcript(video_id: str) -> str:
 # ── CLAUDE ANALYSIS ───────────────────────────────────────────────────────────
 def analyze_with_claude(video: dict, transcript: str, research_context: str) -> dict:
     """Claude analyzes a video — uses transcript if available, falls back to metadata only"""
-    if not ANTHROPIC_API_KEY:
+    if not CLAUDE_KEY_4_CONTENT:
         return {"summary": "No API key", "watch_priority": "low", "relevance_score": 0}
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
     
     has_transcript = transcript and "[transcript unavailable" not in transcript
     
@@ -165,9 +165,9 @@ Return only valid JSON, no markdown."""
 # ── KEYWORD EXPANSION ─────────────────────────────────────────────────────────
 def expand_keywords(topic: str, results_so_far: list, round_num: int) -> list[str]:
     """Ask Claude to generate 5 new search queries based on videos analyzed so far"""
-    if not ANTHROPIC_API_KEY:
+    if not CLAUDE_KEY_4_CONTENT:
         return []
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
     
     summaries = []
     for r in results_so_far[-10:]:

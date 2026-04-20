@@ -22,7 +22,7 @@ import urllib.request, urllib.error
 from datetime import datetime
 from pathlib import Path
 
-ANTHROPIC_KEY    = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_KEY    = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
 ALERT_EMAIL      = os.environ.get("ALERT_EMAIL", "priscila@oakpark-construction.com")
 RUN_RESULTS_JSON = os.environ.get("CONTENT_CREATOR_RUN", "[]")
 WORK_DIR         = Path(os.environ.get("WORK_DIR", "/tmp/content_creator_run"))
@@ -180,7 +180,7 @@ def call_haiku(system_prompt: str, user_content: str, agent_name: str) -> dict:
     if not ANTHROPIC_KEY:
         return {
             "agent": agent_name, "score": None, "verdict": "SKIP",
-            "full_response": "ANTHROPIC_API_KEY not set — skipping agent",
+            "full_response": "CLAUDE_KEY_4_CONTENT not set — skipping agent",
             "error": "no key",
         }
 
@@ -356,7 +356,7 @@ def main():
         return
 
     if not ANTHROPIC_KEY:
-        print("  WARNING: ANTHROPIC_API_KEY not set — all agents will be SKIPPED")
+        print("  WARNING: CLAUDE_KEY_4_CONTENT not set — all agents will be SKIPPED")
 
     print(f"  Auditing {len(results)} post(s)  ×  {len(AGENTS)} agents each...\n")
 
