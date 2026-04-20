@@ -6,8 +6,10 @@ Returns portrait-oriented clips for Reels / TikTok format.
 import os, requests
 
 PEXELS_API_KEY  = os.environ.get("PEXELS_API_KEY", "")
+PIXABAY_API_KEY = os.environ.get("PIXABAY_API_KEY", "")
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
 PEXELS_BASE     = "https://api.pexels.com/videos"
+PIXABAY_BASE    = "https://pixabay.com/api/videos"
 YOUTUBE_BASE    = "https://www.googleapis.com/youtube/v3"
 
 
@@ -31,6 +33,39 @@ def search_pexels(query, per_page=10, orientation="portrait"):
         return response.json().get("videos", [])
     except Exception as e:
         print(f"[broll] Pexels error for '{query}': {e}")
+        return []
+
+
+def search_pixabay(query, per_page=10):
+    """Fallback to Pixabay if Pexels returns too few results. Returns Pexels-shaped dicts."""
+    if not PIXABAY_API_KEY:
+        return []
+    try:
+        response = requests.get(
+            PIXABAY_BASE,
+            params={"key": PIXABAY_API_KEY, "q": query, "per_page": max(per_page, 3), "video_type": "film"},
+            timeout=15,
+        )
+        response.raise_for_status()
+        hits = response.json().get("hits", [])
+        videos = []
+        for h in hits:
+            vfiles = h.get("videos", {})
+            best = (vfiles.get("large") or vfiles.get("medium") or vfiles.get("small") or {})
+            if not best.get("url"):
+                continue
+            videos.append({
+                "url":          h.get("pageURL", ""),
+                "duration":     h.get("duration", 0),
+                "video_files":  [{
+                    "link":   best.get("url", ""),
+                    "width":  best.get("width", 0),
+                    "height": best.get("height", 0),
+                }],
+            })
+        return videos
+    except Exception as e:
+        print(f"[broll] Pixabay error for '{query}': {e}")
         return []
 
 
@@ -93,11 +128,20 @@ def get_broll_for_script(topic, script_text, count=4):  # 4 Pexels + 4 YouTube =
         keywords = " ".join([w for w in script_text.split()[:10] if len(w) > 4])
         pexels_videos += search_pexels(keywords, per_page=count)
 
+    # Pixabay fallback — fill out remaining slots if Pexels came up short
+    stock_source = "pexels"
+    if len(pexels_videos) < count:
+        missing = count - len(pexels_videos)
+        pixabay_videos = search_pixabay(topic, per_page=missing + 2)
+        if pixabay_videos:
+            pexels_videos += pixabay_videos
+            stock_source = "mixed" if pexels_videos[:count - missing] else "pixabay"
+
     pexels_clips = []
     for video in pexels_videos[:count]:
         best = _best_file(video.get("video_files", []))
         pexels_clips.append({
-            "source":       "pexels",
+            "source":       stock_source,
             "pexels_url":   video.get("url", ""),
             "youtube_url":  "",
             "download_url": best.get("link", ""),

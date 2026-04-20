@@ -46,6 +46,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           BUILD_SOURCE: ${{ inputs.source }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: python scripts/build_carousel_cloud.py

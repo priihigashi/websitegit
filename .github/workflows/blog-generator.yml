@@ -42,6 +42,7 @@ jobs:
           WP_USERNAME: ${{ secrets.WP_USERNAME }}
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           MANUAL_TOPIC: ${{ inputs.topic || '' }}
           MANUAL_IMAGE_URLS: ${{ inputs.image_urls || '' }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
