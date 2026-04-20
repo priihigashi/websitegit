@@ -2336,7 +2336,7 @@ def main():
     parser = argparse.ArgumentParser(description="Capture Pipeline v2")
     parser.add_argument("url")
     parser.add_argument("--project",
-                        choices=["book", "news", "opc", "ugc", "stocks", "higashi", "usa", "sovereign", "content"],
+                        choices=["book", "news", "opc", "ugc", "stocks", "higashi", "usa", "brazil", "sovereign", "content"],
                         default="book",
                         help="book | news/brazil | opc | ugc | stocks | higashi | usa (routing.py is source of truth)")
     parser.add_argument("--story-id", default=None)
