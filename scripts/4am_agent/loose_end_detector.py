@@ -6,25 +6,36 @@ Checks 3 sources:
   C) carry_forwards.json: items needing human decision
 """
 import os, json
+import urllib.request, urllib.parse
 import pytz
 from datetime import datetime, timedelta
 from googleapiclient.discovery import build
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 
 SPREADSHEET_ID = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 CARRIES_FILE   = ".github/agent_state/carry_forwards.json"
 et             = pytz.timezone("America/New_York")
 STALE_DAYS     = 5
 
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/calendar",
-]
-
 
 def _creds():
-    return service_account.Credentials.from_service_account_info(
-        json.loads(os.environ["GOOGLE_SA_KEY"]), scopes=SCOPES
+    raw = os.environ["SHEETS_TOKEN"]
+    td  = json.loads(raw)
+    data = urllib.parse.urlencode({
+        "client_id":     td["client_id"],
+        "client_secret": td["client_secret"],
+        "refresh_token": td["refresh_token"],
+        "grant_type":    "refresh_token",
+    }).encode()
+    resp = json.loads(urllib.request.urlopen(
+        "https://oauth2.googleapis.com/token", data=data
+    ).read())
+    return Credentials(
+        token=resp["access_token"],
+        refresh_token=td["refresh_token"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=td["client_id"],
+        client_secret=td["client_secret"],
     )
 
 

@@ -14,12 +14,13 @@ It answers TWO questions:
   Result: 90%+ of nights = zero LLM cost on plan improvement path.
 """
 import os, json, base64, requests
+import urllib.request, urllib.parse
 import context_reader
 import pytz
 import anthropic
 from datetime import datetime
 from googleapiclient.discovery import build
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 
 SPREADSHEET_ID        = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 FLOW_PLANS_TRACKER_ID = "1fggy918FgPfnMQ-dzGQk2zx9uhi2_-uWXMKGW4MA47k"
@@ -27,29 +28,39 @@ LAST_SEEN_PATH        = ".github/agent_state/last_seen.json"
 GITHUB_REPO           = "priihigashi/oak-park-ai-hub"
 GITHUB_TOKEN          = os.environ.get("GITHUB_TOKEN", "")
 ANTHROPIC_KEY         = os.environ["CLAUDE_KEY_4_CONTENT"]
-GOOGLE_SA_KEY         = os.environ["GOOGLE_SA_KEY"]
-SCOPES                = ["https://www.googleapis.com/auth/spreadsheets",
-                         "https://www.googleapis.com/auth/calendar"]
-DRIVE_SCOPES          = ["https://www.googleapis.com/auth/spreadsheets",
-                         "https://www.googleapis.com/auth/drive.readonly",
-                         "https://www.googleapis.com/auth/calendar"]
 et                    = pytz.timezone("America/New_York")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
 
-def _sheets():
-    creds = service_account.Credentials.from_service_account_info(
-        json.loads(GOOGLE_SA_KEY), scopes=SCOPES
+def _oauth_creds():
+    """OAuth via SHEETS_TOKEN — acts as priscila@oakpark-construction.com. Same pattern as sheets_writer.py."""
+    raw = os.environ["SHEETS_TOKEN"]
+    td  = json.loads(raw)
+    data = urllib.parse.urlencode({
+        "client_id":     td["client_id"],
+        "client_secret": td["client_secret"],
+        "refresh_token": td["refresh_token"],
+        "grant_type":    "refresh_token",
+    }).encode()
+    resp = json.loads(urllib.request.urlopen(
+        "https://oauth2.googleapis.com/token", data=data
+    ).read())
+    return Credentials(
+        token=resp["access_token"],
+        refresh_token=td["refresh_token"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=td["client_id"],
+        client_secret=td["client_secret"],
     )
-    return build("sheets", "v4", credentials=creds)
+
+
+def _sheets():
+    return build("sheets", "v4", credentials=_oauth_creds())
 
 
 def _calendar():
-    creds = service_account.Credentials.from_service_account_info(
-        json.loads(GOOGLE_SA_KEY), scopes=SCOPES
-    )
-    return build("calendar", "v3", credentials=creds)
+    return build("calendar", "v3", credentials=_oauth_creds())
 
 
 def _github_headers():
@@ -338,10 +349,7 @@ def run_plan_improvement(notifier_fn=None):
     print(f"[pattern_learner] Tier 1: {len(changed)} changed doc(s). Starting Tier 2...")
 
     # TIER 2: Drive preview — filter trivial changes
-    creds = service_account.Credentials.from_service_account_info(
-        json.loads(GOOGLE_SA_KEY), scopes=DRIVE_SCOPES
-    )
-    drive_service = build("drive", "v3", credentials=creds)
+    drive_service = build("drive", "v3", credentials=_oauth_creds())
 
     meaningful = {}
     for doc_id in changed:

@@ -13,10 +13,11 @@ Dedup state files (W1/W2 fix):
   researched_modules.json — tracks research triggers per module (skip if <7 days)
 """
 import os, json, base64, requests
+import urllib.request, urllib.parse
 import pytz
 from datetime import datetime
 from googleapiclient.discovery import build
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 import anthropic
 
 FAILURES_FILE    = ".github/agent_state/module_failures.json"
@@ -26,8 +27,6 @@ GITHUB_REPO      = "priihigashi/oak-park-ai-hub"
 GITHUB_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
 et               = pytz.timezone("America/New_York")
 client           = anthropic.Anthropic(api_key=os.environ["CLAUDE_KEY_4_CONTENT"])
-
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 TRANSIENT = ["timeout", "connection", "503", "502", "rate limit", "429", "network", "socket"]
 CONFIG    = ["not found", "missing secret", "401", "403", "credential", "permission", "forbidden"]
@@ -42,8 +41,23 @@ DEDUP_DAYS = 7
 
 
 def _creds():
-    return service_account.Credentials.from_service_account_info(
-        json.loads(os.environ["GOOGLE_SA_KEY"]), scopes=SCOPES
+    raw = os.environ["SHEETS_TOKEN"]
+    td  = json.loads(raw)
+    data = urllib.parse.urlencode({
+        "client_id":     td["client_id"],
+        "client_secret": td["client_secret"],
+        "refresh_token": td["refresh_token"],
+        "grant_type":    "refresh_token",
+    }).encode()
+    resp = json.loads(urllib.request.urlopen(
+        "https://oauth2.googleapis.com/token", data=data
+    ).read())
+    return Credentials(
+        token=resp["access_token"],
+        refresh_token=td["refresh_token"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=td["client_id"],
+        client_secret=td["client_secret"],
     )
 
 
@@ -159,10 +173,7 @@ def _fetch_live_headers(sheet_key: str) -> str:
     sheet_id, tab = entry
     try:
         from googleapiclient.discovery import build as _build
-        svc = _build("sheets", "v4", credentials=service_account.Credentials.from_service_account_info(
-            json.loads(os.environ["GOOGLE_SA_KEY"]),
-            scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
-        ))
+        svc = _build("sheets", "v4", credentials=_creds())
         result = svc.spreadsheets().values().get(
             spreadsheetId=sheet_id, range=f"'{tab}'!A1:AC1"
         ).execute()

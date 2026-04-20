@@ -8,16 +8,31 @@ This module feeds those rules back into the 4AM agent so it self-learns
 without needing a human to manually update any scripts.
 """
 import os, json
+import urllib.request, urllib.parse
 from googleapiclient.discovery import build
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 
 SPREADSHEET_ID = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 
 def _sheets():
-    creds = service_account.Credentials.from_service_account_info(
-        json.loads(os.environ["GOOGLE_SA_KEY"]), scopes=SCOPES
+    raw = os.environ["SHEETS_TOKEN"]
+    td  = json.loads(raw)
+    data = urllib.parse.urlencode({
+        "client_id":     td["client_id"],
+        "client_secret": td["client_secret"],
+        "refresh_token": td["refresh_token"],
+        "grant_type":    "refresh_token",
+    }).encode()
+    resp = json.loads(urllib.request.urlopen(
+        "https://oauth2.googleapis.com/token", data=data
+    ).read())
+    creds = Credentials(
+        token=resp["access_token"],
+        refresh_token=td["refresh_token"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=td["client_id"],
+        client_secret=td["client_secret"],
     )
     return build("sheets", "v4", credentials=creds)
 
