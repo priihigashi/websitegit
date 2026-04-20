@@ -95,7 +95,7 @@ ClaudeWorkspace: ~/ClaudeWorkspace/
 Credentials dir: ~/ClaudeWorkspace/Credentials/
 Service account (sheets): oak-park-sheets@gen-lang-client-0364933181.iam.gserviceaccount.com — ALREADY SHARED on all 3 sheets. If a script gets a 403, share it using the OAuth token (see reference_credentials.md) — NEVER ask Priscila to do this manually.
 Capture folders (per niche — routing.py is source of truth, call capture_folder(project)):
-  OPC     → 1lyWGwQiUPAVoMzb8vfQ0fBw72M1A2UfR (Marketing/Content/Captures, confirmed 2026-04-20)
+  OPC     → 19SIHYkGYM3EsaudQUGtnYLmhVTYfMkZh (Marketing/Content/Captures, verified 2026-04-20)
   Brazil  → 1DZWbS4bF4XF_OjJSnD02WD2N83ljXwHd (News/Brazil/Captures)
   USA     → 1ZzrEmj3Smt0chr8CxiCOyroFCRzE-zU1 (News/USA/Captures)
   UGC     → 1b5fCmWn6cUkZSjhaZKGFmaKDc4MafY3U (UGC/Captures)
