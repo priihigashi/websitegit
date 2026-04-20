@@ -60,9 +60,12 @@ try:
     from routing import capture_folder as _capture_folder_fn
     def get_capture_folder(project: str) -> str:
         return _capture_folder_fn(project)
-except ImportError:
+except Exception as _routing_err:
     def get_capture_folder(project: str) -> str:
-        return "1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq"  # fallback: OPC Content Hub
+        raise RuntimeError(
+            f"routing.py failed to load — cannot determine capture folder for '{project}'. "
+            f"Error: {_routing_err}"
+        )
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
