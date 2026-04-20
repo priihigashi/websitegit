@@ -94,13 +94,22 @@ GitHub repo: priihigashi/oak-park-ai-hub
 ClaudeWorkspace: ~/ClaudeWorkspace/
 Credentials dir: ~/ClaudeWorkspace/Credentials/
 Service account (sheets): oak-park-sheets@gen-lang-client-0364933181.iam.gserviceaccount.com — ALREADY SHARED on all 3 sheets. If a script gets a 403, share it using the OAuth token (see reference_credentials.md) — NEVER ask Priscila to do this manually.
-Capture folders (per niche — routing.py is source of truth):
-  OPC     → 1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq (Marketing/Content Hub)
+Capture folders (per niche — routing.py is source of truth, call capture_folder(project)):
+  OPC     → 1lyWGwQiUPAVoMzb8vfQ0fBw72M1A2UfR (Marketing/Content/Captures, confirmed 2026-04-20)
   Brazil  → 1DZWbS4bF4XF_OjJSnD02WD2N83ljXwHd (News/Brazil/Captures)
   USA     → 1ZzrEmj3Smt0chr8CxiCOyroFCRzE-zU1 (News/USA/Captures)
   UGC     → 1b5fCmWn6cUkZSjhaZKGFmaKDc4MafY3U (UGC/Captures)
   Stocks  → 17oazrbMM1lBeFAGNCaFp8sjnAMWbVdSI (Stocks/Captures)
   Higashi → 1by4guSe46XK0DwIJwmNUEtbzmvQFOXOv (Higashi/Captures)
+Carousel parent folders (per niche — routing.py: carousel_folder_id):
+  OPC     → 1j_wiygaY0ltLkOp9-etiDDsA4R4n5ecm (Marketing/Content/Series)   ← series _TEMPLATE_CAROUSEL folders nest here ✅
+  Brazil  → 1gDOjtW_X-_jWtu94pffbDaUsw6VGCKuA (News/Brazil/Carousel)       ← series live at News/Brazil/Content/Series/* (migration pending)
+  USA     → 1lRfZE5XC_gL57pUiiWu0Lhar9wfyCtFw (News/USA/Carousel)          ← series live at News/USA/Content/Series/* (migration pending)
+Reels_Shorts parent folders (per niche — routing.py: reels_folder_id):
+  OPC     → 1jW3WUQEPpfJNgje-4YGyFT4inKgzWrt7 (Marketing/Content/Reels_Shorts)
+  Brazil  → 1IY4TJyv9Dk1qJPdhskyn4flj1g1jp0Kl (News/Brazil/Reels_Shorts)
+  USA     → 1EN2HhPzmUnwjXhXpaaf1hO52REAo7wB0 (News/USA/Reels_Shorts)
+NOTE: content_creator/main.py hardcodes series-level _TEMPLATE_CAROUSEL IDs and does NOT yet read carousel_folder_id from routing.py. OPC ✅ aligns. Brazil/USA series live at <niche>/Content/Series/ not under <niche>/Carousel/ — pending Priscila decision to migrate or update routing.
 Content Creation (Drive): 1um7y2Yt8zi9KGxev6kfFJYgrkMYwrCNh — production workspace (Art/Caption/Reel + Claude brief). Created alongside Content Hub on every capture.
 
 ## HIG NEGÓCIOS IMOBILIÁRIOS — ROUTING (mom's Brazil RE site)
