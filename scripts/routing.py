@@ -49,7 +49,7 @@ ROUTES = {
         "drive_id":           "0AIPzwsJD_qqzUk9PVA",
         "drive_name":         "Marketing",
         "capture_folder_id":  "19SIHYkGYM3EsaudQUGtnYLmhVTYfMkZh",  # Marketing/Content/Captures (verified path 2026-04-20)
-        "carousel_folder_id": "1j_wiygaY0ltLkOp9-etiDDsA4R4n5ecm",  # Marketing/Content/Series (v1_name_seriestopic/{png,motion})
+        "carousel_folder_id": "16P2JN74JAAW3HKnmNqPGPrAq7N5jDNii",  # Marketing/Content/carousel
         "reels_folder_id":    "1jW3WUQEPpfJNgje-4YGyFT4inKgzWrt7",  # Marketing/Content/Reels_Shorts
         "content_control_id": "1C1CAZ8lSgeVLSSCYIg-D9XPJcSLHyIOh1okKtvhZZQg",
         "content_control_tab":"🎬 In Production",
