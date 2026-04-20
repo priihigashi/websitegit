@@ -32,6 +32,10 @@ on:
         default: ""
         type: string
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   process-queue:
     name: Process Capture Queue
@@ -75,8 +79,8 @@ jobs:
           APIFY_API_KEY:             ${{ secrets.APIFY_API_KEY }}
           PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
           PRI_OP_YT_COOKIES:         ${{ secrets.PRI_OP_YT_COOKIES }}
-          GITHUB_TOKEN:              ${{ secrets.MCFOLLING_TOKEN }}
-          GH_TOKEN:                  ${{ secrets.MCFOLLING_TOKEN }}
+          GITHUB_TOKEN:              ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN:                  ${{ secrets.GITHUB_TOKEN }}
           QUEUE_MAX_PER_RUN:         ${{ inputs.max_per_run || '5' }}
           QUEUE_RETRY_FAILED:        ${{ inputs.retry_failed || 'false' }}
           QUEUE_BULK_URLS:           ${{ inputs.bulk_urls || '' }}
