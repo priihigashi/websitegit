@@ -2518,7 +2518,7 @@ def main():
     parser.add_argument("--project",
                         choices=["book", "brazil", "usa", "opc", "ugc", "stocks", "higashi",
                                  # legacy aliases — normalized to canonical names below
-                                 "news", "sovereign", "content"],
+                                 "news", "content"],
                         default="book",
                         help="book | brazil | usa | opc | ugc | stocks | higashi (routing.py is source of truth)")
     parser.add_argument("--story-id", default=None)

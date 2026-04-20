@@ -116,11 +116,10 @@ ROUTES = {
     },
 }
 
-# Legacy aliases — map to canonical keys
+# Legacy aliases — map to canonical keys (kept ONLY for backward compat with old queue rows / old workflow inputs)
 _ALIASES = {
-    "news":      "brazil",   # "news" = Brazil News (same pipeline)
-    "sovereign": "brazil",
-    "content":   "opc",
+    "news":    "brazil",   # "news" = Brazil News
+    "content": "opc",
 }
 
 # fmt: on

@@ -23,22 +23,24 @@ import pytz
 ET = pytz.timezone("America/New_York")
 
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))  # for routing.py
 from topic_picker import pick_topics
 from carousel_builder import generate_carousel_content, build_html, render_pngs, generate_image_suggestions, visual_audit, fetch_all_media, fetch_clips, build_motion_html
+from routing import get_route
 import urllib.request, urllib.parse
 from email_preview import send_preview, update_catalog_status
 
 WORK_DIR = Path(os.environ.get("WORK_DIR", "/tmp/content_creator_run"))
 EXPORT_SCRIPT = os.environ.get("EXPORT_SCRIPT", str(Path(__file__).parent / "export_variants.js"))
 
-# Drive folder IDs — _TEMPLATE_CAROUSEL parents per series.
-# Every build lands at <SERIES>/_TEMPLATE_CAROUSEL/v<N>_<slug>/ (+ v<N>_<slug>_motion sibling).
+# Carousel destination per niche is sourced from routing.py: get_route(niche)["carousel_folder_id"].
+# New spec (confirmed 2026-04-20):
+#   OPC    → Marketing/Content/Series/v<N>_<slug>/{png,motion,resources}    (1j_wiygaY...)
+#   Brazil → News/Brazil/Carousel/v<N>_<slug>/{png,motion,resources}        (1gDOjtW...)
+#   USA    → News/USA/Carousel/v<N>_<slug>/{png,motion,resources}           (1lRfZE5X...)
+# No more _TEMPLATE_CAROUSEL middle folder. No more <series>/ middle folder.
+# Series identity lives in slug naming (v1_<name>_<seriestopic>) + the story Google Doc.
 # N auto-increments when a slug already has versions. See project_carousel_folder_standard.md.
-OPC_TIP_TEMPLATE_FOLDER         = "1PWrZfuOvyHUbTRlFNqYxdhtg-Zvv_bXb"  # Marketing > OPC > Tip of the Week > _TEMPLATE_CAROUSEL
-BRAZIL_QUEM_TEMPLATE_FOLDER     = "1Ts4OlXT_KxtYNziGmHUcsjHVh8Z7D1ds"  # News > Brazil > Quem decidiu isso > _TEMPLATE_CAROUSEL
-USA_THE_CHAIN_TEMPLATE_FOLDER   = "1sDMyPHVYcOqZ3NK9ch4e48AaJ7KVvxL3"  # News > USA > The Chain > _TEMPLATE_CAROUSEL (confirmed 2026-04-19)
-HISTORY_TEMPLATE_FOLDER         = os.environ.get("HISTORY_TEMPLATE_FOLDER", "") or os.environ.get("SOVEREIGN_TEMPLATE_FOLDER", "")  # News drive > USA > The History They Left Out > _TEMPLATE_CAROUSEL (legacy secret: SOVEREIGN_TEMPLATE_FOLDER)
-VERIFICAMOS_TEMPLATE_FOLDER     = "1QhILiMiIM9WrpHhIqXXrPs6JqoAdDijA"  # News > Brazil > Series > Verificamos > _TEMPLATE_CAROUSEL
 VERIFICAMOS_CONFIDENCE_THRESHOLD = 0.70  # auto-build gate — items below this score go to manual review queue
 
 # Shortcuts folders — flat index of all built content per niche.
@@ -810,18 +812,13 @@ def process_one_topic(topic_entry, run_date, drive):
         )
 
     # 5. Upload to Drive — ONE version folder per post, png/ + motion/ + resources/ nested inside.
-    # Shape: <SERIES>/_TEMPLATE_CAROUSEL/v<N>_<slug>/{cover.html, png/, motion/, resources/, story doc}
+    # Shape (NEW 2026-04-20): <carousel_folder_id>/v<N>_<slug>/{cover.html, png/, motion/, resources/, story doc}
+    # carousel_folder_id is the niche-level Carousel parent (no series, no _TEMPLATE_CAROUSEL middle layer).
     print("  Uploading to Drive...")
-    if niche == "opc":
-        parent = OPC_TIP_TEMPLATE_FOLDER
-    elif niche == "usa":
-        parent = USA_THE_CHAIN_TEMPLATE_FOLDER
-    elif series_override == "HISTORY":
-        parent = HISTORY_TEMPLATE_FOLDER or USA_THE_CHAIN_TEMPLATE_FOLDER
-    elif series_override == "VERIFICAMOS":
-        parent = VERIFICAMOS_TEMPLATE_FOLDER
-    else:
-        parent = BRAZIL_QUEM_TEMPLATE_FOLDER
+    parent = get_route(niche).get("carousel_folder_id", "")
+    if not parent:
+        _send_alert(f"No carousel_folder_id configured for niche '{niche}' in routing.py — skipping upload for '{topic[:40]}'")
+        return None
 
     version = next_version_number(parent, slug, drive)
     version_name = f"v{version}_{slug}"
