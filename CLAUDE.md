@@ -94,7 +94,13 @@ GitHub repo: priihigashi/oak-park-ai-hub
 ClaudeWorkspace: ~/ClaudeWorkspace/
 Credentials dir: ~/ClaudeWorkspace/Credentials/
 Service account (sheets): oak-park-sheets@gen-lang-client-0364933181.iam.gserviceaccount.com — ALREADY SHARED on all 3 sheets. If a script gets a 403, share it using the OAuth token (see reference_credentials.md) — NEVER ask Priscila to do this manually.
-Content Hub (Drive): 1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq — Marketing > Claude Code Workspace > Content Hub. Permanent archive of all captured transcripts + resources. One story subfolder per capture. Pipeline auto-saves here. See memory: project_content_hub.md
+Capture folders (per niche — routing.py is source of truth):
+  OPC     → 1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq (Marketing/Content Hub)
+  Brazil  → 1DZWbS4bF4XF_OjJSnD02WD2N83ljXwHd (News/Brazil/Captures)
+  USA     → 1ZzrEmj3Smt0chr8CxiCOyroFCRzE-zU1 (News/USA/Captures)
+  UGC     → 1b5fCmWn6cUkZSjhaZKGFmaKDc4MafY3U (UGC/Captures)
+  Stocks  → 17oazrbMM1lBeFAGNCaFp8sjnAMWbVdSI (Stocks/Captures)
+  Higashi → 1by4guSe46XK0DwIJwmNUEtbzmvQFOXOv (Higashi/Captures)
 Content Creation (Drive): 1um7y2Yt8zi9KGxev6kfFJYgrkMYwrCNh — production workspace (Art/Caption/Reel + Claude brief). Created alongside Content Hub on every capture.
 
 ## HIG NEGÓCIOS IMOBILIÁRIOS — ROUTING (mom's Brazil RE site)
@@ -492,7 +498,7 @@ RULE: Never default to `book` for Brazil reels. Always ask "brazil, usa, or book
 | Feature | News Pipeline (run_news) | OPC Pipeline (run_opc) |
 |---|---|---|
 | Story ID prefix | NWS- | CNT- |
-| Drive destination | SOVEREIGN_FOLDER_ID | Content Hub + Content Creation |
+| Drive destination | routing.py capture_folder_id (Brazil/USA Captures) | routing.py capture_folder_id (OPC Content Hub) |
 | Sheet written | Calendar + Inspiration Library | Inspiration Library + Ideas Queue |
 | Bilingual brief | ✅ EN + PT-BR docs | ✅ EN + PT-BR docs (added) |
 | SRT captions | ✅ | ✅ (added) |

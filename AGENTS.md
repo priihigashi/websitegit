@@ -75,7 +75,12 @@ Gmail MCP can only DRAFT. To SEND, trigger `send_email.yml` via `gh workflow run
 | Chat Logs folder (Drive) | `1qitnbz5_8tfZI2rnTogV1zLLLLOwFVCw` |
 | Productivity & Routine folder | `1b8Cfc8lJhu5unDaxDQIdo4xdN6X7n1nS` |
 | Productivity & Routine doc | `1wVBuNOuOufT8WP4KCrrlVbKWRmQZjKvqmia1soUEBZE` |
-| Content Hub (Drive) | `1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq` |
+| OPC Captures (Drive) | `1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq` — Marketing/Content Hub |
+| Brazil Captures (Drive) | `1DZWbS4bF4XF_OjJSnD02WD2N83ljXwHd` — News/Brazil/Captures |
+| USA Captures (Drive) | `1ZzrEmj3Smt0chr8CxiCOyroFCRzE-zU1` — News/USA/Captures |
+| UGC Captures (Drive) | `1b5fCmWn6cUkZSjhaZKGFmaKDc4MafY3U` — UGC/Captures |
+| Stocks Captures (Drive) | `17oazrbMM1lBeFAGNCaFp8sjnAMWbVdSI` — Stocks/Captures |
+| Higashi Captures (Drive) | `1by4guSe46XK0DwIJwmNUEtbzmvQFOXOv` — Higashi/Captures |
 | Content Creation (Drive) | `1um7y2Yt8zi9KGxev6kfFJYgrkMYwrCNh` |
 | Content Formats registry (Doc) | `1XqXSyJC_iHMTrmMxpM5ZR7S-WQxz19HhDJO1HomdncM` |
 | html to image folder | `1tE-2Ps8V8ZKQ4etyvzk47ZWyzeHAD2nk` (Marketing > Image Creation) |
@@ -358,7 +363,7 @@ Do not claim to save anything to persistent memory — Codex has none. AGENTS.md
 | Feature | News (`run_news`) | OPC (`run_opc`) |
 |---|---|---|
 | Story ID prefix | NWS- | CNT- |
-| Drive destination | SOVEREIGN_FOLDER_ID | Content Hub + Content Creation |
+| Drive destination | routing.py → capture_folder_id (Brazil/USA Captures folders) | routing.py → capture_folder_id (OPC Content Hub) |
 | Sheet written | Calendar + Inspiration Library | Inspiration Library + Ideas Queue |
 | Bilingual brief | ✅ EN + PT-BR docs | ✅ EN + PT-BR docs (added) |
 | SRT captions | ✅ | ✅ (added) |
