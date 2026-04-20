@@ -4,8 +4,8 @@
     "type": "config"
   },
   "chat_log_reader": {
-    "task_created": "2026-04-13",
-    "type": "config"
+    "task_created": "2026-04-20",
+    "type": "unknown"
   },
   "pipeline_main": {
     "task_created": "2026-04-16",
