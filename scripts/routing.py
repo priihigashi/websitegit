@@ -14,10 +14,12 @@ ROUTES = {
     # ── News niches ────────────────────────────────────────────────────────────
     "brazil": {
         "label":              "Brazil News",
-        "pipeline":           "news",
+        "pipeline":           "brazil",   # canonical — must match capture_pipeline.yml choice list
         "drive_id":           "0AH7_C87G0ZwgUk9PVA",
         "drive_name":         "News",
         "capture_folder_id":  "1DZWbS4bF4XF_OjJSnD02WD2N83ljXwHd",  # News/Brazil/Captures
+        "carousel_folder_id": "1gDOjtW_X-_jWtu94pffbDaUsw6VGCKuA",  # News/Brazil/Carousel (v1_name_seriestopic/{png,motion})
+        "reels_folder_id":    "1IY4TJyv9Dk1qJPdhskyn4flj1g1jp0Kl",  # News/Brazil/Reels_Shorts
         "content_control_id": "1QFHa_xcuLOqbbYbtzeMVhb5ypfHIbAkVJyyInCKlgcM",
         "content_control_tab":"🇧🇷 Brazil In Production",
         "published_tab":      "✅ Published",
@@ -27,10 +29,12 @@ ROUTES = {
     },
     "usa": {
         "label":              "USA News",
-        "pipeline":           "news",
+        "pipeline":           "usa",     # canonical — must match capture_pipeline.yml choice list
         "drive_id":           "0AH7_C87G0ZwgUk9PVA",
         "drive_name":         "News",
         "capture_folder_id":  "1ZzrEmj3Smt0chr8CxiCOyroFCRzE-zU1",  # News/USA/Captures
+        "carousel_folder_id": "1lRfZE5XC_gL57pUiiWu0Lhar9wfyCtFw",  # News/USA/Carousel (v1_name_seriestopic/{png,motion})
+        "reels_folder_id":    "1EN2HhPzmUnwjXhXpaaf1hO52REAo7wB0",  # News/USA/Reels_Shorts
         "content_control_id": "1QFHa_xcuLOqbbYbtzeMVhb5ypfHIbAkVJyyInCKlgcM",
         "content_control_tab":"🇺🇸 USA In Production",
         "published_tab":      "✅ Published",
@@ -42,13 +46,15 @@ ROUTES = {
     "opc": {
         "label":              "OPC",
         "pipeline":           "opc",
-        "drive_id":           "0AJp3Phs0wIBOUk9PVA",
-        "drive_name":         "Oak Park Construction",
-        "capture_folder_id":  "1p7s2Q7kCxzKdvaVRFxSoYAQ-IG_NhTqq",  # Marketing/Content Hub (existing)
+        "drive_id":           "0AIPzwsJD_qqzUk9PVA",
+        "drive_name":         "Marketing",
+        "capture_folder_id":  "1lyWGwQiUPAVoMzb8vfQ0fBw72M1A2UfR",  # Marketing/Content/Captures (new, confirmed 2026-04-20)
+        "carousel_folder_id": "1j_wiygaY0ltLkOp9-etiDDsA4R4n5ecm",  # Marketing/Content/Series (v1_name_seriestopic/{png,motion})
+        "reels_folder_id":    "1jW3WUQEPpfJNgje-4YGyFT4inKgzWrt7",  # Marketing/Content/Reels_Shorts
         "content_control_id": "1C1CAZ8lSgeVLSSCYIg-D9XPJcSLHyIOh1okKtvhZZQg",
         "content_control_tab":"🎬 In Production",
         "published_tab":      "✅ Published",
-        "queue_dest":         "Inspiration Library",
+        "queue_dest":         "Marketing Content Drive",
         "story_prefix":       "CNT",
         "email_label":        "OPC capture done",
     },
