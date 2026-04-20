@@ -1571,7 +1571,37 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
         print(f"  SRT saved: {srt_path}")
 
     _news_capture_folder = get_capture_folder(args.project)
-    doc_url = create_drive_doc(f"{args.story_id} — NEWS — {datetime.now().strftime('%Y-%m-%d')}", analysis, _news_capture_folder)
+
+    # Create per-story subfolder inside niche Captures/ so files don't pile up flat.
+    # Naming mirrors save_to_content_hub: YYYY-MM-DD_NICHE_PLATFORM-SOURCEID
+    _date = datetime.now().strftime("%Y-%m-%d")
+    _niche = {"brazil": "BRAZIL", "usa": "USA"}.get(args.project, args.project.upper())
+    if "instagram.com" in args.url:
+        _plat = "IG"; _m = re.search(r'/reel/([^/?]+)', args.url); _src = _m.group(1) if _m else args.story_id
+    elif "youtu" in args.url:
+        _plat = "YT"; _m = re.search(r'(?:watch\?v=|youtu\.be/|shorts/)([^&/?]+)', args.url); _src = _m.group(1) if _m else args.story_id
+    elif "tiktok.com" in args.url:
+        _plat = "TK"; _m = re.search(r'/video/(\d+)', args.url); _src = _m.group(1) if _m else args.story_id
+    else:
+        _plat = "WEB"; _src = args.story_id
+    _story_folder_name = f"{_date}_{_niche}_{_plat}-{_src}"
+    _story_folder_id = _news_capture_folder  # fallback: write flat if Drive unavailable
+    _story_folder_url = ""
+    _drive_svc = get_drive_service()
+    if _drive_svc:
+        try:
+            _sf = _drive_svc.files().create(
+                body={"name": _story_folder_name, "mimeType": "application/vnd.google-apps.folder",
+                      "parents": [_news_capture_folder]},
+                supportsAllDrives=True, fields="id,webViewLink"
+            ).execute()
+            _story_folder_id = _sf["id"]
+            _story_folder_url = _sf.get("webViewLink", f"https://drive.google.com/drive/folders/{_story_folder_id}")
+            print(f"  Story folder: {_story_folder_url}")
+        except Exception as _e:
+            print(f"  WARNING: story subfolder creation failed, writing flat: {_e}")
+
+    doc_url = create_drive_doc(f"{args.story_id} — NEWS — {_date}", analysis, _story_folder_id)
     create_calendar_task(args.story_id, args.project, args.url, doc_url, transcript[:400], args.notes or "")
 
     # Upload video to niche Captures folder so Remotion can reference it (not lost in tmpdir)
@@ -1592,7 +1622,7 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
             drive = build("drive", "v3", credentials=creds)
             size_mb = os.path.getsize(video_path) / (1024 * 1024)
             print(f"  Uploading video to Captures folder ({size_mb:.1f} MB)...")
-            file_meta = {"name": f"{args.story_id}_original.mp4", "parents": [_news_capture_folder]}
+            file_meta = {"name": f"{args.story_id}_original.mp4", "parents": [_story_folder_id]}
             media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
             result = drive.files().create(
                 body=file_meta, media_body=media, supportsAllDrives=True, fields="id,webViewLink"
@@ -1604,7 +1634,7 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
             if srt_content:
                 srt_tmp = Path("/tmp") / f"{args.story_id}_captions.srt"
                 srt_tmp.write_text(srt_content, encoding="utf-8")
-                srt_meta = {"name": f"{args.story_id}_captions.srt", "parents": [_news_capture_folder]}
+                srt_meta = {"name": f"{args.story_id}_captions.srt", "parents": [_story_folder_id]}
                 srt_media = MediaFileUpload(str(srt_tmp), mimetype="text/plain")
                 drive.files().create(
                     body=srt_meta, media_body=srt_media, supportsAllDrives=True
@@ -1633,7 +1663,7 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
             brief_doc = drive_svc.files().create(
                 body={"name": f"[CONTENT BRIEF] {args.story_id}",
                       "mimeType": "application/vnd.google-apps.document",
-                      "parents": [_news_capture_folder]},
+                      "parents": [_story_folder_id]},
                 supportsAllDrives=True, fields="id,webViewLink"
             ).execute()
             brief_doc_id = brief_doc["id"]
