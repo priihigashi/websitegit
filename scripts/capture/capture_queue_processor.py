@@ -304,12 +304,19 @@ def main():
         # Dispatch each URL as a separate capture_pipeline.yml workflow run.
         # Each run gets a fresh GitHub Actions runner IP, avoiding Instagram rate limits.
         try:
+            # Strip whitespace from auth tokens — a trailing newline in a GitHub secret
+            # causes Go's net/http to reject it as an invalid Authorization header value.
+            _dispatch_env = {**os.environ}
+            for _k in ("GH_TOKEN", "GITHUB_TOKEN"):
+                if _k in _dispatch_env:
+                    _dispatch_env[_k] = _dispatch_env[_k].strip()
+
             subprocess.run([
                 "gh", "workflow", "run", "capture_pipeline.yml",
                 "--repo", "priihigashi/oak-park-ai-hub",
                 "--field", f"url={url}",
                 "--field", f"project={pipeline_project}",
-            ], check=True, capture_output=True, text=True, timeout=30)
+            ], check=True, capture_output=True, text=True, timeout=30, env=_dispatch_env)
             moved_to = _queue_dest(project)
             _write_success(token, sheet_row, 3, moved_to, "")
             print(f"  ✓ DISPATCHED — project={pipeline_project}")
