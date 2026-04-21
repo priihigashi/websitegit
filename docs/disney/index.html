@@ -146,8 +146,37 @@
   .ride-card.adults-only { border-left-color: #e74c3c; opacity: 0.7; }
   .ride-card.caution { border-left-color: #f39c12; }
   .ride-name { font-weight: bold; font-size: 0.95em; margin-bottom: 5px; }
-  .ride-name a { color: inherit; text-decoration: none; }
-  .ride-name a:hover { text-decoration: underline; }
+  .ride-name a, .dine-link { color: inherit; text-decoration: none; }
+  .ride-name a:hover, .dine-link:hover { text-decoration: underline; text-decoration-color: #ffd700; }
+
+  .weather-widget {
+    max-width: 900px; margin: -10px auto 20px; padding: 12px 16px;
+    background: linear-gradient(135deg, rgba(25,20,35,0.85), rgba(15,10,25,0.9));
+    border: 1px solid rgba(255,215,0,0.18); border-radius: 10px; color: #e8e6d8;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center;
+  }
+  .ww-today { display: flex; align-items: center; gap: 12px; border-right: 1px solid rgba(255,215,0,0.15); padding-right: 16px; }
+  .ww-today-icon { font-size: 2em; line-height: 1; }
+  .ww-today-main { line-height: 1.2; }
+  .ww-today-date { font-size: 0.72em; color: #ffd700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px; }
+  .ww-today-temp { font-size: 1.5em; font-weight: 600; }
+  .ww-today-desc { font-size: 0.75em; color: #c8c8b0; margin-top: 1px; }
+  .ww-trip { display: flex; gap: 10px; }
+  .ww-day { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 7px; padding: 6px 10px; text-align: center; min-width: 82px; line-height: 1.25; }
+  .ww-day.today { border-color: #ffd700; background: rgba(255,215,0,0.08); }
+  .ww-day-label { font-size: 0.65em; color: #c8c8b0; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 3px; }
+  .ww-day-park { font-size: 0.7em; color: #ffd700; margin-bottom: 3px; }
+  .ww-day-icon { font-size: 1.2em; margin: 2px 0; }
+  .ww-day-temp { font-size: 0.85em; font-weight: 600; }
+  .ww-day-rain { font-size: 0.65em; color: #9ec5fe; margin-top: 2px; }
+  .ww-loading { font-size: 0.8em; color: #888; text-align: center; grid-column: 1/-1; padding: 6px; }
+  @media (max-width: 720px) {
+    .weather-widget { grid-template-columns: 1fr; gap: 10px; }
+    .ww-today { border-right: none; border-bottom: 1px solid rgba(255,215,0,0.15); padding-right: 0; padding-bottom: 10px; justify-content: center; }
+    .ww-trip { justify-content: center; flex-wrap: wrap; }
+    .ww-day { min-width: 74px; padding: 6px 8px; }
+  }
   .ride-card { position: relative; }
   .star-badge {
     position: absolute;
@@ -546,6 +575,77 @@
   <p>Magic Kingdom · Hollywood Studios · Animal Kingdom</p>
 </div>
 
+<div class="weather-widget" id="weatherWidget">
+  <div class="ww-loading">Loading live Orlando weather…</div>
+</div>
+
+<script>
+(function(){
+  var codes = {
+    0:['☀️','Clear'],1:['🌤️','Mostly sunny'],2:['⛅','Partly cloudy'],3:['☁️','Cloudy'],
+    45:['🌫️','Fog'],48:['🌫️','Fog'],
+    51:['🌦️','Light drizzle'],53:['🌦️','Drizzle'],55:['🌦️','Drizzle'],
+    61:['🌧️','Light rain'],63:['🌧️','Rain'],65:['🌧️','Heavy rain'],
+    80:['🌦️','Showers'],81:['🌦️','Showers'],82:['⛈️','Heavy showers'],
+    95:['⛈️','Thunderstorm'],96:['⛈️','Storm + hail'],99:['⛈️','Storm + hail']
+  };
+  function icon(c){ return (codes[c]||['🌴','—'])[0]; }
+  function desc(c){ return (codes[c]||['','Check app'])[1]; }
+
+  var tripDays = [
+    {date:'2026-04-23', label:'Thu · Apr 23', park:'🏰 MK'},
+    {date:'2026-04-24', label:'Fri · Apr 24', park:'🎬 HS'},
+    {date:'2026-04-25', label:'Sat · Apr 25', park:'🦁 AK'}
+  ];
+  var today = new Date().toISOString().slice(0,10);
+
+  var url = 'https://api.open-meteo.com/v1/forecast?latitude=28.42&longitude=-81.58'
+          + '&current=temperature_2m,weather_code'
+          + '&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code'
+          + '&temperature_unit=fahrenheit&timezone=America%2FNew_York&forecast_days=16';
+
+  fetch(url).then(function(r){return r.json();}).then(function(d){
+    var w = document.getElementById('weatherWidget');
+    if(!d || !d.current){ w.innerHTML = '<div class="ww-loading">Weather unavailable — check app day-of</div>'; return; }
+    var nowTemp = Math.round(d.current.temperature_2m);
+    var nowCode = d.current.weather_code;
+    var todayDate = new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    var html = '<div class="ww-today">'
+             + '<div class="ww-today-icon">'+icon(nowCode)+'</div>'
+             + '<div class="ww-today-main">'
+             + '<div class="ww-today-date">Orlando · '+todayDate+'</div>'
+             + '<div class="ww-today-temp">'+nowTemp+'°F</div>'
+             + '<div class="ww-today-desc">'+desc(nowCode)+' · right now</div>'
+             + '</div></div>';
+
+    var daysHTML = '<div class="ww-trip">';
+    tripDays.forEach(function(t){
+      var idx = d.daily.time.indexOf(t.date);
+      var cls = t.date === today ? ' today' : '';
+      if(idx === -1){
+        daysHTML += '<div class="ww-day'+cls+'"><div class="ww-day-label">'+t.label+'</div><div class="ww-day-park">'+t.park+'</div><div class="ww-day-icon">—</div><div class="ww-day-temp">—</div><div class="ww-day-rain">check app</div></div>';
+      } else {
+        var hi = Math.round(d.daily.temperature_2m_max[idx]);
+        var lo = Math.round(d.daily.temperature_2m_min[idx]);
+        var rain = d.daily.precipitation_probability_max[idx];
+        var c = d.daily.weather_code[idx];
+        daysHTML += '<div class="ww-day'+cls+'">'
+                  + '<div class="ww-day-label">'+t.label+'</div>'
+                  + '<div class="ww-day-park">'+t.park+'</div>'
+                  + '<div class="ww-day-icon">'+icon(c)+'</div>'
+                  + '<div class="ww-day-temp">'+hi+'° / '+lo+'°</div>'
+                  + '<div class="ww-day-rain">💧 '+rain+'%</div>'
+                  + '</div>';
+      }
+    });
+    daysHTML += '</div>';
+    w.innerHTML = html + daysHTML;
+  }).catch(function(){
+    document.getElementById('weatherWidget').innerHTML = '<div class="ww-loading">Weather offline — check app day-of</div>';
+  });
+})();
+</script>
+
 <div class="container">
 
   <!-- QUICK LINKS HUB -->
@@ -780,8 +880,8 @@
         <div class="trio-box easy-food">
           <h5>🍽️ EASY FOOD 3</h5>
           <ol>
-            <li>Pinocchio Village Haus (Fantasyland)</li>
-            <li>Columbia Harbour House (Liberty Sq)</li>
+            <li><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/pinocchio-village-haus/" target="_blank" rel="noopener noreferrer" class="dine-link">Pinocchio Village Haus</a> (Fantasyland)</li>
+            <li><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/columbia-harbour-house/" target="_blank" rel="noopener noreferrer" class="dine-link">Columbia Harbour House</a> (Liberty Sq)</li>
             <li>Sleepy Hollow (snacks, waffles)</li>
           </ol>
           <div class="trio-note">Mobile Order in app to skip line.</div>
@@ -1000,8 +1100,8 @@
             </div>
           </div>
           <div class="cluster-info">
-            <div class="cluster-item"><span class="ci-icon">🍽️</span> Pinocchio's Village Haus — quick service pasta/pizza inside the land</div>
-            <div class="cluster-item"><span class="ci-icon">🥐</span> Gaston's Tavern — famous cinnamon rolls + LeFou's Brew (adults love it)</div>
+            <div class="cluster-item"><span class="ci-icon">🍽️</span> <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/pinocchio-village-haus/" target="_blank" rel="noopener noreferrer" class="dine-link">Pinocchio's Village Haus</a> — quick service pasta/pizza inside the land</div>
+            <div class="cluster-item"><span class="ci-icon">🥐</span> <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/gastons-tavern/" target="_blank" rel="noopener noreferrer" class="dine-link">Gaston's Tavern</a> — famous cinnamon rolls + LeFou's Brew (adults love it)</div>
             <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms near It's a Small World & Tangled area</div>
             <div class="cluster-item"><span class="ci-icon">🍦</span> Storybook Treats — ice cream window near the carousel</div>
             <div class="cluster-item"><span class="ci-icon">🛍️</span> Bibbidi Bobbidi Boutique — princess makeovers (book ahead) <span style="color:#c8c8b0">· From $59.99+ tax</span></div>
@@ -1059,7 +1159,7 @@
             </div>
           </div>
           <div class="cluster-info">
-            <div class="cluster-item"><span class="ci-icon">🍽️</span> Cosmic Ray's Starlight Cafe — biggest quick service in MK, good for picky eaters</div>
+            <div class="cluster-item"><span class="ci-icon">🍽️</span> <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/cosmic-rays-starlight-cafe/" target="_blank" rel="noopener noreferrer" class="dine-link">Cosmic Ray's Starlight Cafe</a> — biggest quick service in MK, good for picky eaters</div>
             <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms adjacent to Cosmic Ray's</div>
             <div class="cluster-item"><span class="ci-icon">💡</span> Only 200m from Sleepy Hollow (Liberty Square) — waffles + Nutella</div>
           </div>
@@ -1087,7 +1187,7 @@
             </div>
           </div>
           <div class="cluster-info">
-            <div class="cluster-item"><span class="ci-icon">🥙</span> Columbia Harbour House — quick service fish & chips, clam chowder (good lunch spot)</div>
+            <div class="cluster-item"><span class="ci-icon">🥙</span> <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/columbia-harbour-house/" target="_blank" rel="noopener noreferrer" class="dine-link">Columbia Harbour House</a> — quick service fish & chips, clam chowder (good lunch spot)</div>
             <div class="cluster-item"><span class="ci-icon">🧇</span> Sleepy Hollow Refreshments — Nutella waffle sandwiches, funnel cakes (great snack stop)</div>
             <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms near the Tangled area (between Fantasyland and Liberty Square)</div>
           </div>
@@ -1144,7 +1244,7 @@
             </div>
           </div>
           <div class="cluster-info">
-            <div class="cluster-item"><span class="ci-icon">🍗</span> Pecos Bill Tall Tale Inn — burgers/fries, good for families</div>
+            <div class="cluster-item"><span class="ci-icon">🍗</span> <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/pecos-bills-tall-tale-inn-and-cafe/" target="_blank" rel="noopener noreferrer" class="dine-link">Pecos Bill Tall Tale Inn</a> — burgers/fries, good for families</div>
             <div class="cluster-item"><span class="ci-icon">🍍</span> Adventureland Dole Whip — iconic frozen pineapple treat, MUST for kids + adults</div>
             <div class="cluster-item"><span class="ci-icon">🦃</span> Turkey legs available near Frontierland — giant, kids go crazy over them</div>
             <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms near Pirates queue entrance</div>
@@ -1162,7 +1262,7 @@
           <li><strong>Liberty Tree Tavern</strong> (Liberty Square) — colonial tavern vibes. Beer, wine, hard cider. Family-style platters — grandparents & dads love this one.</li>
           <li><strong>Cinderella's Royal Table</strong> (inside the castle) — beer + wine, but $$$ and princess-focused — save for a special meal. <span style="color:#c8c8b0;font-size:0.88em">· Bkfst $76 adult / $47 child · Lunch/Dinner $89 / $54 +tax/gratuity</span></li>
           <li><strong>Tony's Town Square</strong> (Main Street) — Italian, beer + wine + Italian cocktails. Good early lunch/brunch stop.</li>
-          <li><strong>The Plaza Restaurant</strong> (end of Main Street) — beer & wine. Lighter menu, great for a quick sit-down drink.</li>
+          <li><strong><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/plaza-restaurant/" target="_blank" rel="noopener noreferrer" class="dine-link">The Plaza Restaurant</a></strong> (end of Main Street) — beer & wine. Lighter menu, great for a quick sit-down drink.</li>
         </ul>
         <div class="info-box" style="margin-top:12px;margin-bottom:0">
           <strong>☝️ At MK it's just you, husband + 2 kids.</strong> Husband can order a beer DURING a sit-down lunch (you'll both be there with the kids). The Monorail Bar Crawl for dad + brother + grandpa → save for <strong>Hollywood Studios or Animal Kingdom</strong> days when the full crew is there.
@@ -1172,8 +1272,8 @@
       <div class="tips-box" style="margin-top:15px">
         <h4>🍸 OTHER ADULT PERKS AT MAGIC KINGDOM</h4>
         <ul>
-          <li><strong>LeFou's Brew</strong> (Gaston's Tavern, Fantasyland) — frozen non-alcoholic but delicious. Good for grandparents.</li>
-          <li><strong>Crystal Palace</strong> — Winnie the Pooh character buffet. Grandparents relax sitting down with kids; parents tag-team rides.</li>
+          <li><strong>LeFou's Brew</strong> (<a href="https://disneyworld.disney.go.com/dining/magic-kingdom/gastons-tavern/" target="_blank" rel="noopener noreferrer" class="dine-link">Gaston's Tavern</a>, Fantasyland) — frozen non-alcoholic but delicious. Good for grandparents.</li>
+          <li><strong><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/crystal-palace/" target="_blank" rel="noopener noreferrer" class="dine-link">Crystal Palace</a></strong> — Winnie the Pooh character buffet. Grandparents relax sitting down with kids; parents tag-team rides.</li>
           <li><strong>Dole Whip</strong> (Adventureland) — iconic pineapple soft-serve. You can get it with dark rum floated on top at nearby Polynesian resort if you take the monorail.</li>
         </ul>
       </div>
@@ -1218,8 +1318,8 @@
         <div class="trio-box easy-food">
           <h5>🍽️ EASY FOOD 3</h5>
           <ol>
-            <li>Woody's Lunch Box (Toy Story Land)</li>
-            <li>ABC Commissary (A/C, varied menu)</li>
+            <li><a href="https://disneyworld.disney.go.com/dining/hollywood-studios/woodys-lunch-box/" target="_blank" rel="noopener noreferrer" class="dine-link">Woody's Lunch Box</a> (Toy Story Land)</li>
+            <li><a href="https://disneyworld.disney.go.com/dining/hollywood-studios/abc-commissary/" target="_blank" rel="noopener noreferrer" class="dine-link">ABC Commissary</a> (A/C, varied menu)</li>
             <li>Oga's Cantina <em>(optional adult stop, not core kid meal)</em></li>
           </ol>
         </div>
@@ -1272,7 +1372,7 @@
           <!-- Hollywood Blvd + Entrance (bottom center) -->
           <rect x="170" y="230" width="180" height="60" rx="8" fill="#c0392b" opacity="0.35" stroke="#c0392b" stroke-width="2"/>
           <text x="260" y="258" fill="#fff" font-size="13" font-weight="bold" text-anchor="middle">🎪 HOLLYWOOD BLVD</text>
-          <text x="260" y="275" fill="#f5b7b1" font-size="9" text-anchor="middle">Entrance · Tune-In Lounge</text>
+          <text x="260" y="275" fill="#f5b7b1" font-size="9" text-anchor="middle">Entrance · <a href="https://disneyworld.disney.go.com/dining/hollywood-studios/tune-in-lounge/" target="_blank" rel="noopener noreferrer" class="dine-link">Tune-In Lounge</a></text>
 
           <!-- Central hub -->
           <circle cx="260" cy="190" r="22" fill="#ffd700" opacity="0.4" stroke="#fff" stroke-width="2"/>
@@ -1348,7 +1448,7 @@
             </div>
           </div>
           <div class="cluster-info">
-            <div class="cluster-item"><span class="ci-icon">🍔</span> Woody's Lunch Box — nostalgic food, grilled cheese, potato barrels. Very popular — mobile order ahead</div>
+            <div class="cluster-item"><span class="ci-icon">🍔</span> <a href="https://disneyworld.disney.go.com/dining/hollywood-studios/woodys-lunch-box/" target="_blank" rel="noopener noreferrer" class="dine-link">Woody's Lunch Box</a> — nostalgic food, grilled cheese, potato barrels. Very popular — mobile order ahead</div>
             <div class="cluster-item"><span class="ci-icon">🍦</span> Ice cream floats + totchos (tater tot nachos) — kids and adults love it</div>
             <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms inside Toy Story Land</div>
           </div>
@@ -1398,9 +1498,9 @@
             </div>
           </div>
           <div class="cluster-info">
-            <div class="cluster-item"><span class="ci-icon">🍕</span> ABC Commissary — quick service, good variety (pizza, burgers, Asian-inspired)</div>
-            <div class="cluster-item"><span class="ci-icon">🍺</span> Tune-In Lounge — 50s diner theme, adults can get cocktails while kids eat</div>
-            <div class="cluster-item"><span class="ci-icon">🍦</span> Hollywood Scoops — ice cream near the hat icon area</div>
+            <div class="cluster-item"><span class="ci-icon">🍕</span> <a href="https://disneyworld.disney.go.com/dining/hollywood-studios/abc-commissary/" target="_blank" rel="noopener noreferrer" class="dine-link">ABC Commissary</a> — quick service, good variety (pizza, burgers, Asian-inspired)</div>
+            <div class="cluster-item"><span class="ci-icon">🍺</span> <a href="https://disneyworld.disney.go.com/dining/hollywood-studios/tune-in-lounge/" target="_blank" rel="noopener noreferrer" class="dine-link">Tune-In Lounge</a> — 50s diner theme, adults can get cocktails while kids eat</div>
+            <div class="cluster-item"><span class="ci-icon">🍦</span> <a href="https://disneyworld.disney.go.com/dining/hollywood-studios/hollywood-scoops/" target="_blank" rel="noopener noreferrer" class="dine-link">Hollywood Scoops</a> — ice cream near the hat icon area</div>
             <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms near Animation Courtyard</div>
           </div>
         </div>
@@ -1437,7 +1537,7 @@
           </div>
           <div class="cluster-info">
             <div class="cluster-item"><span class="ci-icon">🍺</span> <strong>Oga's Cantina</strong> — Star Wars bar, exotic cocktails. Reservation required. This is where the 3 dads (husband + brother + dad) can do their beer stop while Priscila rides Rise of the Resistance.</div>
-            <div class="cluster-item"><span class="ci-icon">🍞</span> Docking Bay 7 — quick service sci-fi food</div>
+            <div class="cluster-item"><span class="ci-icon">🍞</span> <a href="https://disneyworld.disney.go.com/dining/hollywood-studios/docking-bay-7-food-and-cargo/" target="_blank" rel="noopener noreferrer" class="dine-link">Docking Bay 7</a> — quick service sci-fi food</div>
             <div class="cluster-item"><span class="ci-icon">💡</span> Theming is intense (dark, loud, crowded) — keep a plan to move the girls through quickly to the ride entrance, not linger</div>
           </div>
         </div>
@@ -1450,7 +1550,7 @@
       <div class="tips-box">
         <h4>🍸 ADULT PERKS AT HOLLYWOOD STUDIOS</h4>
         <ul>
-          <li><strong>Tune-In Lounge</strong> (50's Prime Time Cafe) — throwback cocktails in a 1950s TV room set. One parent watches kids, other grabs a drink. Fun vibe.</li>
+          <li><strong><a href="https://disneyworld.disney.go.com/dining/hollywood-studios/tune-in-lounge/" target="_blank" rel="noopener noreferrer" class="dine-link">Tune-In Lounge</a></strong> (50's Prime Time Cafe) — throwback cocktails in a 1950s TV room set. One parent watches kids, other grabs a drink. Fun vibe.</li>
           <li><strong>Oga's Cantina</strong> (Galaxy's Edge) — Star Wars bar with exotic cocktails + mocktails. Must book reservations in advance. One adult sneaks off while grandparents do Disney Junior meets with the kids. <span style="color:#c8c8b0;font-size:0.88em">· Drinks/snacks extra — about $7.50 to $21+</span></li>
           <li><strong>Indiana Jones Epic Stunt Spectacular</strong> — Live stunt show. Good for grandparents + almost-6yo. almost-4yo might lose attention but won't be scared.</li>
         </ul>
@@ -1496,9 +1596,9 @@
         <div class="trio-box easy-food">
           <h5>🍽️ EASY FOOD 3</h5>
           <ol>
-            <li>Satu'li Canteen (Pandora — best kid food in park)</li>
-            <li>Harambe Market (Africa, outdoor)</li>
-            <li>Flame Tree Barbecue (shaded water views)</li>
+            <li><a href="https://disneyworld.disney.go.com/dining/animal-kingdom/satuli-canteen/" target="_blank" rel="noopener noreferrer" class="dine-link">Satu'li Canteen</a> (Pandora — best kid food in park)</li>
+            <li><a href="https://disneyworld.disney.go.com/dining/animal-kingdom/harambe-market/" target="_blank" rel="noopener noreferrer" class="dine-link">Harambe Market</a> (Africa, outdoor)</li>
+            <li><a href="https://disneyworld.disney.go.com/dining/animal-kingdom/flame-tree-barbecue/" target="_blank" rel="noopener noreferrer" class="dine-link">Flame Tree Barbecue</a> (shaded water views)</li>
           </ol>
         </div>
         <div class="trio-box meltdown">
@@ -1630,9 +1730,9 @@
             </div>
           </div>
           <div class="cluster-info">
-            <div class="cluster-item"><span class="ci-icon">🍖</span> Harambe Market — open-air African market, great for picky and adventurous eaters. Chicken, ribs, corn</div>
-            <div class="cluster-item"><span class="ci-icon">🍺</span> Dawa Bar — adults can grab a Tusker beer or cocktail right here while kids eat</div>
-            <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms near Harambe Market</div>
+            <div class="cluster-item"><span class="ci-icon">🍖</span> <a href="https://disneyworld.disney.go.com/dining/animal-kingdom/harambe-market/" target="_blank" rel="noopener noreferrer" class="dine-link">Harambe Market</a> — open-air African market, great for picky and adventurous eaters. Chicken, ribs, corn</div>
+            <div class="cluster-item"><span class="ci-icon">🍺</span> <a href="https://disneyworld.disney.go.com/dining/animal-kingdom/dawa-bar/" target="_blank" rel="noopener noreferrer" class="dine-link">Dawa Bar</a> — adults can grab a Tusker beer or cocktail right here while kids eat</div>
+            <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms near <a href="https://disneyworld.disney.go.com/dining/animal-kingdom/harambe-market/" target="_blank" rel="noopener noreferrer" class="dine-link">Harambe Market</a></div>
           </div>
         </div>
       </div>
@@ -1670,7 +1770,7 @@
           </div>
           <div class="cluster-info">
             <div class="cluster-item"><span class="ci-icon">🥤</span> Pongu Pongu — Night Blossom drink (glowing, non-alcoholic) — your kids will go NUTS over the color. Also alcoholic version for adults.</div>
-            <div class="cluster-item"><span class="ci-icon">🍱</span> Satu'li Canteen — best quick service in Animal Kingdom. Bowl-style food, good options for kids + adults.</div>
+            <div class="cluster-item"><span class="ci-icon">🍱</span> <a href="https://disneyworld.disney.go.com/dining/animal-kingdom/satuli-canteen/" target="_blank" rel="noopener noreferrer" class="dine-link">Satu'li Canteen</a> — best quick service in Animal Kingdom. Bowl-style food, good options for kids + adults.</div>
             <div class="cluster-item"><span class="ci-icon">💡</span> Area is most magical after dark — if park is open late, come back at night when everything glows blue/purple</div>
             <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms at entrance to Pandora land</div>
           </div>
@@ -1729,7 +1829,7 @@
           </div>
           <div class="cluster-info">
             <div class="cluster-item"><span class="ci-icon">🍦</span> Trilo-Bites — ice cream near Discovery Island — great afternoon treat</div>
-            <div class="cluster-item"><span class="ci-icon">🥤</span> Flame Tree BBQ — best full meal in AK, outdoor seating near water with animal views</div>
+            <div class="cluster-item"><span class="ci-icon">🥤</span> <a href="https://disneyworld.disney.go.com/dining/animal-kingdom/flame-tree-barbecue/" target="_blank" rel="noopener noreferrer" class="dine-link">Flame Tree BBQ</a> — best full meal in AK, outdoor seating near water with animal views</div>
             <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms at Tree of Life base (center of park — easy reference point)</div>
           </div>
         </div>
@@ -1738,9 +1838,9 @@
       <div class="tips-box">
         <h4>🍸 ADULT PERKS AT ANIMAL KINGDOM</h4>
         <ul>
-          <li><strong>Dawa Bar</strong> (Harambe Market, Africa) — beers, cocktails, outdoor seating while kids eat. Chill vibes.</li>
+          <li><strong><a href="https://disneyworld.disney.go.com/dining/animal-kingdom/dawa-bar/" target="_blank" rel="noopener noreferrer" class="dine-link">Dawa Bar</a></strong> (<a href="https://disneyworld.disney.go.com/dining/animal-kingdom/harambe-market/" target="_blank" rel="noopener noreferrer" class="dine-link">Harambe Market</a>, Africa) — beers, cocktails, outdoor seating while kids eat. Chill vibes.</li>
           <li><strong>Nomad Lounge</strong> (near Pandora) — elevated cocktails + small bites. Disney's hidden gem bar. Grandparents can relax here while parents do Avatar Flight of Passage (rider swap). <span style="color:#c8c8b0;font-size:0.88em">· Drinks/snacks extra — about $4.99 to $19.50</span></li>
-          <li><strong>Flame Tree BBQ</strong> — outdoor BBQ with views of the water and animals. Everyone's happy.</li>
+          <li><strong><a href="https://disneyworld.disney.go.com/dining/animal-kingdom/flame-tree-barbecue/" target="_blank" rel="noopener noreferrer" class="dine-link">Flame Tree BBQ</a></strong> — outdoor BBQ with views of the water and animals. Everyone's happy.</li>
         </ul>
       </div>
 
@@ -1788,7 +1888,7 @@
       </div>
       <div class="tip-card">
         <h4>🍦 Strategic Ice Cream Moments</h4>
-        <p>Keep Dole Whip (MK Adventureland), Night Blossom drink (Pandora), and Woody's Lunch Box floats (HS) as "special moments" — use them as rewards or pick-me-ups when energy dips. Don't rush past these; they become the memories.</p>
+        <p>Keep Dole Whip (MK Adventureland), Night Blossom drink (Pandora), and <a href="https://disneyworld.disney.go.com/dining/hollywood-studios/woodys-lunch-box/" target="_blank" rel="noopener noreferrer" class="dine-link">Woody's Lunch Box</a> floats (HS) as "special moments" — use them as rewards or pick-me-ups when energy dips. Don't rush past these; they become the memories.</p>
       </div>
       <div class="tip-card">
         <h4>🎠 Let Kids Repeat Rides</h4>
@@ -1796,7 +1896,7 @@
       </div>
       <div class="tip-card">
         <h4>👴👵 Grandparent Pacing</h4>
-        <p>Grandparents can use stroller as walking aid between lands. In queues with benches (Haunted Mansion, Jungle Cruise), they can wait seated. Designate a shaded "base camp" — they stay there while parents take kids on one fast attraction. Crystal Palace character dining = grandparents stay seated the whole meal.</p>
+        <p>Grandparents can use stroller as walking aid between lands. In queues with benches (Haunted Mansion, Jungle Cruise), they can wait seated. Designate a shaded "base camp" — they stay there while parents take kids on one fast attraction. <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/crystal-palace/" target="_blank" rel="noopener noreferrer" class="dine-link">Crystal Palace</a> character dining = grandparents stay seated the whole meal.</p>
       </div>
     </div>
   </div>
@@ -1807,15 +1907,15 @@
     <p style="font-size:0.85em;color:#c8c8b0;margin-bottom:14px">If you only remember three food stops across all three days — these are the ones that consistently deliver for kids + grown-ups with short lines via Mobile Order.</p>
     <div class="park-trio">
       <div class="trio-box must-do">
-        <h5>🥇 Satu'li Canteen · AK</h5>
+        <h5>🥇 <a href="https://disneyworld.disney.go.com/dining/animal-kingdom/satuli-canteen/" target="_blank" rel="noopener noreferrer" class="dine-link">Satu'li Canteen</a> · AK</h5>
         <div>Pandora. Healthy bowls kids actually eat, A/C, themed. Best quick-service at Disney World per most 2025 rankings.</div>
       </div>
       <div class="trio-box easy-food">
-        <h5>🥈 Columbia Harbour House · MK</h5>
+        <h5>🥈 <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/columbia-harbour-house/" target="_blank" rel="noopener noreferrer" class="dine-link">Columbia Harbour House</a> · MK</h5>
         <div>Liberty Square. Chicken strips, mac &amp; cheese, fish. Huge upstairs seating = quiet zone when park is chaos.</div>
       </div>
       <div class="trio-box meltdown">
-        <h5>🥉 Woody's Lunch Box · HS</h5>
+        <h5>🥉 <a href="https://disneyworld.disney.go.com/dining/hollywood-studios/woodys-lunch-box/" target="_blank" rel="noopener noreferrer" class="dine-link">Woody's Lunch Box</a> · HS</h5>
         <div>Toy Story Land. Grilled cheese, tots, lunchbox tarts. Tiny kitchen, outdoor covered seating, pure toddler happiness.</div>
       </div>
     </div>
