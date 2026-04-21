@@ -35,6 +35,7 @@ from sheets_writer    import (
     update_clip_collections,
     append_run_log,
     save_scraped_to_inspiration_library,
+    append_blog_ideas_to_content_sheet,
 )
 from notifier import notify_run_complete, notify_new_skill
 import pattern_learner
@@ -92,8 +93,8 @@ def main():
                     try:
                         articles = scrape_website_articles(url.strip(), niche)
                         if articles:
-                            added = save_scraped_to_inspiration_library(articles)
-                            print(f"[{log_pfx}]   Website/{niche}/{url}: {added} articles → Inspiration Library")
+                            added = append_blog_ideas_to_content_sheet(articles)
+                            print(f"[{log_pfx}]   Website/{niche}/{url}: {added} articles → Content Ideas (blog)")
                     except Exception as we:
                         print(f"[{log_pfx}]   WARNING: Website scrape failed for {url}: {we}")
 

@@ -74,6 +74,59 @@ def read_scraping_targets():
     return targets
 
 
+BLOG_SHEET_ID = "1CrVHlIe8u1bo_1W0iU0O3WKv2JUrm0-UO76y4p5NC_c"
+
+
+def append_blog_ideas_to_content_sheet(articles):
+    """
+    Writes website-scraped article titles to Content Ideas tab in the blog spreadsheet.
+    Each article becomes a row with status '🆕 Idea' so blog-generator.js picks it up.
+    Deduplicates by Raw Idea (col E) to avoid resubmitting the same title.
+    Returns count of rows appended.
+    """
+    svc = _service()
+    today = datetime.now(et).strftime("%-m/%-d/%Y")
+
+    # Read existing Raw Ideas to deduplicate
+    try:
+        existing = svc.spreadsheets().values().get(
+            spreadsheetId=BLOG_SHEET_ID,
+            range="'Content Ideas'!E:E"
+        ).execute()
+        existing_titles = {r[0].strip().lower() for r in existing.get("values", [])[1:] if r}
+    except Exception:
+        existing_titles = set()
+
+    rows_to_add = []
+    for article in articles:
+        title = article.get("caption", "").strip()
+        if not title or title.lower() in existing_titles:
+            continue
+        source_url = article.get("url", "")
+        source_domain = article.get("target_value", source_url)
+        row = [""] * 23
+        row[0]  = today
+        row[1]  = "4AM Agent"
+        row[2]  = source_domain
+        row[3]  = source_url
+        row[4]  = title
+        row[19] = "🆕 Idea"
+        rows_to_add.append(row)
+        existing_titles.add(title.lower())
+
+    if not rows_to_add:
+        return 0
+
+    svc.spreadsheets().values().append(
+        spreadsheetId=BLOG_SHEET_ID,
+        range="'Content Ideas'!A:A",
+        valueInputOption="USER_ENTERED",
+        insertDataOption="INSERT_ROWS",
+        body={"values": rows_to_add},
+    ).execute()
+    return len(rows_to_add)
+
+
 def read_scraping_destinations():
     """Returns {target_type: destination} from column G (DESTINATION).
     Values: 'instagram' | 'blog' | 'both' | 'reference'
