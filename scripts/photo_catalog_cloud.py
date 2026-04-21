@@ -175,19 +175,26 @@ def describe_image(file_id, drive, anthropic_key):
     while not done:
         _, done = downloader.next_chunk()
     raw = buf.getvalue()
-    if len(raw) > 4 * 1024 * 1024:
-        try:
-            from PIL import Image as PILImage
-            img_pil = PILImage.open(io.BytesIO(raw)).convert("RGB")
+    # Always resize + compress — handles both Anthropic limits:
+    #   dimension: hard limit 8000px per side (modern 48MP iPhones hit 8064px)
+    #   size:      hard limit 5 MB
+    MAX_PIXELS = 7500       # safe margin below 8000
+    MAX_BYTES  = 4_900_000  # safe margin below 5 MB
+    try:
+        from PIL import Image as PILImage
+        img_pil = PILImage.open(io.BytesIO(raw)).convert("RGB")
+        if img_pil.width > MAX_PIXELS or img_pil.height > MAX_PIXELS:
+            img_pil.thumbnail((MAX_PIXELS, MAX_PIXELS), PILImage.LANCZOS)
+        out = io.BytesIO()
+        img_pil.save(out, format="JPEG", quality=85, optimize=True)
+        for q in [70, 55, 40, 30, 20]:
+            if len(out.getvalue()) <= MAX_BYTES:
+                break
             out = io.BytesIO()
-            for q in [70, 55, 40, 30]:
-                out = io.BytesIO()
-                img_pil.save(out, format="JPEG", quality=q, optimize=True)
-                if len(out.getvalue()) <= 4 * 1024 * 1024:
-                    break
-            raw = out.getvalue()
-        except ImportError:
-            pass
+            img_pil.save(out, format="JPEG", quality=q, optimize=True)
+        raw = out.getvalue()
+    except ImportError:
+        raise RuntimeError("Pillow not installed — cannot resize image for Anthropic API")
     img_b64 = base64.b64encode(raw).decode()
     client = anthropic_sdk.Anthropic(api_key=anthropic_key)
     resp = client.messages.create(
