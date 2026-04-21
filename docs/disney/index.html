@@ -86,6 +86,7 @@
     padding: 10px 16px;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
     cursor: pointer;
   }
@@ -567,6 +568,7 @@
     .hero h1 { font-size: 1.5em; }
     .rides-grid { grid-template-columns: 1fr; }
     .walk-path { gap: 3px; }
+    .land-header .walk-time { flex-basis: 100%; margin-left: 34px; margin-top: 2px; }
   }
 </style>
 </head>
@@ -916,7 +918,7 @@
           <text x="250" y="45" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">🏰 FANTASYLAND</text>
           <text x="250" y="65" fill="#e0c8f9" font-size="10" text-anchor="middle">Peter Pan · Dumbo · Pooh</text>
           <text x="250" y="80" fill="#e0c8f9" font-size="10" text-anchor="middle">Small World · Little Mermaid · Mine Train</text>
-          <circle cx="148" cy="33" r="12" fill="#ffd700"/><text x="148" y="37" fill="#000" font-size="12" font-weight="bold" text-anchor="middle">1</text>
+          <circle cx="148" cy="33" r="12" fill="#ffd700"/><text x="148" y="37" fill="#000" font-size="12" font-weight="bold" text-anchor="middle">4</text>
 
           <!-- LIBERTY SQUARE (west of castle) -->
           <rect x="20" y="115" width="105" height="55" rx="8" fill="#95a5a6" opacity="0.35" stroke="#95a5a6" stroke-width="2"/>
@@ -929,7 +931,7 @@
           <text x="422" y="142" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">🚀 TOMORROWLAND</text>
           <text x="422" y="160" fill="#bfe0f5" font-size="10" text-anchor="middle">Buzz Lightyear</text>
           <text x="422" y="175" fill="#bfe0f5" font-size="10" text-anchor="middle">Speedway · Carousel</text>
-          <circle cx="375" cy="128" r="11" fill="#ffd700"/><text x="375" y="132" fill="#000" font-size="11" font-weight="bold" text-anchor="middle">2</text>
+          <circle cx="375" cy="128" r="11" fill="#ffd700"/><text x="375" y="132" fill="#000" font-size="11" font-weight="bold" text-anchor="middle">5</text>
 
           <!-- HUB + CASTLE (center) -->
           <circle cx="250" cy="155" r="32" fill="#ffd700" opacity="0.75" stroke="#fff" stroke-width="2"/>
@@ -940,13 +942,13 @@
           <rect x="20" y="190" width="105" height="55" rx="8" fill="#e67e22" opacity="0.35" stroke="#e67e22" stroke-width="2"/>
           <text x="72" y="213" fill="#fff" font-size="11" font-weight="bold" text-anchor="middle">🤠 FRONTIERLAND</text>
           <text x="72" y="230" fill="#f5cfa3" font-size="9" text-anchor="middle">Big Thunder</text>
-          <circle cx="35" cy="203" r="11" fill="#ffd700"/><text x="35" y="207" fill="#000" font-size="11" font-weight="bold" text-anchor="middle">4</text>
+          <circle cx="35" cy="203" r="11" fill="#ffd700"/><text x="35" y="207" fill="#000" font-size="11" font-weight="bold" text-anchor="middle">2</text>
 
           <!-- ADVENTURELAND (SW / bottom-left) -->
           <rect x="20" y="263" width="190" height="55" rx="8" fill="#2ecc71" opacity="0.3" stroke="#2ecc71" stroke-width="2"/>
           <text x="115" y="285" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">🌴 ADVENTURELAND</text>
           <text x="115" y="302" fill="#b5f0cc" font-size="9" text-anchor="middle">Jungle Cruise · Pirates · Magic Carpets</text>
-          <circle cx="35" cy="276" r="11" fill="#ffd700"/><text x="35" y="280" fill="#000" font-size="11" font-weight="bold" text-anchor="middle">5</text>
+          <circle cx="35" cy="276" r="11" fill="#ffd700"/><text x="35" y="280" fill="#000" font-size="11" font-weight="bold" text-anchor="middle">1</text>
 
           <!-- MAIN STREET USA (south corridor — narrow, from entrance up to hub) -->
           <rect x="225" y="200" width="50" height="120" rx="6" fill="#c0392b" opacity="0.35" stroke="#c0392b" stroke-width="2"/>
@@ -959,20 +961,20 @@
           <text x="250" y="345" fill="#ffd700" font-size="13" text-anchor="middle" font-weight="bold">⬆ ENTRANCE (SOUTH) ⬆</text>
 
           <!-- Walking route arrows (yellow dashed) —
-               Entrance→Main St→Hub→Fantasyland (1)→Tomorrowland (2)→Liberty (3)→Frontierland (4)→Adventureland (5) -->
+               Entrance→Main St→Hub→Adventureland (1)→Frontierland (2)→Liberty Sq (3)→Fantasyland (4)→Tomorrowland (5) -->
           <!-- Entrance up Main Street to Hub -->
           <path d="M 250 335 L 250 320" stroke="#ffd700" stroke-width="2.5" stroke-dasharray="4,3" fill="none" opacity="0.9"/>
           <path d="M 250 200 L 250 187" stroke="#ffd700" stroke-width="2.5" stroke-dasharray="4,3" fill="none" opacity="0.9"/>
-          <!-- Hub up to Fantasyland -->
-          <path d="M 250 123 L 250 100" stroke="#ffd700" stroke-width="2.5" stroke-dasharray="4,3" fill="none" opacity="0.9"/>
-          <!-- Fantasyland east to Tomorrowland -->
+          <!-- Hub SW to Adventureland -->
+          <path d="M 220 170 Q 160 230 115 263" stroke="#ffd700" stroke-width="2.5" stroke-dasharray="4,3" fill="none" opacity="0.9"/>
+          <!-- Adventureland up to Frontierland -->
+          <path d="M 72 263 L 72 245" stroke="#ffd700" stroke-width="2.5" stroke-dasharray="4,3" fill="none" opacity="0.9"/>
+          <!-- Frontierland up to Liberty Square -->
+          <path d="M 72 190 L 72 170" stroke="#ffd700" stroke-width="2.5" stroke-dasharray="4,3" fill="none" opacity="0.9"/>
+          <!-- Liberty Square NE to Fantasyland -->
+          <path d="M 125 130 Q 175 95 220 80" stroke="#ffd700" stroke-width="2.5" stroke-dasharray="4,3" fill="none" opacity="0.9"/>
+          <!-- Fantasyland SE to Tomorrowland -->
           <path d="M 370 80 Q 400 95 375 115" stroke="#ffd700" stroke-width="2.5" stroke-dasharray="4,3" fill="none" opacity="0.9"/>
-          <!-- Tomorrowland (through hub) west to Liberty Square -->
-          <path d="M 360 155 Q 250 195 125 145" stroke="#ffd700" stroke-width="2.5" stroke-dasharray="4,3" fill="none" opacity="0.9"/>
-          <!-- Liberty down to Frontierland -->
-          <path d="M 72 170 L 72 190" stroke="#ffd700" stroke-width="2.5" stroke-dasharray="4,3" fill="none" opacity="0.9"/>
-          <!-- Frontierland down to Adventureland -->
-          <path d="M 72 245 L 72 263" stroke="#ffd700" stroke-width="2.5" stroke-dasharray="4,3" fill="none" opacity="0.9"/>
         </svg>
         <h4 style="margin-top:15px">🗺️ RECOMMENDED WALKING ROUTE (follow this order)</h4>
         <div class="walk-path">
