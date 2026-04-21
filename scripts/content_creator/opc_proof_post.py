@@ -1092,14 +1092,65 @@ def run_phase2(token, group_key):
     print(f"   Motion     : {'✅ MP4+GIF' if motion_links.get('mp4') else '⚠️ skipped'}")
 
 
+# ── Phase 3: Approval handler ─────────────────────────────────────────────────
+
+def run_phase3(token, group_key, decision):
+    """
+    Record APPROVE / REJECT / SKIP decision for a proof-post candidate.
+
+    Decision effects:
+      APPROVE → status = 'Approved' — downstream Phase 4 can schedule/post
+      REJECT  → status = 'Rejected' — candidate removed from queue
+      SKIP    → status = 'Skipped'  — candidate stays available for next cycle
+
+    Reads PROOF_GROUP_KEY + PROOF_DECISION from env (or passed args).
+    """
+    decision = decision.strip().upper()
+    if decision not in ("APPROVE", "REJECT", "SKIP"):
+        print(f"❌ Invalid decision '{decision}' — must be APPROVE, REJECT, or SKIP")
+        sys.exit(1)
+
+    status_map = {
+        "APPROVE": "Approved",
+        "REJECT":  "Rejected",
+        "SKIP":    "Skipped",
+    }
+    new_status = status_map[decision]
+
+    print(f"\n[proof-post Phase 3] Decision: {decision} → {group_key}")
+
+    # Update status in Candidates tab
+    _update_candidate_status(token, group_key, new_status)
+
+    # Write decided_at timestamp to column Q (index 16, zero-based)
+    rows = _sheets_get(token, f"'{CANDIDATES_TAB}'!A:Q")
+    if len(rows) >= 2:
+        header  = rows[0]
+        col_key = next((i for i, h in enumerate(header) if "Group Key" in h), None)
+        if col_key is not None:
+            for row_idx, row in enumerate(rows[1:], start=2):
+                padded = row + [""] * (max(col_key, 16) + 1 - len(row))
+                if padded[col_key].strip() == group_key:
+                    _sheets_update(token, f"'{CANDIDATES_TAB}'!Q{row_idx}",
+                                   [[date.today().isoformat()]])
+                    break
+
+    print(f"✅ Phase 3 complete — {group_key} → {new_status}")
+
+    if decision == "APPROVE":
+        print(f"[proof-post] APPROVED — Phase 4 (schedule/publish) can now run for: {group_key}")
+        # Phase 4 trigger: the APPROVED row is the signal — opc-proof-post.yml Phase 4 reads it
+        # No inline trigger here; separate workflow dispatch with run_phase=4
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="OPC Proof-Post Flow")
-    parser.add_argument("--phase", type=int, default=1, choices=[1, 2],
-                        help="Pipeline phase: 1=candidate scan, 2=enhance+preview")
+    parser.add_argument("--phase", type=int, default=1, choices=[1, 2, 3],
+                        help="Pipeline phase: 1=candidate scan, 2=enhance+preview, 3=approve/reject")
     parser.add_argument("--group-key", default=None,
-                        help="Phase 2: group key to process (default: top above-gate candidate)")
+                        help="Phase 2/3: group key to process (default: top above-gate candidate)")
     args = parser.parse_args()
 
     if not TOKEN_FILE_PATH or not Path(TOKEN_FILE_PATH).exists():
@@ -1140,6 +1191,17 @@ def main():
             sys.exit(0)
         print(f"[proof-post] Phase 2 target: {group_key}")
         run_phase2(token, group_key)
+
+    elif args.phase == 3:
+        group_key = args.group_key or os.environ.get("PROOF_GROUP_KEY", "").strip()
+        decision  = os.environ.get("PROOF_DECISION", "").strip()
+        if not group_key:
+            print("❌ PROOF_GROUP_KEY not set — required for Phase 3")
+            sys.exit(1)
+        if not decision:
+            print("❌ PROOF_DECISION not set — must be APPROVE, REJECT, or SKIP")
+            sys.exit(1)
+        run_phase3(token, group_key, decision)
 
 
 if __name__ == "__main__":

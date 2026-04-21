@@ -4,11 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       run_phase:
-        description: "Phase to run: 1=candidate scan, 2=enhance+preview, both=1 then 2"
+        description: "Phase to run: 1=scan, 2=enhance+preview, 3=approve/reject, both=1+2"
         required: false
         default: "1"
       test_group_key:
-        description: "Phase 2: group key to process (blank = top above-gate candidate)"
+        description: "Phase 2/3: group key to process (blank = top above-gate candidate)"
+        required: false
+        default: ""
+      proof_decision:
+        description: "Phase 3 only: APPROVE, REJECT, or SKIP"
         required: false
         default: ""
   schedule:
@@ -77,6 +81,14 @@ jobs:
           EXPORT_PROOF_JS:    ${{ github.workspace }}/scripts/content_creator/export_proof.js
           PROOF_GROUP_KEY:    ${{ github.event.inputs.test_group_key }}
         run: python scripts/content_creator/opc_proof_post.py --phase 2
+
+      - name: Run proof-post Phase 3 — approval decision
+        if: ${{ github.event.inputs.run_phase == '3' }}
+        env:
+          SHEETS_TOKEN_PATH: /tmp/oak_park_creds/sheets_token.json
+          PROOF_GROUP_KEY:   ${{ github.event.inputs.test_group_key }}
+          PROOF_DECISION:    ${{ github.event.inputs.proof_decision }}
+        run: python scripts/content_creator/opc_proof_post.py --phase 3
 
       - name: Alert on failure
         if: failure()
