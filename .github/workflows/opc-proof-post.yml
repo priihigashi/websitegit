@@ -1,0 +1,37 @@
+name: OPC Proof Post — Phase 1 Scan
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs at 04:05 UTC (midnight ET) — after photo-catalog.yml (23:35 UTC)
+    - cron: "5 4 * * *"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: scripts/requirements_content.txt
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements_content.txt
+
+      - name: Write Google credentials
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          mkdir -p /tmp/oak_park_creds
+          echo "$SHEETS_TOKEN" > /tmp/oak_park_creds/sheets_token.json
+
+      - name: Run proof-post candidate scan
+        env:
+          SHEETS_TOKEN_PATH: /tmp/oak_park_creds/sheets_token.json
+        run: python scripts/content_creator/opc_proof_post.py
