@@ -1,0 +1,434 @@
+name: Photo Edit — AI Enhancement
+
+# PRIMARY workflow — trigger from phone via GitHub Actions UI
+# Accepts a Drive file ID or direct image URL
+# Runs all 4 AI tools (or one specific tool)
+# Results → Marketing > Image Creation > Enhanced Photos + email
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_source:
+        description: 'Drive file ID  OR  direct image URL (.jpg/.png)'
+        required: true
+        type: string
+      tool:
+        description: 'Which AI to use'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - openai
+          - gemini
+          - replicate
+          - nb2
+      original_filename:
+        description: 'Label for this photo (e.g. kitchen-before, walnut-deck)'
+        required: false
+        default: 'photo'
+        type: string
+      destination_folder_id:
+        description: 'Drive folder ID for results (leave blank for default)'
+        required: false
+        default: '1WdxoKIOFIa0E9eREe-uKLDgD4tLVegTw'
+        type: string
+
+# ── FOLDER IDs ─────────────────────────────────────────────────────────────
+# Marketing > Image Creation > Enhanced Photos: 1WdxoKIOFIa0E9eREe-uKLDgD4tLVegTw
+# Marketing > Image Creation > html to image:   1tE-2Ps8V8ZKQ4etyvzk47ZWyzeHAD2nk
+# ───────────────────────────────────────────────────────────────────────────
+
+jobs:
+  enhance:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. GET SOURCE IMAGE ───────────────────────────────────────────────
+      - name: Get source image
+        id: source
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          IMAGE_SOURCE: ${{ inputs.image_source }}
+        run: |
+          pip install -q google-auth google-auth-oauthlib google-api-python-client
+          python3 << 'PYEOF'
+          import os, json, re, urllib.request, sys, io
+          from google.oauth2.credentials import Credentials
+          from google.auth.transport.requests import Request
+
+          src = os.environ["IMAGE_SOURCE"].strip()
+          out = "/tmp/source_photo.jpg"
+
+          if src.startswith("http"):
+              # Direct URL
+              print("Downloading from URL: " + src)
+              urllib.request.urlretrieve(src, out)
+          else:
+              # Treat as Drive file ID
+              file_id = src
+              # extract ID from full Drive URL if pasted
+              m = re.search(r"/d/([a-zA-Z0-9_-]+)", src) or re.search(r"id=([a-zA-Z0-9_-]+)", src)
+              if m:
+                  file_id = m.group(1)
+              print("Downloading from Drive ID: " + file_id)
+              from googleapiclient.discovery import build
+              from googleapiclient.http import MediaIoBaseDownload
+
+              token_data = json.loads(os.environ["SHEETS_TOKEN"])
+              creds = Credentials(
+                  token=token_data.get("token"),
+                  refresh_token=token_data.get("refresh_token"),
+                  token_uri=token_data.get("token_uri", "https://oauth2.googleapis.com/token"),
+                  client_id=token_data.get("client_id"),
+                  client_secret=token_data.get("client_secret"),
+                  scopes=token_data.get("scopes"),
+              )
+              if not creds.valid:
+                  creds.refresh(Request())
+              drive = build("drive", "v3", credentials=creds)
+              meta = drive.files().get(fileId=file_id, fields="name,mimeType", supportsAllDrives=True).execute()
+              ext = ".png" if "png" in meta.get("mimeType","") else ".jpg"
+              out = "/tmp/source_photo" + ext
+              buf = io.BytesIO()
+              dl = MediaIoBaseDownload(buf, drive.files().get_media(fileId=file_id, supportsAllDrives=True))
+              done = False
+              while not done:
+                  _, done = dl.next_chunk()
+              open(out, "wb").write(buf.getvalue())
+
+          size_kb = os.path.getsize(out) // 1024
+          print("Source ready: " + out + " (" + str(size_kb) + "KB)")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("path=" + out + "\n")
+          PYEOF
+
+      # ── 2. OPENAI gpt-image-1 ─────────────────────────────────────────────
+      - name: OpenAI gpt-image-1
+        id: openai
+        if: inputs.tool == 'all' || inputs.tool == 'openai'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SOURCE_PATH: ${{ steps.source.outputs.path }}
+        run: |
+          pip install -q openai pillow
+          python3 << 'PYEOF'
+          import os, sys, base64
+          from PIL import Image
+          from pathlib import Path
+          import openai
+
+          PROMPT = (
+              "Enhance this real construction/remodel photo to professional architectural "
+              "real-estate photography quality. Fix exposure and white balance, improve "
+              "contrast and color accuracy, recover highlights, gently lift shadows, "
+              "mild dehaze/clarity/noise cleanup, slight sharpening, straighten verticals. "
+              "Keep everything truthful to the real jobsite. Do NOT add or remove objects, "
+              "change geometry, layout, finishes, or make it look CGI or staged. "
+              "Natural light, realistic color, South Florida residential feel."
+          )
+
+          src = os.environ.get("SOURCE_PATH","")
+          key = os.environ.get("OPENAI_API_KEY","")
+          if not src or not key:
+              print("OpenAI: skipped")
+              open(os.environ["GITHUB_OUTPUT"],"a").write("path=\n")
+              sys.exit(0)
+
+          png = "/tmp/openai_input.png"
+          Image.open(src).convert("RGB").save(png, "PNG")
+
+          client = openai.OpenAI(api_key=key)
+          print("OpenAI: sending request...")
+          with open(png, "rb") as f:
+              resp = client.images.edit(model="gpt-image-1", image=f, prompt=PROMPT, n=1, size="auto")
+          out = "/tmp/openai_enhanced.png"
+          open(out,"wb").write(base64.b64decode(resp.data[0].b64_json))
+          print("OpenAI done: " + str(os.path.getsize(out)//1024) + "KB")
+          open(os.environ["GITHUB_OUTPUT"],"a").write("path=" + out + "\n")
+          PYEOF
+
+      # ── 3. GEMINI 2.0 Flash ───────────────────────────────────────────────
+      - name: Gemini 2.0 Flash
+        id: gemini
+        if: inputs.tool == 'all' || inputs.tool == 'gemini'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SOURCE_PATH: ${{ steps.source.outputs.path }}
+        run: |
+          pip install -q google-genai
+          python3 << 'PYEOF'
+          import os, sys, base64
+
+          PROMPT = (
+              "TASK: Photo enhancement only. Do NOT redesign or add elements.\n"
+              "Enhance this real construction/remodel photo to professional architectural "
+              "real-estate photography quality. Fix exposure and white balance, improve "
+              "contrast and color accuracy, recover highlights, gently lift shadows, "
+              "mild dehaze/clarity/noise cleanup, slight sharpening, straighten verticals. "
+              "Keep everything truthful. Do NOT add or remove objects, change geometry, "
+              "layout, or make it look CGI. Natural light, realistic color, South Florida residential."
+          )
+
+          src = os.environ.get("SOURCE_PATH","")
+          key = os.environ.get("GEMINI_API_KEY","")
+          if not src or not key:
+              print("Gemini: skipped")
+              open(os.environ["GITHUB_OUTPUT"],"a").write("path=\n")
+              sys.exit(0)
+
+          import mimetypes
+          mime,_ = mimetypes.guess_type(src)
+          mime = mime or "image/jpeg"
+          img_b = open(src,"rb").read()
+
+          from google import genai
+          from google.genai import types
+          client = genai.Client(api_key=key)
+          print("Gemini: sending request...")
+          resp = client.models.generate_content(
+              model="gemini-2.0-flash-exp",
+              contents=[
+                  types.Part.from_bytes(data=img_b, mime_type=mime),
+                  types.Part.from_text(text=PROMPT),
+              ],
+              config=types.GenerateContentConfig(response_modalities=["IMAGE","TEXT"]),
+          )
+          out = "/tmp/gemini_enhanced.jpg"
+          for part in resp.candidates[0].content.parts:
+              if hasattr(part,"inline_data") and part.inline_data:
+                  raw = part.inline_data.data
+                  if isinstance(raw,str): raw = base64.b64decode(raw)
+                  open(out,"wb").write(raw)
+                  print("Gemini done: " + str(os.path.getsize(out)//1024) + "KB")
+                  open(os.environ["GITHUB_OUTPUT"],"a").write("path=" + out + "\n")
+                  sys.exit(0)
+          print("Gemini: no image in response")
+          open(os.environ["GITHUB_OUTPUT"],"a").write("path=\n")
+          PYEOF
+
+      # ── 4. REPLICATE Clarity Upscaler ─────────────────────────────────────
+      - name: Replicate Clarity Upscaler
+        id: replicate
+        if: inputs.tool == 'all' || inputs.tool == 'replicate'
+        env:
+          REPLICATE_API_TOKEN: ${{ secrets.PRI_OP_REPLICATE_API_KEY }}
+          SOURCE_PATH: ${{ steps.source.outputs.path }}
+        run: |
+          pip install -q replicate
+          python3 << 'PYEOF'
+          import os, sys, urllib.request
+          import replicate
+
+          src = os.environ.get("SOURCE_PATH","")
+          if not src:
+              print("Replicate: skipped")
+              open(os.environ["GITHUB_OUTPUT"],"a").write("path=\n")
+              sys.exit(0)
+
+          print("Replicate: sending request...")
+          with open(src,"rb") as f:
+              output = replicate.run(
+                  "philz1337x/clarity-upscaler:dfad41707589d68ecdccd1dfa600d55a208f9310748e44bfe35b4a6291453d5e",
+                  input={
+                      "image": f,
+                      "prompt": "professional real estate photography, architectural photography, natural light, sharp details, correct white balance, South Florida residential",
+                      "negative_prompt": "blur, noise, overexposed, fake, CGI, staged, hallucination, added objects",
+                      "scale_factor": 2, "dynamic": 6, "creativity": 0,
+                      "resemblance": 1, "sharpen": 0, "num_inference_steps": 20,
+                  },
+              )
+          url = str(output) if not isinstance(output,list) else str(output[0])
+          out = "/tmp/replicate_enhanced.png"
+          urllib.request.urlretrieve(url, out)
+          print("Replicate done: " + str(os.path.getsize(out)//1024) + "KB")
+          open(os.environ["GITHUB_OUTPUT"],"a").write("path=" + out + "\n")
+          PYEOF
+
+      # ── 5. NANO BANANA 2 — Gemini 3.1 Flash via inference.sh ──────────────
+      - name: Nano Banana 2 (Gemini 3.1 Flash)
+        id: nb2
+        if: inputs.tool == 'all' || inputs.tool == 'nb2'
+        env:
+          INFSH_KEY: ${{ secrets.PRI_OP_INFSH_API_KEY }}
+          SOURCE_PATH: ${{ steps.source.outputs.path }}
+        run: |
+          pip install -q inferencesh
+          python3 << 'PYEOF'
+          import os, sys, base64, urllib.request
+
+          PROMPT = (
+              "Enhance this real construction/remodel photo to professional architectural "
+              "real-estate photography quality. Fix exposure and white balance, improve "
+              "contrast, recover highlights, lift shadows gently, mild dehaze and noise "
+              "cleanup, slight sharpening. Keep everything truthful to the real jobsite. "
+              "Do NOT add or remove objects, change layout or finishes, or make it look CGI. "
+              "Natural light, realistic color, South Florida residential style."
+          )
+
+          src = os.environ.get("SOURCE_PATH","")
+          key = os.environ.get("INFSH_KEY","")
+          if not src or not key:
+              print("NB2: skipped")
+              open(os.environ["GITHUB_OUTPUT"],"a").write("path=\n")
+              sys.exit(0)
+
+          ext = "jpeg" if src.endswith(".jpg") else "png"
+          img_b64 = base64.b64encode(open(src,"rb").read()).decode()
+          data_uri = "data:image/" + ext + ";base64," + img_b64
+
+          from inferencesh import InferenceClient
+          client = InferenceClient(api_key=key)
+          print("NB2: sending request to gemini-3-1-flash-image-preview...")
+          result = client.run(
+              "google/gemini-3-1-flash-image-preview",
+              input={"prompt": PROMPT, "images": [data_uri], "resolution": "2K"},
+          )
+          images = result.get("images") or result.get("output",{}).get("images",[])
+          if not images:
+              print("NB2: no images in response")
+              open(os.environ["GITHUB_OUTPUT"],"a").write("path=\n")
+              sys.exit(0)
+
+          img_data = images[0]
+          out = "/tmp/nb2_enhanced.png"
+          if isinstance(img_data,str) and img_data.startswith("http"):
+              urllib.request.urlretrieve(img_data, out)
+          elif isinstance(img_data,str) and "base64," in img_data:
+              open(out,"wb").write(base64.b64decode(img_data.split("base64,")[1]))
+          else:
+              open(out,"wb").write(base64.b64decode(img_data) if isinstance(img_data,str) else img_data)
+
+          print("NB2 done: " + str(os.path.getsize(out)//1024) + "KB")
+          open(os.environ["GITHUB_OUTPUT"],"a").write("path=" + out + "\n")
+          PYEOF
+
+      # ── 6. UPLOAD ALL RESULTS TO DRIVE ────────────────────────────────────
+      - name: Upload results to Drive
+        id: upload
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          DEST_FOLDER: ${{ inputs.destination_folder_id }}
+          LABEL: ${{ inputs.original_filename }}
+          OPENAI_PATH: ${{ steps.openai.outputs.path }}
+          GEMINI_PATH: ${{ steps.gemini.outputs.path }}
+          REPLICATE_PATH: ${{ steps.replicate.outputs.path }}
+          NB2_PATH: ${{ steps.nb2.outputs.path }}
+        run: |
+          python3 << 'PYEOF'
+          import os, json, sys, mimetypes
+          from google.oauth2.credentials import Credentials
+          from google.auth.transport.requests import Request
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+          from datetime import datetime
+
+          token_data = json.loads(os.environ["SHEETS_TOKEN"])
+          creds = Credentials(
+              token=token_data.get("token"), refresh_token=token_data.get("refresh_token"),
+              token_uri=token_data.get("token_uri","https://oauth2.googleapis.com/token"),
+              client_id=token_data.get("client_id"), client_secret=token_data.get("client_secret"),
+              scopes=token_data.get("scopes"),
+          )
+          if not creds.valid:
+              creds.refresh(Request())
+          drive = build("drive","v3",credentials=creds)
+
+          # Create dated subfolder
+          label = os.environ.get("LABEL","photo")
+          folder_name = datetime.now().strftime("%Y-%m-%d") + "_" + label
+          folder = drive.files().create(
+              body={"name": folder_name, "mimeType": "application/vnd.google-apps.folder",
+                    "parents": [os.environ["DEST_FOLDER"]]},
+              supportsAllDrives=True, fields="id",
+          ).execute()
+          folder_id = folder["id"]
+          print("Created folder: " + folder_name)
+
+          def upload(local_path, name):
+              if not local_path or not os.path.exists(local_path):
+                  return ""
+              mime,_ = mimetypes.guess_type(local_path)
+              mime = mime or "image/png"
+              r = drive.files().create(
+                  body={"name": name, "parents": [folder_id]},
+                  media_body=MediaFileUpload(local_path, mimetype=mime),
+                  supportsAllDrives=True, fields="id,webViewLink",
+              ).execute()
+              link = r.get("webViewLink","")
+              if link:
+                  print("Uploaded: " + name + " -> " + link)
+              return link
+
+          links = {
+              "openai":    upload(os.environ.get("OPENAI_PATH",""),    "1_openai_gpt-image-1.png"),
+              "gemini":    upload(os.environ.get("GEMINI_PATH",""),    "2_gemini_20flash.jpg"),
+              "replicate": upload(os.environ.get("REPLICATE_PATH",""), "3_replicate_clarity2x.png"),
+              "nb2":       upload(os.environ.get("NB2_PATH",""),       "4_nb2_gemini31flash.png"),
+          }
+          links = {k:v for k,v in links.items() if v}
+
+          out = json.dumps(links)
+          print("All links: " + out)
+          go = os.environ["GITHUB_OUTPUT"]
+          with open(go,"a") as f:
+              f.write("links_json=" + out + "\n")
+              f.write("openai_link=" + links.get("openai","") + "\n")
+              f.write("gemini_link=" + links.get("gemini","") + "\n")
+              f.write("replicate_link=" + links.get("replicate","") + "\n")
+              f.write("nb2_link=" + links.get("nb2","") + "\n")
+              f.write("folder_name=" + folder_name + "\n")
+          PYEOF
+
+      # ── 7. EMAIL RESULTS ──────────────────────────────────────────────────
+      - name: Email results
+        env:
+          PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          OPENAI_LINK: ${{ steps.upload.outputs.openai_link }}
+          GEMINI_LINK: ${{ steps.upload.outputs.gemini_link }}
+          REPLICATE_LINK: ${{ steps.upload.outputs.replicate_link }}
+          NB2_LINK: ${{ steps.upload.outputs.nb2_link }}
+          LABEL: ${{ inputs.original_filename }}
+          TOOL: ${{ inputs.tool }}
+        run: |
+          python3 << 'PYEOF'
+          import os, smtplib
+          from email.mime.text import MIMEText
+
+          label = os.environ.get("LABEL","photo")
+          tool  = os.environ.get("TOOL","all")
+          pwd   = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD","")
+
+          lines = ["Photo Edit Results: " + label + "  (tool=" + tool + ")", ""]
+          pairs = [
+              ("1. OpenAI gpt-image-1",        os.environ.get("OPENAI_LINK","")),
+              ("2. Gemini 2.0 Flash",           os.environ.get("GEMINI_LINK","")),
+              ("3. Replicate Clarity 2x",       os.environ.get("REPLICATE_LINK","")),
+              ("4. Nano Banana 2 (Gemini 3.1)", os.environ.get("NB2_LINK","")),
+          ]
+          for name, link in pairs:
+              if link:
+                  lines += [name + ":", link, ""]
+
+          body = "\n".join(lines)
+          msg = MIMEText(body)
+          msg["Subject"] = "Photo Edit Done: " + label
+          msg["From"]    = "priscila@oakpark-construction.com"
+          msg["To"]      = "priscila@oakpark-construction.com"
+
+          with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+              smtp.login("priscila@oakpark-construction.com", pwd)
+              smtp.send_message(msg)
+          print("Email sent to priscila@oakpark-construction.com")
+          PYEOF
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Photo Edit — AI Enhancement" >> $GITHUB_STEP_SUMMARY
+          echo "- **Label:** ${{ inputs.original_filename }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tool:** ${{ inputs.tool }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **OpenAI:** ${{ steps.upload.outputs.openai_link }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Gemini:** ${{ steps.upload.outputs.gemini_link }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Replicate:** ${{ steps.upload.outputs.replicate_link }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **NB2:** ${{ steps.upload.outputs.nb2_link }}" >> $GITHUB_STEP_SUMMARY
