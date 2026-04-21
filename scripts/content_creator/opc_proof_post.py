@@ -891,7 +891,8 @@ def main():
         print(f"\n✅ Proof-post scan complete — see tab: {CANDIDATES_TAB}")
 
     elif args.phase == 2:
-        group_key = args.group_key or _pick_top_candidate(token)
+        # Accept group key from: --group-key arg OR PROOF_GROUP_KEY env var OR auto-pick top candidate
+        group_key = args.group_key or os.environ.get("PROOF_GROUP_KEY", "").strip() or _pick_top_candidate(token)
         if not group_key:
             print("❌ No above-gate candidates found — run Phase 1 first")
             sys.exit(0)
