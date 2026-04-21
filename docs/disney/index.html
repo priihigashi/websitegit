@@ -363,6 +363,48 @@
   .park-info-strip a:hover { background: rgba(144,202,249,0.15); color: #ffd700; }
   .park-info-strip .strip-sep { color: #555; }
 
+  /* Showtimes Strip — prominent parade + fireworks */
+  .showtimes-strip {
+    background: linear-gradient(135deg, rgba(231,76,60,0.18), rgba(155,89,247,0.15));
+    border: 2px solid rgba(255,215,0,0.5);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .showtime-main, .showtime-secondary {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .showtime-emoji { font-size: 1.6em; line-height: 1; }
+  .showtime-text { flex: 1; font-size: 0.88em; color: #fff; }
+  .showtime-big {
+    display: inline-block;
+    background: rgba(255,215,0,0.25);
+    color: #ffd700;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 1.1em;
+    border: 1px solid rgba(255,215,0,0.5);
+  }
+  .showtime-note { font-size: 0.82em; color: #c8c8b0; margin-top: 4px; line-height: 1.5; }
+  .showtime-link {
+    display: inline-block;
+    align-self: flex-start;
+    color: #90caf9;
+    text-decoration: none;
+    font-size: 0.82em;
+    padding: 6px 12px;
+    background: rgba(144,202,249,0.1);
+    border: 1px solid rgba(144,202,249,0.3);
+    border-radius: 6px;
+  }
+  .showtime-link:hover { background: rgba(144,202,249,0.2); color: #ffd700; }
+
   /* Park Map Link Block */
   .park-map-link {
     background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,215,0,0.04));
@@ -452,6 +494,24 @@
   <!-- QUICK LINKS HUB -->
   <div class="quick-hub">
     <div class="quick-hub-title">⚡ QUICK LINKS — save this for the trip</div>
+
+    <div class="showtimes-strip">
+      <div class="showtime-main">
+        <span class="showtime-emoji">🎠</span>
+        <div class="showtime-text">
+          <strong>Festival of Fantasy Parade</strong> · Magic Kingdom · <span class="showtime-big">3:00 PM</span> daily
+          <div class="showtime-note">Before April 6 = also a 12 PM show. April 6+ = single 3 PM showing. Route: Frontierland → Liberty Square → Main Street USA (good viewing spots = in front of Cinderella Castle or near Main Street Station). Arrive 30–45 min early for shaded curb seat.</div>
+        </div>
+      </div>
+      <div class="showtime-secondary">
+        <span class="showtime-emoji">🎆</span>
+        <div class="showtime-text">
+          <strong>Happily Ever After Fireworks</strong> · Magic Kingdom · <span class="showtime-big">~9:00 PM</span> (verify in app day-of)
+          <div class="showtime-note">Best view = Hub/Castle area (fills 45 min early). Strollers get crowded — grab a spot by Plaza Ice Cream Parlor.</div>
+        </div>
+      </div>
+      <a class="showtime-link" href="https://disneyworld.disney.go.com/calendars/" target="_blank">🗓️ Check exact showtimes for your day ↗</a>
+    </div>
 
     <div class="park-info-strip">
       <span class="strip-label">📍 Park info pages:</span>
