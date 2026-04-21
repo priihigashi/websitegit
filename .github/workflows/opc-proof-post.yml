@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       run_phase:
-        description: "Phase to run: 1=scan, 2=enhance+preview, 3=approve/reject, both=1+2"
+        description: "Phase to run: 1=scan, 2=enhance+preview, 3=approve/reject, 4=schedule, both=1+2"
         required: false
         default: "1"
       test_group_key:
@@ -25,10 +25,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      SHEETS_TOKEN:              ${{ secrets.SHEETS_TOKEN }}
-      PRI_OP_REPLICATE_API_KEY:  ${{ secrets.PRI_OP_REPLICATE_API_KEY }}
-      PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
-      GH_TOKEN:                  ${{ secrets.GITHUB_TOKEN }}
+      SHEETS_TOKEN:                ${{ secrets.SHEETS_TOKEN }}
+      PRI_OP_REPLICATE_API_KEY:    ${{ secrets.PRI_OP_REPLICATE_API_KEY }}
+      PRI_OP_GMAIL_APP_PASSWORD:   ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+      BUFFER_API_KEY_EXP04092027:  ${{ secrets.BUFFER_API_KEY_EXP04092027 }}
+      GH_TOKEN:                    ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout repo
@@ -89,6 +90,13 @@ jobs:
           PROOF_GROUP_KEY:   ${{ github.event.inputs.test_group_key }}
           PROOF_DECISION:    ${{ github.event.inputs.proof_decision }}
         run: python scripts/content_creator/opc_proof_post.py --phase 3
+
+      - name: Run proof-post Phase 4 — schedule to Buffer
+        if: ${{ github.event.inputs.run_phase == '4' }}
+        env:
+          SHEETS_TOKEN_PATH: /tmp/oak_park_creds/sheets_token.json
+          PROOF_GROUP_KEY:   ${{ github.event.inputs.test_group_key }}
+        run: python scripts/content_creator/opc_proof_post.py --phase 4
 
       - name: Alert on failure
         if: failure()

@@ -58,6 +58,8 @@ EXPORT_PROOF_JS = os.path.join(_DIR, "export_proof.js")
 OPENAI_API_KEY     = os.environ.get("OPENAI_API_KEY", "")          # unused in enhance; kept for future
 REPLICATE_API_KEY  = os.environ.get("PRI_OP_REPLICATE_API_KEY", "")
 GMAIL_APP_PASSWORD = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD", "")
+BUFFER_API_KEY     = os.environ.get("BUFFER_API_KEY_EXP04092027", "")
+BUFFER_API_BASE    = "https://api.bufferapp.com/1"
 PREVIEW_EMAIL_TO   = "priscila@oakpark-construction.com"
 PIXEL_DIFF_REJECT_THRESHOLD = 0.15   # fallback gate for legacy enhance_one_photo (not used by core)
 
@@ -1143,12 +1145,199 @@ def run_phase3(token, group_key, decision):
         # No inline trigger here; separate workflow dispatch with run_phase=4
 
 
+# ── Phase 4: Buffer scheduling ────────────────────────────────────────────────
+
+def _buffer_find_slot(profile_id):
+    """Return Unix timestamp for next available slot (max 3/day). Slots: 9am/1pm/6pm ET."""
+    import pytz
+    from collections import defaultdict
+    from datetime import datetime, timedelta
+    ET = pytz.timezone("America/New_York")
+
+    try:
+        url  = f"{BUFFER_API_BASE}/profiles/{profile_id}/updates/pending.json?access_token={BUFFER_API_KEY}"
+        data = json.loads(urllib.request.urlopen(url, timeout=15).read())
+        day_counts = defaultdict(int)
+        for u in data.get("updates", []):
+            ts = u.get("scheduled_at") or u.get("due_at") or 0
+            if ts:
+                day_counts[datetime.fromtimestamp(int(ts), ET).strftime("%Y-%m-%d")] += 1
+        slot_hours = [9, 13, 18]
+        start = datetime.now(ET).replace(hour=0, minute=0, second=0, microsecond=0)
+        for _ in range(60):
+            day_str = start.strftime("%Y-%m-%d")
+            count   = day_counts.get(day_str, 0)
+            if count < 3:
+                h = slot_hours[min(count, 2)]
+                return int(start.replace(hour=h, minute=0, second=0, microsecond=0).timestamp())
+            start += timedelta(days=1)
+    except Exception as e:
+        print(f"  [buffer] slot finder error: {e}")
+    return None
+
+
+def _make_public_url(token, file_id):
+    """Give anyone-reader permission to a Drive file and return public URL."""
+    try:
+        perm_url  = f"https://www.googleapis.com/drive/v3/files/{file_id}/permissions?supportsAllDrives=true"
+        perm_body = json.dumps({"type": "anyone", "role": "reader"}).encode()
+        req = urllib.request.Request(perm_url, data=perm_body, method="POST",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+        urllib.request.urlopen(req).read()
+    except Exception:
+        pass
+    return f"https://drive.google.com/uc?export=download&id={file_id}"
+
+
+def _find_run_folder_for_slug(token, slug):
+    """Find the latest vN_proof-<slug> folder under PROOF_POSTS_FOLDER_ID."""
+    q   = (f"'{PROOF_POSTS_FOLDER_ID}' in parents and trashed=false "
+           f"and mimeType='application/vnd.google-apps.folder' "
+           f"and name contains 'proof-{slug}'")
+    url = (f"https://www.googleapis.com/drive/v3/files"
+           f"?q={urllib.parse.quote(q)}&supportsAllDrives=true"
+           f"&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=name desc")
+    req   = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    files = json.loads(urllib.request.urlopen(req).read()).get("files", [])
+    if not files:
+        return None, None
+    return files[0]["id"], files[0]["name"]   # highest version (desc sorted)
+
+
+def run_phase4(token, group_key):
+    """
+    Phase 4: Schedule approved proof-post to Buffer.
+    Reads proof_*.png files from the latest run folder's png/ subfolder,
+    makes them publicly readable, and posts to Buffer (next available slot).
+    Also schedules a 30-day repeat (same Buffer convention as approval_handler.py).
+    """
+    if not BUFFER_API_KEY:
+        print("❌ BUFFER_API_KEY_EXP04092027 not set — cannot schedule to Buffer")
+        sys.exit(1)
+
+    print(f"\n[proof-post Phase 4] Scheduling: {group_key}")
+
+    parts   = (group_key + "|||").split("|", 3)
+    project = parts[0].strip().title()
+    service = parts[1].strip()
+    room    = parts[2].strip()
+    slug    = re.sub(r"[^a-z0-9]+", "-", group_key.lower()).strip("-")[:40]
+
+    # Find run folder
+    run_fid, run_name = _find_run_folder_for_slug(token, slug)
+    if not run_fid:
+        print(f"❌ No run folder found for slug '{slug}' — run Phase 2 first")
+        sys.exit(1)
+    print(f"  Run folder: {run_name} ({run_fid})")
+
+    # Find png/ subfolder
+    q    = f"'{run_fid}' in parents and name='png' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    url  = (f"https://www.googleapis.com/drive/v3/files"
+            f"?q={urllib.parse.quote(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id)")
+    req  = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    png_folders = json.loads(urllib.request.urlopen(req).read()).get("files", [])
+    if not png_folders:
+        print(f"❌ No png/ subfolder in {run_name}")
+        sys.exit(1)
+    png_fid = png_folders[0]["id"]
+
+    # List proof_*.png files (sorted by name = slide order)
+    q2   = f"'{png_fid}' in parents and name contains 'proof_' and trashed=false"
+    url2 = (f"https://www.googleapis.com/drive/v3/files"
+            f"?q={urllib.parse.quote(q2)}&supportsAllDrives=true&includeItemsFromAllDrives=true"
+            f"&fields=files(id,name)&orderBy=name")
+    req2 = urllib.request.Request(url2, headers={"Authorization": f"Bearer {token}"})
+    proof_files = json.loads(urllib.request.urlopen(req2).read()).get("files", [])
+    if not proof_files:
+        print(f"❌ No proof_*.png files in png/ subfolder of {run_name}")
+        sys.exit(1)
+    print(f"  Found {len(proof_files)} proof slides to schedule")
+
+    # Make all files public + collect URLs
+    image_urls = [_make_public_url(token, f["id"]) for f in proof_files]
+    print(f"  Made {len(image_urls)} files public")
+
+    # Get Buffer Instagram profile
+    profiles_url = f"{BUFFER_API_BASE}/profiles.json?access_token={BUFFER_API_KEY}"
+    try:
+        profiles = json.loads(urllib.request.urlopen(profiles_url, timeout=15).read())
+    except Exception as e:
+        print(f"❌ Buffer profiles fetch failed: {e}")
+        sys.exit(1)
+
+    profile_id = next((p["id"] for p in profiles
+                       if "instagram" in p.get("service", "").lower()), None)
+    if not profile_id:
+        print("❌ No Instagram profile in Buffer account")
+        sys.exit(1)
+
+    slot_ts = _buffer_find_slot(profile_id)
+
+    # Build caption (OPC-safe: no promises, no stats, construction reality)
+    caption = f"Progress update — {project} | {service} | {room} | Oak Park Construction #oakparkconstruction #construction #remodel"
+
+    # Post to Buffer
+    params  = [("access_token", BUFFER_API_KEY), ("profile_ids[]", profile_id),
+               ("text", caption), ("now", "false")]
+    if slot_ts:
+        params.append(("scheduled_at", str(slot_ts)))
+    for url in image_urls[:10]:
+        params.append(("media[photos][]", url))
+
+    payload = urllib.parse.urlencode(params).encode()
+    req     = urllib.request.Request(
+        f"{BUFFER_API_BASE}/updates/create.json", data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+    except Exception as e:
+        print(f"❌ Buffer post failed: {e}")
+        sys.exit(1)
+
+    if not (resp.get("success") or resp.get("id") or "updates" in resp):
+        print(f"❌ Buffer rejected: {resp}")
+        sys.exit(1)
+
+    if slot_ts:
+        from datetime import datetime
+        import pytz
+        ET = pytz.timezone("America/New_York")
+        slot_str = datetime.fromtimestamp(slot_ts, ET).strftime("%Y-%m-%d %H:%M ET")
+        print(f"  ✅ Buffer scheduled: {len(image_urls)} slides → {slot_str}")
+
+        # 30-day repeat (same convention as approval_handler.py)
+        repeat_ts = slot_ts + 30 * 24 * 3600
+        repeat_params = [("access_token", BUFFER_API_KEY), ("profile_ids[]", profile_id),
+                         ("text", caption), ("now", "false"),
+                         ("scheduled_at", str(repeat_ts))]
+        for url in image_urls[:10]:
+            repeat_params.append(("media[photos][]", url))
+        try:
+            urllib.request.urlopen(
+                urllib.request.Request(
+                    f"{BUFFER_API_BASE}/updates/create.json",
+                    data=urllib.parse.urlencode(repeat_params).encode(),
+                    headers={"Content-Type": "application/x-www-form-urlencoded"}),
+                timeout=30).read()
+            from datetime import datetime
+            import pytz
+            ET = pytz.timezone("America/New_York")
+            print(f"  ✅ Buffer 30-day repeat → {datetime.fromtimestamp(repeat_ts, ET).strftime('%Y-%m-%d')}")
+        except Exception as e:
+            print(f"  ⚠️  30-day repeat failed (non-fatal): {e}")
+
+    # Update candidate status → Scheduled
+    _update_candidate_status(token, group_key, "Scheduled")
+
+    print(f"\n✅ Phase 4 complete — {group_key} → Scheduled")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="OPC Proof-Post Flow")
-    parser.add_argument("--phase", type=int, default=1, choices=[1, 2, 3],
-                        help="Pipeline phase: 1=candidate scan, 2=enhance+preview, 3=approve/reject")
+    parser.add_argument("--phase", type=int, default=1, choices=[1, 2, 3, 4],
+                        help="Pipeline phase: 1=scan, 2=enhance+preview, 3=approve/reject, 4=schedule")
     parser.add_argument("--group-key", default=None,
                         help="Phase 2/3: group key to process (default: top above-gate candidate)")
     args = parser.parse_args()
@@ -1202,6 +1391,26 @@ def main():
             print("❌ PROOF_DECISION not set — must be APPROVE, REJECT, or SKIP")
             sys.exit(1)
         run_phase3(token, group_key, decision)
+
+    elif args.phase == 4:
+        group_key = args.group_key or os.environ.get("PROOF_GROUP_KEY", "").strip()
+        if not group_key:
+            # Auto-pick: find first Approved candidate
+            rows   = _sheets_get(token, f"'{CANDIDATES_TAB}'!A:Q")
+            header = rows[0] if rows else []
+            col_st = next((i for i, h in enumerate(header) if h.strip() == "Status"), None)
+            col_gk = next((i for i, h in enumerate(header) if "Group Key" in h), None)
+            if col_st is not None and col_gk is not None:
+                for row in rows[1:]:
+                    padded = row + [""] * (max(col_st, col_gk) + 1 - len(row))
+                    if padded[col_st].strip() == "Approved":
+                        group_key = padded[col_gk].strip()
+                        break
+        if not group_key:
+            print("❌ No Approved candidates found — run Phase 3 (APPROVE) first")
+            sys.exit(0)
+        print(f"[proof-post] Phase 4 target: {group_key}")
+        run_phase4(token, group_key)
 
 
 if __name__ == "__main__":
