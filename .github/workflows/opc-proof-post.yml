@@ -1,15 +1,25 @@
-name: OPC Proof Post — Phase 1 Scan
+name: OPC Proof Post
 
 on:
   workflow_dispatch:
+    inputs:
+      run_phase:
+        description: "Phase to run: 1=candidate scan, 2=enhance+preview"
+        required: false
+        default: "1"
+      test_group_key:
+        description: "Phase 2: group key to process (blank = top above-gate candidate)"
+        required: false
+        default: ""
   schedule:
     # Runs at 04:05 UTC (midnight ET) — after photo-catalog.yml (23:35 UTC)
+    # Scheduled runs always execute Phase 1 (scan only)
     - cron: "5 4 * * *"
 
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -31,7 +41,16 @@ jobs:
           mkdir -p /tmp/oak_park_creds
           echo "$SHEETS_TOKEN" > /tmp/oak_park_creds/sheets_token.json
 
-      - name: Run proof-post candidate scan
+      - name: Run proof-post
         env:
           SHEETS_TOKEN_PATH: /tmp/oak_park_creds/sheets_token.json
-        run: python scripts/content_creator/opc_proof_post.py
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+        run: |
+          PHASE="${{ github.event.inputs.run_phase || '1' }}"
+          GROUP_KEY="${{ github.event.inputs.test_group_key }}"
+          if [ -n "$GROUP_KEY" ]; then
+            python scripts/content_creator/opc_proof_post.py --phase "$PHASE" --group-key "$GROUP_KEY"
+          else
+            python scripts/content_creator/opc_proof_post.py --phase "$PHASE"
+          fi

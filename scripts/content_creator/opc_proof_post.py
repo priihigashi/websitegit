@@ -28,8 +28,10 @@ Drive destination for Phase 2 (NOT used tonight):
   Originals: never touched. Enhanced copies saved alongside with _enhanced suffix.
 """
 
-import json, os, sys, time
+import argparse, base64, json, os, re, shutil, smtplib, ssl, sys, time
 from datetime import date
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
 import urllib.request, urllib.parse
 
@@ -89,6 +91,16 @@ no extra objects, no staging, no fake furniture, no new plants, no new windows,
 no new doors, no changed cabinets, no changed counters, no changed tile, no fake sky
 replacement, no face/body changes, no text/logo/watermark artifacts, no AI hallucinations.
 """.strip()
+
+# ── Phase 2 constants ──────────────────────────────────────────────────────────
+# Content Creation workspace — proof-post run folders land here
+DRIVE_CONTENT_CREATION_FOLDER = "1um7y2Yt8zi9KGxev6kfFJYgrkMYwrCNh"
+PROOF_POSTS_PARENT_NAME       = "Proof Posts"
+OPENAI_API_KEY                = os.environ.get("OPENAI_API_KEY", "")
+GMAIL_APP_PASSWORD            = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD", "")
+PREVIEW_EMAIL_TO              = "priscila@oakpark-construction.com"
+# 15% mean absolute pixel diff → reject OpenAI output as hallucinated
+PIXEL_DIFF_REJECT_THRESHOLD   = 0.15
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -374,38 +386,524 @@ def write_candidates(token, candidates):
     print(f"[proof-post] {len(candidates)} groups scored | {above} above confidence gate | written to {CANDIDATES_TAB}")
 
 
+# ── Phase 2: Drive helpers ─────────────────────────────────────────────────────
+
+def _drive_api_post(token, endpoint, body):
+    """POST to Drive API with supportsAllDrives=true. Returns parsed JSON."""
+    url = f"https://www.googleapis.com/drive/v3/{endpoint}?supportsAllDrives=true"
+    req = urllib.request.Request(
+        url, data=json.dumps(body).encode(), method="POST",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    return json.loads(urllib.request.urlopen(req).read())
+
+
+def _drive_find_or_create_folder(token, name, parent_id):
+    """Find existing folder by name under parent, or create it. Returns folder_id."""
+    safe_name = name.replace("'", "\\'")
+    q = (f"name='{safe_name}' and mimeType='application/vnd.google-apps.folder'"
+         f" and '{parent_id}' in parents and trashed=false")
+    url = (f"https://www.googleapis.com/drive/v3/files"
+           f"?q={urllib.parse.quote(q)}&supportsAllDrives=true"
+           f"&includeItemsFromAllDrives=true&fields=files(id)")
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    files = json.loads(urllib.request.urlopen(req).read()).get("files", [])
+    if files:
+        return files[0]["id"]
+    return _drive_api_post(token, "files", {
+        "name": name,
+        "mimeType": "application/vnd.google-apps.folder",
+        "parents": [parent_id],
+    })["id"]
+
+
+def _mime_for(filename):
+    ext = Path(filename).suffix.lower()
+    return {".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".png": "image/png", ".txt": "text/plain"}.get(ext, "application/octet-stream")
+
+
+def _drive_upload_file_multipart(token, local_path, filename, parent_folder_id):
+    """Multipart upload to Drive. Returns (file_id, web_view_link)."""
+    import requests as _req  # requests is in requirements_content.txt
+    meta = json.dumps({"name": filename, "parents": [parent_folder_id]})
+    with open(local_path, "rb") as fh:
+        resp = _req.post(
+            "https://www.googleapis.com/upload/drive/v3/files"
+            "?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink",
+            headers={"Authorization": f"Bearer {token}"},
+            files={
+                "data": ("metadata", meta, "application/json; charset=UTF-8"),
+                "file": (filename, fh, _mime_for(filename)),
+            },
+        )
+    resp.raise_for_status()
+    data = resp.json()
+    fid = data["id"]
+    return fid, data.get("webViewLink", f"https://drive.google.com/file/d/{fid}/view")
+
+
+def _extract_file_id(url):
+    """Extract Drive file ID from webViewLink or other Drive URL formats."""
+    m = re.search(r"/file/d/([a-zA-Z0-9_-]+)", url)
+    if m:
+        return m.group(1)
+    m = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", url)
+    if m:
+        return m.group(1)
+    if re.match(r"^[a-zA-Z0-9_-]{20,}$", url.strip()):
+        return url.strip()
+    return None
+
+
+def _download_photo_from_drive(token, file_id, dest_dir, stem):
+    """Download Drive file by ID to dest_dir/{stem}_original.jpg. Returns Path."""
+    url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media&supportsAllDrives=true"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    data = urllib.request.urlopen(req).read()
+    out = Path(dest_dir) / f"{stem}_original.jpg"
+    out.write_bytes(data)
+    return out
+
+
+# ── Phase 2: Enhancement ───────────────────────────────────────────────────────
+# TEMPORARY — this block moves to scripts/content_creator/enhancement_core.py
+# after the first successful proof-post preview run, so that photo_edit.yml and
+# opc_proof_post.py share one implementation and cannot drift.
+
+def _pixel_diff_pct(path_a, path_b):
+    """Mean absolute pixel diff as a fraction (0.0–1.0). PIL only, no numpy."""
+    from PIL import Image as _PIL, ImageChops
+    a = _PIL.open(path_a).convert("RGB").resize((128, 128), _PIL.LANCZOS)
+    b = _PIL.open(path_b).convert("RGB").resize((128, 128), _PIL.LANCZOS)
+    diff = ImageChops.difference(a, b)
+    total = sum(sum(p) for p in diff.getdata())
+    return total / (128 * 128 * 3 * 255)
+
+
+def enhance_one_photo(local_path, file_id, openai_key):
+    """
+    Enhance a single photo with OpenAI gpt-image-1.
+    Returns (result_path, fallback_used, reason_str).
+
+    Fallback chain (satisfies 3-route minimum per NONNEGOTIABLES):
+      Route 1: OpenAI gpt-image-1 edit
+      Route 2: pixel diff > 15% → hallucination detected → discard + use original
+      Route 3: any API error → use original
+    """
+    local_path    = Path(local_path)
+    enhanced_path = local_path.parent / local_path.name.replace("_original.jpg", "_enhanced.jpg")
+    fallback_path = local_path.parent / local_path.name.replace("_original.jpg", "_enhanced_fallback.jpg")
+    sidecar_path  = local_path.parent / local_path.name.replace("_original.jpg", "_enhanced.source.txt")
+
+    def _write_fallback(reason):
+        shutil.copy(str(local_path), str(fallback_path))
+        sidecar_path.write_text(
+            f"tier=fallback\nreason={reason}\n"
+            f"file_id={file_id}\nfetched_at={date.today().isoformat()}\n"
+        )
+        return fallback_path, True, reason
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=openai_key)
+        with open(str(local_path), "rb") as img_fh:
+            result = client.images.edit(
+                model="gpt-image-1",
+                image=img_fh,
+                prompt=LOCKED_ENHANCEMENT_PROMPT,
+                n=1,
+                size="1024x1024",
+            )
+        img_item = result.data[0]
+        if getattr(img_item, "b64_json", None):
+            raw = base64.b64decode(img_item.b64_json)
+        elif getattr(img_item, "url", None):
+            raw = urllib.request.urlopen(img_item.url).read()
+        else:
+            return _write_fallback("no_image_data_in_response")
+
+        enhanced_path.write_bytes(raw)
+
+        diff = _pixel_diff_pct(str(local_path), str(enhanced_path))
+        if diff > PIXEL_DIFF_REJECT_THRESHOLD:
+            enhanced_path.unlink(missing_ok=True)
+            sidecar_path.write_text(
+                f"tier=fallback\nreason=hallucination_rejected\n"
+                f"pixel_diff={diff:.2%}\nfile_id={file_id}\n"
+                f"fetched_at={date.today().isoformat()}\n"
+            )
+            return _write_fallback(f"hallucination_rejected(diff={diff:.1%})")
+
+        sidecar_path.write_text(
+            f"tier=openai_gpt_image_1\nreason=ok\n"
+            f"pixel_diff={diff:.2%}\nfile_id={file_id}\n"
+            f"fetched_at={date.today().isoformat()}\n"
+        )
+        return enhanced_path, False, f"ok(diff={diff:.1%})"
+
+    except Exception as exc:
+        return _write_fallback(f"openai_error:{exc}")
+
+
+# ── Phase 2: Preview collage ───────────────────────────────────────────────────
+
+def build_proof_collage(photo_entries, output_path, post_type):
+    """
+    Stitch a preview collage from enhanced photo paths. PIL only.
+    photo_entries: [{"local_path": str, "phase": str, "quality": int, "fallback": bool}]
+
+    PREVIEW ONLY — this is not the final proof-post carousel format.
+    Final format (HTML + Playwright export) comes in a later phase.
+    """
+    from PIL import Image as _PIL, ImageDraw
+
+    CARD_W, CARD_H, LABEL_H, BORDER = 540, 540, 36, 4
+
+    if post_type == "before_after":
+        befores = [e for e in photo_entries if e.get("phase") == "before"]
+        afters  = [e for e in photo_entries if e.get("phase") == "after"]
+        sel = []
+        if befores:
+            sel.append(max(befores, key=lambda x: x.get("quality", 0)))
+        if afters:
+            sel.append(max(afters,  key=lambda x: x.get("quality", 0)))
+    else:
+        sel = sorted(photo_entries, key=lambda x: x.get("quality", 0), reverse=True)[:4]
+
+    if not sel:
+        return None
+
+    cols   = min(len(sel), 2)
+    rows_n = (len(sel) + cols - 1) // cols
+    canvas = _PIL.new("RGB", (cols * CARD_W, rows_n * (CARD_H + LABEL_H)), (20, 20, 20))
+    draw   = ImageDraw.Draw(canvas)
+
+    for i, entry in enumerate(sel):
+        col_i = i % cols
+        row_i = i // cols
+        x = col_i * CARD_W
+        y = row_i * (CARD_H + LABEL_H)
+        try:
+            img = _PIL.open(entry["local_path"]).convert("RGB")
+            img.thumbnail((CARD_W - BORDER * 2, CARD_H - BORDER * 2), _PIL.LANCZOS)
+            px = x + BORDER + (CARD_W - BORDER * 2 - img.width) // 2
+            py = y + BORDER + (CARD_H - BORDER * 2 - img.height) // 2
+            canvas.paste(img, (px, py))
+        except Exception:
+            pass
+        lbl_y = y + CARD_H
+        draw.rectangle([x, lbl_y, x + CARD_W, lbl_y + LABEL_H], fill=(40, 40, 40))
+        fallback_mark = " [orig]" if entry.get("fallback") else ""
+        try:
+            draw.text(
+                (x + 8, lbl_y + 8),
+                f"{entry.get('phase','?')} Q{entry.get('quality','?')}{fallback_mark}",
+                fill=(200, 200, 200),
+            )
+        except Exception:
+            pass  # no system font on runner — skip label text
+
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(str(out), "JPEG", quality=90)
+    return out
+
+
+# ── Phase 2: Email preview ─────────────────────────────────────────────────────
+
+def send_proof_preview_email(project, post_type, confidence, group_key,
+                             run_folder_link, subfolder_links,
+                             enhancement_summary, smtp_password):
+    """Send HTML preview email via smtplib SMTP_SSL (PRI_OP_GMAIL_APP_PASSWORD)."""
+    enh   = enhancement_summary.get("enhanced", 0)
+    fall  = enhancement_summary.get("fallback", 0)
+    total = enh + fall
+    if total == 0:
+        flag = "⚠️ NO PHOTOS — "
+    elif fall == total:
+        flag = "⚠️ NO ENHANCEMENT — "
+    elif fall > 0:
+        flag = "⚠️ PARTIAL — "
+    else:
+        flag = ""
+
+    subject      = f"{flag}OPC Proof Post Preview — {project} | {post_type} | conf={confidence}"
+    collage_link = subfolder_links.get("collage", subfolder_links.get("png", "#"))
+
+    html = f"""<!DOCTYPE html>
+<html><body style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:20px;">
+<h2 style="color:#0a0a0a;">OPC Proof Post Preview</h2>
+<table style="border-collapse:collapse;width:100%;margin-bottom:16px;">
+  <tr><td style="padding:4px 8px;font-weight:bold;">Project</td><td>{project}</td></tr>
+  <tr><td style="padding:4px 8px;font-weight:bold;">Post type</td><td>{post_type}</td></tr>
+  <tr><td style="padding:4px 8px;font-weight:bold;">Confidence</td><td>{confidence}</td></tr>
+  <tr><td style="padding:4px 8px;font-weight:bold;">Group key</td><td><code>{group_key}</code></td></tr>
+  <tr><td style="padding:4px 8px;font-weight:bold;">Enhancement</td>
+      <td>{enh}/{total} enhanced &nbsp;|&nbsp; {fall}/{total} fallback (original used)</td></tr>
+</table>
+<p>
+  <a href="{collage_link}" style="background:#cbcc10;color:#0a0a0a;padding:10px 18px;
+     text-decoration:none;font-weight:bold;border-radius:4px;">View Preview Collage</a>
+</p>
+<p><a href="{run_folder_link}">Open full run folder in Drive</a></p>
+<ul style="line-height:1.8;">
+  <li><a href="{subfolder_links.get('originals_used','#')}">originals_used/</a></li>
+  <li><a href="{subfolder_links.get('enhanced','#')}">enhanced/</a></li>
+  <li><a href="{subfolder_links.get('png','#')}">png/ (preview collage)</a></li>
+</ul>
+<hr style="margin:20px 0;">
+<h3>Reply to approve or reject</h3>
+<p>
+  <strong>APPROVE</strong> → proceed to final carousel build<br>
+  <strong>REJECT</strong> → discard this candidate<br>
+  <strong>SKIP</strong> → keep as candidate for later
+</p>
+<p style="font-size:11px;color:#999;margin-top:32px;">
+  OPC Proof-Post Pipeline — Phase 2 preview asset only, not final carousel format
+</p>
+</body></html>"""
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"]    = PREVIEW_EMAIL_TO
+    msg["To"]      = PREVIEW_EMAIL_TO
+    msg.attach(MIMEText(html, "html"))
+
+    ctx = ssl.create_default_context()
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx) as srv:
+        srv.login(PREVIEW_EMAIL_TO, smtp_password)
+        srv.sendmail(PREVIEW_EMAIL_TO, [PREVIEW_EMAIL_TO], msg.as_string())
+    print(f"[proof-post] Preview email sent → {PREVIEW_EMAIL_TO}")
+
+
+# ── Phase 2: Orchestration ─────────────────────────────────────────────────────
+
+def _pick_top_candidate(token):
+    """Read candidates tab, return group_key of the first above-gate row."""
+    rows = _sheets_get(token, f"'{CANDIDATES_TAB}'!A:P")
+    if len(rows) < 2:
+        return None
+    header    = rows[0]
+    col_above = next((i for i, h in enumerate(header) if "Above Gate" in h), None)
+    col_key   = next((i for i, h in enumerate(header) if "Group Key"  in h), None)
+    if col_above is None or col_key is None:
+        return None
+    for row in rows[1:]:
+        padded = row + [""] * (max(col_above, col_key) + 1 - len(row))
+        if padded[col_above].strip() == "Yes":
+            return padded[col_key].strip()
+    return None
+
+
+def _update_candidate_status(token, group_key, new_status):
+    """Write new_status to the Status column for the matching group_key row."""
+    rows = _sheets_get(token, f"'{CANDIDATES_TAB}'!A:P")
+    if len(rows) < 2:
+        return
+    header     = rows[0]
+    col_key    = next((i for i, h in enumerate(header) if "Group Key" in h), None)
+    col_status = next((i for i, h in enumerate(header) if h.strip() == "Status"), None)
+    if col_key is None or col_status is None:
+        return
+    for row_idx, row in enumerate(rows[1:], start=2):
+        padded = row + [""] * (max(col_key, col_status) + 1 - len(row))
+        if padded[col_key].strip() == group_key:
+            col_letter = chr(ord("A") + col_status)
+            _sheets_update(token, f"'{CANDIDATES_TAB}'!{col_letter}{row_idx}", [[new_status]])
+            print(f"[proof-post] Status → '{new_status}' for {group_key}")
+            return
+
+
+def _get_catalog_photos_for_group(token, group_key):
+    """Re-read Photo Catalog and return the photos matching group_key."""
+    header, data_rows = read_catalog(token)
+    if not header:
+        return []
+    return group_photos(header, data_rows).get(group_key, [])
+
+
+def run_phase2(token, group_key):
+    """
+    Phase 2 orchestrator: download originals → enhance → build collage →
+    upload all to Drive → send preview email.
+
+    Fully isolated: zero contact with Brazil/news flows, main.py, or
+    carousel_builder.py. Only reads Photo Catalog and writes to Proof Posts/.
+    """
+    if not OPENAI_API_KEY:
+        print("❌ OPENAI_API_KEY not set — cannot run Phase 2")
+        sys.exit(1)
+    if not GMAIL_APP_PASSWORD:
+        print("❌ PRI_OP_GMAIL_APP_PASSWORD not set — cannot send preview email")
+        sys.exit(1)
+
+    print(f"\n[proof-post Phase 2] Group: {group_key}")
+    photos = _get_catalog_photos_for_group(token, group_key)
+    if not photos:
+        print(f"❌ No photos found for group: {group_key}")
+        sys.exit(1)
+
+    post_type, confidence, reason, _ = assess_post_type(photos)
+    parts   = (group_key + "||").split("|", 2)
+    project = parts[0]
+    print(f"[proof-post] {len(photos)} photos | {post_type} | conf={confidence}")
+
+    slug     = re.sub(r"[^a-z0-9]+", "-", group_key.lower()).strip("-")[:40]
+    today_s  = date.today().isoformat()
+    run_name = f"{today_s}_{slug}"
+
+    # ── Local temp structure (mirrors Drive structure) ─────────────────────────
+    run_dir = Path(f"/tmp/proof_post_{slug}")
+    for sub in ("originals_used", "enhanced", "png", "motion", "html", "review"):
+        (run_dir / sub).mkdir(parents=True, exist_ok=True)
+
+    # ── Drive structure ────────────────────────────────────────────────────────
+    # Content Creation (1um7y2Yt8zi9KGxev6kfFJYgrkMYwrCNh)
+    #   └── Proof Posts/
+    #         └── YYYY-MM-DD_<slug>/
+    #               originals_used/ enhanced/ png/ motion/ html/ review/
+    proof_root = _drive_find_or_create_folder(
+        token, PROOF_POSTS_PARENT_NAME, DRIVE_CONTENT_CREATION_FOLDER)
+    run_fid    = _drive_find_or_create_folder(token, run_name, proof_root)
+    sub_ids, sub_links = {}, {}
+    for sub in ("originals_used", "enhanced", "png", "motion", "html", "review"):
+        fid = _drive_find_or_create_folder(token, sub, run_fid)
+        sub_ids[sub]   = fid
+        sub_links[sub] = f"https://drive.google.com/drive/folders/{fid}"
+    run_link = f"https://drive.google.com/drive/folders/{run_fid}"
+    print(f"[proof-post] Drive run folder: {run_link}")
+
+    # ── Download + enhance (cap at 6 photos to control OpenAI cost per test) ──
+    photos_to_use  = sorted(photos, key=lambda p: p["quality"], reverse=True)[:6]
+    enhanced_entries = []
+    summary = {"enhanced": 0, "fallback": 0}
+
+    for p in photos_to_use:
+        fid = _extract_file_id(p.get("drive_url", ""))
+        if not fid:
+            print(f"  ⚠️  No file_id in URL: {p.get('drive_url','')[:60]}")
+            continue
+
+        print(f"  ↓ {p['filename']} ...")
+        try:
+            orig = _download_photo_from_drive(
+                token, fid, run_dir / "originals_used", fid)
+        except Exception as e:
+            print(f"  ❌ Download failed: {e}")
+            continue
+
+        try:
+            _drive_upload_file_multipart(
+                token, str(orig), orig.name, sub_ids["originals_used"])
+        except Exception as e:
+            print(f"  ⚠️  Upload original failed (non-fatal): {e}")
+
+        print(f"  ✨ Enhancing ...")
+        enh_path, is_fallback, enh_reason = enhance_one_photo(
+            str(orig), fid, OPENAI_API_KEY)
+        if is_fallback:
+            summary["fallback"] += 1
+            print(f"  ⚠️  Fallback: {enh_reason}")
+        else:
+            summary["enhanced"] += 1
+            print(f"  ✅ Enhanced: {enh_reason}")
+
+        try:
+            _drive_upload_file_multipart(
+                token, str(enh_path), enh_path.name, sub_ids["enhanced"])
+        except Exception as e:
+            print(f"  ⚠️  Upload enhanced failed (non-fatal): {e}")
+
+        enhanced_entries.append({
+            "local_path": str(enh_path),
+            "phase":      p.get("phase", "unknown"),
+            "quality":    p.get("quality", 0),
+            "fallback":   is_fallback,
+        })
+
+    if not enhanced_entries:
+        print("❌ No photos processed successfully — aborting Phase 2")
+        sys.exit(1)
+
+    # ── Preview collage ────────────────────────────────────────────────────────
+    collage_name  = f"collage_{slug}_{today_s.replace('-','')}.jpg"
+    collage_local = run_dir / "png" / collage_name
+    print("[proof-post] Building preview collage ...")
+    result = build_proof_collage(enhanced_entries, str(collage_local), post_type)
+    if result and collage_local.exists():
+        try:
+            _, clnk = _drive_upload_file_multipart(
+                token, str(collage_local), collage_name, sub_ids["png"])
+            sub_links["collage"] = clnk
+            print(f"  ✅ Collage uploaded: {clnk}")
+        except Exception as e:
+            print(f"  ⚠️  Collage upload failed: {e}")
+            sub_links["collage"] = sub_links["png"]
+
+    # ── Preview email ──────────────────────────────────────────────────────────
+    print("[proof-post] Sending preview email ...")
+    send_proof_preview_email(
+        project=project, post_type=post_type, confidence=confidence,
+        group_key=group_key, run_folder_link=run_link,
+        subfolder_links=sub_links, enhancement_summary=summary,
+        smtp_password=GMAIL_APP_PASSWORD,
+    )
+
+    _update_candidate_status(token, group_key, "Preview Sent")
+
+    print(f"\n✅ Phase 2 complete")
+    print(f"   Run folder : {run_link}")
+    print(f"   Enhanced   : {summary['enhanced']} | Fallback: {summary['fallback']}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    parser = argparse.ArgumentParser(description="OPC Proof-Post Flow")
+    parser.add_argument("--phase", type=int, default=1, choices=[1, 2],
+                        help="Pipeline phase: 1=candidate scan, 2=enhance+preview")
+    parser.add_argument("--group-key", default=None,
+                        help="Phase 2: group key to process (default: top above-gate candidate)")
+    args = parser.parse_args()
+
     if not TOKEN_FILE_PATH or not Path(TOKEN_FILE_PATH).exists():
         print("❌ SHEETS_TOKEN_PATH not set or missing")
         sys.exit(1)
 
-    print(f"\n🏗️  OPC Proof-Post Candidate Scan — {date.today()}")
+    print(f"\n🏗️  OPC Proof-Post — Phase {args.phase} — {date.today()}")
     token = _get_token()
-
     _ensure_candidates_tab(token)
 
-    header, data_rows = read_catalog(token)
-    if not header:
-        print("❌ Photo Catalog is empty — run photo-catalog.yml first")
-        sys.exit(0)
-    print(f"[proof-post] Catalog rows: {len(data_rows)}")
+    if args.phase == 1:
+        header, data_rows = read_catalog(token)
+        if not header:
+            print("❌ Photo Catalog is empty — run photo-catalog.yml first")
+            sys.exit(0)
+        print(f"[proof-post] Catalog rows: {len(data_rows)}")
 
-    groups = group_photos(header, data_rows)
-    print(f"[proof-post] Groups (project+service+room): {len(groups)}")
-    for key, photos in sorted(groups.items(), key=lambda x: -len(x[1]))[:10]:
-        phases = [p["phase"] for p in photos]
-        print(f"  {key} — {len(photos)} photos — phases: {phases}")
+        groups = group_photos(header, data_rows)
+        print(f"[proof-post] Groups (project+service+room): {len(groups)}")
+        for key, photos in sorted(groups.items(), key=lambda x: -len(x[1]))[:10]:
+            phases = [p["phase"] for p in photos]
+            print(f"  {key} — {len(photos)} photos — phases: {phases}")
 
-    candidates = select_candidates(groups)
-    print(f"[proof-post] Candidates scored: {len(candidates)}")
-    for c in candidates[:5]:
-        gate_marker = "✅" if c["above_gate"] else "⚠️"
-        print(f"  {gate_marker} {c['post_type']} | conf={c['confidence']} | {c['project']} {c['room']} | {c['reason']}")
+        candidates = select_candidates(groups)
+        print(f"[proof-post] Candidates scored: {len(candidates)}")
+        for c in candidates[:5]:
+            gate_marker = "✅" if c["above_gate"] else "⚠️"
+            print(f"  {gate_marker} {c['post_type']} | conf={c['confidence']} | {c['project']} {c['room']} | {c['reason']}")
 
-    write_candidates(token, candidates)
-    print(f"\n✅ Proof-post scan complete — see tab: {CANDIDATES_TAB}")
+        write_candidates(token, candidates)
+        print(f"\n✅ Proof-post scan complete — see tab: {CANDIDATES_TAB}")
+
+    elif args.phase == 2:
+        group_key = args.group_key or _pick_top_candidate(token)
+        if not group_key:
+            print("❌ No above-gate candidates found — run Phase 1 first")
+            sys.exit(0)
+        print(f"[proof-post] Phase 2 target: {group_key}")
+        run_phase2(token, group_key)
 
 
 if __name__ == "__main__":
