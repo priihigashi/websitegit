@@ -59,7 +59,7 @@ OPENAI_API_KEY     = os.environ.get("OPENAI_API_KEY", "")          # unused in e
 REPLICATE_API_KEY  = os.environ.get("PRI_OP_REPLICATE_API_KEY", "")
 GMAIL_APP_PASSWORD = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD", "")
 BUFFER_API_KEY     = os.environ.get("BUFFER_API_KEY", "")
-BUFFER_API_BASE    = "https://api.bufferapp.com/1"
+BUFFER_GRAPHQL_URL = "https://api.buffer.com"
 PREVIEW_EMAIL_TO   = "priscila@oakpark-construction.com"
 PIXEL_DIFF_REJECT_THRESHOLD = 0.15   # fallback gate for legacy enhance_one_photo (not used by core)
 
@@ -1145,35 +1145,70 @@ def run_phase3(token, group_key, decision):
         # No inline trigger here; separate workflow dispatch with run_phase=4
 
 
-# ── Phase 4: Buffer scheduling ────────────────────────────────────────────────
+# ── Phase 4: Buffer scheduling (GraphQL API) ──────────────────────────────────
 
-def _buffer_find_slot(profile_id):
-    """Return Unix timestamp for next available slot (max 3/day). Slots: 9am/1pm/6pm ET."""
+def _buffer_graphql(query, variables=None):
+    """Execute a Buffer GraphQL query or mutation."""
+    payload = json.dumps({"query": query, "variables": variables or {}}).encode()
+    req = urllib.request.Request(
+        BUFFER_GRAPHQL_URL, data=payload,
+        headers={"Authorization": f"Bearer {BUFFER_API_KEY}",
+                 "Content-Type": "application/json"})
+    resp = json.loads(urllib.request.urlopen(req, timeout=15).read())
+    if "errors" in resp:
+        raise Exception(f"GraphQL errors: {resp['errors']}")
+    return resp.get("data", {})
+
+
+def _buffer_get_instagram_channel():
+    """Return (channel_id, org_id) for the Instagram channel in the Buffer account."""
+    data = _buffer_graphql("{ account { organizations { id channels { id service name } } } }")
+    for org in data.get("account", {}).get("organizations", []):
+        for ch in org.get("channels", []):
+            if "instagram" in ch.get("service", "").lower():
+                return ch["id"], org["id"]
+    return None, None
+
+
+def _buffer_find_slot(channel_id):
+    """Return (ISO string, unix ts) for next open 9am/1pm/6pm ET slot (max 3/day)."""
     import pytz
     from collections import defaultdict
     from datetime import datetime, timedelta
     ET = pytz.timezone("America/New_York")
 
+    day_counts = defaultdict(int)
     try:
-        url  = f"{BUFFER_API_BASE}/profiles/{profile_id}/updates/pending.json?access_token={BUFFER_API_KEY}"
-        data = json.loads(urllib.request.urlopen(url, timeout=15).read())
-        day_counts = defaultdict(int)
-        for u in data.get("updates", []):
-            ts = u.get("scheduled_at") or u.get("due_at") or 0
-            if ts:
-                day_counts[datetime.fromtimestamp(int(ts), ET).strftime("%Y-%m-%d")] += 1
-        slot_hours = [9, 13, 18]
-        start = datetime.now(ET).replace(hour=0, minute=0, second=0, microsecond=0)
-        for _ in range(60):
-            day_str = start.strftime("%Y-%m-%d")
-            count   = day_counts.get(day_str, 0)
-            if count < 3:
-                h = slot_hours[min(count, 2)]
-                return int(start.replace(hour=h, minute=0, second=0, microsecond=0).timestamp())
-            start += timedelta(days=1)
+        q = """query($id:String!){channel(id:$id){posts(filter:{status:[scheduled,pending]}){edges{node{dueAt}}}}}"""
+        data = _buffer_graphql(q, {"id": channel_id})
+        for edge in data.get("channel", {}).get("posts", {}).get("edges", []):
+            due = edge.get("node", {}).get("dueAt")
+            if due:
+                try:
+                    dt = datetime.fromisoformat(due.replace("Z", "+00:00"))
+                    day_counts[dt.astimezone(ET).strftime("%Y-%m-%d")] += 1
+                except Exception:
+                    pass
     except Exception as e:
-        print(f"  [buffer] slot finder error: {e}")
-    return None
+        print(f"  [buffer] slot query error: {e} — using default slot")
+
+    slot_hours = [9, 13, 18]
+    now   = datetime.now(ET)
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if now.hour >= 18:
+        start += timedelta(days=1)
+
+    for _ in range(60):
+        day_str = start.strftime("%Y-%m-%d")
+        count   = day_counts.get(day_str, 0)
+        if count < 3:
+            h  = slot_hours[min(count, 2)]
+            dt = start.replace(hour=h, minute=0, second=0, microsecond=0)
+            if dt > now:
+                iso = dt.astimezone(pytz.UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                return iso, int(dt.timestamp())
+        start += timedelta(days=1)
+    return None, None
 
 
 def _make_public_url(token, file_id):
@@ -1257,72 +1292,72 @@ def run_phase4(token, group_key):
     image_urls = [_make_public_url(token, f["id"]) for f in proof_files]
     print(f"  Made {len(image_urls)} files public")
 
-    # Get Buffer Instagram profile
-    profiles_url = f"{BUFFER_API_BASE}/profiles.json?access_token={BUFFER_API_KEY}"
+    # Get Buffer Instagram channel (GraphQL)
     try:
-        profiles = json.loads(urllib.request.urlopen(profiles_url, timeout=15).read())
+        channel_id, org_id = _buffer_get_instagram_channel()
     except Exception as e:
-        print(f"❌ Buffer profiles fetch failed: {e}")
+        print(f"❌ Buffer channel fetch failed: {e}")
         sys.exit(1)
-
-    profile_id = next((p["id"] for p in profiles
-                       if "instagram" in p.get("service", "").lower()), None)
-    if not profile_id:
-        print("❌ No Instagram profile in Buffer account")
+    if not channel_id:
+        print("❌ No Instagram channel in Buffer account")
         sys.exit(1)
+    print(f"  Buffer Instagram channel: {channel_id}")
 
-    slot_ts = _buffer_find_slot(profile_id)
+    slot_iso, slot_ts = _buffer_find_slot(channel_id)
 
     # Build caption (OPC-safe: no promises, no stats, construction reality)
     caption = f"Progress update — {project} | {service} | {room} | Oak Park Construction #oakparkconstruction #construction #remodel"
 
-    # Post to Buffer
-    params  = [("access_token", BUFFER_API_KEY), ("profile_ids[]", profile_id),
-               ("text", caption), ("now", "false")]
-    if slot_ts:
-        params.append(("scheduled_at", str(slot_ts)))
-    for url in image_urls[:10]:
-        params.append(("media[photos][]", url))
+    # Schedule via GraphQL createPost
+    mutation = """
+    mutation CreatePost($input: CreatePostInput!) {
+      createPost(input: $input) {
+        ... on PostActionSuccess { post { id dueAt } }
+        ... on MutationError { message }
+      }
+    }
+    """
+    post_input = {
+        "text": caption,
+        "channelId": channel_id,
+        "assets": {"images": [{"url": u} for u in image_urls[:10]]},
+    }
+    if slot_iso:
+        post_input["schedulingType"] = "customScheduled"
+        post_input["mode"]           = "customScheduled"
+        post_input["dueAt"]          = slot_iso
+    else:
+        post_input["schedulingType"] = "automatic"
+        post_input["mode"]           = "addToQueue"
 
-    payload = urllib.parse.urlencode(params).encode()
-    req     = urllib.request.Request(
-        f"{BUFFER_API_BASE}/updates/create.json", data=payload,
-        headers={"Content-Type": "application/x-www-form-urlencoded"})
     try:
-        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        resp = _buffer_graphql(mutation, {"input": post_input})
     except Exception as e:
         print(f"❌ Buffer post failed: {e}")
         sys.exit(1)
 
-    if not (resp.get("success") or resp.get("id") or "updates" in resp):
-        print(f"❌ Buffer rejected: {resp}")
+    result = resp.get("createPost", {})
+    if "message" in result:
+        print(f"❌ Buffer rejected: {result['message']}")
         sys.exit(1)
 
-    if slot_ts:
+    post_id = result.get("post", {}).get("id", "?")
+    if slot_iso and slot_ts:
         from datetime import datetime
         import pytz
         ET = pytz.timezone("America/New_York")
         slot_str = datetime.fromtimestamp(slot_ts, ET).strftime("%Y-%m-%d %H:%M ET")
-        print(f"  ✅ Buffer scheduled: {len(image_urls)} slides → {slot_str}")
+        print(f"  ✅ Buffer scheduled: {len(image_urls)} slides → {slot_str} (id={post_id})")
 
-        # 30-day repeat (same convention as approval_handler.py)
-        repeat_ts = slot_ts + 30 * 24 * 3600
-        repeat_params = [("access_token", BUFFER_API_KEY), ("profile_ids[]", profile_id),
-                         ("text", caption), ("now", "false"),
-                         ("scheduled_at", str(repeat_ts))]
-        for url in image_urls[:10]:
-            repeat_params.append(("media[photos][]", url))
+        # 30-day repeat
+        from datetime import timedelta
+        repeat_dt  = datetime.fromtimestamp(slot_ts, pytz.UTC) + timedelta(days=30)
+        repeat_iso = repeat_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        repeat_input = dict(post_input)
+        repeat_input["dueAt"] = repeat_iso
         try:
-            urllib.request.urlopen(
-                urllib.request.Request(
-                    f"{BUFFER_API_BASE}/updates/create.json",
-                    data=urllib.parse.urlencode(repeat_params).encode(),
-                    headers={"Content-Type": "application/x-www-form-urlencoded"}),
-                timeout=30).read()
-            from datetime import datetime
-            import pytz
-            ET = pytz.timezone("America/New_York")
-            print(f"  ✅ Buffer 30-day repeat → {datetime.fromtimestamp(repeat_ts, ET).strftime('%Y-%m-%d')}")
+            _buffer_graphql(mutation, {"input": repeat_input})
+            print(f"  ✅ Buffer 30-day repeat → {repeat_dt.astimezone(pytz.timezone('America/New_York')).strftime('%Y-%m-%d')}")
         except Exception as e:
             print(f"  ⚠️  30-day repeat failed (non-fatal): {e}")
 

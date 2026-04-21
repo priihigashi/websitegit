@@ -10,7 +10,7 @@ jobs:
     env:
       BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY_EXP04092027 }}
     steps:
-      - name: Test Buffer v1 + GraphQL APIs
+      - name: Test Buffer GraphQL API
         run: |
           python3 - <<'EOF'
           import os, urllib.request, json
@@ -21,36 +21,26 @@ jobs:
               exit(1)
 
           print(f"  Token length : {len(key)} chars")
-          print(f"  Token prefix : {key[:6]}...  (first 6 chars only)")
+          print(f"  Token prefix : {key[:6]}...")
 
-          # ── Test 1: v1 REST API ──────────────────────────────────────────
-          print("\n--- Test 1: Buffer v1 REST API ---")
-          try:
-              url = f"https://api.bufferapp.com/1/profiles.json?access_token={key}"
-              resp = urllib.request.urlopen(url, timeout=15)
-              data = json.loads(resp.read())
-              print(f"  ✅ v1 API OK — profiles: {[p.get('service') for p in data]}")
-          except urllib.error.HTTPError as e:
-              body = e.read().decode()[:200]
-              print(f"  ❌ v1 HTTP {e.code}: {body}")
-
-          # ── Test 2: GraphQL API ──────────────────────────────────────────
-          print("\n--- Test 2: Buffer GraphQL API ---")
-          query = '{ organization(id: "68c0c6eeecf9076f387d68dd") { id name channels { id service } } }'
+          query = '{ account { organizations { id name channels { id service name } } } }'
           payload = json.dumps({"query": query}).encode()
-          for endpoint in ["https://graph.buffer.com/graphql", "https://api.buffer.com/graphql"]:
-              try:
-                  req = urllib.request.Request(
-                      endpoint, data=payload,
-                      headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-                  resp = urllib.request.urlopen(req, timeout=15)
-                  data = json.loads(resp.read())
-                  print(f"  ✅ GraphQL OK at {endpoint}")
-                  print(f"  Response: {json.dumps(data)[:400]}")
-                  break
-              except urllib.error.HTTPError as e:
-                  body = e.read().decode()[:200]
-                  print(f"  ❌ {endpoint} — HTTP {e.code}: {body}")
-              except Exception as e:
-                  print(f"  ❌ {endpoint} — {e}")
+          req = urllib.request.Request(
+              "https://api.buffer.com",
+              data=payload,
+              headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+          try:
+              resp = json.loads(urllib.request.urlopen(req, timeout=15).read())
+              if "errors" in resp:
+                  print(f"  ❌ GraphQL errors: {resp['errors']}")
+              else:
+                  orgs = resp.get("data", {}).get("account", {}).get("organizations", [])
+                  for org in orgs:
+                      channels = [f"{c['service']}({c['id'][:8]}...)" for c in org.get("channels", [])]
+                      print(f"  ✅ Org: {org['name']} — channels: {channels}")
+          except urllib.error.HTTPError as e:
+              body = e.read().decode()[:300]
+              print(f"  ❌ HTTP {e.code}: {body}")
+          except Exception as e:
+              print(f"  ❌ Error: {e}")
           EOF
