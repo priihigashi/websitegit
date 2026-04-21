@@ -3,139 +3,275 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Disney Trip 2026 - Kid-First Flexible Route Plan</title>
+  <title>Disney Trip 2026 - Kid-First Route + Visual Maps</title>
   <style>
     :root {
-      --bg: #f7f4ec;
-      --ink: #1f2a44;
-      --accent: #0f7b6c;
-      --accent-2: #d98c2b;
-      --card: #ffffff;
-      --muted: #5f6c7a;
-      --line: #dfe5ea;
+      --bg: #f6f4ee;
+      --ink: #1d2942;
+      --muted: #5d6675;
+      --line: #dce2ea;
+      --card: #fff;
+      --mk: #7c4dff;
+      --hs: #ff6b6b;
+      --ak: #2f9e44;
+      --gold: #d38a1f;
     }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: "Avenir Next", "Trebuchet MS", sans-serif;
       color: var(--ink);
-      background: radial-gradient(circle at 10% 0%, #fff8e6 0%, var(--bg) 48%);
+      background: radial-gradient(circle at top left, #fff8e6, var(--bg) 42%);
       line-height: 1.45;
     }
-    .wrap { max-width: 1080px; margin: 0 auto; padding: 22px; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 20px; }
     h1, h2, h3 { margin: 0 0 10px; }
-    h1 { font-size: 1.9rem; }
-    h2 { font-size: 1.25rem; margin-top: 22px; border-top: 2px solid var(--line); padding-top: 16px; }
-    .note { background: #fff; border-left: 5px solid var(--accent); padding: 12px 14px; border-radius: 8px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
-    .mini { color: var(--muted); font-size: 0.93rem; }
-    .pill { display: inline-block; font-size: .8rem; background: #e8f8f5; border: 1px solid #bce9e2; padding: 2px 8px; border-radius: 999px; margin-right: 6px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: .95rem; background: #fff; }
-    th, td { border: 1px solid var(--line); padding: 8px; text-align: left; vertical-align: top; }
-    th { background: #f2f6f9; }
-    .route { margin-top: 10px; padding-left: 18px; }
-    .route li { margin-bottom: 7px; }
-    .park {
-      margin-top: 14px;
+    h1 { font-size: 1.95rem; }
+    h2 { font-size: 1.2rem; margin-top: 22px; border-top: 2px solid var(--line); padding-top: 14px; }
+    .mini { color: var(--muted); font-size: .94rem; }
+    .note {
       background: #fff;
+      border-left: 5px solid var(--gold);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin: 12px 0;
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap: 12px; }
+    .card {
+      background: var(--card);
       border: 1px solid var(--line);
       border-radius: 12px;
       padding: 12px;
     }
-    .warn { color: #8a4b00; background: #fff6e8; border: 1px solid #f3d8b0; border-radius: 8px; padding: 8px; }
-    .footer { margin-top: 22px; font-size: .9rem; color: var(--muted); }
+    .pill {
+      display:inline-block;
+      border-radius:999px;
+      border:1px solid #cfd7e2;
+      padding:2px 8px;
+      font-size:.78rem;
+      margin-right:6px;
+      background:#f7f9fc;
+    }
+    .park {
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:12px;
+      margin-top:12px;
+    }
+    .mk { border-top:4px solid var(--mk); }
+    .hs { border-top:4px solid var(--hs); }
+    .ak { border-top:4px solid var(--ak); }
+    .route { margin: 8px 0 0; padding-left: 18px; }
+    .route li { margin-bottom: 7px; }
+    .map {
+      background: #f8fbff;
+      border:1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      margin: 10px 0;
+    }
+    svg { width: 100%; height: auto; }
+    .node {
+      fill: #ffffff;
+      stroke: #8ea0b8;
+      stroke-width: 2;
+      rx: 10;
+    }
+    .node text { font-size: 12px; fill: #1d2942; }
+    .arrow { stroke: #7a889b; stroke-width: 2.3; marker-end: url(#arrow); }
+    .t { font-size: 11px; fill: #6a778a; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; background: #fff; font-size: .95rem; }
+    th, td { border:1px solid var(--line); padding:8px; text-align:left; vertical-align:top; }
+    th { background: #f2f6fb; }
+    .warn { background:#fff6ea; border:1px solid #f2d5ab; border-radius:8px; padding:8px; color:#7d4a00; margin-top:8px; }
+    .footer { color:var(--muted); font-size:.9rem; margin:20px 0 10px; }
+    .links a { color:#1f5fbf; text-decoration:none; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Disney Kid-First Route Plan (Spring 2026)</h1>
-    <p class="mini">Family setup: grandparents + parents + two kids (ages 5 and 3). Goal: mostly kid rides/shows, gentle pacing, built-in snack + bathroom + stop/play buffer.</p>
+    <h1>Disney Kid-First Route Plan (Updated)</h1>
+    <p class="mini">No nap / no hotel return version, with visual maps by park cluster and adult drink stops aligned to your route.</p>
 
     <div class="note">
       <strong>Trip order:</strong> Thursday = Magic Kingdom, then Hollywood Studios, then Animal Kingdom.<br>
-      <strong>Routing method:</strong> land-by-land clusters to reduce backtracking, with walk estimates and optional adult mini-break points.
+      <strong>Family setup:</strong> grandparents + parents + kids almost 4 and almost 6.<br>
+      <strong>Flow:</strong> kid-first clusters, micro-breaks, one adult beverage stop without breaking route.
     </div>
 
-    <h2>Rules For This Plan</h2>
+    <h2>No-Nap Operating Style</h2>
     <div class="grid">
-      <div class="card"><span class="pill">Pace</span> 60-90 minute ride clusters, then food/rest/bathroom reset.</div>
-      <div class="card"><span class="pill">Flex</span> No rigid timestamps; keep 2-3 "must do" priorities per park only.</div>
-      <div class="card"><span class="pill">Stamina</span> Midday indoor show or shaded break every park day.</div>
-      <div class="card"><span class="pill">Adults</span> One adult treat stop near kid cluster (quick drink/snack).</div>
+      <div class="card"><span class="pill">Energy</span> 15–20 minute sit/snack/reset every 90–120 minutes.</div>
+      <div class="card"><span class="pill">Heat</span> Midday = indoor show + lunch + store stroll (instead of hotel).</div>
+      <div class="card"><span class="pill">Flex</span> Repeat rides allowed when kids request it.</div>
+      <div class="card"><span class="pill">Adults</span> Short drink stop rotation while another adult stays with kids.</div>
     </div>
 
-    <h2>Park 1 - Magic Kingdom (Thursday)</h2>
-    <div class="park">
-      <p><strong>Best first area:</strong> <em>Fantasyland / Storybook Circus</em> at rope drop (highest kid density + shortest early waits).</p>
+    <h2>Magic Kingdom (Thursday)</h2>
+    <div class="park mk">
+      <p><strong>Best first area:</strong> Fantasyland / Storybook Circus.</p>
+      <div class="map">
+        <svg viewBox="0 0 980 180" role="img" aria-label="Magic Kingdom cluster map">
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#7a889b" />
+            </marker>
+          </defs>
+          <rect class="node" x="20" y="55" width="140" height="55"></rect>
+          <text x="90" y="80" text-anchor="middle">Entrance/Hub</text>
+
+          <rect class="node" x="200" y="35" width="180" height="55"></rect>
+          <text x="290" y="60" text-anchor="middle">Storybook Circus</text>
+
+          <rect class="node" x="420" y="35" width="170" height="55"></rect>
+          <text x="505" y="60" text-anchor="middle">Fantasyland Core</text>
+
+          <rect class="node" x="635" y="35" width="160" height="55"></rect>
+          <text x="715" y="60" text-anchor="middle">Liberty Square</text>
+
+          <rect class="node" x="820" y="35" width="145" height="55"></rect>
+          <text x="892" y="60" text-anchor="middle">Adventureland</text>
+
+          <line class="arrow" x1="160" y1="75" x2="200" y2="62"></line>
+          <text class="t" x="173" y="55">3 min</text>
+
+          <line class="arrow" x1="380" y1="62" x2="420" y2="62"></line>
+          <text class="t" x="392" y="50">5–8 min</text>
+
+          <line class="arrow" x1="590" y1="62" x2="635" y2="62"></line>
+          <text class="t" x="602" y="50">6–9 min</text>
+
+          <line class="arrow" x1="795" y1="62" x2="820" y2="62"></line>
+          <text class="t" x="801" y="50">2–3 min</text>
+        </svg>
+      </div>
       <ol class="route">
-        <li><strong>Start cluster (0-2 min walks):</strong> Dumbo (indoor AC play queue), Barnstormer (if 35"+), carousel, Winnie the Pooh, Under the Sea.</li>
-        <li><strong>Move 5-8 min:</strong> "it's a small world" + Peter Pan's Flight.</li>
-        <li><strong>Move 6-9 min:</strong> Liberty Square / Adventureland for Jungle Cruise or Pirates (if kids feel okay with dark ride moments).</li>
-        <li><strong>Midday decompression:</strong> indoor show or long lunch + store browse + parade spot.</li>
+        <li>Start: Dumbo, Pooh, carousel, Under the Sea, Barnstormer (if ready).</li>
+        <li>Move to Peter Pan + small world.</li>
+        <li>Castle lunch window.</li>
+        <li>Adventureland/Liberty loop + optional repeat favorites.</li>
       </ol>
       <table>
-        <tr><th>Cluster</th><th>Kid Priority</th><th>Nearby Reset Spots</th><th>Adult Quick Win</th></tr>
-        <tr><td>Storybook Circus</td><td>Dumbo, Barnstormer, splash pad area</td><td>Restrooms + water + stroller parking nearby</td><td>Big Top snacks / coffee</td></tr>
-        <tr><td>Fantasyland core</td><td>Pooh, Carousel, Small World, Peter Pan</td><td>Quick-service + shade pockets</td><td>Skipper Canteen later nearby (Adventureland)</td></tr>
-        <tr><td>Adventureland side</td><td>Jungle Cruise (family), Pirates (optional)</td><td>Snack carts + restroom stops</td><td>Dole Whip / Skipper Canteen</td></tr>
+        <tr><th>Dining Pick</th><th>Reserve?</th><th>Best Time</th><th>Why Here</th></tr>
+        <tr><td>Cinderella’s Royal Table</td><td>Yes, strongly</td><td>12:15–1:00 PM</td><td>Natural after Fantasyland run, inside castle.</td></tr>
+        <tr><td>Backup: Columbia Harbour House</td><td>No</td><td>1:30–2:30 PM</td><td>Easy if castle booking unavailable.</td></tr>
+      </table>
+      <table>
+        <tr><th>Adult Drink Stop (MK)</th><th>Location</th><th>Best Window</th><th>Notes</th></tr>
+        <tr><td>The Beak and Barrel</td><td>Adventureland</td><td>2:30–4:00 PM</td><td>Draft beer + lounge vibe; route-compatible.</td></tr>
+        <tr><td>Skipper Canteen</td><td>Adventureland</td><td>1:30 PM alt lunch</td><td>Good if doing lunch + drinks together.</td></tr>
       </table>
     </div>
 
-    <h2>Park 2 - Hollywood Studios</h2>
-    <div class="park">
-      <p><strong>Best first area:</strong> <em>Toy Story Land</em> first, then shift into indoor shows when heat/waits rise.</p>
+    <h2>Hollywood Studios</h2>
+    <div class="park hs">
+      <p><strong>Best first area:</strong> Toy Story Land, then indoor show block.</p>
+      <div class="map">
+        <svg viewBox="0 0 980 180" role="img" aria-label="Hollywood Studios cluster map">
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#7a889b" />
+            </marker>
+          </defs>
+          <rect class="node" x="20" y="55" width="140" height="55"></rect>
+          <text x="90" y="80" text-anchor="middle">Entrance</text>
+
+          <rect class="node" x="200" y="35" width="185" height="55"></rect>
+          <text x="292" y="60" text-anchor="middle">Toy Story Land</text>
+
+          <rect class="node" x="430" y="35" width="190" height="55"></rect>
+          <text x="525" y="60" text-anchor="middle">Runaway Railway</text>
+
+          <rect class="node" x="660" y="35" width="190" height="55"></rect>
+          <text x="755" y="60" text-anchor="middle">Frozen/Shows</text>
+
+          <rect class="node" x="860" y="35" width="110" height="55"></rect>
+          <text x="915" y="60" text-anchor="middle">WDP</text>
+
+          <line class="arrow" x1="160" y1="75" x2="200" y2="62"></line>
+          <text class="t" x="170" y="55">6–8 min</text>
+          <line class="arrow" x1="385" y1="62" x2="430" y2="62"></line>
+          <text class="t" x="397" y="50">5–8 min</text>
+          <line class="arrow" x1="620" y1="62" x2="660" y2="62"></line>
+          <text class="t" x="631" y="50">4–6 min</text>
+          <line class="arrow" x1="850" y1="62" x2="860" y2="62"></line>
+          <text class="t" x="847" y="50">2 min</text>
+        </svg>
+      </div>
       <ol class="route">
-        <li><strong>Start cluster (2-5 min walks):</strong> Toy Story Mania, Alien Swirling Saucers (32"+), Slinky Dog Dash (38"+, optional via Rider Switch).</li>
-        <li><strong>Move 5-8 min:</strong> Mickey & Minnie's Runaway Railway.</li>
-        <li><strong>Indoor block:</strong> Frozen Sing-Along + Walt Disney Presents + Little Mermaid stage show.</li>
+        <li>Start: Toy Story Mania, Alien Saucers, optional Slinky (Rider Switch).</li>
+        <li>Runaway Railway next.</li>
+        <li>Indoor block: Frozen + Little Mermaid + Walt Disney Presents.</li>
       </ol>
-      <p class="warn"><strong>Important 2026 timing:</strong> the new Disney Jr. Mickey Mouse Clubhouse Live starts <strong>May 26, 2026</strong>. If your trip is before that, it is not open yet. The upcoming indoor playground "Drawn to Wonderland" is part of The Magic of Disney Animation planned for late summer 2026.</p>
       <table>
-        <tr><th>Cluster</th><th>Kid Priority</th><th>Nearby Reset Spots</th><th>Adult Quick Win</th></tr>
-        <tr><td>Toy Story Land</td><td>Mania + Saucers (+Slinky if height works)</td><td>Woody's Lunch Box, restrooms, shade breaks</td><td>Baseline Tap House later (Grand Avenue)</td></tr>
-        <tr><td>Chinese Theater / Echo Lake</td><td>Runaway Railway, Frozen show</td><td>Indoor AC shows, stroller-friendly pause</td><td>Coffee + snack window nearby</td></tr>
-        <tr><td>Animation Courtyard side</td><td>Walt Disney Presents, character meets</td><td>Indoor wandering space</td><td>Short bar stop while kids snack/rest</td></tr>
+        <tr><th>Dining Pick</th><th>Reserve?</th><th>Best Time</th><th>Why Here</th></tr>
+        <tr><td>Roundup Rodeo BBQ</td><td>Yes</td><td>12:30 PM</td><td>Right in Toy Story Land; no backtrack.</td></tr>
+        <tr><td>Backup: Woody’s Lunch Box</td><td>No (mobile order)</td><td>11:15 AM</td><td>Fast and same area.</td></tr>
+      </table>
+      <div class="warn"><strong>2026 timing:</strong> Disney Jr. Clubhouse Live begins May 26, 2026. Drawn to Wonderland playground is late summer 2026.</div>
+    </div>
+
+    <h2>Animal Kingdom</h2>
+    <div class="park ak">
+      <p><strong>Best first area:</strong> Kilimanjaro Safaris at opening.</p>
+      <div class="map">
+        <svg viewBox="0 0 980 180" role="img" aria-label="Animal Kingdom cluster map">
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#7a889b" />
+            </marker>
+          </defs>
+          <rect class="node" x="20" y="55" width="140" height="55"></rect>
+          <text x="90" y="80" text-anchor="middle">Entrance</text>
+
+          <rect class="node" x="190" y="35" width="190" height="55"></rect>
+          <text x="285" y="60" text-anchor="middle">Africa (Safari)</text>
+
+          <rect class="node" x="420" y="35" width="180" height="55"></rect>
+          <text x="510" y="60" text-anchor="middle">Gorilla Falls</text>
+
+          <rect class="node" x="640" y="35" width="180" height="55"></rect>
+          <text x="730" y="60" text-anchor="middle">Pandora</text>
+
+          <rect class="node" x="840" y="35" width="130" height="55"></rect>
+          <text x="905" y="60" text-anchor="middle">Nemo/Lion King</text>
+
+          <line class="arrow" x1="160" y1="75" x2="190" y2="62"></line>
+          <text class="t" x="166" y="55">5 min</text>
+          <line class="arrow" x1="380" y1="62" x2="420" y2="62"></line>
+          <text class="t" x="392" y="50">adjacent</text>
+          <line class="arrow" x1="600" y1="62" x2="640" y2="62"></line>
+          <text class="t" x="612" y="50">8–12 min</text>
+          <line class="arrow" x1="820" y1="62" x2="840" y2="62"></line>
+          <text class="t" x="815" y="50">5–9 min</text>
+        </svg>
+      </div>
+      <ol class="route">
+        <li>Safari first, then Gorilla Falls trail.</li>
+        <li>Pandora (Na’vi River Journey).</li>
+        <li>Indoor shows: Lion King + Nemo as midday rest.</li>
+      </ol>
+      <table>
+        <tr><th>Dining Pick</th><th>Reserve?</th><th>Best Time</th><th>Why Here</th></tr>
+        <tr><td>Tusker House</td><td>Yes</td><td>10:45–11:15 AM</td><td>Matches Africa-first flow.</td></tr>
+        <tr><td>Backup: Satu’li Canteen</td><td>No</td><td>12:00–12:30 PM</td><td>Reliable quick-service in Pandora.</td></tr>
       </table>
     </div>
 
-    <h2>Park 3 - Animal Kingdom</h2>
-    <div class="park">
-      <p><strong>Best first area:</strong> <em>Kilimanjaro Safaris</em> first ride (animals most active in cooler morning).</p>
-      <ol class="route">
-        <li><strong>Start cluster:</strong> Kilimanjaro Safaris + Gorilla Falls trail.</li>
-        <li><strong>Move 8-12 min:</strong> Pandora for Na'vi River Journey (all heights).</li>
-        <li><strong>Indoor break block:</strong> Festival of the Lion King + Finding Nemo show.</li>
-        <li><strong>Optional close:</strong> Discovery Island trails + character greetings.</li>
-      </ol>
-      <table>
-        <tr><th>Cluster</th><th>Kid Priority</th><th>Nearby Reset Spots</th><th>Adult Quick Win</th></tr>
-        <tr><td>Africa</td><td>Safari + Gorilla Falls</td><td>Restrooms + stroller-friendly paths</td><td>Tusker area snacks/coffee</td></tr>
-        <tr><td>Pandora</td><td>Na'vi River Journey</td><td>Satu'li Canteen (good family bowls), shade</td><td>Pandora cocktails/coffee options</td></tr>
-        <tr><td>Discovery Island</td><td>Trails + short character meets</td><td>Calmer sit-down pockets</td><td>Nomad Lounge (adults) nearby</td></tr>
-      </table>
+    <h2>Map Links + Sources</h2>
+    <div class="card links">
+      <p class="mini">Official maps to compare with this visual route:</p>
+      <p>
+        <a href="https://disneyworld.disney.go.com/destinations/magic-kingdom/" target="_blank">Magic Kingdom official page/map</a><br>
+        <a href="https://disneyworld.disney.go.com/destinations/hollywood-studios/" target="_blank">Hollywood Studios official page/map</a><br>
+        <a href="https://disneyworld.disney.go.com/parks/animal-kingdom" target="_blank">Animal Kingdom official page/map</a>
+      </p>
+      <p class="mini">Extra folder audit completed: I checked your Drive folder and integrated useful additional structure from your other HTML guide. One old Google Doc in that folder is empty.</p>
     </div>
-
-    <h2>Walk-Time Cheat Sheet (Approx)</h2>
-    <table>
-      <tr><th>Park</th><th>From</th><th>To</th><th>Typical Walk</th></tr>
-      <tr><td>Magic Kingdom</td><td>Storybook Circus</td><td>Peter Pan / Small World</td><td>5-8 min</td></tr>
-      <tr><td>Magic Kingdom</td><td>Fantasyland</td><td>Adventureland</td><td>8-12 min</td></tr>
-      <tr><td>Hollywood Studios</td><td>Toy Story Land</td><td>Runaway Railway</td><td>5-8 min</td></tr>
-      <tr><td>Hollywood Studios</td><td>Runaway Railway</td><td>Walt Disney Presents</td><td>6-9 min</td></tr>
-      <tr><td>Animal Kingdom</td><td>Africa (Safari)</td><td>Pandora</td><td>8-12 min</td></tr>
-      <tr><td>Animal Kingdom</td><td>Pandora</td><td>Discovery Island</td><td>5-9 min</td></tr>
-    </table>
-
-    <h2>Low-Stress Defaults (When Kids Pivot)</h2>
-    <ul>
-      <li>If line > 35-45 min and kids are fading: switch to nearest show/trail/character.</li>
-      <li>Use Rider Switch for one thrill ride per area so adults still get one exciting ride without losing flow.</li>
-      <li>Do mobile food ordering before you get hungry; aim for 11:00 or 2:30 windows to skip peaks.</li>
-      <li>Plan one "free play" stop per park (Dumbo queue play, dance/show blocks, open trails).</li>
-    </ul>
 
     <div class="footer">
-      Built for flexible family pacing. Final day-of route should be adjusted using live wait times in My Disney Experience.
+      Final on-the-day adjustments: use live wait times in My Disney Experience.
     </div>
   </div>
 </body>
