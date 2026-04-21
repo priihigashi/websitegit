@@ -1196,7 +1196,7 @@ def _find_run_folder_for_slug(token, slug):
            f"and name contains 'proof-{slug}'")
     url = (f"https://www.googleapis.com/drive/v3/files"
            f"?q={urllib.parse.quote(q)}&supportsAllDrives=true"
-           f"&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=name desc")
+           f"&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=name%20desc")
     req   = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
     files = json.loads(urllib.request.urlopen(req).read()).get("files", [])
     if not files:
