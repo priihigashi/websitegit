@@ -345,6 +345,24 @@
   .quick-card .hint { font-size: 0.72em; color: #888; margin-top: 6px; font-style: italic; }
   .quick-card.card-accent { background: linear-gradient(135deg, rgba(155,89,247,0.2), rgba(0,0,0,0.4)); }
 
+  /* Park Info Strip (compact horizontal row) */
+  .park-info-strip {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    font-size: 0.82em;
+  }
+  .park-info-strip .strip-label { color: #ffd700; font-weight: 600; margin-right: 4px; }
+  .park-info-strip a { color: #90caf9; text-decoration: none; padding: 2px 6px; border-radius: 4px; transition: background 0.15s; }
+  .park-info-strip a:hover { background: rgba(144,202,249,0.15); color: #ffd700; }
+  .park-info-strip .strip-sep { color: #555; }
+
   /* Park Map Link Block */
   .park-map-link {
     background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,215,0,0.04));
@@ -434,6 +452,18 @@
   <!-- QUICK LINKS HUB -->
   <div class="quick-hub">
     <div class="quick-hub-title">⚡ QUICK LINKS — save this for the trip</div>
+
+    <div class="park-info-strip">
+      <span class="strip-label">📍 Park info pages:</span>
+      <a href="https://disneyworld.disney.go.com/destinations/magic-kingdom/" target="_blank">🏰 Magic Kingdom</a>
+      <span class="strip-sep">·</span>
+      <a href="https://disneyworld.disney.go.com/destinations/hollywood-studios/" target="_blank">🎬 Hollywood Studios</a>
+      <span class="strip-sep">·</span>
+      <a href="https://disneyworld.disney.go.com/destinations/animal-kingdom/" target="_blank">🦁 Animal Kingdom</a>
+      <span class="strip-sep">·</span>
+      <a href="https://disneyworld.disney.go.com/destinations/" target="_blank">All destinations ↗</a>
+    </div>
+
     <div class="quick-hub-grid">
 
       <div class="quick-card card-accent">
