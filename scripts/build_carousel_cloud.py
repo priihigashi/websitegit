@@ -57,6 +57,9 @@ import os, io, json, re, urllib.request, urllib.parse, sys, time, tempfile, base
 from pathlib import Path
 from datetime import date
 
+sys.path.insert(0, str(Path(__file__).parent))
+from routing import reels_folder as _reels_folder
+
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -311,17 +314,7 @@ def sheet_update(token, range_: str, values: list):
         print(f"  \u26a0\ufe0f  sheet_update failed: {e}")
 
 def get_reels_folder_id(token) -> str:
-    try:
-        q = urllib.parse.quote("name contains 'Reels' and mimeType='application/vnd.google-apps.folder'")
-        url = f"https://www.googleapis.com/drive/v3/files?q={q}&fields=files(id,name)"
-        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-        with urllib.request.urlopen(req, timeout=10) as r:
-            data = json.loads(r.read())
-        files = data.get("files", [])
-        return files[0]["id"] if files else ""
-    except Exception as e:
-        print(f"  \u26a0\ufe0f  Could not find Reels folder: {e}")
-    return ""
+    return _reels_folder("opc")
 
 def create_content_subfolder(token, parent_id: str, folder_name: str) -> str:
     try:

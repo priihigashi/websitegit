@@ -151,3 +151,8 @@ def content_control(niche: str) -> tuple[str, str]:
 def capture_folder(project: str) -> str:
     """Return the Drive folder ID where captures for this project should be saved."""
     return get_route(project)["capture_folder_id"]
+
+
+def reels_folder(project: str) -> str:
+    """Return the Drive folder ID for Reels_Shorts for this project."""
+    return get_route(project).get("reels_folder_id", "")
