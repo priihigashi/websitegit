@@ -1,0 +1,211 @@
+name: Photo Enhance — Replicate
+
+on:
+  workflow_dispatch:
+    inputs:
+      drive_file_id:
+        description: 'Drive file ID of the source image (uploaded by photo_enhance_opc.py)'
+        required: true
+        type: string
+      destination_folder_id:
+        description: 'Drive folder ID where the enhanced image is saved'
+        required: true
+        type: string
+      original_filename:
+        description: 'Original filename (for output naming)'
+        required: true
+        default: 'photo'
+        type: string
+
+jobs:
+  enhance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download source image from Drive
+        id: download
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          FILE_ID: ${{ inputs.drive_file_id }}
+        run: |
+          pip install -q google-auth google-auth-oauthlib google-api-python-client
+          python3 << 'PYEOF'
+          import os, json, sys
+          from google.oauth2.credentials import Credentials
+          from google.auth.transport.requests import Request
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaIoBaseDownload
+          import io
+
+          token_data = json.loads(os.environ['SHEETS_TOKEN'])
+          creds = Credentials(
+              token=token_data.get('token'),
+              refresh_token=token_data.get('refresh_token'),
+              token_uri=token_data.get('token_uri', 'https://oauth2.googleapis.com/token'),
+              client_id=token_data.get('client_id'),
+              client_secret=token_data.get('client_secret'),
+              scopes=token_data.get('scopes'),
+          )
+          if not creds.valid:
+              creds.refresh(Request())
+
+          drive = build('drive', 'v3', credentials=creds)
+          file_meta = drive.files().get(
+              fileId=os.environ['FILE_ID'],
+              fields='name,mimeType',
+              supportsAllDrives=True,
+          ).execute()
+
+          request = drive.files().get_media(
+              fileId=os.environ['FILE_ID'],
+              supportsAllDrives=True,
+          )
+          buf = io.BytesIO()
+          dl = MediaIoBaseDownload(buf, request)
+          done = False
+          while not done:
+              _, done = dl.next_chunk()
+
+          ext = '.jpg'
+          if 'png' in file_meta.get('mimeType', ''):
+              ext = '.png'
+          out_path = f"/tmp/source{ext}"
+          with open(out_path, 'wb') as f:
+              f.write(buf.getvalue())
+          print(f"Downloaded: {out_path} ({len(buf.getvalue())//1024}KB)")
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"source_path={out_path}\n")
+              f.write(f"source_ext={ext}\n")
+          PYEOF
+
+      - name: Run Replicate Clarity Upscaler
+        id: replicate
+        env:
+          REPLICATE_API_TOKEN: ${{ secrets.PRI_OP_REPLICATE_API_KEY }}
+          SOURCE_PATH: ${{ steps.download.outputs.source_path }}
+        run: |
+          pip install -q replicate
+          python3 << 'PYEOF'
+          import os, sys, urllib.request
+          import replicate
+
+          PROMPT = (
+              "professional real estate photography, architectural photography, "
+              "natural light, sharp details, correct white balance, clean exposure, "
+              "South Florida residential"
+          )
+          NEG = (
+              "blur, noise, overexposed, fake, CGI, artificial, staged, "
+              "hallucination, added objects, new furniture, new windows"
+          )
+
+          src = os.environ['SOURCE_PATH']
+          print(f"Running Replicate on: {src}")
+
+          with open(src, 'rb') as f:
+              output = replicate.run(
+                  "philz1337x/clarity-upscaler:dfad41707589d68ecdccd1dfa600d55a208f9310748e44bfe35b4a6291453d5e",
+                  input={
+                      "image":                f,
+                      "prompt":               PROMPT,
+                      "negative_prompt":      NEG,
+                      "scale_factor":         2,
+                      "dynamic":              6,
+                      "creativity":           0,
+                      "resemblance":          1,
+                      "sharpen":              0,
+                      "num_inference_steps":  20,
+                  },
+              )
+
+          url = str(output) if not isinstance(output, list) else str(output[0])
+          out_path = "/tmp/replicate_enhanced.png"
+          urllib.request.urlretrieve(url, out_path)
+          size_kb = os.path.getsize(out_path) // 1024
+          print(f"Replicate output saved: {out_path} ({size_kb}KB)")
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"output_path={out_path}\n")
+              f.write(f"output_url={url}\n")
+          PYEOF
+
+      - name: Upload enhanced image to Drive
+        id: upload
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          DESTINATION_FOLDER_ID: ${{ inputs.destination_folder_id }}
+          ORIGINAL_FILENAME: ${{ inputs.original_filename }}
+          OUTPUT_PATH: ${{ steps.replicate.outputs.output_path }}
+        run: |
+          python3 << 'PYEOF'
+          import os, json, sys
+          from google.oauth2.credentials import Credentials
+          from google.auth.transport.requests import Request
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+
+          token_data = json.loads(os.environ['SHEETS_TOKEN'])
+          creds = Credentials(
+              token=token_data.get('token'),
+              refresh_token=token_data.get('refresh_token'),
+              token_uri=token_data.get('token_uri', 'https://oauth2.googleapis.com/token'),
+              client_id=token_data.get('client_id'),
+              client_secret=token_data.get('client_secret'),
+              scopes=token_data.get('scopes'),
+          )
+          if not creds.valid:
+              creds.refresh(Request())
+
+          drive = build('drive', 'v3', credentials=creds)
+          out_name = "replicate_enhanced.png"
+          result = drive.files().create(
+              body={'name': out_name, 'parents': [os.environ['DESTINATION_FOLDER_ID']]},
+              media_body=MediaFileUpload(os.environ['OUTPUT_PATH'], mimetype='image/png'),
+              supportsAllDrives=True,
+              fields='id,name,webViewLink',
+          ).execute()
+          if not result.get('id'):
+              print("ERROR: Drive upload returned no file ID")
+              sys.exit(1)
+          print(f"Uploaded: {result['name']}")
+          print(f"Link: {result['webViewLink']}")
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"drive_link={result['webViewLink']}\n")
+          PYEOF
+
+      - name: Send email with result
+        env:
+          PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          DRIVE_LINK: ${{ steps.upload.outputs.drive_link }}
+          ORIGINAL_FILENAME: ${{ inputs.original_filename }}
+        run: |
+          python3 << 'PYEOF'
+          import os, smtplib
+          from email.mime.text import MIMEText
+
+          body = f"""✅ Replicate Enhancement Done — {os.environ['ORIGINAL_FILENAME']}
+
+REPLICATE (Clarity Upscaler 2×): {os.environ['DRIVE_LINK']}
+
+This is the 3rd enhanced version. Check Drive for OpenAI + Gemini versions too.
+"""
+          msg = MIMEText(body)
+          msg['Subject'] = f"✅ Replicate Enhanced: {os.environ['ORIGINAL_FILENAME']}"
+          msg['From']    = "priscila@oakpark-construction.com"
+          msg['To']      = "priscila@oakpark-construction.com"
+
+          with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+              smtp.login('priscila@oakpark-construction.com', os.environ['PRI_OP_GMAIL_APP_PASSWORD'])
+              smtp.send_message(msg)
+          print("Email sent")
+          PYEOF
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Photo Enhance — Replicate Clarity Upscaler" >> $GITHUB_STEP_SUMMARY
+          echo "- **Source file ID:** ${{ inputs.drive_file_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Original:** ${{ inputs.original_filename }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Result:** ${{ steps.upload.outputs.drive_link }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Replicate URL:** ${{ steps.replicate.outputs.output_url }}" >> $GITHUB_STEP_SUMMARY
