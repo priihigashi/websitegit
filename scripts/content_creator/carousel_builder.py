@@ -297,6 +297,20 @@ Return ONLY a JSON object with these fields:
       "prompt": "DALL-E 3 image prompt if no CC photo found — editorial photo style, construction/interior context, no text in image"
     }}
   }},
+  "slides": [
+    {{
+      "visual_hint": "context-image or none — use context-image when this slide benefits from a construction or materials photo",
+      "context_image_query": "Pexels/Wikimedia/stock search term if context-image — specific and visual (e.g. 'kitchen cabinet installation contractor', 'concrete driveway residential pour', 'bathroom tile remodel Florida'). Empty string if none."
+    }},
+    {{
+      "visual_hint": "context-image or none",
+      "context_image_query": "different search term matching slide 3 content — e.g. 'home addition framing construction', 'roof shingles installation aerial'"
+    }},
+    {{
+      "visual_hint": "context-image or none",
+      "context_image_query": "search term matching slide 4 content — e.g. 'contractor measuring kitchen renovation', 'outdoor kitchen pergola South Florida'"
+    }}
+  ],
   "receipts_needed": ["URL or description of primary source to screenshot as evidence slide"],
   "opposition_confirmation": "Name the opposing political side or outlet that also confirms this fact (leave empty string if not applicable)"
 }}
@@ -307,7 +321,8 @@ Rules:
 - Every stat must name its source in slide2_label or on the sources slide
 - Headlines in ALL CAPS
 - Caption hook = first line visible in feed — make it a question or surprising fact
-- NEVER promise what OPC does for clients"""
+- NEVER promise what OPC does for clients
+- slides[]: emit context-image for at least 1 of the 3 middle slides — never all none"""
 
     for attempt in range(2):
         _prompt = prompt

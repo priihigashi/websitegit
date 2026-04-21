@@ -35,7 +35,7 @@ EXPORT_SCRIPT = os.environ.get("EXPORT_SCRIPT", str(Path(__file__).parent / "exp
 
 # Carousel destination per niche is sourced from routing.py: get_route(niche)["carousel_folder_id"].
 # New spec (confirmed 2026-04-20):
-#   OPC    → Marketing/Content/Series/v<N>_<slug>/{png,motion,resources}    (1j_wiygaY...)
+#   OPC    → Marketing/Content/carousel/v<N>_<slug>/{png,motion,resources}   (16P2JN74J...)
 #   Brazil → News/Brazil/Carousel/v<N>_<slug>/{png,motion,resources}        (1gDOjtW...)
 #   USA    → News/USA/Carousel/v<N>_<slug>/{png,motion,resources}           (1lRfZE5X...)
 # No more _TEMPLATE_CAROUSEL middle folder. No more <series>/ middle folder.
