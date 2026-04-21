@@ -1,0 +1,55 @@
+name: Test Buffer Token (one-shot diagnostic)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY_EXP04092027 }}
+    steps:
+      - name: Introspect Buffer schema — SchedulingType enum + Channel query
+        run: |
+          python3 - <<'EOF'
+          import os, urllib.request, json
+
+          key = os.environ.get("BUFFER_API_KEY", "")
+
+          def gql(query, variables=None):
+              payload = json.dumps({"query": query, "variables": variables or {}}).encode()
+              req = urllib.request.Request(
+                  "https://api.buffer.com", data=payload,
+                  headers={"Authorization": f"Bearer {key}",
+                           "Content-Type": "application/json",
+                           "User-Agent": "BufferClient/1.0",
+                           "Accept": "application/json"})
+              try:
+                  return json.loads(urllib.request.urlopen(req, timeout=15).read())
+              except urllib.error.HTTPError as e:
+                  return {"error": e.read().decode()[:500]}
+
+          # 1. SchedulingType enum values
+          print("=== SchedulingType enum ===")
+          r = gql('{ __type(name: "SchedulingType") { enumValues { name } } }')
+          print(json.dumps(r.get("data", r), indent=2))
+
+          # 2. CreatePostInput fields
+          print("\n=== CreatePostInput fields ===")
+          r = gql('{ __type(name: "CreatePostInput") { inputFields { name type { name kind ofType { name } } } } }')
+          fields = r.get("data", {}).get("__type", {}).get("inputFields", [])
+          for f in fields:
+              t = f["type"]
+              type_name = t.get("name") or (t.get("ofType") or {}).get("name")
+              print(f"  {f['name']:25} {type_name}")
+
+          # 3. Channel query structure
+          print("\n=== Query.channel args ===")
+          r = gql('{ __schema { queryType { fields { name args { name type { name kind ofType { name } } } } } } }')
+          fields = r.get("data", {}).get("__schema", {}).get("queryType", {}).get("fields", [])
+          for f in fields:
+              if "channel" in f["name"].lower():
+                  args = [(a["name"], (a["type"].get("name") or (a["type"].get("ofType") or {}).get("name"))) for a in f.get("args", [])]
+                  print(f"  {f['name']}: {args}")
+          EOF
