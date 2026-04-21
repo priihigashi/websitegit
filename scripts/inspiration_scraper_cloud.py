@@ -55,7 +55,7 @@ def _load_opc_targets_from_sheet(token: str) -> None:
     Falls back to hardcoded lists if the sheet is empty or the call fails."""
     global IG_HASHTAGS, ACCOUNTS_TO_MONITOR
     try:
-        data = sheet_get(token, "/values/'%F0%9F%8E%AF%20Scraping%20Targets'!A1:F50")
+        data = sheet_get(token, "/values/'🎯 Scraping Targets'!A1:F50")
         rows = data.get("values", [])
         if not rows or len(rows) < 2:
             raise ValueError("empty")
