@@ -1328,13 +1328,9 @@ def run_phase4(token, group_key):
         "channelId": channel_id,
         "assets": {"images": [{"url": u} for u in image_urls[:10]]},
     }
+    post_input["schedulingType"] = "automatic"
     if slot_iso:
-        post_input["schedulingType"] = "customScheduled"
-        post_input["mode"]           = "customScheduled"
-        post_input["dueAt"]          = slot_iso
-    else:
-        post_input["schedulingType"] = "automatic"
-        post_input["mode"]           = "addToQueue"
+        post_input["dueAt"] = slot_iso
 
     try:
         resp = _buffer_graphql(mutation, {"input": post_input})
