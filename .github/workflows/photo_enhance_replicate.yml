@@ -130,13 +130,79 @@ jobs:
               f.write(f"output_url={url}\n")
           PYEOF
 
-      - name: Upload enhanced image to Drive
+      - name: Run Nano Banana 2 (inference.sh Gemini 3.1 Flash)
+        id: nb2
+        env:
+          INFSH_KEY: ${{ secrets.PRI_OP_INFSH_API_KEY }}
+          SOURCE_PATH: ${{ steps.download.outputs.source_path }}
+        run: |
+          pip install -q inferencesh
+          python3 << 'PYEOF'
+          import os, sys, base64, json, urllib.request
+
+          PROMPT = (
+              "Enhance this real construction/remodel photo to professional architectural "
+              "real-estate photography quality. Fix exposure and white balance, improve "
+              "contrast, recover highlights, lift shadows gently, mild dehaze and noise "
+              "cleanup, slight sharpening. Keep everything truthful to the real jobsite. "
+              "Do NOT add or remove objects, change layout or finishes, or make it look "
+              "CGI. Natural light, realistic color, South Florida residential style."
+          )
+
+          src = os.environ.get("SOURCE_PATH", "")
+          key = os.environ.get("INFSH_KEY", "")
+          if not src or not key:
+              print("NB2: missing source path or API key — skipping")
+              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                  f.write("nb2_path=\n")
+              sys.exit(0)
+
+          with open(src, "rb") as f:
+              img_b64 = base64.b64encode(f.read()).decode()
+
+          ext = "jpeg" if src.endswith(".jpg") else "png"
+          data_uri = "data:image/" + ext + ";base64," + img_b64
+
+          from inferencesh import InferenceClient
+          client = InferenceClient(api_key=key)
+          print("NB2: sending request to google/gemini-3-1-flash-image-preview...")
+          result = client.run(
+              "google/gemini-3-1-flash-image-preview",
+              input={"prompt": PROMPT, "images": [data_uri], "resolution": "2K"},
+          )
+
+          images = result.get("images") or result.get("output", {}).get("images", [])
+          if not images:
+              print("NB2: no images in response — skipping")
+              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                  f.write("nb2_path=\n")
+              sys.exit(0)
+
+          img_data = images[0]
+          out_path = "/tmp/nb2_enhanced.png"
+          if isinstance(img_data, str) and img_data.startswith("http"):
+              urllib.request.urlretrieve(img_data, out_path)
+          elif isinstance(img_data, str) and "base64," in img_data:
+              raw = base64.b64decode(img_data.split("base64,")[1])
+              open(out_path, "wb").write(raw)
+          elif isinstance(img_data, bytes):
+              open(out_path, "wb").write(img_data)
+          else:
+              open(out_path, "wb").write(base64.b64decode(img_data))
+
+          size_kb = os.path.getsize(out_path) // 1024
+          print("NB2 output saved: " + out_path + " (" + str(size_kb) + "KB)")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("nb2_path=" + out_path + "\n")
+          PYEOF
+
+      - name: Upload all results to Drive
         id: upload
         env:
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
           DESTINATION_FOLDER_ID: ${{ inputs.destination_folder_id }}
-          ORIGINAL_FILENAME: ${{ inputs.original_filename }}
-          OUTPUT_PATH: ${{ steps.replicate.outputs.output_path }}
+          REPLICATE_PATH: ${{ steps.replicate.outputs.output_path }}
+          NB2_PATH: ${{ steps.nb2.outputs.nb2_path }}
         run: |
           python3 << 'PYEOF'
           import os, json, sys
@@ -145,40 +211,52 @@ jobs:
           from googleapiclient.discovery import build
           from googleapiclient.http import MediaFileUpload
 
-          token_data = json.loads(os.environ['SHEETS_TOKEN'])
+          token_data = json.loads(os.environ["SHEETS_TOKEN"])
           creds = Credentials(
-              token=token_data.get('token'),
-              refresh_token=token_data.get('refresh_token'),
-              token_uri=token_data.get('token_uri', 'https://oauth2.googleapis.com/token'),
-              client_id=token_data.get('client_id'),
-              client_secret=token_data.get('client_secret'),
-              scopes=token_data.get('scopes'),
+              token=token_data.get("token"),
+              refresh_token=token_data.get("refresh_token"),
+              token_uri=token_data.get("token_uri", "https://oauth2.googleapis.com/token"),
+              client_id=token_data.get("client_id"),
+              client_secret=token_data.get("client_secret"),
+              scopes=token_data.get("scopes"),
           )
           if not creds.valid:
               creds.refresh(Request())
 
-          drive = build('drive', 'v3', credentials=creds)
-          out_name = "replicate_enhanced.png"
-          result = drive.files().create(
-              body={'name': out_name, 'parents': [os.environ['DESTINATION_FOLDER_ID']]},
-              media_body=MediaFileUpload(os.environ['OUTPUT_PATH'], mimetype='image/png'),
-              supportsAllDrives=True,
-              fields='id,name,webViewLink',
-          ).execute()
-          if not result.get('id'):
-              print("ERROR: Drive upload returned no file ID")
-              sys.exit(1)
-          print(f"Uploaded: {result['name']}")
-          print(f"Link: {result['webViewLink']}")
+          drive  = build("drive", "v3", credentials=creds)
+          folder = os.environ["DESTINATION_FOLDER_ID"]
+          links  = {}
 
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"drive_link={result['webViewLink']}\n")
+          def upload_file(local_path, name):
+              if not local_path or not os.path.exists(local_path):
+                  return None
+              r = drive.files().create(
+                  body={"name": name, "parents": [folder]},
+                  media_body=MediaFileUpload(local_path, mimetype="image/png"),
+                  supportsAllDrives=True,
+                  fields="id,name,webViewLink",
+              ).execute()
+              if r.get("id"):
+                  print("Uploaded: " + r["name"] + " -> " + r["webViewLink"])
+                  return r["webViewLink"]
+              return None
+
+          links["replicate"] = upload_file(os.environ.get("REPLICATE_PATH",""), "replicate_enhanced.png")
+          links["nb2"]       = upload_file(os.environ.get("NB2_PATH",""),       "nb2_gemini31_enhanced.png")
+
+          out = json.dumps({k: v for k, v in links.items() if v})
+          print("Links: " + out)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("links_json=" + out + "\n")
+              f.write("replicate_link=" + (links.get("replicate") or "") + "\n")
+              f.write("nb2_link=" + (links.get("nb2") or "") + "\n")
           PYEOF
 
-      - name: Send email with result
+      - name: Send email with all results
         env:
           PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
-          DRIVE_LINK: ${{ steps.upload.outputs.drive_link }}
+          REPLICATE_LINK: ${{ steps.upload.outputs.replicate_link }}
+          NB2_LINK: ${{ steps.upload.outputs.nb2_link }}
           ORIGINAL_FILENAME: ${{ inputs.original_filename }}
         run: |
           python3 << 'PYEOF'
@@ -186,15 +264,19 @@ jobs:
           from email.mime.text import MIMEText
 
           fname = os.environ.get("ORIGINAL_FILENAME", "photo")
-          link  = os.environ.get("DRIVE_LINK", "")
-          pwd   = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD", "")
+          r_link = os.environ.get("REPLICATE_LINK", "")
+          n_link = os.environ.get("NB2_LINK", "")
+          pwd    = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD", "")
 
-          body = (
-              "Replicate Enhancement Done: " + fname + "\n\n"
-              "Replicate Clarity Upscaler 2x:\n" + link + "\n\n"
-              "This is the 3rd enhanced version. Check Drive for OpenAI + Gemini versions too."
-          )
-          subject = "Replicate Enhanced: " + fname
+          lines = ["Cloud Enhancement Done: " + fname, ""]
+          if r_link:
+              lines += ["3. Replicate Clarity Upscaler 2x:", r_link, ""]
+          if n_link:
+              lines += ["4. Nano Banana 2 (Gemini 3.1 Flash):", n_link, ""]
+          lines += ["Check Drive for OpenAI + Gemini 2.0 versions from the earlier local run."]
+
+          body = "\n".join(lines)
+          subject = "Photo Enhanced (cloud): " + fname
 
           msg = MIMEText(body)
           msg["Subject"] = subject
