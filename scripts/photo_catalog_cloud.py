@@ -75,7 +75,7 @@ def get_cataloged_filenames(sheets):
 
 def append_to_catalog(sheets, rows):
     sheets.spreadsheets().values().append(
-        spreadsheetId=SHEET_ID, range=f"'{CATALOG_TAB}'!A:O",
+        spreadsheetId=SHEET_ID, range=f"'{CATALOG_TAB}'!A:T",
         valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
         body={"values": rows}
     ).execute()
@@ -91,8 +91,30 @@ def ensure_catalog_tab(sheets):
         header = [["Date Added","Project Name","Service Type","Filename","Drive URL",
                    "AI Description","Phase","Quality ⭐","Enhanced?","Used In Post?",
                    "Date Taken","Ideas Generated?","Suggested Post Date",
-                   "Content Type","Times Used"]]
+                   "Content Type","Times Used",
+                   "Room","Trade","Materials","Quality Flag","Client Visible"]]
         append_to_catalog(sheets, header)
+
+def ensure_catalog_columns(sheets):
+    """Add the 5 new metadata columns to an existing catalog header if missing. Idempotent."""
+    NEW_COLS = ["Room", "Trade", "Materials", "Quality Flag", "Client Visible"]
+    result = sheets.spreadsheets().values().get(
+        spreadsheetId=SHEET_ID, range=f"'{CATALOG_TAB}'!1:1"
+    ).execute()
+    existing = [c for row in result.get("values", []) for c in row]
+    missing = [c for c in NEW_COLS if c not in existing]
+    if not missing:
+        return
+    next_col_idx = len(existing)
+    start_col = chr(ord('A') + next_col_idx)
+    end_col = chr(ord('A') + next_col_idx + len(missing) - 1)
+    sheets.spreadsheets().values().update(
+        spreadsheetId=SHEET_ID,
+        range=f"'{CATALOG_TAB}'!{start_col}1:{end_col}1",
+        valueInputOption="RAW",
+        body={"values": [missing]}
+    ).execute()
+    print(f"[catalog] Migrated header: added columns {missing}")
 
 def list_folder_children(drive, folder_id, mime_filter=None):
     q = f"'{folder_id}' in parents and trashed=false"
@@ -169,26 +191,67 @@ def describe_image(file_id, drive, anthropic_key):
     img_b64 = base64.b64encode(raw).decode()
     client = anthropic_sdk.Anthropic(api_key=anthropic_key)
     resp = client.messages.create(
-        model="claude-opus-4-6", max_tokens=600,
+        model="claude-opus-4-6", max_tokens=800,
         messages=[{"role": "user", "content": [
             {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": img_b64}},
             {"type": "text", "text": (
-                "Describe this construction/renovation photo for grouping with related photos.\n"
-                "Be specific about room type, materials, distinctive features, state of work.\n"
-                "Then create a SHORT PROJECT NICKNAME (3-6 words) from distinctive visual features.\n"
-                "Format:\nDESCRIPTION: [2-3 sentence description]\n"
-                "NICKNAME: [short nickname]\nPHASE: before|during|after|progress\nQUALITY: 1-5"
+                "Analyze this construction/renovation photo for content planning.\n"
+                "Return ONLY valid JSON — no prose, no markdown fences, no explanation.\n\n"
+                "Required format:\n"
+                "{\n"
+                '  "description": "2-3 sentence description. Specific about room, materials, state of work.",\n'
+                '  "nickname": "3-6 word project nickname from visual features",\n'
+                '  "phase": "before|during|after|progress",\n'
+                '  "quality": 3,\n'
+                '  "room": "kitchen|bathroom|exterior|garage|living|dining|office|other",\n'
+                '  "trade": "tile|concrete|framing|electrical|plumbing|drywall|painting|flooring|roofing|other",\n'
+                '  "materials": ["material1", "material2"],\n'
+                '  "quality_flag": false,\n'
+                '  "client_visible": true\n'
+                "}\n\n"
+                "quality is integer 1-5.\n"
+                "quality_flag is true when quality < 3 (blurry, dark, cluttered — needs review).\n"
+                "client_visible is true when photo is clean, professional, and suitable for portfolio."
             )}
         ]}]
     )
     text = resp.content[0].text
-    desc, nickname, phase, quality = "", "", "unknown", "3"
-    for line in text.splitlines():
-        if line.startswith("DESCRIPTION:"): desc = line.replace("DESCRIPTION:", "").strip()
-        elif line.startswith("NICKNAME:"): nickname = line.replace("NICKNAME:", "").strip()
-        elif line.startswith("PHASE:"): phase = line.replace("PHASE:", "").strip().lower()
-        elif line.startswith("QUALITY:"): quality = line.replace("QUALITY:", "").strip()
-    return desc, nickname, phase, quality
+    parsed = {}
+    try:
+        raw_text = text.strip()
+        if raw_text.startswith("```"):
+            raw_text = raw_text.split("```")[1]
+            if raw_text.startswith("json"):
+                raw_text = raw_text[4:]
+        parsed = json.loads(raw_text.strip())
+    except (json.JSONDecodeError, IndexError):
+        # Fallback: old line-by-line parser so existing runs never hard-fail
+        for line in text.splitlines():
+            if line.startswith("DESCRIPTION:"): parsed["description"] = line.replace("DESCRIPTION:", "").strip()
+            elif line.startswith("NICKNAME:"): parsed["nickname"] = line.replace("NICKNAME:", "").strip()
+            elif line.startswith("PHASE:"): parsed["phase"] = line.replace("PHASE:", "").strip().lower()
+            elif line.startswith("QUALITY:"): parsed["quality"] = line.replace("QUALITY:", "").strip()
+    quality_val = parsed.get("quality", 3)
+    try:
+        quality_int = int(float(str(quality_val)))
+    except (ValueError, TypeError):
+        quality_int = 3
+    materials = parsed.get("materials", [])
+    if isinstance(materials, list):
+        materials_str = ", ".join(str(m) for m in materials)
+    else:
+        materials_str = str(materials)
+    return {
+        "desc":           parsed.get("description", ""),
+        "nickname":       parsed.get("nickname", ""),
+        "phase":          str(parsed.get("phase", "unknown")).lower(),
+        "quality":        str(quality_int),
+        "room":           str(parsed.get("room", "other")),
+        "trade":          str(parsed.get("trade", "other")),
+        "materials":      materials_str,
+        "quality_flag":   "Yes" if parsed.get("quality_flag", quality_int < 3) else "No",
+        "client_visible": "Yes" if parsed.get("client_visible", quality_int >= 3) else "No",
+    }
 
 def _get_token_from_file() -> str:
     td = json.loads(Path(TOKEN_FILE_PATH).read_text())
@@ -293,7 +356,7 @@ def generate_ideas_from_catalog(sheets, api_key: str):
         return
 
     result = sheets.spreadsheets().values().get(
-        spreadsheetId=SHEET_ID, range=f"'{CATALOG_TAB}'!A:O"
+        spreadsheetId=SHEET_ID, range=f"'{CATALOG_TAB}'!A:T"
     ).execute()
     all_rows = result.get("values", [])
     if len(all_rows) < 2:
@@ -395,6 +458,7 @@ def main():
     drive  = build("drive",  "v3", credentials=creds)
     sheets = build("sheets", "v4", credentials=creds)
     ensure_catalog_tab(sheets)
+    ensure_catalog_columns(sheets)
     already_done = get_cataloged_filenames(sheets)
     print(f"📊 Already cataloged: {len(already_done)}")
 
@@ -414,18 +478,35 @@ def main():
     for img in new_images[:MAX_PER_RUN]:
         print(f"  🖼️  {img['service_type']} / {img['project_name']} — {img['name']}")
         try:
-            desc, nickname, phase, quality = describe_image(img["id"], drive, api_key)
+            meta = describe_image(img["id"], drive, api_key)
             drive_url = f"https://drive.google.com/file/d/{img['id']}/view"
             project_name = img["project_name"]
-            if project_name == "General" and nickname:
-                project_name = nickname
+            if project_name == "General" and meta["nickname"]:
+                project_name = meta["nickname"]
             date_taken = img["created"][:10] if img["created"] else ""
             new_rows.append([
-                date.today().isoformat(), project_name, img["service_type"],
-                img["name"], drive_url, desc, phase, quality,
-                "No", "No", date_taken, "No", "", "", "0"
+                date.today().isoformat(),  # A Date Added
+                project_name,              # B Project Name
+                img["service_type"],       # C Service Type
+                img["name"],               # D Filename
+                drive_url,                 # E Drive URL
+                meta["desc"],              # F AI Description
+                meta["phase"],             # G Phase
+                meta["quality"],           # H Quality ⭐
+                "No",                      # I Enhanced?
+                "No",                      # J Used In Post?
+                date_taken,                # K Date Taken
+                "No",                      # L Ideas Generated?
+                "",                        # M Suggested Post Date
+                "",                        # N Content Type
+                "0",                       # O Times Used
+                meta["room"],              # P Room
+                meta["trade"],             # Q Trade
+                meta["materials"],         # R Materials
+                meta["quality_flag"],      # S Quality Flag
+                meta["client_visible"],    # T Client Visible
             ])
-            print(f"     ✅ {project_name} | {phase} | Q{quality}")
+            print(f"     ✅ {project_name} | {meta['phase']} | Q{meta['quality']} | {meta['room']} | flag={meta['quality_flag']}")
             time.sleep(0.5)
         except Exception as e:
             print(f"     ⚠️  Error: {e}")
