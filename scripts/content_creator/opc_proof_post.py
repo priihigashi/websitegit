@@ -132,6 +132,15 @@ def _sheets_append(token, tab, rows):
     urllib.request.urlopen(req).read()
 
 
+def _sheets_clear(token, range_str):
+    """Clear all cell values in range (POST .../values/{range}:clear)."""
+    enc = urllib.parse.quote(range_str, safe="!:'")
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}:clear"
+    req = urllib.request.Request(url, data=b"{}", method="POST",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+    urllib.request.urlopen(req).read()
+
+
 def _ensure_candidates_tab(token):
     """Create the candidates tab if it doesn't exist. Idempotent."""
     meta_url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}"
@@ -332,7 +341,7 @@ def write_candidates(token, candidates):
     today = date.today().isoformat()
 
     # Clear existing data (keep header in row 1, clear from row 2 down)
-    _sheets_update(token, f"'{CANDIDATES_TAB}'!A2:P1000", [[""] * 16])
+    _sheets_clear(token, f"'{CANDIDATES_TAB}'!A2:P1000")
 
     if not candidates:
         print("[proof-post] No candidates found.")
