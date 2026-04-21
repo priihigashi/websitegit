@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       run_phase:
-        description: "Phase to run: 1=candidate scan, 2=enhance+preview"
+        description: "Phase to run: 1=candidate scan, 2=enhance+preview, both=1 then 2"
         required: false
         default: "1"
       test_group_key:
@@ -17,40 +17,77 @@ on:
     - cron: "5 4 * * *"
 
 jobs:
-  scan:
+  proof-post:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      SHEETS_TOKEN:              ${{ secrets.SHEETS_TOKEN }}
+      PRI_OP_REPLICATE_API_KEY:  ${{ secrets.PRI_OP_REPLICATE_API_KEY }}
+      PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+      GH_TOKEN:                  ${{ secrets.GITHUB_TOKEN }}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
           cache-dependency-path: scripts/requirements_content.txt
 
-      - name: Install dependencies
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install Python dependencies
         run: pip install -r scripts/requirements_content.txt
 
+      - name: Install Playwright + Chromium
+        run: |
+          npm install playwright
+          npx playwright install chromium --with-deps
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Print NONNEGOTIABLES (audit trail)
+        run: |
+          echo "===== NONNEGOTIABLES.md ====="
+          cat NONNEGOTIABLES.md
+          echo "============================="
+
       - name: Write Google credentials
-        env:
-          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
         run: |
           mkdir -p /tmp/oak_park_creds
           echo "$SHEETS_TOKEN" > /tmp/oak_park_creds/sheets_token.json
 
-      - name: Run proof-post
+      - name: Run proof-post Phase 1 — candidate scan
+        if: ${{ github.event.inputs.run_phase != '2' }}
         env:
           SHEETS_TOKEN_PATH: /tmp/oak_park_creds/sheets_token.json
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+        run: python scripts/content_creator/opc_proof_post.py --phase 1
+
+      - name: Run proof-post Phase 2 — enhance + collage + email
+        if: ${{ github.event.inputs.run_phase == '2' || github.event.inputs.run_phase == 'both' }}
+        env:
+          SHEETS_TOKEN_PATH: /tmp/oak_park_creds/sheets_token.json
+          EXPORT_PROOF_JS:   ${{ github.workspace }}/scripts/content_creator/export_proof.js
         run: |
-          PHASE="${{ github.event.inputs.run_phase || '1' }}"
-          GROUP_KEY="${{ github.event.inputs.test_group_key }}"
-          if [ -n "$GROUP_KEY" ]; then
-            python scripts/content_creator/opc_proof_post.py --phase "$PHASE" --group-key "$GROUP_KEY"
-          else
-            python scripts/content_creator/opc_proof_post.py --phase "$PHASE"
+          PHASE_ARGS="--phase 2"
+          GK="${{ github.event.inputs.test_group_key }}"
+          if [ -n "$GK" ]; then
+            PHASE_ARGS="$PHASE_ARGS --group-key '$GK'"
           fi
+          python scripts/content_creator/opc_proof_post.py $PHASE_ARGS
+
+      - name: Alert on failure
+        if: failure()
+        run: |
+          gh workflow run send_email.yml \
+            --repo priihigashi/oak-park-ai-hub \
+            -f to="priscila@oakpark-construction.com" \
+            -f subject="🔴 OPC Proof Post FAILED — run #${{ github.run_number }}" \
+            -f body="opc-proof-post.yml run #${{ github.run_number }} failed. Phase: ${{ github.event.inputs.run_phase || '1 (scheduled)' }}. Logs: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}"

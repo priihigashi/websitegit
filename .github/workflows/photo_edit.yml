@@ -9,8 +9,14 @@ on:
   workflow_dispatch:
     inputs:
       image_source:
-        description: 'Drive file ID  OR  direct image URL (.jpg/.png)'
-        required: true
+        description: 'Drive file ID OR direct image URL (.jpg/.png). Leave blank when using folder_id.'
+        required: false
+        default: ''
+        type: string
+      folder_id:
+        description: 'Drive folder ID for batch processing (all images in folder). Overrides image_source.'
+        required: false
+        default: ''
         type: string
       tool:
         description: 'Which AI to use'
@@ -44,12 +50,53 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ── 0. BATCH MODE — list files if folder_id provided ─────────────────
+      - name: Resolve batch folder to file list
+        id: batch
+        if: inputs.folder_id != ''
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          FOLDER_ID: ${{ inputs.folder_id }}
+        run: |
+          pip install -q google-auth google-api-python-client
+          python3 << 'PYEOF'
+          import os, json
+          from google.oauth2.credentials import Credentials
+          from google.auth.transport.requests import Request
+          from googleapiclient.discovery import build
+
+          token_data = json.loads(os.environ["SHEETS_TOKEN"])
+          creds = Credentials(
+              token=token_data.get("token"), refresh_token=token_data.get("refresh_token"),
+              token_uri=token_data.get("token_uri","https://oauth2.googleapis.com/token"),
+              client_id=token_data.get("client_id"), client_secret=token_data.get("client_secret"),
+              scopes=token_data.get("scopes"),
+          )
+          if not creds.valid: creds.refresh(Request())
+          drive = build("drive","v3",credentials=creds)
+
+          folder_id = os.environ["FOLDER_ID"].strip()
+          files = drive.files().list(
+              q=f"'{folder_id}' in parents and trashed=false and (mimeType='image/jpeg' or mimeType='image/png' or mimeType='image/webp')",
+              supportsAllDrives=True, includeItemsFromAllDrives=True,
+              fields="files(id,name)",
+          ).execute().get("files",[])
+
+          ids = [f["id"] for f in files]
+          print(f"Batch folder {folder_id}: {len(ids)} image(s) found")
+          for f in files: print(f"  {f['name']} ({f['id']})")
+          with open(os.environ["GITHUB_OUTPUT"],"a") as out:
+              out.write("file_ids=" + json.dumps(ids) + "\n")
+              out.write("count=" + str(len(ids)) + "\n")
+          PYEOF
+
       # ── 1. GET SOURCE IMAGE ───────────────────────────────────────────────
       - name: Get source image
         id: source
         env:
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
           IMAGE_SOURCE: ${{ inputs.image_source }}
+          BATCH_IDS: ${{ steps.batch.outputs.file_ids }}
         run: |
           pip install -q google-auth google-auth-oauthlib google-api-python-client
           python3 << 'PYEOF'
@@ -57,7 +104,14 @@ jobs:
           from google.oauth2.credentials import Credentials
           from google.auth.transport.requests import Request
 
-          src = os.environ["IMAGE_SOURCE"].strip()
+          # Batch mode: pick first file_id from folder listing
+          batch_ids_raw = os.environ.get("BATCH_IDS","").strip()
+          src = os.environ.get("IMAGE_SOURCE","").strip()
+          if batch_ids_raw and batch_ids_raw != "null":
+              ids = json.loads(batch_ids_raw)
+              if ids:
+                  src = ids[0]   # single-step processes first; multi-file handled by matrix in future
+                  print(f"Batch mode: using first file {src} ({len(ids)} total in folder)")
           out = "/tmp/source_photo.jpg"
 
           if src.startswith("http"):

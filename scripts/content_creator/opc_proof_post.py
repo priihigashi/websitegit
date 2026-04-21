@@ -28,7 +28,7 @@ Drive destination for Phase 2 (NOT used tonight):
   Originals: never touched. Enhanced copies saved alongside with _enhanced suffix.
 """
 
-import argparse, base64, json, os, re, shutil, smtplib, ssl, sys, time
+import argparse, base64, io, json, mimetypes, os, re, shutil, smtplib, ssl, subprocess, sys, time
 from datetime import date
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -42,6 +42,24 @@ CATALOG_TAB    = "📸 Photo Catalog"
 CANDIDATES_TAB = "📸 Proof Post Candidates"
 
 TOKEN_FILE_PATH = os.environ.get("SHEETS_TOKEN_PATH", "")
+
+# ── Drive path constants — locked 2026-04-21 ──────────────────────────────────
+# CONTENT-ATTACHED: enhanced images live inside the run folder (WITH the post assets)
+PROOF_POSTS_FOLDER_ID  = "1R4p51rUyGSfgf5VMgFKjQVXl5A399_QI"  # Marketing > Content > Proof Posts
+MARKETING_DRIVE_ID     = "0AIPzwsJD_qqzUk9PVA"
+# STANDALONE: enhanced images from manual/chat enhancement go here (photo_edit.yml)
+STANDALONE_ENHANCED_ID = "1WdxoKIOFIa0E9eREe-uKLDgD4tLVegTw"  # Marketing > Image Creation > Enhanced Photos
+
+# Script paths
+_DIR            = os.path.dirname(os.path.abspath(__file__))
+EXPORT_PROOF_JS = os.path.join(_DIR, "export_proof.js")
+
+# Runtime credentials — read from env at startup
+OPENAI_API_KEY     = os.environ.get("OPENAI_API_KEY", "")          # unused in enhance; kept for future
+REPLICATE_API_KEY  = os.environ.get("PRI_OP_REPLICATE_API_KEY", "")
+GMAIL_APP_PASSWORD = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD", "")
+PREVIEW_EMAIL_TO   = "priscila@oakpark-construction.com"
+PIXEL_DIFF_REJECT_THRESHOLD = 0.15   # fallback gate for legacy enhance_one_photo (not used by core)
 
 # Confidence gates — below these, the group is skipped (do not invent a weak story)
 CONFIDENCE_GATE = {
@@ -466,84 +484,47 @@ def _download_photo_from_drive(token, file_id, dest_dir, stem):
     return out
 
 
+
 # ── Phase 2: Enhancement ───────────────────────────────────────────────────────
-# TEMPORARY — this block moves to scripts/content_creator/enhancement_core.py
-# after the first successful proof-post preview run, so that photo_edit.yml and
-# opc_proof_post.py share one implementation and cannot drift.
+# Shared core: photo_enhance_core.py (PIL → Real-ESRGAN → original fallback).
+# This script calls enhance_one_photo() which delegates to that core.
+# Standalone enhancement (manual/chat) uses photo_edit.yml → saves to Enhanced Photos.
+# Content-attached enhancement (here) saves inside run_folder/enhanced/ only.
 
-def _pixel_diff_pct(path_a, path_b):
-    """Mean absolute pixel diff as a fraction (0.0–1.0). PIL only, no numpy."""
-    from PIL import Image as _PIL, ImageChops
-    a = _PIL.open(path_a).convert("RGB").resize((128, 128), _PIL.LANCZOS)
-    b = _PIL.open(path_b).convert("RGB").resize((128, 128), _PIL.LANCZOS)
-    diff = ImageChops.difference(a, b)
-    total = sum(sum(p) for p in diff.getdata())
-    return total / (128 * 128 * 3 * 255)
-
-
-def enhance_one_photo(local_path, file_id, openai_key):
+def enhance_one_photo(local_path, file_id, _unused=None, phase="after"):
     """
-    Enhance a single photo with OpenAI gpt-image-1.
+    Enhance a single photo via shared photo_enhance_core (PIL → Real-ESRGAN → original).
+    Content-attached mode: result saved alongside original in same directory.
     Returns (result_path, fallback_used, reason_str).
 
-    Fallback chain (satisfies 3-route minimum per NONNEGOTIABLES):
-      Route 1: OpenAI gpt-image-1 edit
-      Route 2: pixel diff > 15% → hallucination detected → discard + use original
-      Route 3: any API error → use original
+    Routing:
+      content-attached (here): enhanced copy lives in run_folder/enhanced/ — NOT in standalone path.
+      standalone (photo_edit.yml): caller saves to Marketing > Image Creation > Enhanced Photos.
     """
+    from photo_enhance_core import enhance as _core
+
     local_path    = Path(local_path)
     enhanced_path = local_path.parent / local_path.name.replace("_original.jpg", "_enhanced.jpg")
-    fallback_path = local_path.parent / local_path.name.replace("_original.jpg", "_enhanced_fallback.jpg")
     sidecar_path  = local_path.parent / local_path.name.replace("_original.jpg", "_enhanced.source.txt")
 
-    def _write_fallback(reason):
-        shutil.copy(str(local_path), str(fallback_path))
+    raw    = local_path.read_bytes()
+    result = _core(raw, phase=phase, replicate_key=REPLICATE_API_KEY)
+
+    if result["enhanced"]:
+        enhanced_path.write_bytes(result["enhanced_bytes"])
         sidecar_path.write_text(
-            f"tier=fallback\nreason={reason}\n"
+            f"tier={result['provider']}\nssim={result['ssim']}\n"
             f"file_id={file_id}\nfetched_at={date.today().isoformat()}\n"
         )
-        return fallback_path, True, reason
+        return enhanced_path, False, f"ok(ssim={result['ssim']})"
 
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=openai_key)
-        with open(str(local_path), "rb") as img_fh:
-            result = client.images.edit(
-                model="gpt-image-1",
-                image=img_fh,
-                prompt=LOCKED_ENHANCEMENT_PROMPT,
-                n=1,
-                size="1024x1024",
-            )
-        img_item = result.data[0]
-        if getattr(img_item, "b64_json", None):
-            raw = base64.b64decode(img_item.b64_json)
-        elif getattr(img_item, "url", None):
-            raw = urllib.request.urlopen(img_item.url).read()
-        else:
-            return _write_fallback("no_image_data_in_response")
-
-        enhanced_path.write_bytes(raw)
-
-        diff = _pixel_diff_pct(str(local_path), str(enhanced_path))
-        if diff > PIXEL_DIFF_REJECT_THRESHOLD:
-            enhanced_path.unlink(missing_ok=True)
-            sidecar_path.write_text(
-                f"tier=fallback\nreason=hallucination_rejected\n"
-                f"pixel_diff={diff:.2%}\nfile_id={file_id}\n"
-                f"fetched_at={date.today().isoformat()}\n"
-            )
-            return _write_fallback(f"hallucination_rejected(diff={diff:.1%})")
-
-        sidecar_path.write_text(
-            f"tier=openai_gpt_image_1\nreason=ok\n"
-            f"pixel_diff={diff:.2%}\nfile_id={file_id}\n"
-            f"fetched_at={date.today().isoformat()}\n"
-        )
-        return enhanced_path, False, f"ok(diff={diff:.1%})"
-
-    except Exception as exc:
-        return _write_fallback(f"openai_error:{exc}")
+    # Route C: original fallback
+    shutil.copy(str(local_path), str(enhanced_path))
+    sidecar_path.write_text(
+        f"tier=original_fallback\nssim={result['ssim']}\n"
+        f"file_id={file_id}\nfetched_at={date.today().isoformat()}\n"
+    )
+    return enhanced_path, True, f"original_fallback(ssim={result['ssim']})"
 
 
 # ── Phase 2: Preview collage ───────────────────────────────────────────────────
@@ -723,17 +704,32 @@ def _get_catalog_photos_for_group(token, group_key):
     return group_photos(header, data_rows).get(group_key, [])
 
 
+def _next_version_number(token, slug):
+    """Return next unused vN number under PROOF_POSTS_FOLDER_ID for this slug."""
+    q = f"'{PROOF_POSTS_FOLDER_ID}' in parents and trashed=false and mimeType='application/vnd.google-apps.folder'"
+    url = (f"https://www.googleapis.com/drive/v3/files"
+           f"?q={urllib.parse.quote(q)}&supportsAllDrives=true"
+           f"&includeItemsFromAllDrives=true&fields=files(name)")
+    req   = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    names = [f["name"] for f in json.loads(urllib.request.urlopen(req).read()).get("files", [])]
+    n = 1
+    while f"v{n}_proof-{slug}" in names:
+        n += 1
+    return n
+
+
 def run_phase2(token, group_key):
     """
-    Phase 2 orchestrator: download originals → enhance → build collage →
-    upload all to Drive → send preview email.
+    Phase 2 orchestrator: download originals → enhance (PIL core) → build collage →
+    upload all to Drive run folder → send preview email.
+
+    Storage rule (content-attached):
+      Enhanced images go INSIDE the run folder at: Proof Posts/v<N>_proof-<slug>/enhanced/
+      NOT in the standalone Marketing > Image Creation > Enhanced Photos folder.
 
     Fully isolated: zero contact with Brazil/news flows, main.py, or
     carousel_builder.py. Only reads Photo Catalog and writes to Proof Posts/.
     """
-    if not OPENAI_API_KEY:
-        print("❌ OPENAI_API_KEY not set — cannot run Phase 2")
-        sys.exit(1)
     if not GMAIL_APP_PASSWORD:
         print("❌ PRI_OP_GMAIL_APP_PASSWORD not set — cannot send preview email")
         sys.exit(1)
@@ -749,23 +745,20 @@ def run_phase2(token, group_key):
     project = parts[0]
     print(f"[proof-post] {len(photos)} photos | {post_type} | conf={confidence}")
 
-    slug     = re.sub(r"[^a-z0-9]+", "-", group_key.lower()).strip("-")[:40]
-    today_s  = date.today().isoformat()
-    run_name = f"{today_s}_{slug}"
+    slug    = re.sub(r"[^a-z0-9]+", "-", group_key.lower()).strip("-")[:40]
+    ver_n   = _next_version_number(token, slug)
+    run_name = f"v{ver_n}_proof-{slug}"   # follows CAROUSEL_FOLDER_STANDARD
 
     # ── Local temp structure (mirrors Drive structure) ─────────────────────────
     run_dir = Path(f"/tmp/proof_post_{slug}")
     for sub in ("originals_used", "enhanced", "png", "motion", "html", "review"):
         (run_dir / sub).mkdir(parents=True, exist_ok=True)
 
-    # ── Drive structure ────────────────────────────────────────────────────────
-    # Content Creation (1um7y2Yt8zi9KGxev6kfFJYgrkMYwrCNh)
-    #   └── Proof Posts/
-    #         └── YYYY-MM-DD_<slug>/
-    #               originals_used/ enhanced/ png/ motion/ html/ review/
-    proof_root = _drive_find_or_create_folder(
-        token, PROOF_POSTS_PARENT_NAME, DRIVE_CONTENT_CREATION_FOLDER)
-    run_fid    = _drive_find_or_create_folder(token, run_name, proof_root)
+    # ── Drive structure (content-attached routing) ─────────────────────────────
+    # Marketing > Content > Proof Posts > v<N>_proof-<slug>/
+    #   originals_used/  enhanced/  png/  motion/  html/  review/
+    # Enhanced images live INSIDE this run folder — NOT in standalone Enhanced Photos.
+    run_fid = _drive_find_or_create_folder(token, run_name, PROOF_POSTS_FOLDER_ID)
     sub_ids, sub_links = {}, {}
     for sub in ("originals_used", "enhanced", "png", "motion", "html", "review"):
         fid = _drive_find_or_create_folder(token, sub, run_fid)
@@ -799,9 +792,9 @@ def run_phase2(token, group_key):
         except Exception as e:
             print(f"  ⚠️  Upload original failed (non-fatal): {e}")
 
-        print(f"  ✨ Enhancing ...")
+        print(f"  ✨ Enhancing (PIL core, phase={p.get('phase','after')}) ...")
         enh_path, is_fallback, enh_reason = enhance_one_photo(
-            str(orig), fid, OPENAI_API_KEY)
+            str(orig), fid, phase=p.get("phase", "after"))
         if is_fallback:
             summary["fallback"] += 1
             print(f"  ⚠️  Fallback: {enh_reason}")
