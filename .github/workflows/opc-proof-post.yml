@@ -43,6 +43,7 @@ jobs:
           cache-dependency-path: scripts/requirements_content.txt
 
       - name: Set up Node 24
+        if: ${{ github.event.inputs.run_phase == '2' || github.event.inputs.run_phase == 'both' }}
         uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -51,11 +52,13 @@ jobs:
         run: pip install -r scripts/requirements_content.txt
 
       - name: Install Playwright + Chromium
+        if: ${{ github.event.inputs.run_phase == '2' || github.event.inputs.run_phase == 'both' }}
         run: |
           npm install playwright
           npx playwright install chromium --with-deps
 
       - name: Install ffmpeg
+        if: ${{ github.event.inputs.run_phase == '2' || github.event.inputs.run_phase == 'both' }}
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Print NONNEGOTIABLES (audit trail)
@@ -70,7 +73,7 @@ jobs:
           echo "$SHEETS_TOKEN" > /tmp/oak_park_creds/sheets_token.json
 
       - name: Run proof-post Phase 1 — candidate scan
-        if: ${{ github.event.inputs.run_phase != '2' }}
+        if: ${{ github.event.inputs.run_phase == '1' || github.event.inputs.run_phase == 'both' || github.event_name == 'schedule' }}
         env:
           SHEETS_TOKEN_PATH: /tmp/oak_park_creds/sheets_token.json
         run: python scripts/content_creator/opc_proof_post.py --phase 1
