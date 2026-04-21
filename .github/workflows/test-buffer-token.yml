@@ -28,7 +28,12 @@ jobs:
           req = urllib.request.Request(
               "https://api.buffer.com",
               data=payload,
-              headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+              headers={
+                  "Authorization": f"Bearer {key}",
+                  "Content-Type": "application/json",
+                  "User-Agent": "BufferClient/1.0 (automation)",
+                  "Accept": "application/json",
+              })
           try:
               resp = json.loads(urllib.request.urlopen(req, timeout=15).read())
               if "errors" in resp:
@@ -44,3 +49,15 @@ jobs:
           except Exception as e:
               print(f"  ❌ Error: {e}")
           EOF
+
+      - name: Test with curl (different HTTP client)
+        run: |
+          echo "--- curl test ---"
+          STATUS=$(curl -s -o /tmp/buf_resp.txt -w "%{http_code}" \
+            -X POST https://api.buffer.com \
+            -H "Authorization: Bearer $BUFFER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -H "User-Agent: BufferClient/1.0" \
+            -d '{"query":"{ account { organizations { id name } } }"}')
+          echo "HTTP status: $STATUS"
+          head -c 300 /tmp/buf_resp.txt
