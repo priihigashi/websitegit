@@ -246,7 +246,8 @@ def scrape_website_articles(url, niche):
             title = tag.get_text(strip=True)
             href  = full_url
 
-        if not title or len(title) < 10 or title in seen:
+        JUNK = ["sorry,", "failed to load", "please try again", "no results", "error loading", "no posts found", "coming soon"]
+        if not title or len(title) < 10 or title in seen or any(j in title.lower() for j in JUNK):
             continue
         seen.add(title)
 
