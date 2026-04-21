@@ -1153,7 +1153,9 @@ def _buffer_graphql(query, variables=None):
     req = urllib.request.Request(
         BUFFER_GRAPHQL_URL, data=payload,
         headers={"Authorization": f"Bearer {BUFFER_API_KEY}",
-                 "Content-Type": "application/json"})
+                 "Content-Type": "application/json",
+                 "User-Agent": "BufferClient/1.0 (automation)",
+                 "Accept": "application/json"})
     resp = json.loads(urllib.request.urlopen(req, timeout=15).read())
     if "errors" in resp:
         raise Exception(f"GraphQL errors: {resp['errors']}")
