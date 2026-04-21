@@ -146,6 +146,57 @@
   .ride-card.adults-only { border-left-color: #e74c3c; opacity: 0.7; }
   .ride-card.caution { border-left-color: #f39c12; }
   .ride-name { font-weight: bold; font-size: 0.95em; margin-bottom: 5px; }
+  .ride-card { position: relative; }
+  .star-badge {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: linear-gradient(135deg, #ffd700, #f5b700);
+    color: #000;
+    font-size: 0.65em;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+
+  /* Trip priority legend (compact) */
+  .trip-legend {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 8px 14px;
+    margin-bottom: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    font-size: 0.78em;
+    color: #c8c8b0;
+  }
+  .trip-legend strong { color: #ffd700; }
+
+  /* Per-park compact trio boxes */
+  .park-trio {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    margin: 14px 0 18px;
+  }
+  .trio-box {
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.82em;
+  }
+  .trio-box h5 { color: #ffd700; font-size: 0.88em; margin: 0 0 6px; }
+  .trio-box ol { margin: 0; padding-left: 18px; }
+  .trio-box li { margin: 2px 0; color: #e0e0d0; }
+  .trio-box .trio-note { font-size: 0.78em; color: #888; margin-top: 6px; font-style: italic; }
+  .trio-box.must-do { border-left: 3px solid #ffd700; }
+  .trio-box.easy-food { border-left: 3px solid #90caf9; }
+  .trio-box.meltdown { border-left: 3px solid #2ecc71; }
   .ride-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
   .tag {
     font-size: 0.7em;
@@ -690,6 +741,14 @@
     </div>
   </div>
 
+  <!-- TRIP PRIORITY LEGEND -->
+  <div class="trip-legend">
+    <span><strong>⭐ Must-do</strong></span>
+    <span><strong>❄️</strong> Best indoor reset</span>
+    <span><strong>🍽️</strong> Best easy food stop</span>
+    <span><strong>😵</strong> If kids are done, go here next</span>
+  </div>
+
   <!-- LEGEND -->
   <div class="legend">
     <strong style="color:#ffd700;font-size:0.85em;width:100%;margin-bottom:4px">RIDE CARD LEGEND</strong>
@@ -716,6 +775,34 @@
         <div class="strategy-item"><strong>🌡️ Afternoon pacing:</strong> A/C shows + sit-down lunch + shaded trail walks (stay at park all day)</div>
         <div class="strategy-item"><strong>✨ Evening:</strong> Stay for fireworks — less crowded Adventureland after 6pm</div>
         <div class="strategy-item"><strong>📱 App:</strong> My Disney Experience — real-time wait times + Lightning Lane</div>
+      </div>
+
+      <div class="park-trio">
+        <div class="trio-box must-do">
+          <h5>⭐ MUST-DO 3</h5>
+          <ol>
+            <li>Peter Pan's Flight</li>
+            <li>Dumbo the Flying Elephant</li>
+            <li>Festival of Fantasy Parade (3 PM)</li>
+          </ol>
+        </div>
+        <div class="trio-box easy-food">
+          <h5>🍽️ EASY FOOD 3</h5>
+          <ol>
+            <li>Pinocchio Village Haus (Fantasyland)</li>
+            <li>Columbia Harbour House (Liberty Sq)</li>
+            <li>Sleepy Hollow (snacks, waffles)</li>
+          </ol>
+          <div class="trio-note">Mobile Order in app to skip line.</div>
+        </div>
+        <div class="trio-box meltdown">
+          <h5>😵 MELTDOWN BACKUP</h5>
+          <ol>
+            <li>Dumbo (calm circles)</li>
+            <li>it's a small world (cool + seated)</li>
+            <li>Mickey's PhilharMagic (A/C indoor show)</li>
+          </ol>
+        </div>
       </div>
 
       <!-- WALK MAP MK -->
@@ -823,6 +910,7 @@
         <div class="land-body">
           <div class="rides-grid">
             <div class="ride-card toddler-gold">
+              <span class="star-badge">⭐ MUST-DO</span>
               <div class="ride-name">Peter Pan's Flight ⭐</div>
               <div class="ride-note">Flying ship over miniature London — magical for both kids. Most popular = long lines. GO FIRST at rope drop.</div>
               <div class="ride-tags">
@@ -853,6 +941,7 @@
               </div>
             </div>
             <div class="ride-card toddler-gold">
+              <span class="star-badge">⭐ MUST-DO</span>
               <div class="ride-name">Dumbo the Flying Elephant ⭐</div>
               <div class="ride-note">Kids CONTROL the height — huge hit. Indoor play area in queue = less wait stress. Both kids will want to repeat.</div>
               <div class="ride-tags">
@@ -1120,9 +1209,36 @@
         <div class="strategy-item"><strong>🎭 Plan:</strong> Mix 2 rides + 2 shows + Disney Junior Zone character meets</div>
       </div>
 
+      <div class="park-trio">
+        <div class="trio-box must-do">
+          <h5>⭐ MUST-DO 3</h5>
+          <ol>
+            <li>Mickey &amp; Minnie's Runaway Railway</li>
+            <li>Toy Story Mania!</li>
+            <li>Frozen Sing-Along</li>
+          </ol>
+        </div>
+        <div class="trio-box easy-food">
+          <h5>🍽️ EASY FOOD 3</h5>
+          <ol>
+            <li>Woody's Lunch Box (Toy Story Land)</li>
+            <li>ABC Commissary (A/C, varied menu)</li>
+            <li>Oga's Cantina <em>(optional adult stop, not core kid meal)</em></li>
+          </ol>
+        </div>
+        <div class="trio-box meltdown">
+          <h5>😵 MELTDOWN BACKUP</h5>
+          <ol>
+            <li>Frozen Sing-Along (A/C, 30 min)</li>
+            <li>Disney Junior Play &amp; Dance!</li>
+            <li>Walt Disney Presents (A/C, quiet)</li>
+          </ol>
+        </div>
+      </div>
+
       <div class="info-box">
-        <strong>🎠 THE HIDDEN PLAYGROUND — "Drawn to Wonderland"</strong><br>
-        The <strong>Alice in Wonderland-themed indoor playground</strong> ("Drawn to Wonderland") is coming as part of the new <strong>"The Magic of Disney Animation"</strong> attraction in the reimagined Animation Courtyard. It features an oversized flower garden with musical instruments, a Mad Tea Party playset, and a Tulgey Wood exploration area — all inspired by Mary Blair's original concept art. <strong>Opening: Late Summer 2026</strong> (the outdoor Walt Disney Studios Courtyard opens May 26, 2026 first). <em>This may not be open during your April visit — check the My Disney Experience app for confirmed opening dates before your trip.</em>
+        <strong>🎠 ANIMATION COURTYARD UPDATE — heads up</strong><br>
+        Disney has announced a future Alice-themed indoor play area ("Drawn to Wonderland") as part of Animation Courtyard's phased 2026 reimagining. <strong>It is not expected to be open for this trip</strong> — for your Friday visit, the dependable indoor resets are <strong>Disney Junior Play &amp; Dance!</strong>, <strong>Frozen Sing-Along</strong>, and <strong>Walt Disney Presents</strong>. Check the My Disney Experience app day-of for any surprise previews.
       </div>
 
       <div class="walk-map">
@@ -1203,6 +1319,7 @@
         <div class="land-body">
           <div class="rides-grid">
             <div class="ride-card toddler-gold">
+              <span class="star-badge">⭐ MUST-DO</span>
               <div class="ride-name">Toy Story Mania! ⭐</div>
               <div class="ride-note">3D carnival game ride — both kids will love shooting targets. No height req. Great for the whole family including grandparents. Long wait — go at rope drop or use Lightning Lane.</div>
               <div class="ride-tags">
@@ -1250,6 +1367,7 @@
         <div class="land-body">
           <div class="rides-grid">
             <div class="ride-card toddler-gold">
+              <span class="star-badge">⭐ MUST-DO</span>
               <div class="ride-name">Mickey & Minnie's Runaway Railway ⭐</div>
               <div class="ride-note">Trackless dark ride through Mickey Mouse cartoons. Colorful, joyful, zero scares. Best ride in the park for your kids. No height req. Get Lightning Lane or rope drop this one.</div>
               <div class="ride-tags">
@@ -1377,6 +1495,33 @@
         <div class="strategy-item"><strong>🐦 Shows:</strong> Check schedule on My Disney Experience — plan around Lion King + Nemo shows</div>
       </div>
 
+      <div class="park-trio">
+        <div class="trio-box must-do">
+          <h5>⭐ MUST-DO 3</h5>
+          <ol>
+            <li>Kilimanjaro Safaris</li>
+            <li>Festival of the Lion King</li>
+            <li>Na'vi River Journey</li>
+          </ol>
+        </div>
+        <div class="trio-box easy-food">
+          <h5>🍽️ EASY FOOD 3</h5>
+          <ol>
+            <li>Satu'li Canteen (Pandora — best kid food in park)</li>
+            <li>Harambe Market (Africa, outdoor)</li>
+            <li>Flame Tree Barbecue (shaded water views)</li>
+          </ol>
+        </div>
+        <div class="trio-box meltdown">
+          <h5>😵 MELTDOWN BACKUP</h5>
+          <ol>
+            <li>Festival of the Lion King (A/C, seated)</li>
+            <li>Na'vi River Journey (calm glowing boat)</li>
+            <li>Gorilla Falls Exploration Trail (shaded walk)</li>
+          </ol>
+        </div>
+      </div>
+
       <div class="walk-map">
         <h4>🗺️ PARK LAYOUT — ANIMAL KINGDOM <a href="https://cdn1.parksmedia.wdprapps.disney.com/vision-dam/digital/parks-platform/parks-global-assets/disney-world/guest-services/guide-maps/DAK-020226-ENG_DIGITAL.pdf?2026-01-21T19:41:17+00:00" target="_blank" class="map-inline-link">(official map ↗)</a></h4>
         <svg viewBox="0 0 500 340" style="width:100%;max-width:500px;margin:10px auto 15px;display:block;background:rgba(0,0,0,0.2);border-radius:8px;font-family:sans-serif">
@@ -1464,6 +1609,7 @@
         <div class="land-body">
           <div class="rides-grid">
             <div class="ride-card toddler-gold">
+              <span class="star-badge">⭐ MUST-DO</span>
               <div class="ride-name">Kilimanjaro Safaris ⭐⭐⭐</div>
               <div class="ride-note">THE highlight of Animal Kingdom. Open safari truck ride past real giraffes, elephants, lions, hippos. Animals most active in the morning. Both kids will be absolutely amazed. No height req.</div>
               <div class="ride-tags">
@@ -1512,6 +1658,7 @@
         <div class="land-body">
           <div class="rides-grid">
             <div class="ride-card toddler-gold">
+              <span class="star-badge">⭐ MUST-DO</span>
               <div class="ride-name">Na'vi River Journey ⭐</div>
               <div class="ride-note">Slow, glowing boat ride through bioluminescent jungle. Beautiful and peaceful. No scares. Your almost-4yo will be absolutely mesmerized by the glowing colors. The Shaman animatronic is stunning.</div>
               <div class="ride-tags">
@@ -1665,6 +1812,26 @@
       <div class="tip-card">
         <h4>👴👵 Grandparent Pacing</h4>
         <p>Grandparents can use stroller as walking aid between lands. In queues with benches (Haunted Mansion, Jungle Cruise), they can wait seated. Designate a shaded "base camp" — they stay there while parents take kids on one fast attraction. Crystal Palace character dining = grandparents stay seated the whole meal.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP 3 RESTAURANTS OVERALL -->
+  <div class="section">
+    <h2 style="font-size:1.3em">🍽️ TOP 3 QUICK-SERVICE SPOTS OVERALL</h2>
+    <p style="font-size:0.85em;color:#c8c8b0;margin-bottom:14px">If you only remember three food stops across all three days — these are the ones that consistently deliver for kids + grown-ups with short lines via Mobile Order.</p>
+    <div class="park-trio">
+      <div class="trio-box must-do">
+        <h5>🥇 Satu'li Canteen · AK</h5>
+        <div>Pandora. Healthy bowls kids actually eat, A/C, themed. Best quick-service at Disney World per most 2025 rankings.</div>
+      </div>
+      <div class="trio-box easy-food">
+        <h5>🥈 Columbia Harbour House · MK</h5>
+        <div>Liberty Square. Chicken strips, mac &amp; cheese, fish. Huge upstairs seating = quiet zone when park is chaos.</div>
+      </div>
+      <div class="trio-box meltdown">
+        <h5>🥉 Woody's Lunch Box · HS</h5>
+        <div>Toy Story Land. Grilled cheese, tots, lunchbox tarts. Tiny kitchen, outdoor covered seating, pure toddler happiness.</div>
       </div>
     </div>
   </div>
