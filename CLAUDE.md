@@ -100,9 +100,9 @@ Capture folders (per niche — routing.py is source of truth, call capture_folde
   USA     → 1ZzrEmj3Smt0chr8CxiCOyroFCRzE-zU1 (News/USA/Captures)
   UGC     → 1b5fCmWn6cUkZSjhaZKGFmaKDc4MafY3U (UGC/Captures)
   Stocks  → 17oazrbMM1lBeFAGNCaFp8sjnAMWbVdSI (Stocks/Captures)
-  Higashi → 1by4guSe46XK0DwIJwmNUEtbzmvQFOXOv (Higashi/Captures)
+  Higashi → 1UtJp_8Rn49D7zdk70qhXxswXYFpFBLPG (Higashi Imobiliária - Claude/content/capture, verified 2026-04-20)
 Carousel parent folders (per niche — routing.py: carousel_folder_id):
-  OPC     → 1j_wiygaY0ltLkOp9-etiDDsA4R4n5ecm (Marketing/Content/Series)   ← series _TEMPLATE_CAROUSEL folders nest here ✅
+  OPC     → 16P2JN74JAAW3HKnmNqPGPrAq7N5jDNii (Marketing/Content/carousel, verified 2026-04-20)
   Brazil  → 1gDOjtW_X-_jWtu94pffbDaUsw6VGCKuA (News/Brazil/Carousel)       ← series live at News/Brazil/Content/Series/* (migration pending)
   USA     → 1lRfZE5XC_gL57pUiiWu0Lhar9wfyCtFw (News/USA/Carousel)          ← series live at News/USA/Content/Series/* (migration pending)
 Reels_Shorts parent folders (per niche — routing.py: reels_folder_id):
