@@ -28,7 +28,7 @@ jobs:
       SHEETS_TOKEN:                ${{ secrets.SHEETS_TOKEN }}
       PRI_OP_REPLICATE_API_KEY:    ${{ secrets.PRI_OP_REPLICATE_API_KEY }}
       PRI_OP_GMAIL_APP_PASSWORD:   ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
-      BUFFER_API_KEY_EXP04092027:  ${{ secrets.BUFFER_API_KEY_EXP04092027 }}
+      BUFFER_API_KEY:              ${{ secrets.BUFFER_API_KEY_EXP04092027 }}
       GH_TOKEN:                    ${{ secrets.GITHUB_TOKEN }}
 
     steps:
