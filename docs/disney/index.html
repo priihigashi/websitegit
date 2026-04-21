@@ -148,6 +148,8 @@
   .ride-name { font-weight: bold; font-size: 0.95em; margin-bottom: 5px; }
   .ride-name a, .dine-link { color: inherit; text-decoration: none; }
   .ride-name a:hover, .dine-link:hover { text-decoration: underline; text-decoration-color: #ffd700; }
+  .reserve-link { font-size: 0.72em; background: rgba(255,215,0,0.18); color: #ffd700; padding: 2px 7px; border-radius: 10px; text-decoration: none; margin-left: 4px; border: 1px solid rgba(255,215,0,0.3); }
+  .reserve-link:hover { background: rgba(255,215,0,0.3); color: #fff; }
 
   .weather-widget {
     max-width: 900px; margin: -10px auto 20px; padding: 12px 16px;
@@ -671,8 +673,8 @@
       <div class="showtime-secondary">
         <span class="showtime-emoji">🎆</span>
         <div class="showtime-text">
-          <strong>Happily Ever After Fireworks</strong> · <span class="showtime-big">nightly</span>
-          <div class="showtime-note">Check app day-of for exact start time. Best view = Hub/Castle area (fills 45 min early). Backup: Plaza Ice Cream Parlor curb.</div>
+          <strong>Happily Ever After Fireworks</strong> · <span class="showtime-big">9:00 PM</span> typical
+          <div class="showtime-note">Recent official nightly start is 9:00 PM (sometimes 9:20 PM on extended-hours nights). Confirm in My Disney Experience app day-of. Best view = Hub/Castle area (fills 45 min early). Backup: Plaza Ice Cream Parlor curb.</div>
         </div>
       </div>
 
@@ -701,8 +703,8 @@
       <div class="showtime-secondary">
         <span class="showtime-emoji">🎇</span>
         <div class="showtime-text">
-          <strong>Fantasmic!</strong> · Hollywood Hills Amphitheater · <span class="showtime-big">Night show</span>
-          <div class="showtime-note">Check app day-of. Water + fireworks + Mickey/villains show. Can be loud/intense — some kids love it, some cry. Judgment call.</div>
+          <strong>Fantasmic!</strong> · Hollywood Hills Amphitheater · <span class="showtime-big">~9:00 PM</span>
+          <div class="showtime-note">Recent official start around 9:00 PM (sometimes later, or 2 shows on busy nights). Confirm in app day-of. Water + fireworks + Mickey/villains show. Can be loud/intense — judgment call.</div>
         </div>
       </div>
 
@@ -788,10 +790,10 @@
       <div class="quick-card">
         <h4>🎭 DINING SPOTLIGHTS</h4>
         <ul>
-          <li><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/cinderella-royal-table/" target="_blank">👸 Cinderella's Royal Table (MK)</a> <span style="font-size:0.75em;color:#c8c8b0">· Bkfst $76 adult/$47 child · Lunch/Dinner $89/$54 +tax/gratuity</span></li>
-          <li><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/be-our-guest-restaurant/" target="_blank">🌹 Be Our Guest (MK)</a> <span style="font-size:0.75em;color:#c8c8b0">· $72 adult / $43 child +tax/gratuity</span></li>
-          <li><a href="https://disneyworld.disney.go.com/dining/hollywood-studios/oga-cantina/" target="_blank">🍺 Oga's Cantina (HS — dads' beer)</a> <span style="font-size:0.75em;color:#c8c8b0">· Drinks/snacks ~$7.50–$21+</span></li>
-          <li><a href="https://disneyworld.disney.go.com/dining/animal-kingdom/nomad-lounge/" target="_blank">🍸 Nomad Lounge (AK — hidden gem)</a> <span style="font-size:0.75em;color:#c8c8b0">· Drinks/snacks ~$4.99–$19.50</span></li>
+          <li><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/cinderella-royal-table/" target="_blank">👸 Cinderella's Royal Table (MK)</a> <a href="https://disneyworld.disney.go.com/dine-res/" target="_blank" class="reserve-link">🗓️ Reserve</a> <span style="font-size:0.75em;color:#c8c8b0">· Bkfst $76/$47 · Lunch/Dinner $89/$54 +tax/gratuity</span></li>
+          <li><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/be-our-guest-restaurant/" target="_blank">🌹 Be Our Guest (MK)</a> <a href="https://disneyworld.disney.go.com/dine-res/" target="_blank" class="reserve-link">🗓️ Reserve</a> <span style="font-size:0.75em;color:#c8c8b0">· $72 adult / $43 child +tax/gratuity</span></li>
+          <li><a href="https://disneyworld.disney.go.com/dining/hollywood-studios/oga-cantina/" target="_blank">🍺 Oga's Cantina (HS — dads' beer)</a> <a href="https://disneyworld.disney.go.com/dine-res/" target="_blank" class="reserve-link">🗓️ Reserve</a> <span style="font-size:0.75em;color:#c8c8b0">· Drinks/snacks ~$7.50–$21+</span></li>
+          <li><a href="https://disneyworld.disney.go.com/dining/animal-kingdom/nomad-lounge/" target="_blank">🍸 Nomad Lounge (AK — hidden gem)</a> <a href="https://disneyworld.disney.go.com/dine-res/" target="_blank" class="reserve-link">🗓️ Reserve</a> <span style="font-size:0.75em;color:#c8c8b0">· Drinks/snacks ~$4.99–$19.50</span></li>
         </ul>
         <div class="hint">Pre-book via My Disney Experience — walk-ups are rare at these.</div>
       </div>
@@ -862,9 +864,9 @@
 
       <div class="strategy-bar">
         <div class="strategy-item"><strong>⏰ Arrive:</strong> 45–60 min before opening</div>
-        <div class="strategy-item"><strong>🎯 First stop:</strong> Fantasyland (most rides the girls can do, hits hard early)</div>
+        <div class="strategy-item"><strong>🎯 First stop:</strong> Adventureland (head LEFT — last trip you got stuck in Tomorrowland)</div>
         <div class="strategy-item"><strong>🌡️ Afternoon pacing:</strong> A/C shows + sit-down lunch + shaded trail walks (stay at park all day)</div>
-        <div class="strategy-item"><strong>✨ Evening:</strong> Stay for fireworks — less crowded Adventureland after 6pm</div>
+        <div class="strategy-item"><strong>✨ Evening:</strong> Fireworks at 9 PM — end in Tomorrowland (Buzz, Peoplemover) — kids won't want to leave, that's fine, it's the last stop</div>
         <div class="strategy-item"><strong>📱 App:</strong> My Disney Experience — real-time wait times + Lightning Lane</div>
       </div>
 
@@ -979,37 +981,123 @@
           <span class="path-stop">Main Street</span>
           <span class="path-time">(2 min to hub)</span>
           <span class="path-arrow">→</span>
-          <span class="path-stop">🌟 Fantasyland</span>
-          <span class="path-time">(3 min from hub)</span>
-          <span class="path-arrow">→</span>
-          <span class="path-stop">🚀 Tomorrowland</span>
-          <span class="path-time">(4 min, far right)</span>
-          <span class="path-arrow">→</span>
-          <span class="path-stop">🌿 Liberty Square</span>
-          <span class="path-time">(6 min back)</span>
+          <span class="path-stop">🌴 Adventureland</span>
+          <span class="path-time">(5 min · go LEFT)</span>
           <span class="path-arrow">→</span>
           <span class="path-stop">🤠 Frontierland</span>
           <span class="path-time">(2 min adjacent)</span>
           <span class="path-arrow">→</span>
-          <span class="path-stop">🌴 Adventureland</span>
+          <span class="path-stop">🌿 Liberty Square</span>
           <span class="path-time">(2 min adjacent)</span>
+          <span class="path-arrow">→</span>
+          <span class="path-stop">🏰 Fantasyland</span>
+          <span class="path-time">(3 min north of Liberty)</span>
+          <span class="path-arrow">→</span>
+          <span class="path-stop">🚀 Tomorrowland</span>
+          <span class="path-time">(4 min · LAST so kids can't get stuck)</span>
         </div>
-        <p style="font-size:0.78em;color:#888;margin-top:8px">💡 Full park loop = 1.7 miles. Hub to any land = 3–5 min walk. Fantasyland ↔ Liberty Square shortcut via Tangled bathrooms area saves 5 min.</p>
+        <p style="font-size:0.78em;color:#888;margin-top:8px">💡 Full park loop = 1.7 miles. Hub to any land = 3–5 min walk. Fantasyland ↔ Liberty Square shortcut via Tangled bathrooms area saves 5 min.<br><strong style="color:#ffd700">Note:</strong> Numbered circles on the map above show one popular walking order. The <strong>walking route below</strong> is YOUR team's order — Tomorrowland last so the kids can't get trapped there like last trip.</p>
+      </div>
+
+      <!-- ADVENTURELAND + FRONTIERLAND (go LEFT first) -->
+      <div class="land land-mk-adventureland">
+        <div class="land-header">
+          <div class="order-badge">1</div>
+          <h3>🌴 Adventureland + 🤠 Frontierland <span style="font-weight:normal;color:#aaa">— FIRST STOP, go LEFT from entrance (avoids last trip's Tomorrowland trap)</span></h3>
+          <span class="walk-time">~8 min from entrance via Main Street + hub · 2 min between the two lands</span>
+        </div>
+        <div class="land-body">
+          <div class="rides-grid">
+            <div class="ride-card toddler-green">
+              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/big-thunder-mountain-railroad/" target="_blank" rel="noopener noreferrer">Big Thunder Mountain Railroad</a></div>
+              <div class="ride-note">"Wildest ride in the wilderness!" — outdoor mine train coaster. Loud, bumpy. almost-6yo probably good; almost-4yo needs 40"+ and parent judgment. Rider swap available.</div>
+              <div class="ride-tags">
+                <span class="tag tag-height">40" req</span>
+                <span class="tag tag-age5">✓ Almost 6 (if 40"+)</span>
+                <span class="tag tag-duration">~4 min</span>
+              </div>
+            </div>
+            <div class="ride-card toddler-gold">
+              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/jungle-cruise/" target="_blank" rel="noopener noreferrer">Jungle Cruise ⭐</a></div>
+              <div class="ride-note">Boat tour with animatronic animals + terrible dad jokes. Both kids love the animals. Grandparents will die laughing at the puns. Classic.</div>
+              <div class="ride-tags">
+                <span class="tag tag-noreq">No height req</span>
+                <span class="tag tag-age3">✓ Almost 4</span>
+                <span class="tag tag-age5">✓ Almost 6</span>
+                <span class="tag tag-duration">~10 min</span>
+              </div>
+            </div>
+            <div class="ride-card caution">
+              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/pirates-of-the-caribbean/" target="_blank" rel="noopener noreferrer">Pirates of the Caribbean ⚠️</a></div>
+              <div class="ride-note">Boat ride with a small dark drop + cannon fire sounds + pirate scenes. Very popular. Most almost-6yo handle fine; some almost-4yo startle. Preview it with them.</div>
+              <div class="ride-tags">
+                <span class="tag tag-noreq">No height req</span>
+                <span class="tag tag-age3">⚠️ Small drop + dark</span>
+                <span class="tag tag-age5">✓ Almost 6</span>
+                <span class="tag tag-duration">~8 min</span>
+              </div>
+            </div>
+            <div class="ride-card toddler-gold">
+              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/magic-carpets-of-aladdin/" target="_blank" rel="noopener noreferrer">Magic Carpets of Aladdin</a></div>
+              <div class="ride-note">Like Dumbo but Aladdin-themed, kids control height + pitch. They'll want multiple rides. In Adventureland near Pirates.</div>
+              <div class="ride-tags">
+                <span class="tag tag-noreq">No height req</span>
+                <span class="tag tag-age3">✓ Almost 4</span>
+                <span class="tag tag-age5">✓ Almost 6</span>
+                <span class="tag tag-duration">~2 min</span>
+              </div>
+            </div>
+          </div>
+          <div class="cluster-info">
+            <div class="cluster-item"><span class="ci-icon">🍗</span> <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/pecos-bills-tall-tale-inn-and-cafe/" target="_blank" rel="noopener noreferrer" class="dine-link">Pecos Bill Tall Tale Inn</a> — burgers/fries, good for families</div>
+            <div class="cluster-item"><span class="ci-icon">🍍</span> Adventureland Dole Whip — iconic frozen pineapple treat, MUST for kids + adults</div>
+            <div class="cluster-item"><span class="ci-icon">🦃</span> Turkey legs available near Frontierland — giant, kids go crazy over them</div>
+            <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms near Pirates queue entrance</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIBERTY SQUARE -->
+      <div class="land land-mk-libertysquare">
+        <div class="land-header">
+          <div class="order-badge">2</div>
+          <h3>🏛️ Liberty Square <span style="font-weight:normal;color:#aaa">— heading right from Frontierland, on the way to Fantasyland</span></h3>
+          <span class="walk-time">2 min from Frontierland, 3 min to Fantasyland</span>
+        </div>
+        <div class="land-body">
+          <div class="rides-grid">
+            <div class="ride-card caution">
+              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/haunted-mansion/" target="_blank" rel="noopener noreferrer">Haunted Mansion ⚠️</a></div>
+              <div class="ride-note">Spooky and dark — many 5-year-olds love it, some 3-year-olds get scared. Ride together, prep them: "it's pretend ghosts." Grandparents enjoy this one.</div>
+              <div class="ride-tags">
+                <span class="tag tag-noreq">No height req</span>
+                <span class="tag tag-age3">⚠️ May scare</span>
+                <span class="tag tag-age5">✓ Almost 6 (handles it)</span>
+                <span class="tag tag-duration">~8 min</span>
+              </div>
+            </div>
+          </div>
+          <div class="cluster-info">
+            <div class="cluster-item"><span class="ci-icon">🥙</span> <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/columbia-harbour-house/" target="_blank" rel="noopener noreferrer" class="dine-link">Columbia Harbour House</a> — quick service fish & chips, clam chowder (good lunch spot)</div>
+            <div class="cluster-item"><span class="ci-icon">🧇</span> Sleepy Hollow Refreshments — Nutella waffle sandwiches, funnel cakes (great snack stop)</div>
+            <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms near the Tangled area (between Fantasyland and Liberty Square)</div>
+          </div>
+        </div>
       </div>
 
       <!-- FANTASYLAND -->
       <div class="land land-mk-fantasyland">
         <div class="land-header">
-          <div class="order-badge">1</div>
-          <h3>🏰 Fantasyland <span style="font-weight:normal;color:#aaa">— DO THIS FIRST, before crowds hit</span></h3>
-          <span class="walk-time">3 min from entrance hub</span>
+          <div class="order-badge">3</div>
+          <h3>🏰 Fantasyland <span style="font-weight:normal;color:#aaa">— mid-day · use Lightning Lane Multi Pass for Peter Pan + Mine Train (crowds peak by now)</span></h3>
+          <span class="walk-time">3 min from Liberty Square</span>
         </div>
         <div class="land-body">
           <div class="rides-grid">
             <div class="ride-card toddler-gold">
               <span class="star-badge">⭐ MUST-DO</span>
               <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/peter-pan-flight/" target="_blank" rel="noopener noreferrer">Peter Pan's Flight ⭐</a></div>
-              <div class="ride-note">Flying ship over miniature London — magical for both kids. Most popular = long lines. GO FIRST at rope drop.</div>
+              <div class="ride-note">Flying ship over miniature London — magical for both kids. Most popular = long lines (60–90 min by afternoon). <strong>Book Lightning Lane Multi Pass for this one</strong> — skip the wait.</div>
               <div class="ride-tags">
                 <span class="tag tag-noreq">No height req</span>
                 <span class="tag tag-age3">✓ Almost 4</span>
@@ -1104,7 +1192,7 @@
             <div class="cluster-item"><span class="ci-icon">🥐</span> <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/gastons-tavern/" target="_blank" rel="noopener noreferrer" class="dine-link">Gaston's Tavern</a> — famous cinnamon rolls + LeFou's Brew (adults love it)</div>
             <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms near It's a Small World & Tangled area</div>
             <div class="cluster-item"><span class="ci-icon">🍦</span> Storybook Treats — ice cream window near the carousel</div>
-            <div class="cluster-item"><span class="ci-icon">🛍️</span> Bibbidi Bobbidi Boutique — princess makeovers (book ahead) <span style="color:#c8c8b0">· From $59.99+ tax</span></div>
+            <div class="cluster-item"><span class="ci-icon">🛍️</span> Bibbidi Bobbidi Boutique — princess makeovers <a href="https://disneyworld.disney.go.com/reservations/bbb/" target="_blank" class="reserve-link">🗓️ Book</a> <span style="color:#c8c8b0">· From $59.99+ tax</span></div>
           </div>
         </div>
       </div>
@@ -1112,9 +1200,9 @@
       <!-- TOMORROWLAND -->
       <div class="land land-mk-tomorrowland">
         <div class="land-header">
-          <div class="order-badge">2</div>
-          <h3>🚀 Tomorrowland <span style="font-weight:normal;color:#aaa">— mid-morning, kids love Buzz</span></h3>
-          <span class="walk-time">4 min from Fantasyland</span>
+          <div class="order-badge">4</div>
+          <h3>🚀 Tomorrowland <span style="font-weight:normal;color:#aaa">— LAST STOP · kids won't want to leave, that's fine — it's the end of the day anyway</span></h3>
+          <span class="walk-time">4 min from Fantasyland · next to hub for easy exit after fireworks</span>
         </div>
         <div class="land-body">
           <div class="rides-grid">
@@ -1166,102 +1254,16 @@
         </div>
       </div>
 
-      <!-- LIBERTY SQUARE -->
-      <div class="land land-mk-libertysquare">
-        <div class="land-header">
-          <div class="order-badge">3</div>
-          <h3>🏛️ Liberty Square <span style="font-weight:normal;color:#aaa">— on the way between Tomorrowland and Frontierland</span></h3>
-          <span class="walk-time">2 min from Tomorrowland, 2 min to Frontierland</span>
-        </div>
-        <div class="land-body">
-          <div class="rides-grid">
-            <div class="ride-card caution">
-              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/haunted-mansion/" target="_blank" rel="noopener noreferrer">Haunted Mansion ⚠️</a></div>
-              <div class="ride-note">Spooky and dark — many 5-year-olds love it, some 3-year-olds get scared. Ride together, prep them: "it's pretend ghosts." Grandparents enjoy this one.</div>
-              <div class="ride-tags">
-                <span class="tag tag-noreq">No height req</span>
-                <span class="tag tag-age3">⚠️ May scare</span>
-                <span class="tag tag-age5">✓ Almost 6 (handles it)</span>
-                <span class="tag tag-duration">~8 min</span>
-              </div>
-            </div>
-          </div>
-          <div class="cluster-info">
-            <div class="cluster-item"><span class="ci-icon">🥙</span> <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/columbia-harbour-house/" target="_blank" rel="noopener noreferrer" class="dine-link">Columbia Harbour House</a> — quick service fish & chips, clam chowder (good lunch spot)</div>
-            <div class="cluster-item"><span class="ci-icon">🧇</span> Sleepy Hollow Refreshments — Nutella waffle sandwiches, funnel cakes (great snack stop)</div>
-            <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms near the Tangled area (between Fantasyland and Liberty Square)</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- FRONTIERLAND + ADVENTURELAND -->
-      <div class="land land-mk-frontierland">
-        <div class="land-header">
-          <div class="order-badge">4</div>
-          <h3>🤠 Frontierland + 🌴 Adventureland <span style="font-weight:normal;color:#aaa">— afternoon / evening, less rushed</span></h3>
-          <span class="walk-time">2 min apart from each other</span>
-        </div>
-        <div class="land-body">
-          <div class="rides-grid">
-            <div class="ride-card toddler-green">
-              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/big-thunder-mountain-railroad/" target="_blank" rel="noopener noreferrer">Big Thunder Mountain Railroad</a></div>
-              <div class="ride-note">"Wildest ride in the wilderness!" — outdoor mine train coaster. Loud, bumpy. almost-6yo probably good; almost-4yo needs 40"+ and parent judgment. Rider swap available.</div>
-              <div class="ride-tags">
-                <span class="tag tag-height">40" req</span>
-                <span class="tag tag-age5">✓ Almost 6 (if 40"+)</span>
-                <span class="tag tag-duration">~4 min</span>
-              </div>
-            </div>
-            <div class="ride-card toddler-gold">
-              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/jungle-cruise/" target="_blank" rel="noopener noreferrer">Jungle Cruise ⭐</a></div>
-              <div class="ride-note">Boat tour with animatronic animals + terrible dad jokes. Both kids love the animals. Grandparents will die laughing at the puns. Classic.</div>
-              <div class="ride-tags">
-                <span class="tag tag-noreq">No height req</span>
-                <span class="tag tag-age3">✓ Almost 4</span>
-                <span class="tag tag-age5">✓ Almost 6</span>
-                <span class="tag tag-duration">~10 min</span>
-              </div>
-            </div>
-            <div class="ride-card caution">
-              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/pirates-of-the-caribbean/" target="_blank" rel="noopener noreferrer">Pirates of the Caribbean ⚠️</a></div>
-              <div class="ride-note">Boat ride with a small dark drop + cannon fire sounds + pirate scenes. Very popular. Most almost-6yo handle fine; some almost-4yo startle. Preview it with them.</div>
-              <div class="ride-tags">
-                <span class="tag tag-noreq">No height req</span>
-                <span class="tag tag-age3">⚠️ Small drop + dark</span>
-                <span class="tag tag-age5">✓ Almost 6</span>
-                <span class="tag tag-duration">~8 min</span>
-              </div>
-            </div>
-            <div class="ride-card toddler-gold">
-              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/magic-carpets-of-aladdin/" target="_blank" rel="noopener noreferrer">Magic Carpets of Aladdin</a></div>
-              <div class="ride-note">Like Dumbo but Aladdin-themed, kids control height + pitch. They'll want multiple rides. In Adventureland near Pirates.</div>
-              <div class="ride-tags">
-                <span class="tag tag-noreq">No height req</span>
-                <span class="tag tag-age3">✓ Almost 4</span>
-                <span class="tag tag-age5">✓ Almost 6</span>
-                <span class="tag tag-duration">~2 min</span>
-              </div>
-            </div>
-          </div>
-          <div class="cluster-info">
-            <div class="cluster-item"><span class="ci-icon">🍗</span> <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/pecos-bills-tall-tale-inn-and-cafe/" target="_blank" rel="noopener noreferrer" class="dine-link">Pecos Bill Tall Tale Inn</a> — burgers/fries, good for families</div>
-            <div class="cluster-item"><span class="ci-icon">🍍</span> Adventureland Dole Whip — iconic frozen pineapple treat, MUST for kids + adults</div>
-            <div class="cluster-item"><span class="ci-icon">🦃</span> Turkey legs available near Frontierland — giant, kids go crazy over them</div>
-            <div class="cluster-item"><span class="ci-icon">🚻</span> Bathrooms near Pirates queue entrance</div>
-          </div>
-        </div>
-      </div>
-
       <!-- MK BEER / ALCOHOL SECTION -->
       <div class="tips-box" style="margin-top:20px;background:rgba(230,126,34,0.1);border-color:rgba(230,126,34,0.3)">
         <h4 style="color:#e67e22">🍺 WHERE DAD, UNCLE & GRANDPA CAN GET BEER IN MAGIC KINGDOM</h4>
         <p style="font-size:0.82em;color:#d4d4b0;margin-bottom:10px;"><strong style="color:#e67e22">⚠️ Reality check:</strong> Magic Kingdom has <strong>NO walk-up bars or beer carts</strong>. Alcohol is served <strong>ONLY inside table-service restaurants</strong> — you must sit down and eat. Here's where:</p>
         <ul>
-          <li><strong>Jungle Navigation Co. Ltd. Skipper Canteen</strong> (Adventureland) ⭐ — the dads' spot. Full cocktail menu, beers (Schweitzer Slush, Kungaloosh), and puns. Good lunch stop. Reservations help but often has walk-ups.</li>
-          <li><strong>Be Our Guest Restaurant</strong> (Fantasyland) — French wine + beer. Fancy castle dining. Dinner is the move (no kid menu pressure). Book 60 days out. <span style="color:#c8c8b0;font-size:0.88em">· $72 adult / $43 child +tax/gratuity</span></li>
-          <li><strong>Liberty Tree Tavern</strong> (Liberty Square) — colonial tavern vibes. Beer, wine, hard cider. Family-style platters — grandparents & dads love this one.</li>
-          <li><strong>Cinderella's Royal Table</strong> (inside the castle) — beer + wine, but $$$ and princess-focused — save for a special meal. <span style="color:#c8c8b0;font-size:0.88em">· Bkfst $76 adult / $47 child · Lunch/Dinner $89 / $54 +tax/gratuity</span></li>
-          <li><strong>Tony's Town Square</strong> (Main Street) — Italian, beer + wine + Italian cocktails. Good early lunch/brunch stop.</li>
+          <li><strong>Jungle Navigation Co. Ltd. Skipper Canteen</strong> (Adventureland) <a href="https://disneyworld.disney.go.com/dine-res/" target="_blank" class="reserve-link">🗓️ Reserve</a> ⭐ — the dads' spot. Full cocktail menu, beers (Schweitzer Slush, Kungaloosh), and puns. Good lunch stop. Reservations help but often has walk-ups.</li>
+          <li><strong>Be Our Guest Restaurant</strong> (Fantasyland) <a href="https://disneyworld.disney.go.com/dine-res/" target="_blank" class="reserve-link">🗓️ Reserve</a> — French wine + beer. Fancy castle dining. Dinner is the move (no kid menu pressure). <span style="color:#c8c8b0;font-size:0.88em">· $72 adult / $43 child +tax/gratuity</span></li>
+          <li><strong>Liberty Tree Tavern</strong> (Liberty Square) <a href="https://disneyworld.disney.go.com/dine-res/" target="_blank" class="reserve-link">🗓️ Reserve</a> — colonial tavern vibes. Beer, wine, hard cider. Family-style platters — grandparents & dads love this one.</li>
+          <li><strong>Cinderella's Royal Table</strong> (inside the castle) <a href="https://disneyworld.disney.go.com/dine-res/" target="_blank" class="reserve-link">🗓️ Reserve</a> — beer + wine, but $$$ and princess-focused — save for a special meal. <span style="color:#c8c8b0;font-size:0.88em">· Bkfst $76/$47 · Lunch/Dinner $89/$54 +tax/gratuity</span></li>
+          <li><strong>Tony's Town Square</strong> (Main Street) <a href="https://disneyworld.disney.go.com/dine-res/" target="_blank" class="reserve-link">🗓️ Reserve</a> — Italian, beer + wine + Italian cocktails. Good early lunch/brunch stop.</li>
           <li><strong><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/plaza-restaurant/" target="_blank" rel="noopener noreferrer" class="dine-link">The Plaza Restaurant</a></strong> (end of Main Street) — beer & wine. Lighter menu, great for a quick sit-down drink.</li>
         </ul>
         <div class="info-box" style="margin-top:12px;margin-bottom:0">
@@ -1273,7 +1275,7 @@
         <h4>🍸 OTHER ADULT PERKS AT MAGIC KINGDOM</h4>
         <ul>
           <li><strong>LeFou's Brew</strong> (<a href="https://disneyworld.disney.go.com/dining/magic-kingdom/gastons-tavern/" target="_blank" rel="noopener noreferrer" class="dine-link">Gaston's Tavern</a>, Fantasyland) — frozen non-alcoholic but delicious. Good for grandparents.</li>
-          <li><strong><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/crystal-palace/" target="_blank" rel="noopener noreferrer" class="dine-link">Crystal Palace</a></strong> — Winnie the Pooh character buffet. Grandparents relax sitting down with kids; parents tag-team rides.</li>
+          <li><strong><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/crystal-palace/" target="_blank" rel="noopener noreferrer" class="dine-link">Crystal Palace</a></strong> <a href="https://disneyworld.disney.go.com/dine-res/" target="_blank" class="reserve-link">🗓️ Reserve</a> — Winnie the Pooh character buffet. Grandparents relax sitting down with kids; parents tag-team rides.</li>
           <li><strong>Dole Whip</strong> (Adventureland) — iconic pineapple soft-serve. You can get it with dark rum floated on top at nearby Polynesian resort if you take the monorail.</li>
         </ul>
       </div>
@@ -1517,7 +1519,7 @@
           <div class="rides-grid">
             <div class="ride-card toddler-gold" style="border-left-color:#9b59b6;background:rgba(155,89,182,0.15)">
               <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/hollywood-studios/star-wars-rise-of-the-resistance/" target="_blank" rel="noopener noreferrer">⭐ Star Wars: Rise of the Resistance — YOUR RIDE 🎯</a></div>
-              <div class="ride-note"><strong>The biggest "wow" ride at Hollywood Studios.</strong> 18-min immersive experience — part dark ride, part walk-through, part trackless ride. Feels like a real Star Wars movie. NOT a coaster, NOT scary like Tower of Terror. 40" req (too short for your girls, but grandparents + brother + dad can watch them). <strong>Rider swap this one</strong> — one adult rides while the others do Toy Story Mania with the girls, then swap. Book Lightning Lane day-of or rope-drop.</div>
+              <div class="ride-note"><strong>The biggest "wow" ride at Hollywood Studios.</strong> 18-min immersive experience — part dark ride, part walk-through, part trackless ride. Feels like a real Star Wars movie. NOT a coaster, NOT scary like Tower of Terror. 40" req (too short for the kids, but grandparents + brother + dad can watch them). <strong>Rider swap this one</strong> — one adult rides while the others do Toy Story Mania with the kids, then swap. Book Lightning Lane day-of or rope-drop.</div>
               <div class="ride-tags">
                 <span class="tag tag-height">40" req</span>
                 <span class="tag" style="background:rgba(155,89,182,0.3);color:#d2b4de">⭐ Priority for Priscila</span>
@@ -1538,7 +1540,7 @@
           <div class="cluster-info">
             <div class="cluster-item"><span class="ci-icon">🍺</span> <strong>Oga's Cantina</strong> — Star Wars bar, exotic cocktails. Reservation required. This is where the 3 dads (husband + brother + dad) can do their beer stop while Priscila rides Rise of the Resistance.</div>
             <div class="cluster-item"><span class="ci-icon">🍞</span> <a href="https://disneyworld.disney.go.com/dining/hollywood-studios/docking-bay-7-food-and-cargo/" target="_blank" rel="noopener noreferrer" class="dine-link">Docking Bay 7</a> — quick service sci-fi food</div>
-            <div class="cluster-item"><span class="ci-icon">💡</span> Theming is intense (dark, loud, crowded) — keep a plan to move the girls through quickly to the ride entrance, not linger</div>
+            <div class="cluster-item"><span class="ci-icon">💡</span> Theming is intense (dark, loud, crowded) — keep a plan to move the kids through quickly to the ride entrance, not linger</div>
           </div>
         </div>
       </div>
@@ -1550,7 +1552,7 @@
       <div class="tips-box">
         <h4>🍸 ADULT PERKS AT HOLLYWOOD STUDIOS</h4>
         <ul>
-          <li><strong><a href="https://disneyworld.disney.go.com/dining/hollywood-studios/tune-in-lounge/" target="_blank" rel="noopener noreferrer" class="dine-link">Tune-In Lounge</a></strong> (50's Prime Time Cafe) — throwback cocktails in a 1950s TV room set. One parent watches kids, other grabs a drink. Fun vibe.</li>
+          <li><strong><a href="https://disneyworld.disney.go.com/dining/hollywood-studios/tune-in-lounge/" target="_blank" rel="noopener noreferrer" class="dine-link">Tune-In Lounge</a></strong> (50's Prime Time Cafe) <a href="https://disneyworld.disney.go.com/dine-res/" target="_blank" class="reserve-link">🗓️ Reserve</a> — throwback cocktails in a 1950s TV room set. One parent watches kids, other grabs a drink. Fun vibe.</li>
           <li><strong>Oga's Cantina</strong> (Galaxy's Edge) — Star Wars bar with exotic cocktails + mocktails. Must book reservations in advance. One adult sneaks off while grandparents do Disney Junior meets with the kids. <span style="color:#c8c8b0;font-size:0.88em">· Drinks/snacks extra — about $7.50 to $21+</span></li>
           <li><strong>Indiana Jones Epic Stunt Spectacular</strong> — Live stunt show. Good for grandparents + almost-6yo. almost-4yo might lose attention but won't be scared.</li>
         </ul>
@@ -1759,7 +1761,7 @@
             </div>
             <div class="ride-card toddler-gold" style="border-left-color:#9b59b6;background:rgba(155,89,182,0.15)">
               <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/animal-kingdom/avatar-flight-of-passage/" target="_blank" rel="noopener noreferrer">⭐ Avatar Flight of Passage — YOUR RIDE 🎯</a></div>
-              <div class="ride-note"><strong>Best ride in all of Disney World.</strong> Flying banshee simulator — you physically lean and fly over Pandora. Priscila's must-do. <strong>Rider swap works here</strong> because grandparents + brother + dad are at AK. Book Lightning Lane or rope-drop it first thing (waits hit 120+ min by midday). One adult rides while others do Na'vi River with the girls, then swap.</div>
+              <div class="ride-note"><strong>Best ride in all of Disney World.</strong> Flying banshee simulator — you physically lean and fly over Pandora. Priscila's must-do. <strong>Rider swap works here</strong> because grandparents + brother + dad are at AK. Book Lightning Lane or rope-drop it first thing (waits hit 120+ min by midday). One adult rides while others do Na'vi River with the kids, then swap.</div>
               <div class="ride-tags">
                 <span class="tag tag-height">44" req</span>
                 <span class="tag" style="background:rgba(155,89,182,0.3);color:#d2b4de">⭐ Priority for Priscila</span>
@@ -1768,6 +1770,21 @@
               </div>
             </div>
           </div>
+
+          <!-- KIDS-WHILE-AVATAR-QUEUE CALLOUT -->
+          <div class="info-box" style="margin:10px 0 14px;border-left:3px solid #9b59b6;background:rgba(155,89,182,0.12);padding:12px 16px;font-size:0.88em">
+            <strong style="color:#d2b4de">👧👦 WHERE THE KIDS GO WHILE YOU'RE IN THE AVATAR LINE</strong><br>
+            <span style="color:#c8c8b0">Avatar queue can be 60–120 min. Don't trap the kids in line — grandparents + other adults take them to these nearby Pandora + AK spots:</span>
+            <ul style="margin-top:8px;padding-left:18px;color:#e8e8d4">
+              <li><strong>🛶 <a href="https://disneyworld.disney.go.com/attractions/animal-kingdom/navi-river-journey/" target="_blank" rel="noopener noreferrer" style="color:#d2b4de">Na'vi River Journey</a></strong> (same land, 2 min walk) — gentle slow boat through glowing Pandora forest. No height req. Perfect for both kids. Usually 20–40 min wait. <strong>Best option.</strong></li>
+              <li><strong>🥤 <a href="https://disneyworld.disney.go.com/dining/animal-kingdom/pongu-pongu/" target="_blank" rel="noopener noreferrer" style="color:#d2b4de">Pongu Pongu</a></strong> (Pandora) — glowing Night Blossom drink + pineapple lumpia. Pandora scenery, benches, photo spots. 10 min stop.</li>
+              <li><strong>🦁 <a href="https://disneyworld.disney.go.com/attractions/animal-kingdom/discovery-island-trails/" target="_blank" rel="noopener noreferrer" style="color:#d2b4de">Discovery Island Trails</a></strong> (5 min walk) — self-paced animal walk with lemurs, flamingos, capybaras. Shaded. Kids love it.</li>
+              <li><strong>🐠 <a href="https://disneyworld.disney.go.com/entertainment/animal-kingdom/finding-nemo-big-blue-and-beyond/" target="_blank" rel="noopener noreferrer" style="color:#d2b4de">Finding Nemo: Big Blue and Beyond</a></strong> (Discovery Island) — 40-min A/C musical show. Perfect place to burn off Avatar queue time if it's hot.</li>
+              <li><strong>🌳 <a href="https://disneyworld.disney.go.com/entertainment/animal-kingdom/the-tree-of-life-awakenings/" target="_blank" rel="noopener noreferrer" style="color:#d2b4de">Tree of Life</a></strong> — walk around the iconic tree, spot the hidden animal carvings together. Free, shaded, 10–15 min.</li>
+            </ul>
+            <div style="margin-top:10px;font-size:0.9em;color:#d2b4de"><strong>🔁 Rider-swap flow:</strong> One parent queues Avatar. Other parent + grandparents + kids do Na'vi River. Parent-in-line texts when ~20 min out. Swap at entrance. Both parents get Avatar, kids never in line.</div>
+          </div>
+
           <div class="cluster-info">
             <div class="cluster-item"><span class="ci-icon">🥤</span> Pongu Pongu — Night Blossom drink (glowing, non-alcoholic) — your kids will go NUTS over the color. Also alcoholic version for adults.</div>
             <div class="cluster-item"><span class="ci-icon">🍱</span> <a href="https://disneyworld.disney.go.com/dining/animal-kingdom/satuli-canteen/" target="_blank" rel="noopener noreferrer" class="dine-link">Satu'li Canteen</a> — best quick service in Animal Kingdom. Bowl-style food, good options for kids + adults.</div>
