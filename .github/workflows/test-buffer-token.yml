@@ -52,4 +52,18 @@ jobs:
               if "channel" in f["name"].lower():
                   args = [(a["name"], (a["type"].get("name") or (a["type"].get("ofType") or {}).get("name"))) for a in f.get("args", [])]
                   print(f"  {f['name']}: {args}")
+
+          # 4. ShareMode enum values
+          print("\n=== ShareMode enum ===")
+          r = gql('{ __type(name: "ShareMode") { enumValues { name } } }')
+          print(json.dumps(r.get("data", r), indent=2))
+
+          # 5. ChannelInput fields
+          print("\n=== ChannelInput fields ===")
+          r = gql('{ __type(name: "ChannelInput") { inputFields { name type { name kind ofType { name } } } } }')
+          fields = r.get("data", {}).get("__type", {}).get("inputFields", [])
+          for f in fields:
+              t = f["type"]
+              type_name = t.get("name") or (t.get("ofType") or {}).get("name")
+              print(f"  {f['name']:25} {type_name}")
           EOF
