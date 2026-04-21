@@ -26,38 +26,39 @@ async function main() {
     const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const page    = await browser.newPage();
 
+    // Load with minimal viewport first to count slides
     await page.setViewportSize({ width: 1080, height: 1350 });
 
     // file:// protocol so base64 data-URI images render correctly
     const fileUrl = 'file://' + path.resolve(htmlPath);
     await page.goto(fileUrl, { waitUntil: 'networkidle', timeout: 30000 });
-
-    // Brief settle for any CSS transitions
     await page.waitForTimeout(300);
 
-    const slides = await page.$$('.slide');
-    if (slides.length === 0) {
+    const slideCount = await page.$$eval('.slide', els => els.length);
+    if (slideCount === 0) {
         console.error('No .slide elements found in HTML');
         await browser.close();
         process.exit(1);
     }
 
-    console.log(`Found ${slides.length} slide(s)`);
+    // Resize viewport to fit all slides so clip coordinates are within bounds
+    const totalHeight = slideCount * 1350;
+    await page.setViewportSize({ width: 1080, height: totalHeight });
+    await page.waitForTimeout(150);
 
+    console.log(`Found ${slideCount} slide(s)`);
+
+    const slides = await page.$$('.slide');
     for (let i = 0; i < slides.length; i++) {
-        const nn    = String(i + 1).padStart(2, '0');
-        const name  = `proof_${nn}.png`;
-        const out   = path.join(outDir, name);
+        const nn  = String(i + 1).padStart(2, '0');
+        const name = `proof_${nn}.png`;
+        const out  = path.join(outDir, name);
 
-        const box = await slides[i].boundingBox();
-        if (box && box.height > 0) {
-            await page.screenshot({
-                path: out,
-                clip: { x: box.x, y: box.y, width: 1080, height: 1350 },
-            });
-        } else {
-            await slides[i].screenshot({ path: out });
-        }
+        // Clip by computed position (slides stack vertically at i * 1350)
+        await page.screenshot({
+            path: out,
+            clip: { x: 0, y: i * 1350, width: 1080, height: 1350 },
+        });
 
         const size = fs.statSync(out).size;
         if (size < 10000) {
