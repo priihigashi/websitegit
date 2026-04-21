@@ -271,7 +271,7 @@ jobs:
                           gclient = genai.Client(api_key=key)
                           print("  Gemini: sending...")
                           gresp = gclient.models.generate_content(
-                              model="gemini-2.0-flash-exp",
+                              model="gemini-2.0-flash",
                               contents=[
                                   types.Part.from_bytes(data=img_bytes, mime_type=mime2),
                                   types.Part.from_text(
@@ -302,24 +302,51 @@ jobs:
                   # ── Replicate Clarity Upscaler ───────────────────────────────
                   if do_replicate:
                       try:
+                          import json as _json, time as _time
                           token = os.environ.get("REPLICATE_API_TOKEN", "")
                           if not token:
                               raise Exception("no key")
-                          import replicate as _replicate
-                          print("  Replicate: sending...")
+                          ext_r = "png" if src_path.endswith(".png") else "jpeg"
                           with open(src_path, "rb") as fh:
-                              output = _replicate.run(
-                                  "philz1337x/clarity-upscaler:dfad41707589d68ecdccd1dfa600d55a208f9310748e44bfe35b4a6291453d5e",
-                                  input={
-                                      "image": fh, "prompt": REPLICATE_PROMPT,
-                                      "negative_prompt": REPLICATE_NEG, "scale_factor": 2,
-                                      "dynamic": 6, "creativity": 0, "resemblance": 1,
-                                      "sharpen": 0, "num_inference_steps": 20,
-                                  },
+                              img_b64_r = base64.b64encode(fh.read()).decode()
+                          data_uri_r = "data:image/" + ext_r + ";base64," + img_b64_r
+                          req_body = _json.dumps({
+                              "version": "dfad41707589d68ecdccd1dfa600d55a208f9310748e44bfe35b4a6291453d5e",
+                              "input": {
+                                  "image": data_uri_r, "prompt": REPLICATE_PROMPT,
+                                  "negative_prompt": REPLICATE_NEG, "scale_factor": 2,
+                                  "dynamic": 6, "creativity": 0, "resemblance": 1,
+                                  "sharpen": 0, "num_inference_steps": 20,
+                              }
+                          }).encode()
+                          req_create = urllib.request.Request(
+                              "https://api.replicate.com/v1/predictions",
+                              data=req_body,
+                              headers={"Authorization": "Token " + token, "Content-Type": "application/json"},
+                          )
+                          print("  Replicate: creating prediction...")
+                          with urllib.request.urlopen(req_create) as r:
+                              pred = _json.loads(r.read())
+                          pred_id = pred["id"]
+                          url_r = ""
+                          for _ in range(120):
+                              _time.sleep(5)
+                              req_poll = urllib.request.Request(
+                                  "https://api.replicate.com/v1/predictions/" + pred_id,
+                                  headers={"Authorization": "Token " + token},
                               )
-                          url = str(output) if not isinstance(output, list) else str(output[0])
+                              with urllib.request.urlopen(req_poll) as r:
+                                  status = _json.loads(r.read())
+                              if status["status"] == "succeeded":
+                                  out_r = status.get("output", [])
+                                  url_r = out_r[0] if isinstance(out_r, list) else str(out_r)
+                                  break
+                              if status["status"] in ("failed", "canceled"):
+                                  raise Exception("prediction " + status["status"] + ": " + str(status.get("error", "")))
+                          if not url_r:
+                              raise Exception("prediction timed out")
                           out = tmp_pfx + "_3_replicate.png"
-                          urllib.request.urlretrieve(url, out)
+                          urllib.request.urlretrieve(url_r, out)
                           link = upload_to_drive(out, "3_replicate_clarity2x.png", sf_id)
                           tools_out["replicate"] = {"status": "ok", "file": "3_replicate_clarity2x.png", "drive_link": link}
                           print("  Replicate: ok -> " + link)
@@ -333,16 +360,16 @@ jobs:
                           key = os.environ.get("INFSH_KEY", "")
                           if not key:
                               raise Exception("no key")
-                          from inferencesh import InferenceClient
+                          from inferencesh import Inference
                           ext4 = "jpeg" if src_path.endswith(".jpg") else "png"
                           b64data = base64.b64encode(open(src_path, "rb").read()).decode()
                           data_uri = "data:image/" + ext4 + ";base64," + b64data
-                          nc = InferenceClient(api_key=key)
+                          nc = Inference(api_key=key)
                           print("  NB2: sending to gemini-3-1-flash-image-preview...")
-                          nresult = nc.run(
-                              "google/gemini-3-1-flash-image-preview",
-                              input={"prompt": FULL_PROMPT, "images": [data_uri], "resolution": "2K"},
-                          )
+                          nresult = nc.run({
+                              "app": "google/gemini-3-1-flash-image-preview",
+                              "input": {"prompt": FULL_PROMPT, "images": [data_uri], "resolution": "2K"},
+                          })
                           imgs = nresult.get("images") or nresult.get("output", {}).get("images", [])
                           if not imgs:
                               raise Exception("no images in response")
