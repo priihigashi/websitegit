@@ -163,6 +163,9 @@ def filter_and_normalise(raw, niche, target_type, target_value):
     return passed, rejected
 
 
+INSTAGRAM_TYPES = {"ACCOUNT", "HASHTAG", "KEYWORD", "TOPIC COLLECTING", "HASHTAG — VERIFICAMOS"}
+
+
 def scrape_all_targets(targets):
     """
     targets: {target_type: {niche: [value, ...]}}
@@ -171,6 +174,9 @@ def scrape_all_targets(targets):
     all_results, total_scraped, total_rejected = [], 0, 0
 
     for target_type, niches in targets.items():
+        if target_type not in INSTAGRAM_TYPES:
+            print(f"[scraper] Skipping non-Instagram row type: {target_type}")
+            continue
         for niche, values in niches.items():
             for value in values:
                 if not value.strip():
