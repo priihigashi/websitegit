@@ -369,7 +369,7 @@ def write_candidates(token, candidates):
             "Pending" if c["above_gate"] else "Below Gate",
         ])
 
-    _sheets_append(token, CANDIDATES_TAB, rows)
+    _sheets_update(token, f"'{CANDIDATES_TAB}'!A2", rows)
     above = sum(1 for c in candidates if c["above_gate"])
     print(f"[proof-post] {len(candidates)} groups scored | {above} above confidence gate | written to {CANDIDATES_TAB}")
 
