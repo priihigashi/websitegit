@@ -10,6 +10,7 @@ on:
       destination_folder_id:
         description: 'Drive folder ID where the enhanced image is saved'
         required: true
+        default: '1WdxoKIOFIa0E9eREe-uKLDgD4tLVegTw'
         type: string
       original_filename:
         description: 'Original filename (for output naming)'
@@ -184,19 +185,24 @@ jobs:
           import os, smtplib
           from email.mime.text import MIMEText
 
-          body = f"""✅ Replicate Enhancement Done — {os.environ['ORIGINAL_FILENAME']}
+          fname = os.environ.get("ORIGINAL_FILENAME", "photo")
+          link  = os.environ.get("DRIVE_LINK", "")
+          pwd   = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD", "")
 
-REPLICATE (Clarity Upscaler 2×): {os.environ['DRIVE_LINK']}
+          body = (
+              "Replicate Enhancement Done: " + fname + "\n\n"
+              "Replicate Clarity Upscaler 2x:\n" + link + "\n\n"
+              "This is the 3rd enhanced version. Check Drive for OpenAI + Gemini versions too."
+          )
+          subject = "Replicate Enhanced: " + fname
 
-This is the 3rd enhanced version. Check Drive for OpenAI + Gemini versions too.
-"""
           msg = MIMEText(body)
-          msg['Subject'] = f"✅ Replicate Enhanced: {os.environ['ORIGINAL_FILENAME']}"
-          msg['From']    = "priscila@oakpark-construction.com"
-          msg['To']      = "priscila@oakpark-construction.com"
+          msg["Subject"] = subject
+          msg["From"]    = "priscila@oakpark-construction.com"
+          msg["To"]      = "priscila@oakpark-construction.com"
 
-          with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-              smtp.login('priscila@oakpark-construction.com', os.environ['PRI_OP_GMAIL_APP_PASSWORD'])
+          with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+              smtp.login("priscila@oakpark-construction.com", pwd)
               smtp.send_message(msg)
           print("Email sent")
           PYEOF
