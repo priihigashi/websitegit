@@ -516,6 +516,198 @@ def enhance_one_photo(local_path, file_id, _unused=None, phase="after"):
     return enhanced_path, True, f"original_fallback(ssim={result['ssim']})"
 
 
+# ── Phase 2: Proof-post HTML slide builder ─────────────────────────────────────
+
+def _img_to_b64(local_path: str) -> str:
+    """Encode image file as base64 data URI for inline HTML embedding."""
+    data = Path(local_path).read_bytes()
+    mime = mimetypes.guess_type(local_path)[0] or "image/jpeg"
+    return f"data:{mime};base64,{base64.b64encode(data).decode()}"
+
+
+def build_proof_slides_html(enhanced_entries, post_type, project, today_s, group_key) -> str:
+    """
+    Build Instagram-format HTML proof-post slides (1080×1350 each).
+    Photos embedded as base64 data URIs — no network requests needed at render time.
+    Returns full HTML string; caller writes to disk and runs export_proof.js.
+    """
+    OBSIDIAN = "#0A0A0A"
+    CREAM    = "#F0EBE3"
+    LIME     = "#CBCC10"
+
+    parts   = (group_key + "|||").split("|", 3)
+    address = parts[0].strip().title()
+    service = parts[1].strip()
+    room    = parts[2].strip()
+
+    entries = sorted(enhanced_entries, key=lambda e: (
+        {"before": 0, "during": 1, "progress": 1, "after": 2}.get(e.get("phase", ""), 3),
+        -e.get("quality", 0),
+    ))
+
+    slide_css = f"""
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@400;700&display=swap');
+  *{{margin:0;padding:0;box-sizing:border-box;}}
+  .slide{{width:1080px;height:1350px;background:{OBSIDIAN};position:relative;overflow:hidden;
+         font-family:'Roboto Condensed',Arial,sans-serif;display:block;}}
+  .slide-photo{{width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;}}
+  .ov-bot{{position:absolute;bottom:0;left:0;right:0;height:50%;
+           background:linear-gradient(to top,rgba(10,10,10,.93) 0%,rgba(10,10,10,0) 100%);}}
+  .ov-top{{position:absolute;top:0;left:0;right:0;height:22%;
+           background:linear-gradient(to bottom,rgba(10,10,10,.78) 0%,rgba(10,10,10,0) 100%);}}
+  .opc-mark{{position:absolute;top:40px;right:48px;color:{LIME};
+             font-family:'Anton',Impact,sans-serif;font-size:30px;letter-spacing:5px;}}
+  .badge{{display:inline-block;background:{LIME};color:{OBSIDIAN};
+          font-family:'Anton',Impact,sans-serif;font-size:20px;letter-spacing:3px;
+          padding:7px 18px;text-transform:uppercase;margin-bottom:18px;}}
+  .slide-content{{position:absolute;bottom:56px;left:56px;right:56px;color:{CREAM};}}
+  .proj-title{{font-family:'Anton',Impact,sans-serif;font-size:60px;line-height:1.0;
+               color:{CREAM};text-transform:uppercase;margin-bottom:10px;}}
+  .proj-sub{{font-size:26px;color:{LIME};font-weight:700;text-transform:uppercase;
+             letter-spacing:2px;}}
+  .date-line{{font-size:19px;color:rgba(240,235,227,.6);margin-top:14px;letter-spacing:1px;}}
+  .phase-lbl{{position:absolute;top:40px;left:48px;background:rgba(10,10,10,.82);
+              border-left:4px solid {LIME};color:{CREAM};font-size:20px;font-weight:700;
+              padding:7px 18px;text-transform:uppercase;letter-spacing:2px;}}
+  .photo-n{{position:absolute;bottom:36px;right:48px;color:rgba(240,235,227,.45);
+            font-size:19px;font-family:'Roboto Condensed',Arial,sans-serif;}}
+  .outro{{width:1080px;height:1350px;background:{OBSIDIAN};display:flex;flex-direction:column;
+          align-items:center;justify-content:center;position:relative;overflow:hidden;}}
+  .outro-opc{{font-family:'Anton',Impact,sans-serif;font-size:128px;color:{LIME};
+              letter-spacing:10px;line-height:1;}}
+  .outro-line{{width:100px;height:3px;background:{LIME};margin:28px auto;}}
+  .outro-name{{font-size:34px;color:{CREAM};font-family:'Roboto Condensed',Arial,sans-serif;
+               font-weight:700;text-transform:uppercase;letter-spacing:3px;margin-bottom:20px;}}
+  .outro-cta{{font-size:24px;color:rgba(240,235,227,.60);letter-spacing:1px;
+              text-transform:uppercase;text-align:center;max-width:800px;line-height:1.4;}}
+  .outro-lic{{position:absolute;bottom:36px;font-size:17px;color:rgba(240,235,227,.28);
+              letter-spacing:1px;}}
+</style>"""
+
+    slides = []
+    total = len(entries) + 1  # photos + outro
+
+    # ── Cover slide ──
+    best_b64 = _img_to_b64(entries[0]["local_path"])
+    cover_phase = entries[0].get("phase", "progress").upper()
+    slides.append(f"""
+<div class="slide">
+  <img class="slide-photo" src="{best_b64}" />
+  <div class="ov-top"></div><div class="ov-bot"></div>
+  <div class="opc-mark">OPC</div>
+  <div class="slide-content">
+    <div class="badge">Progress Update</div>
+    <div class="proj-title">{address}</div>
+    <div class="proj-sub">{service}</div>
+    <div class="date-line">{today_s}</div>
+  </div>
+</div>""")
+
+    # ── Photo slides ──
+    for i, entry in enumerate(entries[1:], start=2):
+        b64   = _img_to_b64(entry["local_path"])
+        phase = entry.get("phase", "progress").upper()
+        fallback_note = " [orig]" if entry.get("fallback") else ""
+        slides.append(f"""
+<div class="slide">
+  <img class="slide-photo" src="{b64}" />
+  <div class="ov-top"></div><div class="ov-bot"></div>
+  <div class="opc-mark">OPC</div>
+  <div class="phase-lbl">{phase}{fallback_note}</div>
+  <div class="photo-n">{i} / {total}</div>
+</div>""")
+
+    # ── Outro slide ──
+    cta_text = (room or service or "Quality Craftsmanship")
+    slides.append(f"""
+<div class="slide outro">
+  <div class="outro-opc">OPC</div>
+  <div class="outro-line"></div>
+  <div class="outro-name">Oak Park Construction</div>
+  <div class="outro-cta">{cta_text}</div>
+  <div class="outro-lic">© {today_s[:4]} Oak Park Construction — License CBC1263425</div>
+</div>""")
+
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>OPC Proof Post — {address}</title>
+{slide_css}
+</head><body style="background:#111;padding:0;margin:0;">
+{"".join(slides)}
+</body></html>"""
+
+
+def render_proof_pngs(html_path: str, out_dir: str) -> list:
+    """Run export_proof.js → list of rendered proof_NN.png paths (sorted)."""
+    js = os.environ.get("EXPORT_PROOF_JS", EXPORT_PROOF_JS)
+    if not os.path.exists(js):
+        print(f"  ⚠️  export_proof.js not found at {js} — skipping PNG render")
+        return []
+    try:
+        r = subprocess.run(["node", js, html_path, out_dir],
+                           capture_output=True, text=True, timeout=120)
+        for line in r.stdout.splitlines():
+            print(f"  [playwright] {line}")
+        if r.returncode != 0:
+            print(f"  ⚠️  export_proof.js stderr: {r.stderr[:400]}")
+            return []
+        return sorted(Path(out_dir).glob("proof_*.png"))
+    except Exception as e:
+        print(f"  ⚠️  PNG render failed (non-fatal): {e}")
+        return []
+
+
+def render_proof_motion(cover_png: str, out_dir: str, duration_s: int = 5) -> dict:
+    """Ken Burns zoompan on cover PNG → MP4 + GIF + preview_frame.jpg.
+    Non-fatal: returns dict with None values on failure."""
+    out        = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    mp4_path   = out / "cover_motion.mp4"
+    gif_path   = out / "cover_motion.gif"
+    frame_path = out / "preview_frame.jpg"
+    fps        = 30
+    frames     = duration_s * fps
+
+    # Slow zoom-in 1.0→1.05x with gentle pan — construction photo feels
+    zp = (f"zoompan=z='min(zoom+0.0003,1.05)':"
+          f"x='iw/2-(iw/zoom/2)+sin(on/{fps})*4':"
+          f"y='ih/2-(ih/zoom/2)':d={frames}:s=1080x1350:fps={fps}")
+    try:
+        r = subprocess.run([
+            "ffmpeg", "-y", "-loop", "1", "-i", cover_png,
+            "-vf", zp, "-t", str(duration_s),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+            str(mp4_path),
+        ], capture_output=True, timeout=90)
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr[-400:].decode("utf-8", "replace"))
+        print(f"  ✅ Motion MP4 → {mp4_path.name}")
+
+        subprocess.run([
+            "ffmpeg", "-y", "-i", str(mp4_path), "-t", "3",
+            "-vf", "fps=5,scale=540:-1:flags=lanczos", str(gif_path),
+        ], capture_output=True, timeout=60)
+        if gif_path.exists():
+            print(f"  ✅ Motion GIF → {gif_path.name}")
+
+        subprocess.run([
+            "ffmpeg", "-y", "-i", str(mp4_path),
+            "-frames:v", "1", "-q:v", "2", str(frame_path),
+        ], capture_output=True, timeout=15)
+
+        return {"mp4": str(mp4_path), "gif": str(gif_path) if gif_path.exists() else None,
+                "frame": str(frame_path) if frame_path.exists() else None}
+    except Exception as e:
+        print(f"  ⚠️  Motion render failed (non-fatal): {e}")
+        try:
+            shutil.copy(cover_png, str(frame_path))
+        except Exception:
+            pass
+        return {"mp4": None, "gif": None,
+                "frame": str(frame_path) if frame_path.exists() else None}
+
+
 # ── Phase 2: Preview collage ───────────────────────────────────────────────────
 
 def build_proof_collage(photo_entries, output_path, post_type):
@@ -600,6 +792,13 @@ def send_proof_preview_email(project, post_type, confidence, group_key,
 
     subject      = f"{flag}OPC Proof Post Preview — {project} | {post_type} | conf={confidence}"
     collage_link = subfolder_links.get("collage", subfolder_links.get("png", "#"))
+    slides_link  = subfolder_links.get("slides", subfolder_links.get("png", "#"))
+    motion_link  = subfolder_links.get("motion_folder", "")
+
+    slides_row = (f'<li><a href="{slides_link}">png/ — proof slides (Instagram format)</a></li>'
+                  if slides_link else "")
+    motion_row = (f'<li><a href="{motion_link}">motion/ — Ken Burns MP4 + GIF</a></li>'
+                  if motion_link else "")
 
     html = f"""<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:20px;">
@@ -615,22 +814,27 @@ def send_proof_preview_email(project, post_type, confidence, group_key,
 <p>
   <a href="{collage_link}" style="background:#cbcc10;color:#0a0a0a;padding:10px 18px;
      text-decoration:none;font-weight:bold;border-radius:4px;">View Preview Collage</a>
+  &nbsp;
+  <a href="{slides_link}" style="background:#0a0a0a;color:#cbcc10;padding:10px 18px;
+     text-decoration:none;font-weight:bold;border-radius:4px;border:2px solid #cbcc10;">View Proof Slides (PNG)</a>
 </p>
 <p><a href="{run_folder_link}">Open full run folder in Drive</a></p>
 <ul style="line-height:1.8;">
-  <li><a href="{subfolder_links.get('originals_used','#')}">originals_used/</a></li>
-  <li><a href="{subfolder_links.get('enhanced','#')}">enhanced/</a></li>
-  <li><a href="{subfolder_links.get('png','#')}">png/ (preview collage)</a></li>
+  <li><a href="{subfolder_links.get('originals_used','#')}">originals_used/ — downloaded originals</a></li>
+  <li><a href="{subfolder_links.get('enhanced','#')}">enhanced/ — PIL-enhanced copies</a></li>
+  {slides_row}
+  {motion_row}
+  <li><a href="{subfolder_links.get('html','#')}">html/ — proof_slides.html source</a></li>
 </ul>
 <hr style="margin:20px 0;">
 <h3>Reply to approve or reject</h3>
 <p>
-  <strong>APPROVE</strong> → proceed to final carousel build<br>
+  <strong>APPROVE</strong> → proceed to Buffer scheduling<br>
   <strong>REJECT</strong> → discard this candidate<br>
   <strong>SKIP</strong> → keep as candidate for later
 </p>
 <p style="font-size:11px;color:#999;margin-top:32px;">
-  OPC Proof-Post Pipeline — Phase 2 preview asset only, not final carousel format
+  OPC Proof-Post Pipeline — opc-proof-post.yml Phase 2
 </p>
 </body></html>"""
 
@@ -809,6 +1013,52 @@ def run_phase2(token, group_key):
         print("❌ No photos processed successfully — aborting Phase 2")
         sys.exit(1)
 
+    # ── Proof-post HTML slides + PNG render ────────────────────────────────────
+    print("[proof-post] Building proof-post HTML slides ...")
+    proof_html = build_proof_slides_html(
+        enhanced_entries, post_type, project, today_s, group_key)
+    html_path  = run_dir / "html" / "proof_slides.html"
+    html_path.write_text(proof_html, encoding="utf-8")
+    try:
+        _drive_upload_file_multipart(
+            token, str(html_path), "proof_slides.html", sub_ids["html"])
+        print(f"  ✅ HTML uploaded to html/")
+    except Exception as e:
+        print(f"  ⚠️  HTML upload failed (non-fatal): {e}")
+
+    print("[proof-post] Rendering proof PNGs via Playwright ...")
+    png_dir   = run_dir / "png"
+    proof_pngs = render_proof_pngs(str(html_path), str(png_dir))
+    for png in proof_pngs:
+        try:
+            _drive_upload_file_multipart(token, str(png), png.name, sub_ids["png"])
+            print(f"  ✅ Uploaded {png.name}")
+        except Exception as e:
+            print(f"  ⚠️  PNG upload failed {png.name}: {e}")
+    if proof_pngs:
+        sub_links["slides"] = sub_links["png"]
+
+    # ── Ken Burns motion (cover PNG) ───────────────────────────────────────────
+    cover_png = str(proof_pngs[0]) if proof_pngs else None
+    motion_links = {}
+    if cover_png and Path(cover_png).exists():
+        print("[proof-post] Rendering Ken Burns motion ...")
+        motion_result = render_proof_motion(cover_png, str(run_dir / "motion"))
+        for key, fpath in motion_result.items():
+            if fpath and Path(fpath).exists():
+                fname = Path(fpath).name
+                try:
+                    _, mlink = _drive_upload_file_multipart(
+                        token, fpath, fname, sub_ids["motion"])
+                    motion_links[key] = mlink
+                    print(f"  ✅ Motion uploaded: {fname}")
+                except Exception as e:
+                    print(f"  ⚠️  Motion upload failed {fname}: {e}")
+        if motion_links:
+            sub_links["motion_folder"] = sub_links["motion"]
+    else:
+        print("  ⚠️  No cover PNG available — skipping motion render")
+
     # ── Preview collage ────────────────────────────────────────────────────────
     collage_name  = f"collage_{slug}_{today_s.replace('-','')}.jpg"
     collage_local = run_dir / "png" / collage_name
@@ -838,6 +1088,8 @@ def run_phase2(token, group_key):
     print(f"\n✅ Phase 2 complete")
     print(f"   Run folder : {run_link}")
     print(f"   Enhanced   : {summary['enhanced']} | Fallback: {summary['fallback']}")
+    print(f"   Slides     : {len(proof_pngs)} PNGs rendered")
+    print(f"   Motion     : {'✅ MP4+GIF' if motion_links.get('mp4') else '⚠️ skipped'}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
