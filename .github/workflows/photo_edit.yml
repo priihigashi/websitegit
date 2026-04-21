@@ -271,7 +271,7 @@ jobs:
                           gclient = genai.Client(api_key=key)
                           print("  Gemini: sending...")
                           gresp = gclient.models.generate_content(
-                              model="gemini-2.0-flash",
+                              model="gemini-2.5-flash-image",
                               contents=[
                                   types.Part.from_bytes(data=img_bytes, mime_type=mime2),
                                   types.Part.from_text(
@@ -311,7 +311,6 @@ jobs:
                               img_b64_r = base64.b64encode(fh.read()).decode()
                           data_uri_r = "data:image/" + ext_r + ";base64," + img_b64_r
                           req_body = _json.dumps({
-                              "version": "dfad41707589d68ecdccd1dfa600d55a208f9310748e44bfe35b4a6291453d5e",
                               "input": {
                                   "image": data_uri_r, "prompt": REPLICATE_PROMPT,
                                   "negative_prompt": REPLICATE_NEG, "scale_factor": 2,
@@ -320,9 +319,9 @@ jobs:
                               }
                           }).encode()
                           req_create = urllib.request.Request(
-                              "https://api.replicate.com/v1/predictions",
+                              "https://api.replicate.com/v1/models/philz1337x/clarity-upscaler/predictions",
                               data=req_body,
-                              headers={"Authorization": "Token " + token, "Content-Type": "application/json"},
+                              headers={"Authorization": "Bearer " + token, "Content-Type": "application/json", "Prefer": "wait"},
                           )
                           print("  Replicate: creating prediction...")
                           with urllib.request.urlopen(req_create) as r:
@@ -354,37 +353,44 @@ jobs:
                           tools_out["replicate"] = {"status": "failed", "error": str(e)[:200]}
                           print("  Replicate FAILED: " + str(e)[:200])
 
-                  # ── Nano Banana 2 — Gemini 3.1 Flash via inference.sh ────────
+                  # ── Nano Banana 2 — Gemini 3.1 Flash Image via Gemini API ────
                   if do_nb2:
                       try:
-                          key = os.environ.get("INFSH_KEY", "")
+                          key = os.environ.get("GEMINI_API_KEY", "")
                           if not key:
                               raise Exception("no key")
-                          from inferencesh import Inference
-                          ext4 = "jpeg" if src_path.endswith(".jpg") else "png"
-                          b64data = base64.b64encode(open(src_path, "rb").read()).decode()
-                          data_uri = "data:image/" + ext4 + ";base64," + b64data
-                          nc = Inference(api_key=key)
-                          print("  NB2: sending to gemini-3-1-flash-image-preview...")
-                          nresult = nc.run({
-                              "app": "google/gemini-3-1-flash-image-preview",
-                              "input": {"prompt": FULL_PROMPT, "images": [data_uri], "resolution": "2K"},
-                          })
-                          imgs = nresult.get("images") or nresult.get("output", {}).get("images", [])
-                          if not imgs:
-                              raise Exception("no images in response")
-                          img4 = imgs[0]
-                          out = tmp_pfx + "_4_nb2.png"
-                          if isinstance(img4, str) and img4.startswith("http"):
-                              urllib.request.urlretrieve(img4, out)
-                          elif isinstance(img4, str) and "base64," in img4:
-                              open(out, "wb").write(base64.b64decode(img4.split("base64,")[1]))
-                          else:
-                              raw4 = base64.b64decode(img4) if isinstance(img4, str) else img4
-                              open(out, "wb").write(raw4)
-                          link = upload_to_drive(out, "4_nb2_gemini31flash.png", sf_id)
-                          tools_out["nb2"] = {"status": "ok", "file": "4_nb2_gemini31flash.png", "drive_link": link}
-                          print("  NB2: ok -> " + link)
+                          from google import genai
+                          from google.genai import types as gtypes
+                          mime4, _ = mimetypes.guess_type(src_path)
+                          mime4 = mime4 or "image/jpeg"
+                          img4_bytes = open(src_path, "rb").read()
+                          gclient4 = genai.Client(api_key=key)
+                          print("  NB2: sending to gemini-3.1-flash-image-preview...")
+                          gresp4 = gclient4.models.generate_content(
+                              model="gemini-3.1-flash-image-preview",
+                              contents=[
+                                  gtypes.Part.from_bytes(data=img4_bytes, mime_type=mime4),
+                                  gtypes.Part.from_text(
+                                      text="TASK: Photo enhancement only. Do NOT redesign.\n" + FULL_PROMPT
+                                  ),
+                              ],
+                              config=gtypes.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"]),
+                          )
+                          found4 = False
+                          for part4 in gresp4.candidates[0].content.parts:
+                              if hasattr(part4, "inline_data") and part4.inline_data:
+                                  raw4 = part4.inline_data.data
+                                  if isinstance(raw4, str):
+                                      raw4 = base64.b64decode(raw4)
+                                  out = tmp_pfx + "_4_nb2.png"
+                                  open(out, "wb").write(raw4)
+                                  link = upload_to_drive(out, "4_nb2_gemini31flash.png", sf_id)
+                                  tools_out["nb2"] = {"status": "ok", "file": "4_nb2_gemini31flash.png", "drive_link": link}
+                                  print("  NB2: ok -> " + link)
+                                  found4 = True
+                                  break
+                          if not found4:
+                              raise Exception("no image in response")
                       except Exception as e:
                           tools_out["nb2"] = {"status": "failed", "error": str(e)[:200]}
                           print("  NB2 FAILED: " + str(e)[:200])
