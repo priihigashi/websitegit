@@ -1156,7 +1156,11 @@ def _buffer_graphql(query, variables=None):
                  "Content-Type": "application/json",
                  "User-Agent": "BufferClient/1.0 (automation)",
                  "Accept": "application/json"})
-    resp = json.loads(urllib.request.urlopen(req, timeout=15).read())
+    try:
+        resp = json.loads(urllib.request.urlopen(req, timeout=15).read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()[:500]
+        raise Exception(f"HTTP {e.code}: {body}")
     if "errors" in resp:
         raise Exception(f"GraphQL errors: {resp['errors']}")
     return resp.get("data", {})
