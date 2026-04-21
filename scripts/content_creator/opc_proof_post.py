@@ -110,17 +110,6 @@ no new doors, no changed cabinets, no changed counters, no changed tile, no fake
 replacement, no face/body changes, no text/logo/watermark artifacts, no AI hallucinations.
 """.strip()
 
-# ── Phase 2 constants ──────────────────────────────────────────────────────────
-# Content Creation workspace — proof-post run folders land here
-DRIVE_CONTENT_CREATION_FOLDER = "1um7y2Yt8zi9KGxev6kfFJYgrkMYwrCNh"
-PROOF_POSTS_PARENT_NAME       = "Proof Posts"
-OPENAI_API_KEY                = os.environ.get("OPENAI_API_KEY", "")
-GMAIL_APP_PASSWORD            = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD", "")
-PREVIEW_EMAIL_TO              = "priscila@oakpark-construction.com"
-# 15% mean absolute pixel diff → reject OpenAI output as hallucinated
-PIXEL_DIFF_REJECT_THRESHOLD   = 0.15
-
-
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 def _get_token() -> str:
@@ -746,6 +735,7 @@ def run_phase2(token, group_key):
     print(f"[proof-post] {len(photos)} photos | {post_type} | conf={confidence}")
 
     slug    = re.sub(r"[^a-z0-9]+", "-", group_key.lower()).strip("-")[:40]
+    today_s = date.today().isoformat()
     ver_n   = _next_version_number(token, slug)
     run_name = f"v{ver_n}_proof-{slug}"   # follows CAROUSEL_FOLDER_STANDARD
 
