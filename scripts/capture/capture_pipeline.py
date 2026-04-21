@@ -856,8 +856,10 @@ def download_audio(url: str, tmp_dir: str, metadata: dict = None) -> str:
         if audio:
             return audio
 
-    print("  ERROR: all download methods failed for this URL")
-    sys.exit(1)
+    # Raise instead of sys.exit — lets __main__ distinguish photo posts from real failures.
+    if re.search(r'instagram\.com/p/', url):
+        raise RuntimeError("__ig_photo_post__ no video found for Instagram /p/ URL — likely a photo post, not a reel")
+    raise RuntimeError("all download methods failed")
 
 
 # ─── STEP 1b: VIDEO DOWNLOAD ────────────────────────────────────────────────
@@ -1521,6 +1523,68 @@ def _mark_queue_processed(url: str):
                 return
     except Exception as e:
         print(f"  WARNING _mark_queue_processed (non-fatal): {e}")
+
+
+def _mark_queue_failed(url: str, reason: str = "error"):
+    """Write failure status back to Drop Links or Inspiration Library for this URL.
+    Called on pipeline failure so the scheduled poller doesn't retry forever.
+    Non-fatal — never blocks pipeline exit.
+    """
+    import urllib.request as _ur
+    import urllib.parse as _up
+    raw = os.getenv("SHEETS_TOKEN", "")
+    if not raw or not url:
+        return
+    try:
+        td = json.loads(raw)
+        data = _up.urlencode({
+            "client_id": td["client_id"], "client_secret": td["client_secret"],
+            "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
+        }).encode()
+        resp = json.loads(_ur.urlopen(
+            _ur.Request("https://oauth2.googleapis.com/token", data=data)
+        ).read())
+        token = resp["access_token"]
+
+        sheet_id = IDEAS_INBOX_ID
+        norm = url.split("?")[0].rstrip("/")
+        note_val = f"capture_pipeline: {reason} — {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+
+        # (tab_name, read_range, url_col_idx, status_col, note_col)
+        # Drop Links:           URL=col A(0), status=col C, note=col D
+        # Inspiration Library:  URL=col D(3), status=col S, note=col V
+        tabs = [
+            ("🎯 Drop Links",          "A2:E", 0, "C", "D"),
+            ("📥 Inspiration Library", "A2:V", 3, "S", "V"),
+        ]
+        for tab_name, tab_range, url_idx, status_col, note_col in tabs:
+            enc = _up.quote(f"'{tab_name}'!{tab_range}", safe="!:'")
+            rows_resp = json.loads(_ur.urlopen(
+                _ur.Request(
+                    f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc}",
+                    headers={"Authorization": f"Bearer {token}"}
+                )
+            ).read())
+            for i, row in enumerate(rows_resp.get("values", [])):
+                row_url = (row[url_idx].strip() if len(row) > url_idx else "").split("?")[0].rstrip("/")
+                if row_url == norm:
+                    sheet_row = i + 2
+                    body = json.dumps({
+                        "valueInputOption": "USER_ENTERED",
+                        "data": [
+                            {"range": f"'{tab_name}'!{status_col}{sheet_row}", "values": [[reason]]},
+                            {"range": f"'{tab_name}'!{note_col}{sheet_row}", "values": [[note_val]]},
+                        ],
+                    }).encode()
+                    _ur.urlopen(_ur.Request(
+                        f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values:batchUpdate",
+                        data=body,
+                        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                    )).read()
+                    print(f"  Queue row {sheet_row} in '{tab_name}' marked '{reason}'")
+                    return
+    except Exception as e:
+        print(f"  WARNING _mark_queue_failed (non-fatal): {e}")
 
 
 # ─── PIPELINES ────────────────────────────────────────────────────────────────
@@ -2642,12 +2706,18 @@ def main():
 
 
 if __name__ == "__main__":
+    _url_for_failure = sys.argv[1] if len(sys.argv) > 1 else ""
     try:
         main()
     except Exception as exc:
         import traceback
         tb = traceback.format_exc()
         print(f"\nFATAL ERROR:\n{tb}")
+        _is_photo_post = "__ig_photo_post__" in str(exc)
+        _mark_queue_failed(_url_for_failure, "no-video" if _is_photo_post else "error")
+        if _is_photo_post:
+            print("  Instagram /p/ post with no video — marked no-video in queue, exiting cleanly.")
+            sys.exit(0)
         send_notification_email(
             subject="CAPTURE FAILED — check GitHub Actions",
             body=f"Pipeline crashed.\n\nError: {exc}\n\nTraceback:\n{tb}\n\nArgs: {' '.join(sys.argv[1:])}",
