@@ -24,7 +24,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install anthropic openai google-generativeai replicate google-auth google-auth-httplib2 google-api-python-client requests pytz
+        run: pip install anthropic openai google-generativeai replicate google-auth google-auth-httplib2 google-api-python-client requests pytz beautifulsoup4
 
       - name: Restore CLAUDE.md for mirror step
         env:

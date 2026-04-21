@@ -212,4 +212,60 @@ def scrape_all_targets(targets):
                 except Exception as e:
                     print(f"[scraper] ERROR on {target_type}/{niche}/{value}: {e}")
 
+
+def scrape_website_articles(url, niche):
+    """
+    Fetches article titles + links from a website URL.
+    Returns items compatible with save_scraped_to_inspiration_library.
+    """
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        print(f"[scraper] beautifulsoup4 not installed — skipping website scrape for {url}")
+        return []
+
+    full_url = url if url.startswith("http") else f"https://{url}"
+    try:
+        resp = requests.get(full_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"[scraper] Website fetch failed for {url}: {e}")
+        return []
+
+    from urllib.parse import urljoin
+    soup = BeautifulSoup(resp.text, "html.parser")
+    articles = []
+    seen = set()
+
+    for tag in soup.find_all(["article", "h2", "h3", "h4"]):
+        a = tag.find("a", href=True) or (tag if tag.name == "a" else None)
+        if a and a.name == "a":
+            title = a.get_text(strip=True)
+            href  = urljoin(full_url, a.get("href", ""))
+        else:
+            title = tag.get_text(strip=True)
+            href  = full_url
+
+        if not title or len(title) < 10 or title in seen:
+            continue
+        seen.add(title)
+
+        articles.append({
+            "url":          href,
+            "caption":      title,
+            "platform":     "website",
+            "content_type": "Blog Idea",
+            "views":        0,
+            "niche":        niche,
+            "target_type":  "WEBSITE",
+            "target_value": url,
+            "series_override": "",
+        })
+
+        if len(articles) >= 20:
+            break
+
+    print(f"[scraper] WEBSITE/{niche}/{url}: {len(articles)} articles found")
+    return articles
+
     return all_results, total_scraped, total_rejected

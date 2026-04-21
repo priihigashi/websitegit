@@ -74,6 +74,26 @@ def read_scraping_targets():
     return targets
 
 
+def read_scraping_destinations():
+    """Returns {target_type: destination} from column G (DESTINATION).
+    Values: 'instagram' | 'blog' | 'both' | 'reference'
+    Defaults to 'instagram' if column is missing or empty.
+    """
+    result = _service().spreadsheets().values().get(
+        spreadsheetId=SPREADSHEET_ID,
+        range="'🎯 Scraping Targets'!A1:G50",
+    ).execute()
+    rows = result.get("values", [])
+    destinations = {}
+    for row in rows[1:]:
+        if not row:
+            continue
+        target_type = row[0].strip()
+        if target_type:
+            destinations[target_type] = row[6].strip().lower() if len(row) > 6 else "instagram"
+    return destinations
+
+
 # ─── Content Queue ────────────────────────────────────────────────────────────
 # Columns: Date Created | Project Name | Service Type | Photo(s) Used |
 #          Content Type | Hook | Caption Body | CTA | Hashtags | Status |
@@ -248,7 +268,7 @@ def save_scraped_to_inspiration_library(items):
         put("date added", today)
         put("platform", item.get("platform", "instagram").capitalize())
         put("url", url)
-        put("content type", "Reel")
+        put("content type", item.get("content_type", "Reel"))
         put("description", item.get("caption", "")[:200])
         put("views", str(item.get("views", "")) if item.get("views") else "")
         put("niche", item.get("niche", "").title())

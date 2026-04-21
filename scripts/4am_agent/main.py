@@ -25,11 +25,12 @@ from pathlib import Path
 import pytz
 from datetime import datetime
 
-from scraper          import scrape_all_targets
+from scraper          import scrape_all_targets, scrape_website_articles
 from script_generator import pick_topics_and_write_scripts
 from broll_finder     import get_broll_for_script
 from sheets_writer    import (
     read_scraping_targets,
+    read_scraping_destinations,
     append_to_content_queue,
     update_clip_collections,
     append_run_log,
@@ -79,6 +80,22 @@ def main():
         targets = read_scraping_targets()
         if not targets:
             raise ValueError("Scraping Targets tab is empty. Add accounts/hashtags and retry.")
+
+        # -- 1b. Scrape websites → Inspiration Library (blog/both destinations) --
+        destinations = read_scraping_destinations()
+        for niche, urls in targets.get("WEBSITE", {}).items():
+            dest = destinations.get("WEBSITE", "blog")
+            if dest in ("blog", "both"):
+                for url in urls:
+                    if not url.strip():
+                        continue
+                    try:
+                        articles = scrape_website_articles(url.strip(), niche)
+                        if articles:
+                            added = save_scraped_to_inspiration_library(articles)
+                            print(f"[{log_pfx}]   Website/{niche}/{url}: {added} articles → Inspiration Library")
+                    except Exception as we:
+                        print(f"[{log_pfx}]   WARNING: Website scrape failed for {url}: {we}")
 
         # -- 2. Scrape (graceful fallback) --
         print(f"[{log_pfx}] Step 2: Scraping via Apify...")
