@@ -284,6 +284,67 @@
   .path-arrow { color: #666; font-size: 0.9em; }
   .path-time { color: #888; font-size: 0.75em; white-space: nowrap; }
 
+  /* Quick Links Hub (top of page) */
+  .quick-hub {
+    background: linear-gradient(135deg, rgba(155,89,247,0.12), rgba(52,152,219,0.08));
+    border: 1px solid rgba(255,215,0,0.25);
+    border-radius: 14px;
+    padding: 22px 26px;
+    margin: 20px 0 30px;
+  }
+  .quick-hub-title {
+    color: #ffd700;
+    font-size: 1.05em;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .quick-hub-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 14px;
+  }
+  .quick-card {
+    background: rgba(0,0,0,0.35);
+    border-radius: 10px;
+    padding: 14px 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .quick-card:hover { transform: translateY(-2px); border-color: rgba(255,215,0,0.4); }
+  .quick-card h4 {
+    color: #ffd700;
+    font-size: 0.88em;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .quick-card ul { list-style: none; padding: 0; margin: 0; }
+  .quick-card li { margin: 4px 0; font-size: 0.82em; line-height: 1.4; }
+  .quick-card a {
+    color: #90caf9;
+    text-decoration: none;
+    padding: 2px 0;
+    display: inline-block;
+  }
+  .quick-card a:hover { color: #ffd700; text-decoration: underline; }
+  .quick-card .pill {
+    display: inline-block;
+    font-size: 0.7em;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 4px;
+    background: rgba(255,215,0,0.15);
+    color: #ffd700;
+    border: 1px solid rgba(255,215,0,0.3);
+  }
+  .quick-card .pill-lane { background: rgba(46,204,113,0.15); color: #2ecc71; border-color: rgba(46,204,113,0.3); }
+  .quick-card .pill-paid { background: rgba(231,76,60,0.15); color: #e74c3c; border-color: rgba(231,76,60,0.3); }
+  .quick-card .hint { font-size: 0.72em; color: #888; margin-top: 6px; font-style: italic; }
+  .quick-card.card-accent { background: linear-gradient(135deg, rgba(155,89,247,0.2), rgba(0,0,0,0.4)); }
+
   /* Park Map Link Block */
   .park-map-link {
     background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,215,0,0.04));
@@ -369,6 +430,102 @@
 </div>
 
 <div class="container">
+
+  <!-- QUICK LINKS HUB -->
+  <div class="quick-hub">
+    <div class="quick-hub-title">⚡ QUICK LINKS — save this for the trip</div>
+    <div class="quick-hub-grid">
+
+      <div class="quick-card card-accent">
+        <h4>📱 MUST-HAVE APPS</h4>
+        <ul>
+          <li><a href="https://apps.apple.com/us/app/my-disney-experience/id1352357054" target="_blank">My Disney Experience <span class="pill">iOS</span></a></li>
+          <li><a href="https://play.google.com/store/apps/details?id=com.disney.wdpro.dlog" target="_blank">My Disney Experience <span class="pill">Android</span></a></li>
+          <li><a href="https://disneyworld.disney.go.com/plan/my-disney-experience/bands-cards/" target="_blank">MagicBand+ info ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/mobile-order/" target="_blank">Mobile Order dining ↗</a></li>
+        </ul>
+        <div class="hint">Download BEFORE you go. Link tickets + reserve Lightning Lane.</div>
+      </div>
+
+      <div class="quick-card">
+        <h4>⚡ LIGHTNING LANE (skip the line)</h4>
+        <ul>
+          <li><a href="https://disneyworld.disney.go.com/genie/" target="_blank">Lightning Lane overview <span class="pill-paid pill">PAID</span></a></li>
+          <li><a href="https://disneyworld.disney.go.com/genie/lightning-lane-multi-pass/" target="_blank">Multi Pass $15–$32/day <span class="pill-paid pill">per person</span></a></li>
+          <li><a href="https://disneyworld.disney.go.com/genie/lightning-lane-single-pass/" target="_blank">Single Pass (top rides) <span class="pill-paid pill">extra</span></a></li>
+          <li><a href="https://disneyworld.disney.go.com/genie/" target="_blank">Free Genie tips ↗ <span class="pill-lane pill">FREE</span></a></li>
+        </ul>
+        <div class="hint">Buy Multi Pass at 7am day-of. Priority: Seven Dwarfs Mine Train (MK), Slinky Dog (HS), Avatar FoP (AK).</div>
+      </div>
+
+      <div class="quick-card">
+        <h4>🗺️ INTERACTIVE PARK MAPS</h4>
+        <ul>
+          <li><a href="https://disneyworld.disney.go.com/maps/magic-kingdom/" target="_blank">🏰 Magic Kingdom map ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/maps/hollywood-studios/" target="_blank">🎬 Hollywood Studios map ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/maps/animal-kingdom/" target="_blank">🦁 Animal Kingdom map ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/maps/" target="_blank">All parks + resorts ↗</a></li>
+        </ul>
+        <div class="hint">Opens in-app for live wait times + bathroom/food filters.</div>
+      </div>
+
+      <div class="quick-card">
+        <h4>🍽️ DINING BY PARK</h4>
+        <ul>
+          <li><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/" target="_blank">🏰 MK restaurants ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/dining/hollywood-studios/" target="_blank">🎬 HS restaurants ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/dining/animal-kingdom/" target="_blank">🦁 AK restaurants ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/dining/reservations/" target="_blank">Reservations (60 days out) ↗</a></li>
+        </ul>
+        <div class="hint">Book character dining NOW — Cinderella's Royal Table books fastest.</div>
+      </div>
+
+      <div class="quick-card">
+        <h4>🎭 DINING SPOTLIGHTS</h4>
+        <ul>
+          <li><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/cinderella-royal-table/" target="_blank">👸 Cinderella's Royal Table (MK)</a></li>
+          <li><a href="https://disneyworld.disney.go.com/dining/magic-kingdom/be-our-guest-restaurant/" target="_blank">🌹 Be Our Guest (MK)</a></li>
+          <li><a href="https://disneyworld.disney.go.com/dining/hollywood-studios/oga-cantina/" target="_blank">🍺 Oga's Cantina (HS — dads' beer)</a></li>
+          <li><a href="https://disneyworld.disney.go.com/dining/animal-kingdom/nomad-lounge/" target="_blank">🍸 Nomad Lounge (AK — hidden gem)</a></li>
+        </ul>
+        <div class="hint">Pre-book via My Disney Experience — walk-ups are rare at these.</div>
+      </div>
+
+      <div class="quick-card">
+        <h4>⏱️ LIVE WAIT TIMES & PLANNING</h4>
+        <ul>
+          <li><a href="https://thrill-data.com/waits/" target="_blank">Thrill Data — live waits ↗</a></li>
+          <li><a href="https://touringplans.com/walt-disney-world/crowd-calendar" target="_blank">Touring Plans crowd calendar ↗</a></li>
+          <li><a href="https://queue-times.com/parks/6/queue_times" target="_blank">Queue-Times.com live feed ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/calendars/" target="_blank">Disney operating hours ↗</a></li>
+        </ul>
+        <div class="hint">Check crowd level the night before — adjust rope-drop plan.</div>
+      </div>
+
+      <div class="quick-card">
+        <h4>🎆 ENTERTAINMENT & SHOWS</h4>
+        <ul>
+          <li><a href="https://disneyworld.disney.go.com/entertainment/magic-kingdom/happily-ever-after-fireworks/" target="_blank">🎆 MK Happily Ever After ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/entertainment/magic-kingdom/festival-of-fantasy-parade/" target="_blank">🎠 Festival of Fantasy parade ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/entertainment/animal-kingdom/festival-lion-king/" target="_blank">🦁 Festival of the Lion King ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/entertainment/" target="_blank">All shows + times ↗</a></li>
+        </ul>
+        <div class="hint">Grab fireworks spots 45 min early near Plaza Ice Cream Parlor.</div>
+      </div>
+
+      <div class="quick-card">
+        <h4>👧 KID-FRIENDLY ESSENTIALS</h4>
+        <ul>
+          <li><a href="https://disneyworld.disney.go.com/guest-services/baby-care/" target="_blank">Baby Care Centers (per park) ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/guest-services/rider-switch/" target="_blank">Rider Switch policy ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/guest-services/stroller-wheelchair-rentals/" target="_blank">Stroller rentals ↗</a></li>
+          <li><a href="https://disneyworld.disney.go.com/faq/parks/height-requirements/" target="_blank">📏 Height requirements cheat sheet ↗</a></li>
+        </ul>
+        <div class="hint">Height measured at first park = good for whole trip (wristband given).</div>
+      </div>
+
+    </div>
+  </div>
 
   <!-- LEGEND -->
   <div class="legend">
