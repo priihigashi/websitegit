@@ -32,25 +32,56 @@ DAYS_LOOKBACK   = 14   # only posts from last 14 days
 MIN_IG_VIEWS    = 5000 # minimum views to consider
 MIN_YT_VIEWS    = 25000
 
-# ── Instagram — hashtags to scrape ───────────────────────────────────────────
-# Mix: niche + service-specific + South Florida local
-IG_HASHTAGS = [
-    # Service types (what Oak Park does)
+# ── Instagram targets — loaded from 🎯 Scraping Targets tab at runtime ───────
+# Fallback values used only if the sheet is empty or unreachable.
+_IG_HASHTAGS_FALLBACK = [
     "kitchenremodel", "bathroomremodel", "homeaddition", "shellconstruction",
     "cbsconstruction", "newconstruction", "pergola", "outdoorkitchen",
     "concretedesign", "concretedriveway", "roofing", "tileinstallation",
-    # Broader renovation
     "homerenovation", "beforeandafter", "customhomebuilder", "contractorlife",
     "constructionlife", "homeimprovement", "remodeling",
-    # South Florida local (catches posts WITHOUT national hashtags)
     "southfloridahomes", "southfloridaliving", "pompanobeach",
     "fortlauderdale", "browardcounty", "miamirealestate",
 ]
+_ACCOUNTS_FALLBACK = []
 
-# ── Instagram — accounts to monitor (add when Priscila identifies them) ──────
-# Leave empty for now — hashtags + locations cover the gap
-# Format: ["username1", "username2"]
-ACCOUNTS_TO_MONITOR = []
+# Populated at runtime by _load_opc_targets_from_sheet()
+IG_HASHTAGS: list = []
+ACCOUNTS_TO_MONITOR: list = []
+
+
+def _load_opc_targets_from_sheet(token: str) -> None:
+    """Read 🎯 Scraping Targets tab and populate IG_HASHTAGS / ACCOUNTS_TO_MONITOR.
+    Falls back to hardcoded lists if the sheet is empty or the call fails."""
+    global IG_HASHTAGS, ACCOUNTS_TO_MONITOR
+    try:
+        data = sheet_get(token, "/values/'%F0%9F%8E%AF%20Scraping%20Targets'!A1:F50")
+        rows = data.get("values", [])
+        if not rows or len(rows) < 2:
+            raise ValueError("empty")
+
+        # Row 0: TYPE/TARGET | OAK PARK | BRAZIL | UGC | NEWS/WORLD | NOTES
+        # OAK PARK is always column index 1 (verified against live sheet 2026-04-20)
+        hashtags, accounts = [], []
+        for row in rows[1:]:
+            if not row:
+                continue
+            target_type = row[0].strip().upper()
+            cell = row[1].strip() if len(row) > 1 else ""
+            values = [v.strip() for v in cell.split(",") if v.strip()]
+            if target_type == "HASHTAG":
+                hashtags.extend(values)
+            elif target_type == "ACCOUNT":
+                accounts.extend(values)
+
+        IG_HASHTAGS = hashtags or _IG_HASHTAGS_FALLBACK
+        ACCOUNTS_TO_MONITOR = accounts or _ACCOUNTS_FALLBACK
+        print(f"✅ Scraping Targets loaded — {len(IG_HASHTAGS)} hashtags, "
+              f"{len(ACCOUNTS_TO_MONITOR)} accounts")
+    except Exception as e:
+        IG_HASHTAGS = _IG_HASHTAGS_FALLBACK
+        ACCOUNTS_TO_MONITOR = _ACCOUNTS_FALLBACK
+        print(f"⚠️  Could not load Scraping Targets ({e}) — using fallback lists")
 
 # ── YouTube — search queries ──────────────────────────────────────────────────
 YT_QUERIES = [
@@ -445,6 +476,9 @@ def main():
 
     print("🔐 Authenticating with Google...")
     gtoken = get_gtoken()
+
+    print("📋 Loading OPC targets from 🎯 Scraping Targets tab...")
+    _load_opc_targets_from_sheet(gtoken)
 
     print("🔗 Loading existing URLs + titles (dedup check)...")
     existing_urls = get_existing_urls(gtoken)

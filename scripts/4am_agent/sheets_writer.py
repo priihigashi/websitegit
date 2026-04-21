@@ -49,7 +49,7 @@ def read_scraping_targets():
     """
     result = _service().spreadsheets().values().get(
         spreadsheetId=SPREADSHEET_ID,
-        range="'Scraping Targets'!A1:F50",
+        range="'🎯 Scraping Targets'!A1:F50",
     ).execute()
     rows = result.get("values", [])
     if not rows:
