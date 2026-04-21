@@ -310,7 +310,17 @@ jobs:
                           with open(src_path, "rb") as fh:
                               img_b64_r = base64.b64encode(fh.read()).decode()
                           data_uri_r = "data:image/" + ext_r + ";base64," + img_b64_r
+                          # Get latest version dynamically (avoids hardcoded broken hashes)
+                          req_ver = urllib.request.Request(
+                              "https://api.replicate.com/v1/models/philz1337x/clarity-upscaler/versions",
+                              headers={"Authorization": "Bearer " + token},
+                          )
+                          with urllib.request.urlopen(req_ver) as rv:
+                              versions = _json.loads(rv.read())
+                          latest_ver = versions["results"][0]["id"]
+                          print("  Replicate: version " + latest_ver[:16] + "...")
                           req_body = _json.dumps({
+                              "version": latest_ver,
                               "input": {
                                   "image": data_uri_r, "prompt": REPLICATE_PROMPT,
                                   "negative_prompt": REPLICATE_NEG, "scale_factor": 2,
@@ -319,7 +329,7 @@ jobs:
                               }
                           }).encode()
                           req_create = urllib.request.Request(
-                              "https://api.replicate.com/v1/models/philz1337x/clarity-upscaler/predictions",
+                              "https://api.replicate.com/v1/predictions",
                               data=req_body,
                               headers={"Authorization": "Bearer " + token, "Content-Type": "application/json", "Prefer": "wait"},
                           )
