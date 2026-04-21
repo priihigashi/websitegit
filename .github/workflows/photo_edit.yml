@@ -302,58 +302,24 @@ jobs:
                   # ── Replicate Clarity Upscaler ───────────────────────────────
                   if do_replicate:
                       try:
-                          import json as _json, time as _time
+                          import replicate as _replicate
                           token = os.environ.get("REPLICATE_API_TOKEN", "")
                           if not token:
                               raise Exception("no key")
-                          ext_r = "png" if src_path.endswith(".png") else "jpeg"
-                          with open(src_path, "rb") as fh:
-                              img_b64_r = base64.b64encode(fh.read()).decode()
-                          data_uri_r = "data:image/" + ext_r + ";base64," + img_b64_r
-                          # Get latest version dynamically (avoids hardcoded broken hashes)
-                          req_ver = urllib.request.Request(
-                              "https://api.replicate.com/v1/models/philz1337x/clarity-upscaler/versions",
-                              headers={"Authorization": "Bearer " + token},
-                          )
-                          with urllib.request.urlopen(req_ver) as rv:
-                              versions = _json.loads(rv.read())
-                          latest_ver = versions["results"][0]["id"]
-                          print("  Replicate: version " + latest_ver[:16] + "...")
-                          req_body = _json.dumps({
-                              "version": latest_ver,
-                              "input": {
-                                  "image": data_uri_r, "prompt": REPLICATE_PROMPT,
-                                  "negative_prompt": REPLICATE_NEG, "scale_factor": 2,
-                                  "dynamic": 6, "creativity": 0, "resemblance": 1,
-                                  "sharpen": 0, "num_inference_steps": 20,
-                              }
-                          }).encode()
-                          req_create = urllib.request.Request(
-                              "https://api.replicate.com/v1/predictions",
-                              data=req_body,
-                              headers={"Authorization": "Bearer " + token, "Content-Type": "application/json", "Prefer": "wait"},
-                          )
+                          rclient = _replicate.Client(api_token=token)
                           print("  Replicate: creating prediction...")
-                          with urllib.request.urlopen(req_create) as r:
-                              pred = _json.loads(r.read())
-                          pred_id = pred["id"]
-                          url_r = ""
-                          for _ in range(120):
-                              _time.sleep(5)
-                              req_poll = urllib.request.Request(
-                                  "https://api.replicate.com/v1/predictions/" + pred_id,
-                                  headers={"Authorization": "Token " + token},
+                          with open(src_path, "rb") as fh:
+                              output = rclient.run(
+                                  "philz1337x/clarity-upscaler",
+                                  input={
+                                      "image": fh, "prompt": REPLICATE_PROMPT,
+                                      "negative_prompt": REPLICATE_NEG, "scale_factor": 2,
+                                      "dynamic": 6, "creativity": 0, "resemblance": 1,
+                                      "sharpen": 0, "num_inference_steps": 20,
+                                  },
                               )
-                              with urllib.request.urlopen(req_poll) as r:
-                                  status = _json.loads(r.read())
-                              if status["status"] == "succeeded":
-                                  out_r = status.get("output", [])
-                                  url_r = out_r[0] if isinstance(out_r, list) else str(out_r)
-                                  break
-                              if status["status"] in ("failed", "canceled"):
-                                  raise Exception("prediction " + status["status"] + ": " + str(status.get("error", "")))
-                          if not url_r:
-                              raise Exception("prediction timed out")
+                          first = output[0] if isinstance(output, list) else output
+                          url_r = getattr(first, "url", None) or str(first)
                           out = tmp_pfx + "_3_replicate.png"
                           urllib.request.urlretrieve(url_r, out)
                           link = upload_to_drive(out, "3_replicate_clarity2x.png", sf_id)
