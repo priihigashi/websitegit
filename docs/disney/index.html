@@ -2226,6 +2226,51 @@
 
 </div>
 
+<script>
+// Add compact Google business/maps links next to restaurant links across the page.
+(function() {
+  function shouldSkipLabel(label) {
+    var l = (label || '').toLowerCase();
+    return !l ||
+      l.includes('dining') ||
+      l.includes('restaurants') ||
+      l.includes('reservation') ||
+      l.includes('mobile order') ||
+      l.includes('menu') ||
+      l.includes('maps') ||
+      l.includes('official');
+  }
+
+  function addGoogleLinks() {
+    var links = document.querySelectorAll('a[href*="disneyworld.disney.go.com/dining/"]');
+    links.forEach(function(a) {
+      if (a.classList.contains('mini-g-link')) return;
+      if (a.nextElementSibling && a.nextElementSibling.classList.contains('mini-g-link')) return;
+
+      var label = (a.textContent || '').replace(/\s+/g, ' ').trim();
+      if (shouldSkipLabel(label)) return;
+
+      var g = document.createElement('a');
+      g.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(label + ' Walt Disney World');
+      g.target = '_blank';
+      g.rel = 'noopener noreferrer';
+      g.className = 'mini-g-link';
+      g.title = 'Google business photos/reviews';
+      g.setAttribute('aria-label', 'Open Google business page for ' + label);
+      g.textContent = '⛓️‍💥';
+
+      a.insertAdjacentElement('afterend', g);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', addGoogleLinks);
+  } else {
+    addGoogleLinks();
+  }
+})();
+</script>
+
 <footer>
   🏰 Disney World Family Guide 2026 · Built for Priscila's family trip · Almost 4 & Almost 6<br>
   Created via Oak Park AI Hub research pipeline
