@@ -453,6 +453,12 @@
   .park-info-strip a { color: #90caf9; text-decoration: none; padding: 2px 6px; border-radius: 4px; transition: background 0.15s; }
   .park-info-strip a:hover { background: rgba(144,202,249,0.15); color: #ffd700; }
   .park-info-strip .strip-sep { color: #555; }
+  @media (max-width: 600px) {
+    .quick-jump-strip .strip-label {
+      flex-basis: 100%;
+      margin-right: 0;
+    }
+  }
 
   /* Showtimes Strip — prominent parade + fireworks */
   .showtimes-strip {
@@ -657,7 +663,7 @@
 <div class="container">
 
   <!-- QUICK JUMP BAR -->
-  <div class="park-info-strip">
+  <div class="park-info-strip quick-jump-strip">
     <span class="strip-label">🧭 Jump to sections:</span>
     <a href="#mk-guide">🏰 Magic Kingdom ↓</a>
     <span class="strip-sep">·</span>
