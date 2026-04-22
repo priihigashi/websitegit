@@ -1,0 +1,20 @@
+{
+  "approved_at": "2026-04-22T02:02:24.977405+00:00",
+  "source_email": {
+    "message_id": "19db182082fbe1a4",
+    "subject": "You have been approved for Google Ads API Basic Access!",
+    "from": "noreply@google.com",
+    "date": "Tue, 21 Apr 2026 12:26:20 -0700",
+    "snippet": "Appeal Received Basic Access Approval Hello Oak Park Construction, Based on the information you provided during registration, the Developer Token associated with Manager Account 587-071-3494 has been",
+    "thread_id": "19db182082fbe1a4",
+    "classification": "approved",
+    "inbox": "priscila@oakpark-construction.com"
+  },
+  "next_steps": [
+    "Update GOOGLE_ADS_DEVELOPER_TOKEN if new token was issued",
+    "Run mutation scripts in scripts/ads_mutations/ (pause/budget/negkw)",
+    "Link Google Ads <-> GA4 for conversion import",
+    "Deploy PWA dashboard to Vercel",
+    "Set up daily ads_report.yml workflow"
+  ]
+}
