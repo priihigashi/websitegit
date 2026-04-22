@@ -1,0 +1,113 @@
+name: McFolling IMAP Probe
+on:
+  workflow_dispatch:
+    inputs:
+      search_term:
+        description: 'Search term (e.g. "checking in", "Airbnb")'
+        required: false
+        default: ''
+      days:
+        description: 'How many days back to scan'
+        required: false
+        default: '14'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Connect, search, email results
+        env:
+          MF_GMAIL_APP_PASSWORD: ${{ secrets.MF_GMAIL_APP_PASSWORD }}
+          PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          SEARCH_TERM: ${{ inputs.search_term }}
+          DAYS: ${{ inputs.days }}
+        run: |
+          python3 - <<'PYEOF'
+          import os, imaplib, email, smtplib, ssl
+          from email.mime.text import MIMEText
+          from email.header import decode_header
+          from datetime import datetime, timedelta
+
+          MF_USER = "mcfollingproperties@gmail.com"
+          MF_PW = os.environ["MF_GMAIL_APP_PASSWORD"]
+          OPC_USER = "priscila@oakpark-construction.com"
+          OPC_PW = os.environ["PRI_OP_GMAIL_APP_PASSWORD"]
+          SEARCH = os.environ.get("SEARCH_TERM", "").strip()
+          DAYS = int(os.environ.get("DAYS", "14"))
+
+          report = []
+          report.append(f"McFolling IMAP Probe — {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}")
+          report.append("=" * 60)
+
+          try:
+              M = imaplib.IMAP4_SSL("imap.gmail.com", 993)
+              M.login(MF_USER, MF_PW)
+              report.append(f"LOGIN: OK as {MF_USER}")
+          except Exception as e:
+              report.append(f"LOGIN FAILED: {e}")
+              body = "\n".join(report)
+              msg = MIMEText(body)
+              msg["Subject"] = "McFolling IMAP Probe — LOGIN FAILED"
+              msg["From"] = OPC_USER
+              msg["To"] = OPC_USER
+              with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+                  s.login(OPC_USER, OPC_PW)
+                  s.send_message(msg)
+              raise
+
+          M.select("INBOX")
+          since = (datetime.now() - timedelta(days=DAYS)).strftime("%d-%b-%Y")
+
+          queries = [
+              ("ALL recent", f'(SINCE {since})'),
+              ("Airbnb", f'(SINCE {since} FROM "airbnb")'),
+              ("VRBO", f'(SINCE {since} FROM "vrbo")'),
+              ("Booking.com", f'(SINCE {since} FROM "booking.com")'),
+              ("Hopper", f'(SINCE {since} FROM "hopper")'),
+              ("Turno", f'(SINCE {since} FROM "turno")'),
+          ]
+          if SEARCH:
+              queries.append((f'Search: "{SEARCH}"', f'(SINCE {since} TEXT "{SEARCH}")'))
+
+          for label, q in queries:
+              try:
+                  typ, data = M.search(None, q)
+                  ids = data[0].split() if data and data[0] else []
+                  report.append(f"\n── {label} ──  ({len(ids)} messages)")
+                  for mid in ids[-10:]:
+                      typ, msg_data = M.fetch(mid, "(RFC822.HEADER)")
+                      if typ != "OK": continue
+                      msg = email.message_from_bytes(msg_data[0][1])
+                      def dec(s):
+                          if not s: return ""
+                          parts = decode_header(s)
+                          return "".join(
+                              (p.decode(enc or "utf-8", errors="ignore") if isinstance(p, bytes) else p)
+                              for p, enc in parts
+                          )
+                      frm = dec(msg.get("From", ""))[:70]
+                      subj = dec(msg.get("Subject", ""))[:90]
+                      dt = msg.get("Date", "")[:25]
+                      report.append(f"  [{dt}] {frm}")
+                      report.append(f"     → {subj}")
+              except Exception as e:
+                  report.append(f"  ERROR on {label}: {e}")
+
+          M.close()
+          M.logout()
+
+          report.append("\n" + "=" * 60)
+          report.append("END OF PROBE")
+
+          body = "\n".join(report)
+          print(body)
+
+          msg = MIMEText(body)
+          msg["Subject"] = f"McFolling IMAP Probe — {len([l for l in report if l.startswith('  [')])} messages found"
+          msg["From"] = OPC_USER
+          msg["To"] = OPC_USER
+          with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+              s.login(OPC_USER, OPC_PW)
+              s.send_message(msg)
+          print("Report emailed to priscila@oakpark-construction.com")
+          PYEOF
