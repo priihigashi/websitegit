@@ -151,6 +151,10 @@
   .ride-name a:hover, .dine-link:hover { text-decoration: underline; text-decoration-color: #ffd700; }
   .reserve-link a { font-size: 0.82em; margin-left: 6px; text-decoration: none; opacity: 0.85; }
   .reserve-link a:hover { opacity: 1; text-decoration: none; }
+  .backup-bar { margin-top: 10px; padding: 8px 10px; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 0.82em; color: #a8a89c; border: 1px dashed rgba(255,255,255,0.1); }
+  .backup-bar .backup-label { font-weight: 600; color: #c8c8b0; margin-right: 6px; display: inline-block; }
+  .backup-bar a { display: inline-block; padding: 3px 9px; margin: 2px 3px 2px 0; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; color: #e8e6d8; text-decoration: none; font-size: 0.92em; }
+  .backup-bar a:hover { background: rgba(255,215,0,0.15); border-color: rgba(255,215,0,0.4); color: #fff; }
 
   .weather-widget {
     max-width: 900px; margin: 26px auto 20px; padding: 12px 16px;
@@ -1054,16 +1058,18 @@
                 <span class="tag tag-duration">~10 min</span>
               </div>
             </div>
-            <div class="ride-card toddler-green">
-              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/big-thunder-mountain-railroad/" target="_blank" rel="noopener noreferrer">Big Thunder Mountain Railroad</a></div>
-              <div class="ride-note">"Wildest ride in the wilderness!" — outdoor mine train coaster. Deepest in Frontierland. <strong>Both Mia (41") and Caio (47") clear the 40" height.</strong> Caio will love it. Mia CAN ride but it's fast + bumpy — judgment call based on how she handled Tiana's drop.</div>
+            <div class="ride-card caution" style="opacity:0.5">
+              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/big-thunder-mountain-railroad/" target="_blank" rel="noopener noreferrer">Big Thunder Mountain Railroad — CLOSED</a></div>
+              <div class="ride-note"><strong>⛔ Unavailable April 23–25, 2026.</strong> Disney says it reopens <strong>May 3, 2026</strong> — you'll miss it this trip. Skip entirely, no need to plan around it.</div>
               <div class="ride-tags">
-                <span class="tag tag-height">40" req</span>
-                <span class="tag tag-age3">✓ Mia (41") — judgment call</span>
-                <span class="tag tag-age5">✓ Caio (47")</span>
-                <span class="tag tag-duration">~4 min</span>
+                <span class="tag tag-adults">Closed for refurbishment</span>
+                <span class="tag tag-duration">Reopens May 3, 2026</span>
               </div>
             </div>
+          </div>
+          <div class="backup-bar">
+            <span class="backup-label">📋 Backup if you have time / need A/C:</span>
+            <a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/country-bear-jamboree/" target="_blank" rel="noopener noreferrer">🐻 Country Bear Musical Jamboree — indoor show, any height</a>
           </div>
           <div class="cluster-info">
             <div class="cluster-item"><span class="ci-icon">🍗</span> <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/pecos-bills-tall-tale-inn-and-cafe/" target="_blank" rel="noopener noreferrer" class="dine-link">Pecos Bill Tall Tale Inn</a> — burgers/fries, good for families</div>
@@ -1154,6 +1160,28 @@
               </div>
             </div>
             <div class="ride-card toddler-gold">
+              <span class="star-badge">⭐ MUST-DO</span>
+              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/mickeys-philharmagic/" target="_blank" rel="noopener noreferrer">Mickey's PhilharMagic ⭐</a></div>
+              <div class="ride-note">Indoor 3D musical film — Donald Duck through classic Disney scenes. 12 min, A/C, zero scares. Perfect afternoon rest + both kids will love it. Short waits usually.</div>
+              <div class="ride-tags">
+                <span class="tag tag-noreq">No height req</span>
+                <span class="tag tag-age3">✓ Almost 4</span>
+                <span class="tag tag-age5">✓ Almost 6</span>
+                <span class="tag tag-show">3D SHOW — A/C</span>
+                <span class="tag tag-duration">~12 min</span>
+              </div>
+            </div>
+            <div class="ride-card toddler-gold">
+              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/prince-charming-regal-carrousel/" target="_blank" rel="noopener noreferrer">Prince Charming Regal Carrousel</a></div>
+              <div class="ride-note">Classic carousel right behind the castle — one of Disney's oldest rides, beautifully restored. Any height, whole family rides together including grandparents.</div>
+              <div class="ride-tags">
+                <span class="tag tag-noreq">No height req</span>
+                <span class="tag tag-age3">✓ Almost 4</span>
+                <span class="tag tag-age5">✓ Almost 6</span>
+                <span class="tag tag-duration">~2 min</span>
+              </div>
+            </div>
+            <div class="ride-card toddler-gold">
               <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/seven-dwarfs-mine-train/" target="_blank" rel="noopener noreferrer">Seven Dwarfs Mine Train ⭐</a></div>
               <div class="ride-note">Best family coaster in MK — swaying mine cart, no upside-down, mild drops. BOTH KIDS CLEAR 38"! Caio (47") will love it. Mia (41") makes it — check her comfort with speed. Great big-kid moment.</div>
               <div class="ride-tags">
@@ -1205,6 +1233,10 @@
               </div>
             </div>
           </div>
+          <div class="backup-bar">
+            <span class="backup-label">📋 Backup if kids need a sit-down ride:</span>
+            <a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/walt-disney-world-railroad/" target="_blank" rel="noopener noreferrer">🚂 WDW Railroad — limited shuttle between Main Street &amp; Fantasyland only right now</a>
+          </div>
           <div class="cluster-info">
             <div class="cluster-item"><span class="ci-icon">🍽️</span> <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/pinocchio-village-haus/" target="_blank" rel="noopener noreferrer" class="dine-link">Pinocchio's Village Haus</a> — quick service pasta/pizza inside the land</div>
             <div class="cluster-item"><span class="ci-icon">🥐</span> <a href="https://disneyworld.disney.go.com/dining/magic-kingdom/gastons-tavern/" target="_blank" rel="noopener noreferrer" class="dine-link">Gaston's Tavern</a> — famous cinnamon rolls + LeFou's Brew (adults love it)</div>
@@ -1233,6 +1265,16 @@
                 <span class="tag tag-age3">✓ Almost 4</span>
                 <span class="tag tag-age5">✓ Almost 6</span>
                 <span class="tag tag-duration">~5 min</span>
+              </div>
+            </div>
+            <div class="ride-card toddler-gold">
+              <div class="ride-name"><a href="https://disneyworld.disney.go.com/attractions/magic-kingdom/tomorrowland-transit-authority-peoplemover/" target="_blank" rel="noopener noreferrer">Tomorrowland Transit Authority PeopleMover ⭐</a></div>
+              <div class="ride-note">Slow elevated tour of Tomorrowland — seated, relaxing, open-air breeze. Perfect leg-rest for grandparents + quiet break for tired kids. Often walk-on. Any height.</div>
+              <div class="ride-tags">
+                <span class="tag tag-noreq">No height req</span>
+                <span class="tag tag-age3">✓ Almost 4</span>
+                <span class="tag tag-age5">✓ Almost 6</span>
+                <span class="tag tag-duration">~10 min</span>
               </div>
             </div>
             <div class="ride-card toddler-green">
@@ -1455,6 +1497,28 @@
             <div class="ride-card toddler-gold">
               <div class="ride-name">Disney Junior Zone (Character Meets)</div>
               <div class="ride-note">Rotating characters — Doc McStuffins, Mickey Clubhouse characters, Vampirina, Fancy Nancy. FREE character photos here. Best for your almost-4yo especially.</div>
+              <div class="ride-tags">
+                <span class="tag tag-noreq">No height req</span>
+                <span class="tag tag-age3">⭐ Best for almost-4</span>
+                <span class="tag tag-age5">✓ Almost 6</span>
+                <span class="tag tag-show">CHARACTER MEET</span>
+              </div>
+            </div>
+            <div class="ride-card toddler-gold">
+              <span class="star-badge">⭐ MUST-DO</span>
+              <div class="ride-name"><a href="https://disneyworld.disney.go.com/entertainment/hollywood-studios/little-mermaid-musical-adventure/" target="_blank" rel="noopener noreferrer">The Little Mermaid — A Musical Adventure ⭐</a></div>
+              <div class="ride-note">Live 20-min stage show with Ariel + puppetry + songs. A/C theater. Brand-new for 2026 — big upgrade from the old Voyage show. Mia will love Ariel; Caio will enjoy the songs.</div>
+              <div class="ride-tags">
+                <span class="tag tag-noreq">No height req</span>
+                <span class="tag tag-age3">✓ Almost 4</span>
+                <span class="tag tag-age5">✓ Almost 6</span>
+                <span class="tag tag-show">LIVE SHOW — A/C</span>
+                <span class="tag tag-duration">~20 min</span>
+              </div>
+            </div>
+            <div class="ride-card toddler-gold">
+              <div class="ride-name"><a href="https://disneyworld.disney.go.com/entertainment/hollywood-studios/character-meet-ariel-walt-disney-presents/" target="_blank" rel="noopener noreferrer">Meet Ariel at Walt Disney Presents</a></div>
+              <div class="ride-note">Dedicated Ariel character meet + photo. Indoor A/C queue. Pair it with the Little Mermaid show for a full Ariel moment — big hit for Mia.</div>
               <div class="ride-tags">
                 <span class="tag tag-noreq">No height req</span>
                 <span class="tag tag-age3">⭐ Best for almost-4</span>
@@ -1853,6 +1917,17 @@
                 <span class="tag tag-age5">✓ Almost 6</span>
                 <span class="tag tag-show">3D FILM — A/C</span>
                 <span class="tag tag-duration">~8 min</span>
+              </div>
+            </div>
+            <div class="ride-card toddler-gold">
+              <div class="ride-name"><a href="https://disneyworld.disney.go.com/entertainment/animal-kingdom/feathered-friends/" target="_blank" rel="noopener noreferrer">Feathered Friends in Flight! ⭐</a></div>
+              <div class="ride-note">Live bird show — macaws, hawks, owls flying overhead. Outdoor amphitheater in Asia. Kids love the flybys. Multiple shows daily — check My Disney Experience app.</div>
+              <div class="ride-tags">
+                <span class="tag tag-noreq">No height req</span>
+                <span class="tag tag-age3">✓ Almost 4</span>
+                <span class="tag tag-age5">✓ Almost 6</span>
+                <span class="tag tag-show">LIVE SHOW — outdoor</span>
+                <span class="tag tag-duration">~25 min</span>
               </div>
             </div>
             <div class="ride-card toddler-gold">
