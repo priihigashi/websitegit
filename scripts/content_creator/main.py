@@ -103,6 +103,24 @@ def _safe_float(val, default=0.0):
         return default
 
 
+def _normalize_niche(raw_niche, fmt=""):
+    """Normalize source/format labels to opc|brazil|usa."""
+    n = (raw_niche or "").strip().lower()
+    f = (fmt or "").strip().lower()
+    if n in ("opc", "oak park", "oak park construction", "content"):
+        return "opc"
+    if n in ("usa", "us", "united states", "news-usa", "news-us", "america"):
+        return "usa"
+    if n in ("brazil", "brasil", "news", "news-brazil", "sovereign"):
+        return "brazil"
+    # Legacy fallback when Source is blank/noisy
+    if "usa" in f or "the chain" in f:
+        return "usa"
+    if "brazil" in f or "quem" in f or "verificamos" in f:
+        return "brazil"
+    return "opc"
+
+
 def _col_letter(n):
     r = ""
     while n > 0:
@@ -195,9 +213,7 @@ def get_approved_queue_rows():
             continue
         if v(row, "drive folder path"):
             continue  # already built
-        niche = v(row, "source").lower() or ("opc" if "opc" in v(row, "format").lower() else "brazil")
-        if niche not in ("opc", "brazil"):
-            niche = "brazil" if "quem" in v(row, "format").lower() else "opc"
+        niche = _normalize_niche(v(row, "source"), v(row, "format"))
         approved.append({
             "queue_row_idx": idx,
             "topic": v(row, "project name"),
@@ -210,6 +226,63 @@ def get_approved_queue_rows():
             "fake_news_confidence": _safe_float(v(row, "fake_news_confidence"), 0.0),
         })
     return approved
+
+
+def _default_context_query(slide, topic, niche):
+    """Safe fallback query for context-image slots."""
+    h_pt = (slide.get("heading_pt") or "").strip()
+    h_en = (slide.get("heading_en") or "").strip()
+    base = h_pt or h_en or topic
+    suffix = "Brasil política" if niche == "brazil" else "US politics"
+    return f"{base} {suffix}".strip()
+
+
+def _enforce_news_visual_targets(content, topic, niche):
+    """Guarantee at least 3 middle slides can render real context images."""
+    if not isinstance(content, dict):
+        return content
+    slides = content.get("slides", [])
+    if not isinstance(slides, list) or not slides:
+        return content
+
+    # Fill missing query where visual_hint is already context-image
+    for slide in slides:
+        if slide.get("visual_hint") == "context-image" and not (slide.get("context_image_query") or "").strip():
+            slide["context_image_query"] = _default_context_query(slide, topic, niche)
+
+    def _ready(s):
+        return s.get("visual_hint") == "context-image" and bool((s.get("context_image_query") or "").strip())
+
+    ready = sum(1 for s in slides if _ready(s))
+    needed = max(0, 3 - ready)
+    if needed <= 0:
+        return content
+
+    # Prefer non-profile slides first
+    for slide in slides:
+        if needed <= 0:
+            break
+        if _ready(slide):
+            continue
+        if slide.get("type") == "profile":
+            continue
+        slide["visual_hint"] = "context-image"
+        if not (slide.get("context_image_query") or "").strip():
+            slide["context_image_query"] = _default_context_query(slide, topic, niche)
+        needed -= 1
+
+    # Last resort: allow profile slides too
+    if needed > 0:
+        for slide in slides:
+            if needed <= 0:
+                break
+            if _ready(slide):
+                continue
+            slide["visual_hint"] = "context-image"
+            slide["context_image_query"] = _default_context_query(slide, topic, niche)
+            needed -= 1
+
+    return content
 
 
 def get_drive_service():
@@ -696,6 +769,9 @@ def process_one_topic(topic_entry, run_date, drive):
         print("  FAILED: content generation")
         return None
 
+    if niche in ("brazil", "usa"):
+        content = _enforce_news_visual_targets(content, topic, niche)
+
     # 1b. Visual audit — flag boring/incomplete carousels before rendering
     _, audit_issues, audit_summary = visual_audit(content, niche)
     print(f"  {audit_summary}")
@@ -1028,7 +1104,26 @@ def main():
     # Scored but un-approved rows → CQ Status=Draft (you flip to Approved in sheet to release)
     print("\n--- Phase A: Promoting Inspiration → Content Queue ---")
     try:
-        pick_topics(count_opc=2, count_brazil=1, count_usa=1)
+        picks = pick_topics(count_opc=2, count_brazil=1, count_usa=1)
+        pick_counts = {"opc": 0, "brazil": 0, "usa": 0}
+        for p in picks or []:
+            n = (p.get("niche") or "").lower()
+            if n in pick_counts:
+                pick_counts[n] += 1
+        shortfall = []
+        if pick_counts["brazil"] < 1:
+            shortfall.append("brazil<1")
+        if pick_counts["usa"] < 1:
+            shortfall.append("usa<1")
+        if shortfall:
+            msg = (
+                "Niche shortfall during topic promotion: "
+                + ", ".join(shortfall)
+                + f" | picks={pick_counts}. "
+                "Pipeline may overfill OPC unless Brazil/USA topics are approved and eligible."
+            )
+            print(f"  WARNING: {msg}")
+            _send_alert(msg)
     except Exception as e:
         print(f"  Topic picker failed: {e}")
         _send_alert(f"Topic picker crashed: {e}")
@@ -1041,6 +1136,17 @@ def main():
         _send_alert("No Approved rows in Content Queue — pipeline picked zero topics to build. Check Inspiration Library scoring + Queue status flips.")
         return
     print(f"  Found {len(approved)} Approved carousel(s) to build")
+    approved_counts = {"opc": 0, "brazil": 0, "usa": 0}
+    for a in approved:
+        n = (a.get("niche") or "").lower()
+        if n in approved_counts:
+            approved_counts[n] += 1
+    if approved_counts["brazil"] == 0 or approved_counts["usa"] == 0:
+        _send_alert(
+            "Approved queue niche gap: "
+            f"opc={approved_counts['opc']}, brazil={approved_counts['brazil']}, usa={approved_counts['usa']}. "
+            "No auto-build for missing niche in this run."
+        )
 
     drive = get_drive_service()
     results = []
