@@ -487,6 +487,7 @@ subject_type guide:
 
 VISUAL-EVERY-OTHER-SLIDE RULE (non-negotiable):
 Between cover and sources, never output "visual_hint": "none" on more than 1 consecutive slide.
+Also target at least 3 middle slides with visual_hint="context-image" plus specific queries.
 visual_hint values:
   "bio-card" → slide has named person in mentioned_people (face cards render automatically from that field)
   "context-image" → slide references a specific institution, building, place, event, or document; fill context_image_query with a specific search term (e.g. "Câmara dos Deputados Brasília", "Viktor Orbán 2026", "Supremo Tribunal Federal fachada", "Congresso Nacional aerial")
@@ -1308,17 +1309,6 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
   <div class="tag">Tip of the Week · Oak Park Construction</div>
   <div class="headline">{hl_html}</div>
   <div class="body-text">{content["subhead"]}</div>
-  <div class="sticker-stamp">▸ TIP</div>
-  <div class="sticker-slot">
-    <svg class="worker-silhouette" viewBox="0 0 200 260" xmlns="http://www.w3.org/2000/svg">
-      <path d="M100 50 C65 50 50 30 50 20 C50 15 55 12 100 12 C145 12 150 15 150 20 C150 30 135 50 100 50 Z" fill="currentColor" opacity="0.9"/>
-      <rect x="45" y="48" width="110" height="12" fill="currentColor" opacity="0.95"/>
-      <ellipse cx="100" cy="90" rx="32" ry="38" fill="currentColor"/>
-      <path d="M60 140 C60 120 75 110 100 110 C125 110 140 120 140 140 L140 260 L60 260 Z" fill="currentColor"/>
-      <rect x="92" y="150" width="16" height="40" fill="#0A0A0A" opacity="0.3"/>
-    </svg>
-    <div class="sticker-placeholder">ON-SITE · SWAP-IN</div>
-  </div>
   <div class="arrow">SWIPE →</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
@@ -1784,6 +1774,14 @@ def visual_audit(content, niche):
     for i, s in enumerate(slides, start=2):
         if s.get("visual_hint") == "context-image" and not s.get("context_image_query", "").strip():
             issues.append(f"Slide {i}: visual_hint=context-image but context_image_query is empty.")
+
+    # News visual floor: require at least 3 middle slides with context-image.
+    if niche in ("brazil", "usa"):
+        context_count = sum(1 for s in slides if s.get("visual_hint") == "context-image")
+        if context_count < 3:
+            issues.append(
+                f"News visual floor miss: only {context_count} context-image slide(s); require >= 3."
+            )
 
     # Cover visual missing
     if not content.get("cover_visual"):
