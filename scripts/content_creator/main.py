@@ -59,13 +59,13 @@ ALERT_EMAIL = os.environ.get("ALERT_EMAIL", "priscila@oakpark-construction.com")
 
 
 def _send_alert(msg: str):
-    """Fail-loud email alert when pipeline hits a crash path or produces zero output.
-    Uses gh CLI to trigger send_email.yml (uses PRI_OP_GMAIL_APP_PASSWORD)."""
+    """Route A: gh CLI → send_email.yml. Route B: SMTP fallback via PRI_OP_GMAIL_APP_PASSWORD."""
+    print(f"\n🔴 ALERT: {msg}")
+    subject = f"[content_creator] Pipeline alert — {datetime.now(ET).strftime('%Y-%m-%d %H:%M ET')}"
+    body = f"Pipeline hit a failure:\n\n{msg}\n\nCheck logs: https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/content_creator.yml"
+    # Route A — gh CLI workflow dispatch
     try:
-        print(f"\n🔴 ALERT: {msg}")
-        subject = f"[content_creator] Pipeline alert — {datetime.now(ET).strftime('%Y-%m-%d %H:%M ET')}"
-        body = f"Pipeline hit a failure:\n\n{msg}\n\nCheck logs: https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/content_creator.yml"
-        subprocess.run(
+        result = subprocess.run(
             ["gh", "workflow", "run", "send_email.yml",
              "--repo", "priihigashi/oak-park-ai-hub",
              "-f", f"to={ALERT_EMAIL}",
@@ -73,8 +73,29 @@ def _send_alert(msg: str):
              "-f", f"body={body}"],
             check=False, timeout=30,
         )
+        if result.returncode == 0:
+            return
     except Exception as e:
-        print(f"  (alert send itself failed: {e})")
+        print(f"  (Route A gh CLI failed: {e})")
+    # Route B — SMTP via PRI_OP_GMAIL_APP_PASSWORD
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        app_pass = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD", "")
+        if not app_pass:
+            print("  (Route B skipped: PRI_OP_GMAIL_APP_PASSWORD not set)")
+            return
+        sender = "priscila@oakpark-construction.com"
+        msg_obj = MIMEText(body)
+        msg_obj["Subject"] = subject
+        msg_obj["From"] = sender
+        msg_obj["To"] = ALERT_EMAIL
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender, app_pass)
+            server.sendmail(sender, [ALERT_EMAIL], msg_obj.as_string())
+        print("  (Route B SMTP alert sent)")
+    except Exception as e:
+        print(f"  (Route B SMTP also failed: {e})")
 
 
 _token_cache = {}
@@ -284,10 +305,12 @@ def add_shortcut(target_id, name, dest_folder_id, drive):
 
 
 def upload_single_file(local_path, parent_id, name, mime, drive):
+    """Uses resumable upload for files > 5MB to prevent silent failure at the Drive API limit."""
     from googleapiclient.http import MediaFileUpload
+    resumable = Path(local_path).stat().st_size > 5 * 1024 * 1024
     drive.files().create(
         body={"name": name, "parents": [parent_id]},
-        media_body=MediaFileUpload(str(local_path), mimetype=mime),
+        media_body=MediaFileUpload(str(local_path), mimetype=mime, resumable=resumable),
         supportsAllDrives=True, fields="id",
     ).execute()
 
