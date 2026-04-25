@@ -66,4 +66,36 @@ jobs:
               t = f["type"]
               type_name = t.get("name") or (t.get("ofType") or {}).get("name")
               print(f"  {f['name']:25} {type_name}")
+
+          # 6. PostInputMetaData fields — find Instagram post type field
+          print("\n=== PostInputMetaData fields ===")
+          r = gql('{ __type(name: "PostInputMetaData") { inputFields { name type { name kind ofType { name } } } } }')
+          fields = (r.get("data") or {}).get("__type", {}).get("inputFields", [])
+          if fields:
+              for f in fields:
+                  t = f["type"]
+                  type_name = t.get("name") or (t.get("ofType") or {}).get("name")
+                  print(f"  {f['name']:25} {type_name}")
+          else:
+              print("  (no fields found — type may be named differently)")
+
+          # 7. InstagramMetaData fields (alternate type name)
+          print("\n=== InstagramMetaData fields ===")
+          r = gql('{ __type(name: "InstagramMetaData") { inputFields { name type { name kind ofType { name } } } } }')
+          fields = (r.get("data") or {}).get("__type", {}).get("inputFields", [])
+          if fields:
+              for f in fields:
+                  t = f["type"]
+                  type_name = t.get("name") or (t.get("ofType") or {}).get("name")
+                  print(f"  {f['name']:25} {type_name}")
+          else:
+              print("  (no fields found — check type name)")
+
+          # 8. CreatePostInput metadata field — deep type resolution
+          print("\n=== CreatePostInput — metadata field (deep) ===")
+          r = gql('{ __type(name: "CreatePostInput") { inputFields { name type { name kind ofType { name kind ofType { name } } } } } }')
+          fields = (r.get("data") or {}).get("__type", {}).get("inputFields", [])
+          for f in fields:
+              if "metadata" in f["name"].lower() or "meta" in f["name"].lower():
+                  print(f"  {f}")
           EOF
