@@ -92,3 +92,13 @@ jobs:
             });
         env:
           WP_URL: ${{ secrets.WP_URL }}
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow blog-generator.yml \
+            --status "${{ job.status }}"

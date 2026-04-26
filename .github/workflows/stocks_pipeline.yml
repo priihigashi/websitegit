@@ -76,3 +76,13 @@ jobs:
             stocks/original/
             stocks/transcription/
           retention-days: 90
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow stocks_pipeline.yml \
+            --status "${{ job.status }}"

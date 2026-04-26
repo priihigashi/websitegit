@@ -36,3 +36,13 @@ jobs:
           APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
         run: python scripts/inspiration_scraper_cloud.py
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow inspiration-scraper.yml \
+            --status "${{ job.status }}"
