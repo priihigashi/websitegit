@@ -2607,17 +2607,201 @@ def run_higashi(args, transcript, video_path: str = "", metadata: dict = None, s
     run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
 
 
+# ─── PROJECT AUTO-DETECTION ──────────────────────────────────────────────────
+
+VALID_PROJECTS = {"book", "brazil", "usa", "opc", "ugc", "stocks", "higashi"}
+
+# Deterministic notes-keyword overrides — checked FIRST, skip Claude entirely if hit.
+# Order matters: more specific keywords first.
+_NOTES_KEYWORD_MAP = [
+    (("higashi", "imobili", "mom", "alexandra", "hig negocios", "hig negócios"), "higashi"),
+    (("brasil", "brazil", "pt-br", "ptbr", "voiceover pt", "em portugu", "lula", "bolsonaro", "stf", "senado federal"), "brazil"),
+    (("oak park", "opc", "construction", "contractor", "remodel", "kitchen reno"), "opc"),
+    (("ugc", "creator clip", "movement factory"), "ugc"),
+    (("stocks", "investing", "robinhood", "ticker", "portfolio"), "stocks"),
+    (("usa news", "america", "trump", "biden", "u.s. politics", "us politics"), "usa"),
+    (("for the book", "receipts book", "sovereign book", "fact-check book"), "book"),
+]
+
+
+def detect_project(transcript: str, caption: str, notes: str) -> tuple:
+    """Return (project, confidence, reason).
+
+    Step 1 — notes keyword override (deterministic, zero tokens).
+    Step 2 — Claude Haiku JSON classify on transcript + caption + notes.
+    Step 3 — confidence < 0.70 OR any failure → ('unrouted', 0.0, reason).
+    """
+    notes_l = (notes or "").lower()
+    if notes_l.strip():
+        for keywords, niche in _NOTES_KEYWORD_MAP:
+            if any(k in notes_l for k in keywords):
+                return (niche, 1.0, f"notes keyword match → {niche}")
+
+    if not CLAUDE_KEY_4_CONTENT:
+        return ("unrouted", 0.0, "no CLAUDE_KEY_4_CONTENT — cannot classify")
+
+    transcript_snip = (transcript or "")[:3000]
+    caption_snip = (caption or "")[:1000]
+    notes_snip = (notes or "")[:500]
+
+    prompt = (
+        "You are a content router. Classify this captured video into ONE niche.\n\n"
+        "Valid niches:\n"
+        "- book: research for the SOVEREIGN/RECEIPTS fact-check book (US/global political accountability)\n"
+        "- brazil: Brazilian politics, news, PT-language content, Brazilian institutions/figures\n"
+        "- usa: US politics, news, US institutions/figures\n"
+        "- opc: Oak Park Construction — home remodel, contractor tips, building projects\n"
+        "- ugc: user-generated creator content, movement/body footage for repurposing\n"
+        "- stocks: stocks, investing, financial markets, trading\n"
+        "- higashi: Brazilian real estate (mom's company in São José dos Campos)\n\n"
+        f"NOTES from user (highest priority signal): {notes_snip or '(none)'}\n\n"
+        f"CAPTION: {caption_snip or '(none)'}\n\n"
+        f"TRANSCRIPT (first 3000 chars):\n{transcript_snip or '(none)'}\n\n"
+        "Respond with ONLY a JSON object — no preamble, no markdown fence:\n"
+        '{"project": "book|brazil|usa|opc|ugc|stocks|higashi", "confidence": 0.0-1.0, "reason": "one-sentence why"}'
+    )
+
+    import urllib.request as _urllib_request
+    payload = json.dumps({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 200,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+
+    try:
+        req = _urllib_request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "x-api-key": CLAUDE_KEY_4_CONTENT,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+        )
+        resp = json.loads(_urllib_request.urlopen(req, timeout=30).read())
+        raw = resp["content"][0]["text"].strip()
+        # Strip accidental markdown fence
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw).strip()
+        parsed = json.loads(raw)
+        proj = (parsed.get("project") or "").lower().strip()
+        conf = float(parsed.get("confidence") or 0.0)
+        reason = parsed.get("reason") or ""
+
+        if proj not in VALID_PROJECTS:
+            return ("unrouted", 0.0, f"Claude returned invalid project '{proj}'")
+        if conf < 0.70:
+            return ("unrouted", conf, f"low confidence ({conf:.2f}) — Claude said {proj}: {reason}")
+        return (proj, conf, reason)
+    except Exception as e:
+        return ("unrouted", 0.0, f"Claude classify failed: {e}")
+
+
+def run_unrouted(args, transcript: str, video_path: str = "", metadata: dict = None,
+                 srt_content: str = "", detect_reason: str = ""):
+    """Save unidentified captures to Marketing/Captures - Unrouted folder.
+    Does NOT trigger niche-specific pipelines. Logs to Inspiration Library with
+    status='Not Identified' so the weekly digest picks it up."""
+    print(f"\n  ⚠️  UNROUTED — {detect_reason}")
+    print(f"  Saving to Captures - Unrouted for manual triage")
+
+    metadata = metadata or {}
+    drive = get_drive_service()
+    if not drive:
+        print("  SKIP unrouted save: Drive unavailable")
+        return
+
+    try:
+        from googleapiclient.http import MediaInMemoryUpload
+        unrouted_folder_id = get_capture_folder("unrouted")
+        date = datetime.now().strftime("%Y-%m-%d")
+        story_folder_name = f"{date}_{args.story_id}_UNROUTED"
+
+        # Create story subfolder
+        sub = drive.files().create(
+            body={"name": story_folder_name, "mimeType": "application/vnd.google-apps.folder",
+                  "parents": [unrouted_folder_id]},
+            supportsAllDrives=True, fields="id,webViewLink"
+        ).execute()
+        sub_id = sub["id"]
+        sub_url = sub["webViewLink"]
+
+        # transcript.txt
+        drive.files().create(
+            body={"name": "transcript.txt", "parents": [sub_id]},
+            media_body=MediaInMemoryUpload(transcript.encode("utf-8"), mimetype="text/plain"),
+            supportsAllDrives=True, fields="id"
+        ).execute()
+
+        # detection_log.txt — why it failed routing
+        log_text = (
+            f"URL: {args.url}\n"
+            f"Story ID: {args.story_id}\n"
+            f"Captured: {datetime.now().isoformat()}\n"
+            f"Notes: {args.notes or '(none)'}\n"
+            f"Caption: {metadata.get('caption', '(none)')[:500]}\n"
+            f"Detection reason: {detect_reason}\n"
+        )
+        drive.files().create(
+            body={"name": "detection_log.txt", "parents": [sub_id]},
+            media_body=MediaInMemoryUpload(log_text.encode("utf-8"), mimetype="text/plain"),
+            supportsAllDrives=True, fields="id"
+        ).execute()
+
+        # Video (best-effort)
+        if video_path and os.path.exists(video_path):
+            try:
+                drive.files().create(
+                    body={"name": f"video{Path(video_path).suffix}", "parents": [sub_id]},
+                    media_body=MediaInMemoryUpload(open(video_path, "rb").read(), mimetype="video/mp4"),
+                    supportsAllDrives=True, fields="id"
+                ).execute()
+            except Exception as e:
+                print(f"  WARNING: video upload skipped: {e}")
+
+        print(f"  ✅ Unrouted folder: {sub_url}")
+
+        # Log to Inspiration Library with niche = "Not Identified".
+        # update_inspiration_library is additive — sets niche from classification.
+        try:
+            classification = {
+                "niche": "Not Identified",
+                "content_type": "unrouted",
+                "description": (metadata.get("caption", "") or transcript[:200])[:300],
+                "hook": "",
+                "hook_type": "",
+            }
+            update_inspiration_library(
+                url=args.url,
+                transcript=transcript,
+                classification=classification,
+                hub_url=sub_url,
+                doc_url="",
+                metadata=metadata,
+                user_notes=f"AUTO-DETECT FAILED: {detect_reason}\n\n{args.notes or ''}",
+            )
+        except Exception as e:
+            print(f"  WARNING: Inspiration Library logging failed: {e}")
+
+    except Exception as e:
+        import traceback
+        print(f"  ERROR saving unrouted capture: {e}")
+        traceback.print_exc()
+
+
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="Capture Pipeline v2")
     parser.add_argument("url")
     parser.add_argument("--project",
-                        choices=["book", "brazil", "usa", "opc", "ugc", "stocks", "higashi",
+                        choices=["auto", "unrouted",
+                                 "book", "brazil", "usa", "opc", "ugc", "stocks", "higashi",
                                  # legacy aliases — normalized to canonical names below
                                  "news", "content"],
-                        default="book",
-                        help="book | brazil | usa | opc | ugc | stocks | higashi (routing.py is source of truth)")
+                        default="auto",
+                        help="auto = let runner classify (default). Or pass an explicit niche. "
+                             "Falls back to 'unrouted' if confidence < 0.70.")
     parser.add_argument("--story-id", default=None)
     parser.add_argument("--notes", default="")
     parser.add_argument("--credits", action="store_true",
@@ -2631,13 +2815,20 @@ def main():
     _alias = {"sovereign": "brazil", "content": "opc", "news": "brazil"}
     args.project = _alias.get(args.project, args.project)
 
-    if not args.story_id:
-        _prefixes = {"book": "BCI", "brazil": "NWS", "usa": "NWS", "opc": "CNT",
-                     "ugc": "UGC", "stocks": "STK", "higashi": "HIG"}
-        prefix = _prefixes.get(args.project, "CNT")
-        args.story_id = f"{prefix}-{datetime.now().strftime('%Y%m%d%H%M')}"
+    # Story ID prefix is set AFTER auto-detect (project may change), but if explicit we set early.
+    _PREFIXES = {"book": "BCI", "brazil": "NWS", "usa": "NWS", "opc": "CNT",
+                 "ugc": "UGC", "stocks": "STK", "higashi": "HIG", "unrouted": "UNK"}
 
-    print(f"\n{'='*50}\nCAPTURE PIPELINE v2\nURL: {args.url}\nProject: {args.project.upper()}\nStory ID: {args.story_id}\n{'='*50}")
+    def _assign_story_id():
+        if not args.story_id:
+            prefix = _PREFIXES.get(args.project, "UNK")
+            args.story_id = f"{prefix}-{datetime.now().strftime('%Y%m%d%H%M')}"
+
+    if args.project != "auto":
+        _assign_story_id()
+        print(f"\n{'='*50}\nCAPTURE PIPELINE v2\nURL: {args.url}\nProject: {args.project.upper()} (explicit)\nStory ID: {args.story_id}\n{'='*50}")
+    else:
+        print(f"\n{'='*50}\nCAPTURE PIPELINE v2\nURL: {args.url}\nProject: AUTO (detect after transcription)\n{'='*50}")
 
     # Step 0: Fetch metadata — YouTube Data API for YouTube, Apify for Instagram
     metadata = {}
@@ -2660,6 +2851,18 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         audio = download_audio(args.url, tmp, metadata=metadata)
         transcript = transcribe_audio(audio, args.url)
+
+        # Auto-detect project AFTER transcription if not explicit.
+        # Detection uses notes (highest priority) → Claude Haiku on transcript+caption+notes.
+        # Confidence < 0.70 OR Claude failure → 'unrouted' (NEVER falls back to book or opc).
+        _detect_reason = ""
+        if args.project == "auto":
+            caption = metadata.get("caption", "") if metadata else ""
+            args.project, _conf, _detect_reason = detect_project(transcript, caption, args.notes or "")
+            _assign_story_id()
+            print(f"\n  AUTO-DETECT → project={args.project.upper()} (confidence={_conf:.2f}) — {_detect_reason}")
+            print(f"  Story ID: {args.story_id}\n")
+
         save_transcript(transcript, args.url, args.story_id, args.project)
 
         # Download video file for Content Hub (non-fatal — transcript is the priority)
@@ -2679,7 +2882,10 @@ def main():
                 _yt_cookie_alert(resolved=True)
 
         srt_content = get_caption_srt(audio) if audio and not _is_youtube(args.url) else ""
-        if args.project == "book":
+        if args.project == "unrouted":
+            run_unrouted(args, transcript, video_path=video_path or "", metadata=metadata,
+                         srt_content=srt_content, detect_reason=_detect_reason)
+        elif args.project == "book":
             run_book(args, transcript)
         elif args.project in ("brazil", "usa"):
             # Both niches share the News pipeline flow but land in separate Drive folders

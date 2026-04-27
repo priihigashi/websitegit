@@ -10,11 +10,12 @@ on:
         required: true
         type: string
       project:
-        description: "book | brazil | opc | ugc | usa | stocks | higashi"
-        required: true
-        default: "book"
+        description: "auto = let runner classify (default). Or pick a niche explicitly."
+        required: false
+        default: "auto"
         type: choice
         options:
+          - auto
           - book
           - brazil
           - opc
@@ -22,6 +23,7 @@ on:
           - usa
           - stocks
           - higashi
+          - unrouted
       story_id:
         description: "Story ID e.g. BCI-002 or NWS-001 (blank = auto-generate)"
         required: false

@@ -1,0 +1,33 @@
+name: Unrouted Captures — Weekly Digest
+
+# Sends a weekly email summarizing all captures that the auto-detect
+# could not route. Source: Inspiration Library rows where Status = "Not Identified".
+# Empty list → no email.
+
+on:
+  schedule:
+    # Sunday 13:00 UTC (~9 AM ET) — captures from the prior 7 days
+    - cron: "0 13 * * 0"
+  workflow_dispatch: {}
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install deps
+        run: pip install gspread google-auth google-api-python-client
+
+      - name: Build digest + send
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+        run: |
+          python3 scripts/unrouted_digest.py

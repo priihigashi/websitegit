@@ -114,6 +114,20 @@ ROUTES = {
         "story_prefix":       "BCI",
         "email_label":        "Book capture done",
     },
+    # ── Unrouted (auto-detect failed / low confidence) ─────────────────────────
+    "unrouted": {
+        "label":              "Not Identified",
+        "pipeline":           "unrouted",
+        "drive_id":           "0AIPzwsJD_qqzUk9PVA",
+        "drive_name":         "Marketing",
+        "capture_folder_id":  "1tQQ0tEF_5pGKC4jDqe4ehuK3Jl6F_jzp",  # Marketing/Captures - Unrouted (created 2026-04-27)
+        "content_control_id": "",
+        "content_control_tab":"",
+        "published_tab":      "",
+        "queue_dest":         "Unrouted",
+        "story_prefix":       "UNK",
+        "email_label":        "Capture unrouted (needs manual review)",
+    },
 }
 
 # Legacy aliases — map to canonical keys (kept ONLY for backward compat with old queue rows / old workflow inputs)
@@ -126,10 +140,13 @@ _ALIASES = {
 
 
 def get_route(niche_or_project: str) -> dict:
-    """Return routing config for a niche/project key. Case-insensitive. Falls back to opc."""
+    """Return routing config for a niche/project key. Case-insensitive.
+    Falls back to 'unrouted' (NOT opc) — wrong-niche routing was silently sending
+    misclassified content to OPC. Unrouted lands in Marketing/Captures - Unrouted
+    so it can be triaged via the weekly digest email."""
     key = niche_or_project.lower().strip()
     key = _ALIASES.get(key, key)
-    return ROUTES.get(key, ROUTES["opc"])
+    return ROUTES.get(key, ROUTES["unrouted"])
 
 
 def pipeline_project(queue_project: str) -> str:
