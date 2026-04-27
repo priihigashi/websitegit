@@ -11,7 +11,7 @@ INSPO_TAB = "📥 Inspiration Library"
 QUEUE_TAB = "📋 Content Queue"
 CATALOG_TAB = "📸 Project Content Catalog"
 MIN_SCORE = 8  # Topics below this are not ready — skip regardless of niche
-SKIP_STATUSES = ("done", "posted", "skip", "captured", "archived", "classified", "built", "scheduled", "rejected")
+SKIP_STATUSES = ("posted", "skip", "captured", "built", "error", "not identified")
 
 _token_cache = {}
 
@@ -284,7 +284,10 @@ def pick_topics(count_opc=2, count_brazil=1, count_usa=1):
 
         if status_idx is not None:
             status_col = col_letter(status_idx + 1)
-            updates = [(f"{status_col}{p['row_idx']}", "CLASSIFIED")]
+            # Mark as Built once consumed for Content Queue — canonical 10-state
+            # vocab. Dedup against re-pick is handled by get_queued_topics() and
+            # the SKIP_STATUSES check (Built is in skip).
+            updates = [(f"{status_col}{p['row_idx']}", "Built")]
             if date_idx is not None:
                 date_col = col_letter(date_idx + 1)
                 updates.append((f"{date_col}{p['row_idx']}", now))
