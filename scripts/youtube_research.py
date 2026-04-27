@@ -226,22 +226,35 @@ def get_sheet():
         return None
 
 def save_to_sheet(sheet, video: dict, analysis: dict, topic: str):
+    """Write a video-research row using header-name lookup so column reorders
+    on the Inspiration Library tab can never shift the data again."""
     try:
         ws = sheet.worksheet(INSP_TAB)
-        row = [
-            datetime.now().strftime("%Y-%m-%d %H:%M"),
-            f"[VIDEO RESEARCH] {topic}",
-            video["title"],
-            video["url"],
-            video.get("uploader", ""),
-            analysis.get("summary", ""),
-            ", ".join(analysis.get("tools_used", [])),
-            analysis.get("technique", ""),
-            analysis.get("quality_assessment", ""),
-            analysis.get("watch_priority", ""),
-            analysis.get("relevance_reason", ""),
-        ]
-        ws.append_row(row)
+        headers = ws.row_values(1)
+        col_pos = {h.strip().lower(): i for i, h in enumerate(headers)}
+        width = (max(col_pos.values()) + 1) if col_pos else 29
+        row = [""] * width
+
+        def put(col_name, val):
+            i = col_pos.get(col_name.lower())
+            if i is not None and i < width:
+                row[i] = "" if val is None else str(val)
+
+        put("date added",        datetime.now().strftime("%Y-%m-%d %H:%M"))
+        put("topic / title",     f"[VIDEO RESEARCH] {topic}")
+        put("description",       video.get("title", ""))
+        put("url",               video.get("url", ""))
+        put("creator / account", video.get("uploader", ""))
+        put("brief / angle",     analysis.get("summary", ""))
+        put("what's working",    ", ".join(analysis.get("tools_used", [])))
+        put("visual hook",       analysis.get("technique", ""))
+        put("hook type",         analysis.get("quality_assessment", ""))
+        put("ai score (1-5)",    analysis.get("watch_priority", ""))
+        put("comments",          analysis.get("relevance_reason", ""))
+        put("platform",          "YouTube")
+        put("status",            "NEEDS_REVIEW")
+
+        ws.append_row(row, value_input_option="USER_ENTERED")
         print(f"  Saved to sheet: {video['title'][:50]}")
     except Exception as e:
         print(f"  Sheet save error: {e}")

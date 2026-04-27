@@ -307,7 +307,11 @@ def save_to_inspiration_library(url: str, transcript: str, cl: dict,
         _set_col(base_row, "hook type",         "")
         _set_col(base_row, "what's working",    cl.get("notes", ""))
         _set_col(base_row, "brief / angle",     f"Topic cluster from: {original_url}" if original_url else "")
-        _set_col(base_row, "status",            cl.get("classification", "NEEDS_REVIEW"))
+        # Map LLM verdict → canonical Status vocabulary (col S dropdown).
+        # READY = ready to build, NOT_RELEVANT = drop, NEEDS_REVIEW = human gate.
+        _STATUS_MAP = {"READY": "Approved", "NOT_RELEVANT": "Skip", "NEEDS_REVIEW": "NEEDS_REVIEW"}
+        verdict = cl.get("classification", "NEEDS_REVIEW")
+        _set_col(base_row, "status",            _STATUS_MAP.get(verdict, "NEEDS_REVIEW"))
         _set_col(base_row, "topic / title",     topic_cluster_id)
 
         lib.append_row(base_row, value_input_option="USER_ENTERED")

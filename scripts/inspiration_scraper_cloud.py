@@ -17,6 +17,10 @@ import os, json, time, urllib.request, urllib.parse, sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+# Header-name lookup so column moves can't silently corrupt the sheet.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib.sheet_schema import INSPO_COLS, make_col_pos  # noqa: E402
+
 # ── Config ────────────────────────────────────────────────────────────────────
 WORKSPACE       = Path("/Users/priscilahigashi/ClaudeWorkspace")
 TOKEN_FILE      = Path(os.environ.get("SHEETS_TOKEN_PATH",
@@ -172,21 +176,69 @@ def fix_header_add_comments(token):
     else:
         print("✅ Header OK")
 
-def get_existing_urls(token) -> set:
-    """Return set of URLs already in Inspiration Library (column D after 2026-04-17 remap)."""
+def _col_letter(idx: int) -> str:
+    """0-indexed column number → A1 letter (0→A, 27→AB)."""
+    s = ""
+    n = idx
+    while True:
+        s = chr(ord("A") + n % 26) + s
+        n = n // 26 - 1
+        if n < 0:
+            break
+    return s
+
+
+def get_live_col_pos(token) -> dict:
+    """Read live header row and return {lowercase_header: index} map."""
+    rows = sheet_get(token, f"/values/'{INSPO_TAB}'!1:1").get("values", [[]])
+    return make_col_pos(rows[0] if rows else [])
+
+
+def get_existing_urls(token, col_pos: dict) -> set:
+    """Return set of URLs already in Inspiration Library — column resolved by header name."""
+    idx = col_pos.get(INSPO_COLS["url"])
+    if idx is None:
+        print("  WARN: 'url' header missing — dedup disabled")
+        return set()
+    col = _col_letter(idx)
     try:
-        rows = sheet_get(token, f"/values/'{INSPO_TAB}'!D:D").get("values", [])
+        rows = sheet_get(token, f"/values/'{INSPO_TAB}'!{col}:{col}").get("values", [])
         return {r[0].strip() for r in rows[1:] if r}
     except Exception:
         return set()
 
-def get_existing_titles(token) -> set:
-    """Return normalized set of Original Captions / titles (column I after 2026-04-17 remap)."""
+
+def get_existing_titles(token, col_pos: dict) -> set:
+    """Return normalized set of Original Captions / titles — column resolved by header name."""
+    idx = col_pos.get(INSPO_COLS["original_caption"])
+    if idx is None:
+        return set()
+    col = _col_letter(idx)
     try:
-        rows = sheet_get(token, f"/values/'{INSPO_TAB}'!I:I").get("values", [])
+        rows = sheet_get(token, f"/values/'{INSPO_TAB}'!{col}:{col}").get("values", [])
         return {r[0].strip().lower() for r in rows[1:] if r and r[0].strip()}
     except Exception:
         return set()
+
+
+def build_row(record: dict, col_pos: dict) -> list:
+    """Convert a {INSPO_COLS-key: value} dict to a positional row aligned to live headers.
+    Unknown keys are skipped. Headers not present in record stay empty. This is the ONE
+    place the script touches column positions — everything else stays name-keyed."""
+    if not col_pos:
+        return []
+    width = max(col_pos.values()) + 1
+    row = [""] * width
+    for key, value in record.items():
+        header = INSPO_COLS.get(key)
+        if not header:
+            continue
+        idx = col_pos.get(header)
+        if idx is None:
+            continue
+        row[idx] = "" if value is None else str(value)
+    return row
+
 
 def append_rows(token, rows: list):
     sheet_post(token,
@@ -242,7 +294,7 @@ def apify_run(api_key, actor_id, input_data, timeout=300):
         return []
 
 # ── Source A — Instagram ───────────────────────────────────────────────────────
-def scrape_instagram(api_key: str, existing_urls: set) -> list:
+def scrape_instagram(api_key: str, existing_urls: set, col_pos: dict) -> list:
     print("\n📸 Source A — Instagram (Apify)...")
 
     # Build list of hashtag URLs + account URLs
@@ -294,34 +346,21 @@ def scrape_instagram(api_key: str, existing_urls: set) -> list:
         hook     = caption[:100] if caption else ""
         username = item.get("ownerUsername") or item.get("username") or ""
 
-        new_rows.append([
-            today,          # A  Date Added
-            "",             # B  Content Hub Link (scraper has no hub path)
-            "Instagram",    # C  Platform
-            url,            # D  URL
-            f"@{username}", # E  Creator / Account
-            "Reel",         # F  Content Type
-            "",             # G  Description (empty — AI fills later)
-            "",             # H  Transcription
-            caption,        # I  Original Caption
-            hook,           # J  Visual Hook
-            "Visual",       # K  Hook Type
-            str(views),     # L  Views
-            str(comments),  # M  Engagement Comments
-            "",             # N  Saves / Shares
-            "",             # O  What's Working
-            "",             # P  A/B Test
-            "",             # Q  Brief / Angle
-            "",             # R  Format
-            "New",          # S  Status
-            caption[:80],   # T  Topic / Title
-            "OPC",          # U  Niche
-            "",             # V  Comments (internal note)
-            "",             # W  AI Score (1-5) — blank until processed
-            "",             # X  Date Status Changed
-            "",             # Y  Drive Folder Path
-            "",             # Z  My Raw Notes
-        ])
+        new_rows.append(build_row({
+            "date_added":       today,
+            "platform":         "Instagram",
+            "url":              url,
+            "creator":          f"@{username}",
+            "content_type":     "Reel",
+            "original_caption": caption,
+            "visual_hook":      hook,
+            "hook_type":        "Visual",
+            "views":            str(views),
+            "comments":         str(comments),
+            "status":           "New",
+            "topic_title":      caption[:80],
+            "niche":            "OPC",
+        }, col_pos))
         existing_urls.add(url)
 
         if len(new_rows) >= MAX_INSTAGRAM:
@@ -331,7 +370,7 @@ def scrape_instagram(api_key: str, existing_urls: set) -> list:
     return new_rows
 
 # ── Source B — YouTube ────────────────────────────────────────────────────────
-def scrape_youtube(api_key: str, existing_urls: set, existing_titles: set = None) -> list:
+def scrape_youtube(api_key: str, existing_urls: set, col_pos: dict, existing_titles: set = None) -> list:
     print("\n▶️  Source B — YouTube (Data API v3)...")
     if existing_titles is None:
         existing_titles = set()
@@ -422,34 +461,21 @@ def scrape_youtube(api_key: str, existing_urls: set, existing_titles: set = None
 
             existing_urls.add(url)
             existing_titles.add(title.lower())
-            new_rows.append([
-                today,          # A  Date Added
-                "",             # B  Content Hub Link (scraper has no hub path)
-                "YouTube",      # C  Platform
-                url,            # D  URL
-                channel,        # E  Creator / Account
-                content_type,   # F  Content Type (Short vs Video)
-                desc,           # G  Description
-                "",             # H  Transcription
-                title,          # I  Original Caption (title = hook idea)
-                "",             # J  Visual Hook
-                "Text/Title",   # K  Hook Type
-                str(views),     # L  Views
-                str(comments),  # M  Engagement Comments
-                "",             # N  Saves / Shares
-                "",             # O  What's Working
-                "",             # P  A/B Test
-                "",             # Q  Brief / Angle
-                "",             # R  Format
-                "New",          # S  Status
-                title[:80],     # T  Topic / Title
-                "OPC",          # U  Niche
-                "",             # V  Comments (internal)
-                "",             # W  AI Score (1-5)
-                "",             # X  Date Status Changed
-                "",             # Y  Drive Folder Path
-                "",             # Z  My Raw Notes
-            ])
+            new_rows.append(build_row({
+                "date_added":       today,
+                "platform":         "YouTube",
+                "url":              url,
+                "creator":          channel,
+                "content_type":     content_type,
+                "description":      desc,
+                "original_caption": title,
+                "hook_type":        "Text/Title",
+                "views":            str(views),
+                "comments":         str(comments),
+                "status":           "New",
+                "topic_title":      title[:80],
+                "niche":            "OPC",
+            }, col_pos))
 
             if len(new_rows) >= MAX_YOUTUBE:
                 break
@@ -480,28 +506,38 @@ def main():
     print("📋 Loading OPC targets from 🎯 Scraping Targets tab...")
     _load_opc_targets_from_sheet(gtoken)
 
+    print("📐 Resolving column positions from live header...")
+    col_pos = get_live_col_pos(gtoken)
+    if INSPO_COLS["url"] not in col_pos:
+        print("❌ Live header missing 'URL' column — aborting to avoid corrupting rows")
+        sys.exit(1)
+    platform_idx = col_pos.get(INSPO_COLS["platform"])
+
     print("🔗 Loading existing URLs + titles (dedup check)...")
-    existing_urls = get_existing_urls(gtoken)
-    existing_titles = get_existing_titles(gtoken)
+    existing_urls = get_existing_urls(gtoken, col_pos)
+    existing_titles = get_existing_titles(gtoken, col_pos)
     print(f"   {len(existing_urls)} URLs, {len(existing_titles)} titles already in library")
 
     all_rows = []
 
     # Source A — Instagram
     if apify_key:
-        ig_rows = scrape_instagram(apify_key, existing_urls)
+        ig_rows = scrape_instagram(apify_key, existing_urls, col_pos)
         all_rows.extend(ig_rows)
 
     # Source B — YouTube
     if youtube_key:
-        yt_rows = scrape_youtube(youtube_key, existing_urls, existing_titles)
+        yt_rows = scrape_youtube(youtube_key, existing_urls, col_pos, existing_titles)
         all_rows.extend(yt_rows)
 
     if all_rows:
         print(f"\n📝 Writing {len(all_rows)} rows to '{INSPO_TAB}'...")
         append_rows(gtoken, all_rows)
-        ig_count = sum(1 for r in all_rows if r[2] == "Instagram")
-        yt_count = sum(1 for r in all_rows if r[2] == "YouTube")
+        if platform_idx is not None:
+            ig_count = sum(1 for r in all_rows if len(r) > platform_idx and r[platform_idx] == "Instagram")
+            yt_count = sum(1 for r in all_rows if len(r) > platform_idx and r[platform_idx] == "YouTube")
+        else:
+            ig_count = yt_count = 0
         print(f"✅ Done — {ig_count} Instagram + {yt_count} YouTube added")
     else:
         print("\n✅ Nothing new to add today")

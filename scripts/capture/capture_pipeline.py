@@ -1356,7 +1356,8 @@ def update_book_tracker(story_id, url, doc_url, analysis, notes):
 
 
 def _detect_platform(url: str) -> str:
-    """Detect platform name from URL for Inspiration Library Platform column."""
+    """Detect platform name from URL for Inspiration Library Platform column.
+    Values must match col C dropdown exactly."""
     u = url.lower()
     if "instagram.com" in u:
         return "Instagram"
@@ -1365,8 +1366,25 @@ def _detect_platform(url: str) -> str:
     elif "tiktok.com" in u:
         return "TikTok"
     elif "twitter.com" in u or "x.com" in u:
-        return "Twitter/X"
+        return "Twitter"
     return "Web"
+
+
+def _detect_source_format(url: str) -> str:
+    """Detect what kind of source media the URL points at — F (Content Type) col.
+    Distinct from production format (R col). Values match col F dropdown."""
+    u = url.lower()
+    if "youtube.com/shorts/" in u:
+        return "YouTube Short"
+    if "youtube.com/watch" in u or "youtu.be/" in u:
+        return "YouTube Video"
+    if "instagram.com/reel" in u or "instagram.com/reels" in u:
+        return "Reel"
+    if "instagram.com/p/" in u:
+        return "Carousel"
+    if "tiktok.com" in u:
+        return "Reel"
+    return "Other"
 
 
 def update_inspiration_library(url, transcript, classification, hub_url="", doc_url="", metadata=None, user_notes=""):
@@ -1406,7 +1424,10 @@ def update_inspiration_library(url, transcript, classification, hub_url="", doc_
         _set_col(base_row, "platform",          _detect_platform(url))
         _set_col(base_row, "url",               url)
         _set_col(base_row, "creator / account", creator)
-        _set_col(base_row, "content type",      classification.get("content_type", ""))
+        # F = source format (where it came from); R = production format (what we'll build).
+        # LLM-classified content_type ("Talking Head", "Progress", "Before-After", FORMAT-XXX) → R.
+        _set_col(base_row, "content type",      _detect_source_format(url))
+        _set_col(base_row, "format",            classification.get("content_type", ""))
         _set_col(base_row, "description",       classification.get("summary", ""))
         _set_col(base_row, "transcription",     transcript[:300])
         _set_col(base_row, "original caption",  metadata.get("caption", "")[:300])
@@ -1552,6 +1573,8 @@ def _mark_queue_failed(url: str, reason: str = "error"):
         sheet_id = IDEAS_INBOX_ID
         norm = url.split("?")[0].rstrip("/")
         note_val = f"capture_pipeline: {reason} — {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        # Status col uses the canonical 10-state vocabulary; raw reason goes to note col.
+        status_val = "Error"
 
         # (tab_name, read_range, url_col_idx, status_col, note_col)
         # Drop Links:           URL=col A(0), status=col C, note=col D
@@ -1575,7 +1598,7 @@ def _mark_queue_failed(url: str, reason: str = "error"):
                     body = json.dumps({
                         "valueInputOption": "USER_ENTERED",
                         "data": [
-                            {"range": f"'{tab_name}'!{status_col}{sheet_row}", "values": [[reason]]},
+                            {"range": f"'{tab_name}'!{status_col}{sheet_row}", "values": [[status_val]]},
                             {"range": f"'{tab_name}'!{note_col}{sheet_row}", "values": [[note_val]]},
                         ],
                     }).encode()

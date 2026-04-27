@@ -318,14 +318,24 @@ def save_scraped_to_inspiration_library(items):
             if idx is not None and idx < width:
                 row[idx] = val
 
+        # Niche values must match col U dropdown exactly — preserve known acronyms (USA, OPC).
+        _NICHE_MAP = {
+            "opc": "OPC", "usa": "USA", "ugc": "UGC",
+            "brazil": "Brazil", "higashi": "Higashi", "stocks": "Stocks",
+            "news": "News", "ai content": "AI Content",
+            "brazil news": "Brazil News", "usa news": "USA News",
+        }
+        raw_niche = (item.get("niche") or "").strip().lower()
+        niche_val = _NICHE_MAP.get(raw_niche, raw_niche.title())
+
         put("date added", today)
         put("platform", item.get("platform", "instagram").capitalize())
         put("url", url)
         put("content type", item.get("content_type", "Reel"))
         put("description", item.get("caption", "")[:200])
         put("views", str(item.get("views", "")) if item.get("views") else "")
-        put("niche", item.get("niche", "").title())
-        put("status", "captured")
+        put("niche", niche_val)
+        put("status", "Captured")
         put("series_override", series_override)
         put("fake_news_confidence", "medium")  # scraped via verification hashtag = medium confidence
 

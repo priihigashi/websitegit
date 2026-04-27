@@ -27,9 +27,14 @@ import time
 import urllib.request, urllib.parse
 import requests
 from datetime import datetime, timezone
+from pathlib import Path
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+
+# Header-name lookup so column moves can't silently corrupt the sheet.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from lib.sheet_schema import INSPO_COLS, make_col_pos  # noqa: E402
 
 SHEET_ID = os.getenv("CAPTURE_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
 DROP_TAB = os.getenv("CAPTURE_DROP_TAB", "🎯 Drop Links")
@@ -92,6 +97,31 @@ def _read_rows(svc, tab: str):
         return None
 
 
+def _read_headers(svc, tab: str) -> dict:
+    """Return {lowercase_header: index} for the live tab. Empty dict on failure."""
+    try:
+        resp = svc.spreadsheets().values().get(
+            spreadsheetId=SHEET_ID, range=f"'{tab}'!1:1"
+        ).execute()
+        header_row = resp.get("values", [[]])[0]
+        return make_col_pos(header_row)
+    except Exception as e:
+        print(f"  could not read header of '{tab}': {e}")
+        return {}
+
+
+def _col_letter(idx: int) -> str:
+    """0-indexed column number → A1 letter (e.g. 0→A, 27→AB)."""
+    s = ""
+    n = idx
+    while True:
+        s = chr(ord("A") + n % 26) + s
+        n = n // 26 - 1
+        if n < 0:
+            break
+    return s
+
+
 def _dispatch(url: str, project: str) -> tuple[bool, str]:
     """Fire workflow_dispatch. Returns (ok, run_url_or_error)."""
     if not GH_TOKEN:
@@ -116,21 +146,33 @@ def _project_for(niche: str) -> str:
     return NICHE_TO_PROJECT.get((niche or "").strip().lower(), "content")
 
 
-def _write_status(svc, tab: str, row: int, status: str, note: str):
+def _write_status(svc, tab: str, row: int, status: str, note: str, col_pos: dict):
+    """Resolve target columns by header name. Refuses to write if header is missing
+    so we never overwrite a URL column by accident again."""
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
-    # Inspiration Library: Status=col S, Comments=col V
-    # Drop Links: Status=col C, note=col D
     if tab == FALLBACK_TAB:
-        status_col, note_col = "S", "V"
+        status_name = INSPO_COLS["status"]      # 'status'
+        note_name   = INSPO_COLS["my_comments"] # 'comments' (col V on current schema)
     else:
-        status_col, note_col = "C", "D"
+        # Drop Links legacy mapping (tab no longer exists, but kept for parity)
+        status_name, note_name = "status", "date / dispatched"
+
+    status_idx = col_pos.get(status_name)
+    note_idx   = col_pos.get(note_name)
+    if status_idx is None or note_idx is None:
+        print(f"  WARN: header lookup failed on '{tab}' "
+              f"(status='{status_name}'→{status_idx}, note='{note_name}'→{note_idx}) — skipping writeback")
+        return
+
+    status_col = _col_letter(status_idx)
+    note_col   = _col_letter(note_idx)
     svc.spreadsheets().values().batchUpdate(
         spreadsheetId=SHEET_ID,
         body={
             "valueInputOption": "RAW",
             "data": [
                 {"range": f"'{tab}'!{status_col}{row}", "values": [[status]]},
-                {"range": f"'{tab}'!{note_col}{row}", "values": [[f"{ts} — {note}"]]},
+                {"range": f"'{tab}'!{note_col}{row}",   "values": [[f"{ts} — {note}"]]},
             ],
         },
     ).execute()
@@ -146,27 +188,40 @@ def main():
         rows = _read_rows(svc, FALLBACK_TAB) or []
         active_tab = FALLBACK_TAB
 
+    # Resolve column positions by header name (refuse to operate if missing)
+    col_pos = _read_headers(svc, active_tab)
+    if active_tab == FALLBACK_TAB:
+        url_idx    = col_pos.get(INSPO_COLS["url"])
+        status_idx = col_pos.get(INSPO_COLS["status"])
+        niche_idx  = col_pos.get(INSPO_COLS["niche"])
+    else:
+        # Drop Links legacy mapping (tab no longer exists)
+        url_idx, status_idx, niche_idx = (
+            col_pos.get("url"), col_pos.get("status"), col_pos.get("niche override")
+        )
+    if url_idx is None or status_idx is None or niche_idx is None:
+        print(f"ERROR: required headers missing on '{active_tab}' "
+              f"(url={url_idx}, status={status_idx}, niche={niche_idx}). Aborting.")
+        sys.exit(1)
+
     print(f"Scanning {len(rows)} rows in '{active_tab}' (max dispatch: {MAX_DISPATCH})")
+    print(f"  Header positions: url=col {_col_letter(url_idx)}, "
+          f"status=col {_col_letter(status_idx)}, niche=col {_col_letter(niche_idx)}")
 
     dispatched = 0
     for i, row in enumerate(rows):
         if dispatched >= MAX_DISPATCH:
             print("Dispatch cap reached; stopping.")
             break
-        row = row + [""] * (29 - len(row))
-        # Inspiration Library: URL=col D(3), Status=col S(18), Niche=col U(20)
-        # Drop Links: URL=col A(0), Status=col C(2), Niche=col E(4)
-        if active_tab == FALLBACK_TAB:
-            url    = row[3].strip()    # col D = URL
-            status = row[18].strip().lower()  # col S = Status
-            niche  = row[20].strip()   # col U = Niche
-        else:
-            url    = row[0].strip()    # col A = URL in Drop Links
-            status = row[2].strip().lower()   # col C = Status
-            niche  = row[4].strip()    # col E = Niche override
+        # Pad row so positional reads never IndexError
+        max_idx = max(url_idx, status_idx, niche_idx)
+        row = row + [""] * (max_idx + 1 - len(row))
+        url    = row[url_idx].strip()
+        status = row[status_idx].strip().lower()
+        niche  = row[niche_idx].strip()
         if not url or not url.startswith("http"):
             if url:
-                print(f"  row {i+2}: skipping non-URL in expected col: {url[:40]!r}")
+                print(f"  row {i+2}: skipping non-URL in {INSPO_COLS['url']!r} col: {url[:40]!r}")
             continue
         if status in SKIP_STATUS:
             continue
@@ -175,12 +230,12 @@ def main():
         ok, info = _dispatch(url, project)
         sheet_row = i + 2
         if ok:
-            _write_status(svc, active_tab, sheet_row, "Queued", info)
+            _write_status(svc, active_tab, sheet_row, "Queued", info, col_pos)
             dispatched += 1
             print(f"  row {sheet_row}: Queued ({project}) → {url[:60]}")
             time.sleep(1)
         else:
-            _write_status(svc, active_tab, sheet_row, "Error", info[:120])
+            _write_status(svc, active_tab, sheet_row, "Error", info[:120], col_pos)
             print(f"  row {sheet_row}: Error — {info}")
 
     print(f"Done. Dispatched {dispatched} capture runs.")
