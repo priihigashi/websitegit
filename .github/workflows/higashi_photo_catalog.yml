@@ -1,0 +1,38 @@
+name: Higashi Photo Catalog — Daily Scan
+
+on:
+  schedule:
+    - cron: '15 9 * * *'   # 5:15 AM ET (UTC-4) = 09:15 UTC — runs after OPC catalog
+  workflow_dispatch:        # allow manual run from GitHub UI
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements_content.txt
+          pip install pillow-heif
+
+      - name: Write Google credentials
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          mkdir -p /tmp/oak_park_creds
+          echo "$SHEETS_TOKEN" > /tmp/oak_park_creds/sheets_token.json
+
+      - name: Run Higashi photo catalog
+        env:
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
+          SHEETS_TOKEN_PATH:    /tmp/oak_park_creds/sheets_token.json
+        run: python scripts/higashi_photo_catalog_cloud.py
