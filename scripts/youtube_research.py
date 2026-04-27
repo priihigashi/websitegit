@@ -426,6 +426,114 @@ def log_pipeline_failure(stage: str, error: str, sheet=None):
     except Exception as e:
         print(f"  (failure-log write itself failed: {e})")
 
+# ── TIER 3 FALLBACK: CLAUDE WEB SEARCH ────────────────────────────────────────
+# When YouTube blocks transcripts entirely (the GHA-IP issue), we still need
+# actionable research. Claude's native web_search tool lets the API do the
+# searching + synthesis on Anthropic's side. One call per query, returns a list
+# of result-shaped dicts that slot into all_results.
+def claude_web_research(topic: str, query: str, max_results: int = 5) -> list[dict]:
+    """Call Claude API with web_search enabled. Returns list of synthetic 'video'
+    results so downstream sheet/report writers don't need changes. Source URLs
+    become the 'url' field; quality assessment becomes the 'analysis' block."""
+    if not CLAUDE_KEY_4_CONTENT:
+        return []
+    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
+    prompt = f"""You are researching: {topic}
+Specific query: {query}
+
+Use web_search to find {max_results} of the most useful written sources (articles, official docs, blog posts, GitHub READMEs) on this query. Focus on actionable prompt examples, technique walk-throughs, and real-world workflows — not video listicles.
+
+For each source, return JSON in this exact shape:
+{{
+  "title": "page title",
+  "url": "full URL",
+  "uploader": "publication / author / domain",
+  "summary": "2-3 sentence summary of the actionable content",
+  "tools_used": ["tools, models, or platforms covered"],
+  "technique": "specific technique, prompt pattern, or workflow demonstrated",
+  "key_tips": ["up to 3 concrete actionable tips — quote prompt examples verbatim where possible"],
+  "use_case": "what this is best for",
+  "relevant_to_us": true,
+  "relevance_reason": "why or why not relevant to Oak Park Construction (US construction marketing) / Hig Negocios (Brazilian real estate marketing)",
+  "watch_priority": "high / medium / low",
+  "relevance_score": 1-10,
+  "quality_assessment": "honest read on usefulness"
+}}
+
+Return ONLY a JSON array of {max_results} items. No markdown, no prose."""
+    try:
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=4000,
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 8}],
+            messages=[{"role": "user", "content": prompt}],
+        )
+        # Walk content blocks; the final text block holds the JSON answer
+        text = ""
+        for block in msg.content:
+            if getattr(block, "type", "") == "text":
+                text = block.text
+        raw = text.strip()
+        if raw.startswith("```"):
+            raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        if not raw:
+            return []
+        items = json.loads(raw)
+        # Adapt each item to the all_results shape used by save_to_sheet/report
+        adapted = []
+        for it in items:
+            adapted.append({
+                "id": "",  # web result, no YouTube ID
+                "title": it.get("title", ""),
+                "url": it.get("url", ""),
+                "uploader": it.get("uploader", ""),
+                "duration": 0,
+                "upload_date": "",
+                "analysis": {
+                    "summary": it.get("summary", ""),
+                    "tools_used": it.get("tools_used", []),
+                    "technique": it.get("technique", ""),
+                    "quality_assessment": it.get("quality_assessment", ""),
+                    "key_tips": it.get("key_tips", []),
+                    "use_case": it.get("use_case", ""),
+                    "relevant_to_us": it.get("relevant_to_us", True),
+                    "relevance_reason": it.get("relevance_reason", ""),
+                    "watch_priority": it.get("watch_priority", "medium"),
+                    "relevance_score": it.get("relevance_score", 5),
+                    "has_transcript": True,  # full article content was synthesized
+                    "source_kind": "web_article",
+                },
+                "transcript_excerpt": it.get("summary", "")[:500],
+            })
+        return adapted
+    except Exception as e:
+        print(f"  Claude web_search fallback failed for '{query}': {e}")
+        return []
+
+
+def run_claude_web_fallback(topic: str, queries: list[str], sheet, all_results: list, seen_ids: set):
+    """Execute Tier 3 across all original queries when YouTube tier failed flat."""
+    print(f"\n{'='*40}")
+    print(f"TIER 3 FALLBACK — Claude web_search (YouTube transcripts unavailable)")
+    print(f"{'='*40}")
+    added = 0
+    for query in queries:
+        print(f"\n  [Web fallback] Searching: {query}")
+        items = claude_web_research(topic, query, max_results=5)
+        for item in items:
+            url = item.get("url", "")
+            if not url or url in seen_ids:
+                continue
+            seen_ids.add(url)
+            all_results.append(item)
+            added += 1
+            if sheet:
+                save_to_sheet(sheet, item, item["analysis"], topic)
+            print(f"    + {item['title'][:70]}")
+    print(f"\nTier 3 added: {added} web articles")
+    return added
+
+
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 def run(topic: str, queries: list[str], max_per_query: int = 5):
     print(f"\n=== VIDEO RESEARCH: {topic} ===")
@@ -564,14 +672,61 @@ def run(topic: str, queries: list[str], max_per_query: int = 5):
     upload_to_drive(doc_content, filename, DRIVE_FOLDER_ID)
     
     # Bug 3 ceiling check: if 0 videos got transcripts, log it (YouTube IP block)
+    # AND trigger Tier 3 web-article fallback so we still ship actionable research.
     transcripts_ok = sum(1 for r in all_results if r["analysis"].get("has_transcript"))
     if all_results and transcripts_ok == 0:
         log_pipeline_failure(
             "Transcription (all videos metadata-only)",
             f"0/{len(all_results)} videos returned a transcript — YouTube likely blocking GHA IP. "
-            "Permanent unless we route via residential proxy or Whisper-on-audio.",
+            "Falling back to Claude web_search for written sources.",
             sheet,
         )
+        # Tier 3: Claude web_search across original queries
+        web_added = run_claude_web_fallback(topic, queries, sheet, all_results, seen_ids)
+        if web_added > 0:
+            # Re-sort implementable list now that web articles are included, then
+            # rewrite the report so the Drive doc reflects fallback findings.
+            implementable = sorted(
+                [r for r in all_results if r["analysis"].get("relevance_score", 0) >= 7],
+                key=lambda r: r["analysis"].get("relevance_score", 0),
+                reverse=True,
+            )
+            doc_lines2 = [
+                f"RESEARCH REPORT (with web fallback): {topic}",
+                f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                f"YouTube videos: {len(all_results) - web_added} (metadata only — transcripts blocked)",
+                f"Web articles via Claude: {web_added}",
+                f"Immediately implementable (score 7+): {len(implementable)}",
+                "",
+                "=" * 60,
+                "",
+                "BEST IDEAS TO IMPLEMENT NOW",
+                "-" * 40,
+            ]
+            for i, r in enumerate(implementable[:10], 1):
+                score = r["analysis"].get("relevance_score", 0)
+                kind = r["analysis"].get("source_kind", "youtube")
+                doc_lines2.append(f"{i}. [{score}/10] [{kind}] {r['title']}")
+                doc_lines2.append(f"   URL: {r['url']}")
+                doc_lines2.append(f"   {r['analysis'].get('summary', '')}")
+                tips = r["analysis"].get("key_tips", [])
+                if tips:
+                    doc_lines2.append("   Key tips:")
+                    for tip in tips[:3]:
+                        doc_lines2.append(f"     - {tip}")
+                doc_lines2.append(f"   Why: {r['analysis'].get('relevance_reason', '')}")
+                doc_lines2.append("")
+            fallback_doc = "\n".join(doc_lines2)
+            fb_filename = f"research_{topic.replace(' ','_')}_{timestamp}_WITH_FALLBACK.txt"
+            with open(f"/tmp/{fb_filename}", "w") as f:
+                f.write(fallback_doc)
+            upload_to_drive(fallback_doc, fb_filename, DRIVE_FOLDER_ID)
+            # Tier 3 succeeded — clear the transcript failure so run does not exit 1
+            PIPELINE_FAILURES[:] = [
+                fl for fl in PIPELINE_FAILURES
+                if fl.get("stage") != "Transcription (all videos metadata-only)"
+            ]
+            print(f"  ✅ Tier 3 fallback recovered {web_added} usable sources — clearing failure flag")
 
     # Flush any failures recorded BEFORE sheet was available
     if sheet and PIPELINE_FAILURES:
