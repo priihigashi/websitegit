@@ -3054,22 +3054,40 @@ def main():
         audio = download_audio(args.url, tmp, metadata=metadata)
         transcript = transcribe_audio(audio, args.url)
 
-        # Visual layer — ALWAYS run Claude Vision on keyframes (video) or Apify slide URLs
-        # (carousel), even when Whisper returned a transcript. Audio + on-screen visuals
-        # complement each other: text overlays, names shown as graphics, document close-ups,
-        # and citations flashed on screen are invisible to Whisper. Vision output is appended
-        # to the transcript with a clear [ON-SCREEN VISUAL] marker so the fact-check + brief
-        # can reason about both layers separately.
-        _visual_desc = _try_vision_fallback(audio, tmp, metadata)
-        if _visual_desc:
-            if transcript.strip():
-                transcript = transcript.strip() + "\n\n[ON-SCREEN VISUAL — Claude Vision]\n" + _visual_desc
-                print(f"  Visual description appended ({len(_visual_desc)} chars on top of audio transcript)")
-            else:
-                transcript = _visual_desc
-                print(f"  Visual description used as transcript ({len(transcript)} chars — no audio)")
+        # Download video BEFORE vision so keyframe extraction has a real video file to
+        # work with. Audio is an mp3 with no video stream — calling ffmpeg keyframe
+        # extraction on it returns nothing and vision silently no-ops.
+        # Skip for YouTube (runner IPs blocked) and IG carousel (no video file exists).
+        if audio in ("__youtube_transcript_fallback__", "__ig_carousel__"):
+            video_path = ""
+        else:
+            video_path = download_video(args.url, tmp)
 
-        # Auto-detect project AFTER transcription if not explicit.
+        # Visual layer — ALWAYS run Claude Vision after the video file is on disk.
+        # Audio + on-screen visuals complement each other: text overlays, names shown
+        # as graphics, document close-ups, and citations flashed on screen are invisible
+        # to Whisper. Vision output is appended to the transcript with a clear
+        # [ON-SCREEN VISUAL] marker so detect_project, fact-check, and brief generation
+        # can all reason about both layers.
+        # Inputs: video_path for downloaded clips, "__ig_carousel__" sentinel for carousels
+        # (vision uses Apify slide URLs from metadata), or "" to skip (YT-only path).
+        if audio == "__ig_carousel__":
+            _vision_input = "__ig_carousel__"
+        elif video_path:
+            _vision_input = video_path
+        else:
+            _vision_input = ""
+        if _vision_input:
+            _visual_desc = _try_vision_fallback(_vision_input, tmp, metadata)
+            if _visual_desc:
+                if transcript.strip():
+                    transcript = transcript.strip() + "\n\n[ON-SCREEN VISUAL — Claude Vision]\n" + _visual_desc
+                    print(f"  Visual description appended ({len(_visual_desc)} chars on top of audio transcript)")
+                else:
+                    transcript = _visual_desc
+                    print(f"  Visual description used as transcript ({len(transcript)} chars — no audio)")
+
+        # Auto-detect project AFTER transcription+vision if not explicit.
         # Detection uses notes (highest priority) → Claude Haiku on transcript+caption+notes.
         # Confidence < 0.70 OR Claude failure → 'unrouted' (NEVER falls back to book or opc).
         _detect_reason = ""
@@ -3081,13 +3099,6 @@ def main():
             print(f"  Story ID: {args.story_id}\n")
 
         save_transcript(transcript, args.url, args.story_id, args.project)
-
-        # Download video file for Content Hub (non-fatal — transcript is the priority).
-        # Skip for YouTube (runner IPs blocked) and IG carousel (no video file exists).
-        if audio in ("__youtube_transcript_fallback__", "__ig_carousel__"):
-            video_path = ""
-        else:
-            video_path = download_video(args.url, tmp)
 
         # Cookie health check — only relevant when yt-dlp is used for YouTube.
         # When YOUTUBE_API_KEY is set we skip yt-dlp entirely, so no cookie alerts needed.
