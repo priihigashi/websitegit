@@ -69,6 +69,28 @@ SCOPES = [
 PIPELINE_FAILURES = []
 GHA_RUN_ID = os.environ.get("GITHUB_RUN_ID", "")
 
+# ── OAUTH TOKEN REFRESH ───────────────────────────────────────────────────────
+# Same pattern as content_creator/main.py and capture_pipeline.py.
+# SHEETS_TOKEN is a JSON refresh-token blob, not a raw access token.
+import time
+_token_cache = {}
+def get_oauth_token():
+    if _token_cache.get("t") and time.time() < _token_cache.get("exp", 0):
+        return _token_cache["t"]
+    raw = os.environ.get("SHEETS_TOKEN", "")
+    if not raw:
+        return ""
+    td = json.loads(raw)
+    data = urllib.parse.urlencode({
+        "client_id": td["client_id"], "client_secret": td["client_secret"],
+        "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
+    }).encode()
+    resp = json.loads(urllib.request.urlopen(
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+    _token_cache["t"] = resp["access_token"]
+    _token_cache["exp"] = time.time() + resp.get("expires_in", 3500) - 60
+    return resp["access_token"]
+
 # ── YOUTUBE SEARCH ────────────────────────────────────────────────────────────
 def search_youtube(query: str, max_results: int = 5) -> list[dict]:
     """Use yt-dlp to search YouTube, return list of {url, title, id, duration}"""
@@ -162,7 +184,10 @@ Return only valid JSON, no markdown."""
             max_tokens=1000,
             messages=[{"role": "user", "content": prompt}]
         )
-        return json.loads(msg.content[0].text)
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        return json.loads(raw)
     except Exception as e:
         return {"summary": f"Analysis failed: {e}", "watch_priority": "low", "relevance_score": 0, "has_transcript": has_transcript}
 
@@ -260,12 +285,15 @@ def save_to_sheet(sheet, video: dict, analysis: dict, topic: str):
         print(f"  Sheet save error: {e}")
 
 # ── DRIVE UPLOAD ──────────────────────────────────────────────────────────────
-def upload_to_drive(content: str, filename: str, folder_id: str, token: str):
-    """Upload a text file to Drive using OAuth token"""
-    if not token:
+def upload_to_drive(content: str, filename: str, folder_id: str, token: str = None):
+    """Upload a text file to Drive. Refreshes SHEETS_TOKEN to get a fresh access_token."""
+    # Always fetch a fresh access_token via refresh flow — the legacy `token`
+    # arg was the raw JSON blob which Drive rejects with 401.
+    access_token = get_oauth_token()
+    if not access_token:
         print(f"  No Drive token — skipping upload of {filename}")
         return None
-    
+
     boundary = "boundary_xyz_123"
     body = (
         f"--{boundary}\r\n"
@@ -281,7 +309,7 @@ def upload_to_drive(content: str, filename: str, folder_id: str, token: str):
         "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true",
         data=body,
         headers={
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Bearer {access_token}",
             "Content-Type": f"multipart/related; boundary={boundary}",
         },
         method="POST"
@@ -333,8 +361,6 @@ def run(topic: str, queries: list[str], max_per_query: int = 5):
     print(f"Target: {TARGET_VIDEOS} transcribed videos across 3 rounds\n")
 
     sheet = get_sheet()
-    drive_token = os.environ.get("DRIVE_OAUTH_TOKEN", "")
-    
     all_results = []
     seen_ids = set()
 
@@ -456,12 +482,13 @@ def run(topic: str, queries: list[str], max_per_query: int = 5):
     filename = f"research_{topic.replace(' ','_')}_{timestamp}.txt"
     
     print(f"\nSaving report: {filename}")
-    if drive_token:
-        upload_to_drive(doc_content, filename, DRIVE_FOLDER_ID, drive_token)
-    else:
-        with open(f"/tmp/{filename}", "w") as f:
-            f.write(doc_content)
-        print(f"  Saved locally to /tmp/{filename} (no Drive token)")
+    # Always write to /tmp first so the GHA artifact upload step can grab it,
+    # even if Drive upload fails. This is the recovery path.
+    local_path = f"/tmp/{filename}"
+    with open(local_path, "w") as f:
+        f.write(doc_content)
+    print(f"  Saved locally to {local_path}")
+    upload_to_drive(doc_content, filename, DRIVE_FOLDER_ID)
     
     # Bug 3 ceiling check: if 0 videos got transcripts, log it (YouTube IP block)
     transcripts_ok = sum(1 for r in all_results if r["analysis"].get("has_transcript"))
