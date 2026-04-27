@@ -35,6 +35,7 @@ jobs:
           CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
           DRIVE_OAUTH_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
           python scripts/youtube_research.py \
             --topic "${{ github.event.inputs.topic }}" \
@@ -42,8 +43,34 @@ jobs:
             --max ${{ github.event.inputs.max_per_query }}
 
       - name: Upload findings as artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: research-findings-${{ github.run_id }}
           path: /tmp/research_*.txt
           if-no-files-found: ignore
+
+      - name: Email alert on failure
+        if: failure()
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+        run: |
+          python3 - <<PYEOF
+          import os, smtplib
+          from email.message import EmailMessage
+          msg = EmailMessage()
+          msg['Subject'] = '🚨 video-research.yml FAILED — run ${{ github.run_id }}'
+          msg['From'] = 'priscila@oakpark-construction.com'
+          msg['To']   = 'priscila@oakpark-construction.com'
+          msg.set_content(
+              "video-research.yml run ${{ github.run_id }} exited non-zero.\n\n"
+              "Topic: ${{ github.event.inputs.topic }}\n"
+              "Logs:  https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}\n\n"
+              "Failures recorded in: Ideas & Inbox → 🚨 Pipeline Failures tab\n"
+              "(filter by RUN_ID = ${{ github.run_id }})"
+          )
+          s = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+          s.login('priscila@oakpark-construction.com', os.environ['GMAIL_APP_PASSWORD'])
+          s.send_message(msg)
+          s.quit()
+          PYEOF

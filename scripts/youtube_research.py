@@ -65,6 +65,10 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
+# Failure accumulator — populated by log_pipeline_failure(). Non-empty => script exits 1.
+PIPELINE_FAILURES = []
+GHA_RUN_ID = os.environ.get("GITHUB_RUN_ID", "")
+
 # ── YOUTUBE SEARCH ────────────────────────────────────────────────────────────
 def search_youtube(query: str, max_results: int = 5) -> list[dict]:
     """Use yt-dlp to search YouTube, return list of {url, title, id, duration}"""
@@ -196,9 +200,16 @@ Return ONLY a JSON array of 5 query strings, nothing else:
             messages=[{"role": "user", "content": prompt}]
         )
         raw = msg.content[0].text.strip()
+        # Strip markdown fences if Haiku wrapped the JSON
+        if raw.startswith("```"):
+            raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        if not raw:
+            raise ValueError(f"Haiku returned empty body (model=claude-haiku-4-5-20251001, round={round_num})")
+        print(f"  [round {round_num}] raw response (first 200 chars): {raw[:200]}")
         return json.loads(raw)
     except Exception as e:
         print(f"  Keyword expansion failed: {e}")
+        log_pipeline_failure(f"Round {round_num} keyword expansion", e)
         return []
 
 # ── GOOGLE SHEETS ─────────────────────────────────────────────────────────────
@@ -269,7 +280,38 @@ def upload_to_drive(content: str, filename: str, folder_id: str, token: str):
             return result.get("id")
     except Exception as e:
         print(f"  Drive upload failed: {e}")
+        log_pipeline_failure("Drive upload", e)
         return None
+
+# ── FAILURE LOGGING ───────────────────────────────────────────────────────────
+def log_pipeline_failure(stage: str, error: str, sheet=None):
+    """Record a silent-failure event. Appends to '🚨 Pipeline Failures' tab and
+    accumulates in PIPELINE_FAILURES so __main__ can exit non-zero."""
+    PIPELINE_FAILURES.append({"stage": stage, "error": str(error)[:500]})
+    print(f"  ❌ FAILURE [{stage}]: {str(error)[:200]}")
+    if sheet is None:
+        return
+    try:
+        ws = sheet.worksheet("🚨 Pipeline Failures")
+    except Exception:
+        return  # tab missing — failures still tracked in PIPELINE_FAILURES
+    try:
+        run_url = (
+            f"https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{GHA_RUN_ID}"
+            if GHA_RUN_ID else ""
+        )
+        ws.append_row([
+            datetime.utcnow().isoformat() + "Z",
+            "video-research.yml",
+            GHA_RUN_ID,
+            stage,
+            str(error)[:500],
+            run_url,
+            "",  # RESOLVED checkbox — leave empty per checkbox rule
+            "",  # NOTE
+        ], value_input_option="USER_ENTERED")
+    except Exception as e:
+        print(f"  (failure-log write itself failed: {e})")
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 def run(topic: str, queries: list[str], max_per_query: int = 5):
@@ -408,10 +450,46 @@ def run(topic: str, queries: list[str], max_per_query: int = 5):
             f.write(doc_content)
         print(f"  Saved locally to /tmp/{filename} (no Drive token)")
     
+    # Bug 3 ceiling check: if 0 videos got transcripts, log it (YouTube IP block)
+    transcripts_ok = sum(1 for r in all_results if r["analysis"].get("has_transcript"))
+    if all_results and transcripts_ok == 0:
+        log_pipeline_failure(
+            "Transcription (all videos metadata-only)",
+            f"0/{len(all_results)} videos returned a transcript — YouTube likely blocking GHA IP. "
+            "Permanent unless we route via residential proxy or Whisper-on-audio.",
+            sheet,
+        )
+
+    # Flush any failures recorded BEFORE sheet was available
+    if sheet and PIPELINE_FAILURES:
+        for f in PIPELINE_FAILURES:
+            try:
+                ws = sheet.worksheet("🚨 Pipeline Failures")
+                run_url = (
+                    f"https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{GHA_RUN_ID}"
+                    if GHA_RUN_ID else ""
+                )
+                ws.append_row([
+                    datetime.utcnow().isoformat() + "Z",
+                    "video-research.yml",
+                    GHA_RUN_ID,
+                    f["stage"],
+                    f["error"],
+                    run_url,
+                    "",
+                    "(flushed at run end)",
+                ], value_input_option="USER_ENTERED")
+            except Exception:
+                pass
+
     print(f"\n{'='*60}")
     print(f"DONE: {len(all_results)} videos analyzed")
     print(f"Implementable (7+): {len(implementable)}")
     print(f"High priority: {len(high)}")
+    if PIPELINE_FAILURES:
+        print(f"❌ {len(PIPELINE_FAILURES)} silent failure(s) — see '🚨 Pipeline Failures' tab in Ideas & Inbox")
+        for f in PIPELINE_FAILURES:
+            print(f"   - {f['stage']}: {f['error'][:120]}")
     if implementable:
         top = implementable[0]
         print(f"Top pick: {top['title']}")
@@ -428,3 +506,7 @@ if __name__ == "__main__":
     
     queries = [q.strip() for q in args.queries.split(",")]
     run(args.topic, queries, args.max)
+
+    # Fail loud: any silent failure → non-zero exit so GitHub marks run ❌
+    if PIPELINE_FAILURES:
+        sys.exit(1)
