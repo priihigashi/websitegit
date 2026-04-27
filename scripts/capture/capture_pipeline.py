@@ -1416,6 +1416,9 @@ def update_inspiration_library(url, transcript, classification, hub_url="", doc_
         _set_col(base_row, "series_override",   classification.get("series_override", ""))
         _set_col(base_row, "fake_news_route",   classification.get("fake_news_route", ""))
         _set_col(base_row, "fake_news_confidence", classification.get("fake_news_confidence", ""))
+        _set_col(base_row, "status",            classification.get("status", ""))
+        _set_col(base_row, "niche",             classification.get("niche", ""))
+        _set_col(base_row, "drive folder path", hub_url or doc_url)
         if user_notes:
             _set_col(base_row, "my raw notes",  user_notes)
 
@@ -2766,6 +2769,7 @@ def run_unrouted(args, transcript: str, video_path: str = "", metadata: dict = N
         try:
             classification = {
                 "niche": "Not Identified",
+                "status": "Not Identified",
                 "content_type": "unrouted",
                 "description": (metadata.get("caption", "") or transcript[:200])[:300],
                 "hook": "",

@@ -49,8 +49,8 @@ jobs:
           BODY: ${{ github.event.comment.body }}
         run: |
           URL=$(printf '%s' "$BODY" | grep -oE 'https?://[^[:space:]]+' | head -n 1 || true)
-          PROJECT=$(printf '%s' "$BODY" | grep -oE '\b(brazil|usa|opc|ugc|stocks|higashi|book|sovereign|news|content)\b' | head -n 1 || true)
-          PROJECT=${PROJECT:-opc}
+          PROJECT=$(printf '%s' "$BODY" | grep -oE '\b(brazil|usa|opc|ugc|stocks|higashi|book|sovereign|news|content|auto|unrouted)\b' | head -n 1 || true)
+          PROJECT=${PROJECT:-auto}
           # Normalize legacy aliases to canonical names — capture_pipeline.yml workflow_dispatch
           # only accepts: book|brazil|opc|ugc|usa|stocks|higashi. Anything else → silent fail.
           case "$PROJECT" in
