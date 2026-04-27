@@ -460,6 +460,17 @@ def fetch_reel_metadata(url: str) -> dict:
             "source_url": url,
             "video_url": item.get("videoUrl", ""),
         }
+        # Carousel slide images — for /p/ posts with no video track.
+        # Apify returns carousel slides in "images" array as [{url, width, height}] objects.
+        # Single-image posts fall back to displayUrl.
+        _raw_images = item.get("images", []) or []
+        slide_image_urls = [
+            img.get("url") or img.get("src") or (img if isinstance(img, str) else "")
+            for img in _raw_images
+        ][:8]
+        if not slide_image_urls and item.get("displayUrl"):
+            slide_image_urls = [item["displayUrl"]]
+        metadata["slide_image_urls"] = [u for u in slide_image_urls if isinstance(u, str) and u.startswith("http")]
         print(f"  Creator: @{metadata['creator_handle']} ({metadata['creator_name']})")
         print(f"  Stats: {metadata['likes']} likes, {metadata['views']} views")
         print(f"  Caption: {metadata['caption'][:100]}...")
@@ -856,9 +867,12 @@ def download_audio(url: str, tmp_dir: str, metadata: dict = None) -> str:
         if audio:
             return audio
 
-    # Raise instead of sys.exit — lets __main__ distinguish photo posts from real failures.
+    # Return sentinel for /p/ posts so _try_vision_fallback() can use Apify slide images.
+    # If Apify returned no slide_image_urls, vision returns "" and detect_project falls
+    # back to caption-only, routing to unrouted — no crash.
     if re.search(r'instagram\.com/p/', url):
-        raise RuntimeError("__ig_photo_post__ no video found for Instagram /p/ URL — likely a photo post, not a reel")
+        print("  Instagram /p/ post: no video found — attempting carousel/image vision fallback")
+        return "__ig_carousel__"
     raise RuntimeError("all download methods failed")
 
 
@@ -1048,6 +1062,11 @@ def _whisper_with_fallback(audio_path: str, *, fmt: str = "text", url: str = "")
 
 def transcribe_audio(audio_path: str, url: str = "") -> str:
     print("\n[2/3] Transcribing...")
+    # Instagram carousel sentinel — no audio track, skip transcription.
+    # _try_vision_fallback() in main() will use Apify slide images instead.
+    if audio_path == "__ig_carousel__":
+        print("  Instagram carousel — skipping audio transcription (no audio track)")
+        return ""
     # YouTube fallback: use youtube-transcript-api (no download, no cookies needed)
     if audio_path == "__youtube_transcript_fallback__":
         try:
@@ -1107,6 +1126,145 @@ def save_transcript(transcript: str, url: str, story_id: str, project: str) -> s
         f.write(f"STORY ID: {story_id}\nPROJECT: {project}\nURL: {url}\nDATE: {datetime.now()}\n\n{transcript}")
     print(f"  Saved: {filepath}")
     return str(filepath)
+
+
+# ─── VISUAL FALLBACK — CLAUDE VISION ─────────────────────────────────────────
+# Used when transcribe_audio() returns "" (silent video, text-overlay, IG carousel).
+# Extracts keyframes (video) or uses Apify slide URLs (carousel) → Claude Haiku Vision
+# → returns a visual description that feeds detect_project() as the "transcript".
+
+def _extract_video_keyframes(file_path: str, tmp_dir: str, n: int = 6) -> list:
+    """Extract N evenly-spaced JPEG keyframes from a video file via FFmpeg.
+
+    Returns list of local JPEG paths. Returns [] if FFmpeg fails or file has no
+    video stream (e.g. audio-only mp3). Never raises.
+    """
+    try:
+        import subprocess as _sp
+        # Probe duration
+        probe = _sp.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=nb_frames,duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", file_path],
+            capture_output=True, text=True, timeout=15,
+        )
+        if probe.returncode != 0 or not probe.stdout.strip():
+            print(f"  _extract_video_keyframes: no video stream in {file_path}")
+            return []
+
+        lines = [l for l in probe.stdout.strip().splitlines() if l.strip()]
+        duration = float(lines[0]) if lines else 0
+        if duration <= 0:
+            return []
+
+        step = max(1, int(duration / n))
+        out_pattern = os.path.join(tmp_dir, "frame_%02d.jpg")
+        result = _sp.run(
+            ["ffmpeg", "-i", file_path,
+             "-vf", f"select='not(mod(t\\,{step}))'",
+             "-vsync", "vfr", "-frames:v", str(n),
+             "-q:v", "3", out_pattern, "-y", "-loglevel", "error"],
+            capture_output=True, text=True, timeout=30,
+        )
+        frames = sorted(
+            [os.path.join(tmp_dir, f) for f in os.listdir(tmp_dir) if f.startswith("frame_") and f.endswith(".jpg")]
+        )
+        if not frames:
+            print(f"  _extract_video_keyframes: FFmpeg produced no frames (rc={result.returncode})")
+        else:
+            print(f"  Extracted {len(frames)} keyframes from video")
+        return frames
+    except Exception as e:
+        print(f"  WARNING _extract_video_keyframes (non-fatal): {e}")
+        return []
+
+
+def _describe_with_claude_vision(image_sources: list, context: str = "") -> str:
+    """Send up to 8 images to Claude Haiku Vision → returns scene description string.
+
+    image_sources: list of local file paths (JPEG) OR remote URLs.
+    Returns "" on any failure — never raises.
+    """
+    if not CLAUDE_KEY_4_CONTENT:
+        print("  _describe_with_claude_vision: CLAUDE_KEY_4_CONTENT not set — skipping")
+        return ""
+    if not image_sources:
+        return ""
+
+    try:
+        import anthropic as _anthropic
+        client = _anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
+
+        content_blocks = []
+        for src in image_sources[:8]:
+            if src.startswith("http://") or src.startswith("https://"):
+                content_blocks.append({
+                    "type": "image",
+                    "source": {"type": "url", "url": src},
+                })
+            elif os.path.exists(src):
+                with open(src, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("utf-8")
+                content_blocks.append({
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": "image/jpeg", "data": b64},
+                })
+
+        if not content_blocks:
+            return ""
+
+        content_blocks.append({
+            "type": "text",
+            "text": (
+                "Describe what you see in these images. Include:\n"
+                "- Any visible text (signs, overlays, captions, headlines)\n"
+                "- People shown (names if visible, roles, public figures)\n"
+                "- Location or setting\n"
+                "- Topic or subject matter\n"
+                "- Language of any text\n"
+                "Be specific. This description will be used to classify the content niche "
+                "(Brazil news, USA news, Oak Park construction, stocks, etc.)."
+                + (f"\n\nContext from caption: {context[:300]}" if context else "")
+            ),
+        })
+
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            messages=[{"role": "user", "content": content_blocks}],
+        )
+        description = resp.content[0].text.strip()
+        print(f"  Claude Vision description ({len(description)} chars, {len(content_blocks)-1} images)")
+        return description
+    except Exception as e:
+        print(f"  WARNING _describe_with_claude_vision (non-fatal): {e}")
+        return ""
+
+
+def _try_vision_fallback(audio: str, tmp_dir: str, metadata: dict) -> str:
+    """Visual fallback when transcript is empty.
+
+    For __ig_carousel__: uses slide_image_urls from Apify metadata.
+    For downloaded video files: extracts keyframes via FFmpeg.
+    Returns visual description string, or "" if nothing usable.
+    Never raises.
+    """
+    metadata = metadata or {}
+    caption = metadata.get("caption", "")
+
+    if audio == "__ig_carousel__":
+        slide_urls = metadata.get("slide_image_urls", [])
+        if not slide_urls:
+            print("  Vision fallback: no slide_image_urls from Apify — skipping")
+            return ""
+        print(f"  Vision fallback: {len(slide_urls)} carousel slide(s) → Claude Haiku Vision")
+        return _describe_with_claude_vision(slide_urls, context=caption)
+    else:
+        frames = _extract_video_keyframes(audio, tmp_dir, n=6)
+        if not frames:
+            return ""
+        print(f"  Vision fallback: {len(frames)} keyframe(s) → Claude Haiku Vision")
+        return _describe_with_claude_vision(frames, context=caption)
 
 
 # ─── CLAUDE ANALYSIS ──────────────────────────────────────────────────────────
@@ -2879,6 +3037,15 @@ def main():
         audio = download_audio(args.url, tmp, metadata=metadata)
         transcript = transcribe_audio(audio, args.url)
 
+        # Visual fallback — when Whisper returns "" (silent video, text-overlay, IG carousel),
+        # try Claude Haiku Vision on keyframes (video) or Apify slide URLs (carousel).
+        # Falls through silently if vision also fails — detect_project runs on caption alone.
+        if not transcript.strip():
+            _visual_desc = _try_vision_fallback(audio, tmp, metadata)
+            if _visual_desc:
+                transcript = _visual_desc
+                print(f"  Visual description used as transcript ({len(transcript)} chars)")
+
         # Auto-detect project AFTER transcription if not explicit.
         # Detection uses notes (highest priority) → Claude Haiku on transcript+caption+notes.
         # Confidence < 0.70 OR Claude failure → 'unrouted' (NEVER falls back to book or opc).
@@ -2892,10 +3059,9 @@ def main():
 
         save_transcript(transcript, args.url, args.story_id, args.project)
 
-        # Download video file for Content Hub (non-fatal — transcript is the priority)
-        # Skip for YouTube transcript-only path — GitHub runner IPs are blocked by YouTube,
-        # so download always fails and just produces a spurious failure notification.
-        if audio == "__youtube_transcript_fallback__":
+        # Download video file for Content Hub (non-fatal — transcript is the priority).
+        # Skip for YouTube (runner IPs blocked) and IG carousel (no video file exists).
+        if audio in ("__youtube_transcript_fallback__", "__ig_carousel__"):
             video_path = ""
         else:
             video_path = download_video(args.url, tmp)
@@ -2908,7 +3074,9 @@ def main():
             elif video_path:
                 _yt_cookie_alert(resolved=True)
 
-        srt_content = get_caption_srt(audio) if audio and not _is_youtube(args.url) else ""
+        # Skip SRT generation for sentinels — no audio file exists for either path.
+        _has_audio_file = audio not in ("__youtube_transcript_fallback__", "__ig_carousel__")
+        srt_content = get_caption_srt(audio) if _has_audio_file and not _is_youtube(args.url) else ""
         if args.project == "unrouted":
             run_unrouted(args, transcript, video_path=video_path or "", metadata=metadata,
                          srt_content=srt_content, detect_reason=_detect_reason)
@@ -2917,7 +3085,7 @@ def main():
         elif args.project in ("brazil", "usa"):
             # Both niches share the News pipeline flow but land in separate Drive folders
             # (routing.py::capture_folder returns the correct Brazil or USA folder).
-            srt_content = get_caption_srt(audio) if audio else ""
+            srt_content = get_caption_srt(audio) if _has_audio_file else ""
             run_news(args, transcript, video_path=video_path or "", srt_content=srt_content, creator_name=metadata.get("creator_name", ""))
         elif args.project == "ugc":
             run_ugc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
