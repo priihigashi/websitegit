@@ -1242,12 +1242,15 @@ def _describe_with_claude_vision(image_sources: list, context: str = "") -> str:
 
 
 def _try_vision_fallback(audio: str, tmp_dir: str, metadata: dict) -> str:
-    """Visual fallback when transcript is empty.
+    """Always-on visual layer (audio-or-no-audio).
+
+    Runs on every capture to extract on-screen text, names shown as graphics,
+    document close-ups, and citations that Whisper cannot hear.
 
     For __ig_carousel__: uses slide_image_urls from Apify metadata.
     For downloaded video files: extracts keyframes via FFmpeg.
     Returns visual description string, or "" if nothing usable.
-    Never raises.
+    Never raises. Caller decides whether to append (audio present) or replace (silent).
     """
     metadata = metadata or {}
     caption = metadata.get("caption", "")
@@ -3051,14 +3054,20 @@ def main():
         audio = download_audio(args.url, tmp, metadata=metadata)
         transcript = transcribe_audio(audio, args.url)
 
-        # Visual fallback — when Whisper returns "" (silent video, text-overlay, IG carousel),
-        # try Claude Haiku Vision on keyframes (video) or Apify slide URLs (carousel).
-        # Falls through silently if vision also fails — detect_project runs on caption alone.
-        if not transcript.strip():
-            _visual_desc = _try_vision_fallback(audio, tmp, metadata)
-            if _visual_desc:
+        # Visual layer — ALWAYS run Claude Vision on keyframes (video) or Apify slide URLs
+        # (carousel), even when Whisper returned a transcript. Audio + on-screen visuals
+        # complement each other: text overlays, names shown as graphics, document close-ups,
+        # and citations flashed on screen are invisible to Whisper. Vision output is appended
+        # to the transcript with a clear [ON-SCREEN VISUAL] marker so the fact-check + brief
+        # can reason about both layers separately.
+        _visual_desc = _try_vision_fallback(audio, tmp, metadata)
+        if _visual_desc:
+            if transcript.strip():
+                transcript = transcript.strip() + "\n\n[ON-SCREEN VISUAL — Claude Vision]\n" + _visual_desc
+                print(f"  Visual description appended ({len(_visual_desc)} chars on top of audio transcript)")
+            else:
                 transcript = _visual_desc
-                print(f"  Visual description used as transcript ({len(transcript)} chars)")
+                print(f"  Visual description used as transcript ({len(transcript)} chars — no audio)")
 
         # Auto-detect project AFTER transcription if not explicit.
         # Detection uses notes (highest priority) → Claude Haiku on transcript+caption+notes.
