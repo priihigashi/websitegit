@@ -1263,7 +1263,23 @@ def _try_vision_fallback(audio: str, tmp_dir: str, metadata: dict) -> str:
         print(f"  Vision fallback: {len(slide_urls)} carousel slide(s) → Claude Haiku Vision")
         return _describe_with_claude_vision(slide_urls, context=caption)
     else:
-        frames = _extract_video_keyframes(audio, tmp_dir, n=6)
+        # Scale keyframes by video duration so longer videos aren't under-sampled.
+        # Rule: 1 frame per ~12s, floor 6, cap 15 (cost guardrail on Vision API).
+        n = 6
+        try:
+            import subprocess as _sp
+            _probe = _sp.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1", audio],
+                capture_output=True, text=True, timeout=10,
+            )
+            if _probe.returncode == 0 and _probe.stdout.strip():
+                _dur = float(_probe.stdout.strip())
+                n = max(6, min(15, int(_dur // 12)))
+                print(f"  Vision keyframes: video {_dur:.1f}s → {n} frames")
+        except Exception as _e:
+            print(f"  Vision keyframe scaling failed, using default n=6: {_e}")
+        frames = _extract_video_keyframes(audio, tmp_dir, n=n)
         if not frames:
             return ""
         print(f"  Vision fallback: {len(frames)} keyframe(s) → Claude Haiku Vision")
