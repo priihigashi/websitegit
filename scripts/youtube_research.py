@@ -51,6 +51,7 @@ except ImportError:
 
 import urllib.request
 import urllib.parse
+import time
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 CLAUDE_KEY_4_CONTENT = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
@@ -132,6 +133,8 @@ def get_transcript(video_id: str) -> str:
             return " ".join(t.text for t in transcript)
         except Exception as e:
             last_error = e
+            if attempt == 0:
+                time.sleep(3)  # wait before retry
     return f"[transcript unavailable: {last_error}]"
 
 # ── CLAUDE ANALYSIS ───────────────────────────────────────────────────────────
@@ -381,8 +384,9 @@ def run(topic: str, queries: list[str], max_per_query: int = 5):
                 seen_ids.add(video["id"])
                 
                 print(f"  [{video['id']}] {video['title'][:60]}")
+                time.sleep(2)  # avoid YouTube 429 rate limiting between transcript calls
                 transcript = get_transcript(video["id"])
-                
+
                 has_transcript = "[transcript unavailable" not in transcript
                 mode = "with transcript" if has_transcript else "metadata only"
                 print(f"    Analyzing ({mode})...")
