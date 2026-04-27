@@ -120,12 +120,76 @@ def search_youtube(query: str, max_results: int = 5) -> list[dict]:
     return results
 
 # ── TRANSCRIPT ────────────────────────────────────────────────────────────────
+_YT_COOKIES_FILE = ""
+
+def _write_yt_cookies_file() -> str:
+    """Write PRI_OP_YT_COOKIES secret to a Netscape cookies file. Returns path or ''."""
+    raw = os.environ.get("PRI_OP_YT_COOKIES", "")
+    if not raw.strip():
+        return ""
+    import tempfile as _tmp
+    fd, path = _tmp.mkstemp(suffix=".txt", prefix="ytcookies_")
+    with os.fdopen(fd, "w") as f:
+        f.write(raw)
+    return path
+
+
+def _ytdlp_whisper_fallback(video_id: str) -> str:
+    """Tier 2: yt-dlp (with PRI_OP_YT_COOKIES) → OpenAI Whisper. Mirrors capture_pipeline.py."""
+    global _YT_COOKIES_FILE
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not openai_key:
+        return ""
+    import tempfile as _tmp
+    import subprocess as _sp
+    if not _YT_COOKIES_FILE:
+        _YT_COOKIES_FILE = _write_yt_cookies_file()
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    with _tmp.TemporaryDirectory() as td:
+        out_pattern = os.path.join(td, "audio.%(ext)s")
+        cmd = [
+            "yt-dlp", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "0",
+            "--output", out_pattern, "--no-playlist", "--quiet", "--no-warnings",
+        ]
+        if _YT_COOKIES_FILE:
+            cmd.extend(["--cookies", _YT_COOKIES_FILE])
+        cmd.append(url)
+        try:
+            r = _sp.run(cmd, capture_output=True, text=True, timeout=180)
+        except Exception as e:
+            print(f"    yt-dlp error: {e}")
+            return ""
+        if r.returncode != 0:
+            print(f"    yt-dlp failed: {r.stderr[:200].strip()}")
+            return ""
+        audio_path = ""
+        for f in os.listdir(td):
+            if f.endswith(".mp3"):
+                audio_path = os.path.join(td, f)
+                break
+        if not audio_path:
+            return ""
+        try:
+            import openai
+            client = openai.OpenAI(api_key=openai_key)
+            with open(audio_path, "rb") as af:
+                resp = client.audio.transcriptions.create(
+                    model="whisper-1", file=af, response_format="text"
+                )
+            text = resp if isinstance(resp, str) else getattr(resp, "text", "")
+            print(f"    Whisper transcribed ({len(text)} chars)")
+            return text
+        except Exception as e:
+            print(f"    Whisper failed: {e}")
+            return ""
+
+
 def get_transcript(video_id: str) -> str:
-    """Pull transcript via youtube-transcript-api (no download)"""
+    """Tier 1: youtube-transcript-api → Tier 2: yt-dlp+Whisper. Mirrors capture_pipeline.py cascade."""
     last_error = None
     for attempt, kwargs in enumerate([
-        {"languages": ["en", "en-US", "en-GB", "pt", "es"]},  # preferred languages
-        {},  # any available (includes auto-generated)
+        {"languages": ["en", "en-US", "en-GB", "pt", "es"]},
+        {},
     ]):
         try:
             api = YouTubeTranscriptApi()
@@ -134,7 +198,12 @@ def get_transcript(video_id: str) -> str:
         except Exception as e:
             last_error = e
             if attempt == 0:
-                time.sleep(3)  # wait before retry
+                time.sleep(3)
+    # Tier 2: yt-dlp + Whisper
+    print(f"    transcript-api blocked ({type(last_error).__name__}) — trying yt-dlp+Whisper...")
+    fallback_text = _ytdlp_whisper_fallback(video_id)
+    if fallback_text:
+        return fallback_text
     return f"[transcript unavailable: {last_error}]"
 
 # ── CLAUDE ANALYSIS ───────────────────────────────────────────────────────────
