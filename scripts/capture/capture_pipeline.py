@@ -2803,8 +2803,11 @@ _NOTES_KEYWORD_MAP = [
     (("oak park", "opc", "construction", "contractor", "remodel", "kitchen reno"), "opc"),
     (("ugc", "creator clip", "movement factory"), "ugc"),
     (("stocks", "investing", "robinhood", "ticker", "portfolio"), "stocks"),
-    (("usa news", "america", "trump", "biden", "u.s. politics", "us politics"), "usa"),
-    (("for the book", "receipts book", "sovereign book", "fact-check book"), "book"),
+    (("usa news", "america", "trump", "biden", "u.s. politics", "us politics",
+      "starbucks", "amazon", "nike", "boycott", "bds", "palestine", "union bust",
+      "civil rights", "racial profiling", "philadelphia"), "usa"),
+    (("for the book", "receipts book", "sovereign book", "fact-check book",
+      "presidential pardon", "pardoned by trump", "pardoned by biden"), "book"),
 ]
 
 
@@ -2831,13 +2834,24 @@ def detect_project(transcript: str, caption: str, notes: str) -> tuple:
     prompt = (
         "You are a content router. Classify this captured video into ONE niche.\n\n"
         "Valid niches:\n"
-        "- book: research for the SOVEREIGN/RECEIPTS fact-check book (US/global political accountability)\n"
+        "- book: ONLY for research that is explicitly framed as 'for the book' / 'for RECEIPTS' / 'for SOVEREIGN' "
+        "or covers historical political pardons, presidential criminal accountability, or specific book chapters. "
+        "Default is NOT book.\n"
         "- brazil: Brazilian politics, news, PT-language content, Brazilian institutions/figures\n"
-        "- usa: US politics, news, US institutions/figures\n"
+        "- usa: US politics, news, US institutions, US corporate accountability, civil rights in the US, "
+        "US labor/union disputes, BDS/Palestine US-corporate angle, US racial justice, anti-imperialism critique of US companies\n"
         "- opc: Oak Park Construction — home remodel, contractor tips, building projects\n"
         "- ugc: user-generated creator content, movement/body footage for repurposing\n"
         "- stocks: stocks, investing, financial markets, trading\n"
         "- higashi: Brazilian real estate (mom's company in São José dos Campos)\n\n"
+        "DISAMBIGUATION RULES (read carefully — these reflect past misclassifications):\n"
+        "1. Criticism of a US corporation (Starbucks, Amazon, Nike, etc.) → USA, not book. "
+        "Even if the framing is fact-check / accountability / 'here's why you should boycott', it is USA news.\n"
+        "2. 'Book' niche requires an explicit historical-pardon / presidential-criminal-accountability / "
+        "named-book-chapter signal. Generic political accountability content = USA or BRAZIL based on the country.\n"
+        "3. If the transcript discusses a US-based company, US workers, US arrests, or US civil rights, "
+        "default to USA unless Brazil is more central.\n"
+        "4. If unclear between book and usa, prefer usa.\n\n"
         f"NOTES from user (highest priority signal): {notes_snip or '(none)'}\n\n"
         f"CAPTION: {caption_snip or '(none)'}\n\n"
         f"TRANSCRIPT (first 3000 chars):\n{transcript_snip or '(none)'}\n\n"
