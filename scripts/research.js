@@ -268,6 +268,33 @@ async function fetchYoutubeTranscriptFallback(youtubeItems) {
   return fallback;
 }
 
+function normalizeIdeaText(s = '') {
+  return s
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function dedupeRawIdeas(items) {
+  const seen = new Set();
+  const out = [];
+  let dropped = 0;
+  for (const item of items) {
+    const key = normalizeIdeaText(item.rawIdea || '');
+    if (!key) continue;
+    if (seen.has(key)) {
+      dropped += 1;
+      continue;
+    }
+    seen.add(key);
+    out.push(item);
+  }
+  if (dropped > 0) console.log(`Deduped raw ideas: removed ${dropped} near-duplicates`);
+  return out;
+}
+
 // ─── Claude: Score + enrich a batch of ideas ─────────────────────────────────
 async function enrichBatch(items, offset) {
   const SYSTEM = `You are a content strategist for ${COMPANY.name}, a licensed general contractor in ${COMPANY.location.headquarters} serving ${COMPANY.location.primaryMarket}. Services: ${COMPANY.services.core.slice(0,5).join(', ')}.`;
@@ -298,6 +325,8 @@ RECENCY + COMPLETENESS RULES:
 - If a source appears outdated or incomplete, modernize the angle and avoid repeating stale specifics without caution.
 - If a topic implies a process but omits steps, provide practical, high-level step guidance in topic_direction and reader_payoff.
 - Do not invent legal/code guarantees; when uncertain, keep the angle useful and add verification language.
+- Prefer ideas with concrete homeowner/investor/commercial value over generic commentary.
+- If an idea depends on changing policy/pricing/code/regulation, include a "verify current local requirements" cue in reader_payoff.
 
 For EVERY idea (both Approved and Idea), generate ALL of these fields — no exceptions:
 topic_direction, focus_keyword, secondary_keyword, hook_professional, hook_emotional, hook_genz, master_hook, reader_payoff, ideal_for (Both/Blog Only/Reels Only), target_audience (Homeowner/Investor/Commercial/All), image_direction, social_one_liner, status (✅ Approved or 🆕 Idea)
@@ -480,7 +509,7 @@ async function getOAuthToken() {
       fetchSerp(),
     ]);
 
-    const allRaw = [...reddit, ...youtube, ...news, ...serp];
+    let allRaw = [...reddit, ...youtube, ...news, ...serp];
     console.log(`\nTotal raw ideas collected: ${allRaw.length}`);
 
     // If primary sources are thin, append transcript-derived YouTube ideas at the bottom.
@@ -490,6 +519,9 @@ async function getOAuthToken() {
       allRaw.push(...transcriptFallbackItems);
       console.log(`Total raw ideas after transcript fallback: ${allRaw.length}`);
     }
+
+    allRaw = dedupeRawIdeas(allRaw);
+    console.log(`Total raw ideas after dedupe: ${allRaw.length}`);
 
     if (allRaw.length === 0) {
       console.log('No ideas found this run. Exiting.');
