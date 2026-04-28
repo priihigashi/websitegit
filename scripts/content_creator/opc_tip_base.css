@@ -142,7 +142,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 
 /* ---- Arrow indicator (every slide except last) ---- */
 .arrow {
-  position:absolute; bottom:88px; right:124px; z-index:10;
+  position:absolute; bottom:88px; right:108px; z-index:10;
   font-family:'Anton', sans-serif; font-size:32px; color:#CBCC10;
   letter-spacing:0.1em;
 }
@@ -170,6 +170,51 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   position:absolute; bottom:54px; left:108px;
   font-family:'Anton', sans-serif; font-size:20px; letter-spacing:0.2em;
   color:var(--c-tag); text-transform:uppercase; z-index:10;
+}
+
+/* ---- OPC context-image panel for middle slides ---- */
+.context-img-slot {
+  width:100%;
+  min-height:420px;
+  max-height:520px;
+  margin:28px 0 18px;
+  border:2px solid var(--c-brk);
+  border-radius:10px;
+  overflow:hidden;
+  background:rgba(10,10,10,0.25);
+}
+.context-img-slot img {
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:center;
+  display:block;
+  filter:grayscale(0.08) contrast(1.03);
+}
+.context-img-slot .ctx-fallback {
+  width:100%;
+  height:100%;
+  min-height:420px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  text-align:center;
+  font-family:'JetBrains Mono', monospace;
+  font-size:18px;
+  line-height:1.4;
+  letter-spacing:0.08em;
+  color:var(--c-body);
+  text-transform:uppercase;
+}
+
+.project-note {
+  font-family:'Roboto Condensed', sans-serif;
+  font-size:27px;
+  line-height:1.35;
+  color:var(--c-body);
+  max-width:860px;
+  margin-top:16px;
 }
 
 /* =========================================================== */
@@ -213,5 +258,4 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 .v3 .save-cta { color:#F0EBE3; }
 .v3 .handle, .v3 .tip-label, .v3 .arrow { color:#F0EBE3; }
 .v3 .sticker-stamp { color:#F0EBE3; }
-
 

@@ -21,11 +21,14 @@ import json, os, re, subprocess, sys
 from pathlib import Path
 from datetime import datetime
 import urllib.request, urllib.parse
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 
 # Env vars
 SHEETS_TOKEN     = os.environ.get("SHEETS_TOKEN", "")
 ALERT_EMAIL      = os.environ.get("ALERT_EMAIL", "priscila@oakpark-construction.com")
 RUN_RESULTS_JSON = os.environ.get("CONTENT_CREATOR_RUN", "[]")  # JSON array of result dicts
+REVIEW_DRIVE_FOLDERS = os.environ.get("REVIEW_DRIVE_FOLDERS", "").strip()  # CSV folder ids or links
 
 DRY_RUN = "--dry-run" in sys.argv
 
@@ -55,6 +58,31 @@ def check_html_placeholders(html_path: str) -> list[str]:
             + "; ".join(ctx_matches[:3])
         )
 
+    # OPC-specific quality checks (prevent text-only middle slides)
+    if "Tip of the Week · Oak Park Construction" in html:
+        slot_count = len(re.findall(r'class="context-img-slot"', html))
+        if slot_count < 3:
+            issues.append(
+                f"OPC layout issue: expected >=3 context image slots on slides 2-4, found {slot_count}"
+            )
+
+        img_count = len(re.findall(r'<div class="context-img-slot">\s*<img ', html))
+        if img_count < 2:
+            issues.append(
+                f"OPC visual floor miss: only {img_count} context slot(s) have real images; require >=2"
+            )
+
+        fallback_count = len(re.findall(r'class="ctx-fallback"', html))
+        if fallback_count > 1:
+            issues.append(
+                f"OPC fallback overuse: {fallback_count} context slots still fallback text (max 1)"
+            )
+
+        if "class=\"project-note\"" not in html:
+            issues.append(
+                "OPC explanation missing: project-note block not found on stat slide"
+            )
+
     return issues
 
 
@@ -83,6 +111,107 @@ def check_motion_folder(motion_dir: str) -> list[str]:
     if not mp4s:
         return ["No MP4 files in motion folder — motion render failed"]
     return []
+
+
+def _extract_drive_id(text: str) -> str:
+    text = (text or "").strip()
+    if not text:
+        return ""
+    m = re.search(r"/folders/([a-zA-Z0-9_-]+)", text)
+    if m:
+        return m.group(1)
+    if re.fullmatch(r"[a-zA-Z0-9_-]{20,}", text):
+        return text
+    return ""
+
+
+def _build_drive_service():
+    if not SHEETS_TOKEN:
+        return None
+    creds = Credentials.from_authorized_user_info(json.loads(SHEETS_TOKEN))
+    return build("drive", "v3", credentials=creds)
+
+
+def _list_children(drive, folder_id: str, mime: str | None = None):
+    q = f"'{folder_id}' in parents and trashed=false"
+    if mime:
+        q += f" and mimeType='{mime}'"
+    return drive.files().list(
+        q=q,
+        fields="files(id,name,mimeType,size,webViewLink)",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+        corpora="allDrives",
+    ).execute().get("files", [])
+
+
+def _find_folder_id(drive, parent_id: str, name: str) -> str:
+    q = (
+        f"'{parent_id}' in parents and trashed=false and "
+        f"mimeType='application/vnd.google-apps.folder' and name='{name}'"
+    )
+    files = drive.files().list(
+        q=q,
+        fields="files(id,name)",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+        corpora="allDrives",
+    ).execute().get("files", [])
+    return files[0]["id"] if files else ""
+
+
+def _download_drive_text(drive, file_id: str) -> str:
+    req = drive.files().get_media(fileId=file_id)
+    return req.execute().decode("utf-8", errors="ignore")
+
+
+def check_drive_folder(folder_id: str, drive) -> dict:
+    issues = []
+    folder_meta = drive.files().get(
+        fileId=folder_id, fields="id,name,webViewLink", supportsAllDrives=True
+    ).execute()
+    folder_name = folder_meta.get("name", folder_id)
+
+    files = _list_children(drive, folder_id)
+    html_file = next((f for f in files if f.get("name") == "cover.html"), None)
+    if html_file:
+        try:
+            html_text = _download_drive_text(drive, html_file["id"])
+            tmp = Path("/tmp") / f"review_{folder_id}.html"
+            tmp.write_text(html_text, encoding="utf-8")
+            issues.extend(check_html_placeholders(str(tmp)))
+        except Exception as e:
+            issues.append(f"Could not inspect cover.html: {e}")
+    else:
+        issues.append("cover.html missing in version folder")
+
+    png_folder_id = _find_folder_id(drive, folder_id, "png")
+    if not png_folder_id:
+        issues.append("PNG folder missing")
+    else:
+        pngs = [f for f in _list_children(drive, png_folder_id) if f.get("name", "").lower().endswith(".png")]
+        if len(pngs) < 5:
+            issues.append(f"Too few PNGs: {len(pngs)} found, expected ≥ 5")
+        tiny = [p["name"] for p in pngs if int(p.get("size") or 0) < 10_000]
+        if tiny:
+            issues.append(f"Suspiciously small PNGs (blank slide?): {', '.join(tiny)}")
+
+    motion_folder_id = _find_folder_id(drive, folder_id, "motion")
+    if not motion_folder_id:
+        issues.append("Motion folder missing entirely")
+    else:
+        mp4s = [f for f in _list_children(drive, motion_folder_id) if f.get("name", "").lower().endswith(".mp4")]
+        if not mp4s:
+            issues.append("No MP4 files in motion folder — motion render failed")
+
+    return {
+        "post_id": folder_id,
+        "topic": folder_name[:60],
+        "niche": "manual",
+        "issues": issues,
+        "passed": len(issues) == 0,
+        "drive_link": folder_meta.get("webViewLink", ""),
+    }
 
 
 def check_built_post(result: dict) -> dict:
@@ -200,12 +329,36 @@ def main():
     except json.JSONDecodeError:
         results = []
 
-    if not results:
-        print("  No results to review (CONTENT_CREATOR_RUN not set or empty) — exiting")
-        return
+    reviewed = []
+    if results:
+        print(f"  Reviewing {len(results)} post(s) from CONTENT_CREATOR_RUN...")
+        reviewed.extend(check_built_post(r) for r in results)
 
-    print(f"  Reviewing {len(results)} post(s)...")
-    reviewed = [check_built_post(r) for r in results]
+    manual_targets = [x.strip() for x in REVIEW_DRIVE_FOLDERS.split(",") if x.strip()]
+    manual_ids = [_extract_drive_id(x) for x in manual_targets]
+    manual_ids = [x for x in manual_ids if x]
+    if manual_ids:
+        print(f"  Reviewing {len(manual_ids)} existing Drive folder(s) on demand...")
+        drive = _build_drive_service()
+        if not drive:
+            print("  SHEETS_TOKEN missing — cannot review Drive folders")
+        else:
+            for fid in manual_ids:
+                try:
+                    reviewed.append(check_drive_folder(fid, drive))
+                except Exception as e:
+                    reviewed.append({
+                        "post_id": fid,
+                        "topic": fid,
+                        "niche": "manual",
+                        "issues": [f"Drive review failed: {e}"],
+                        "passed": False,
+                        "drive_link": f"https://drive.google.com/drive/folders/{fid}",
+                    })
+
+    if not reviewed:
+        print("  No results to review (CONTENT_CREATOR_RUN and REVIEW_DRIVE_FOLDERS empty) — exiting")
+        return
 
     passed = [r for r in reviewed if r["passed"]]
     failed = [r for r in reviewed if not r["passed"]]

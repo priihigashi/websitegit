@@ -1,0 +1,47 @@
+name: Carousel Reviewer — On Demand
+
+on:
+  workflow_dispatch:
+    inputs:
+      drive_folders:
+        description: "Comma-separated Drive folder links or IDs (version folders to review)"
+        required: true
+      alert_email:
+        description: "Email to receive review report"
+        required: false
+        default: "priscila@oakpark-construction.com"
+      dry_run:
+        description: "Print report only (no email)"
+        required: false
+        default: "false"
+
+jobs:
+  review-existing-carousels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+      ALERT_EMAIL: ${{ inputs.alert_email }}
+      REVIEW_DRIVE_FOLDERS: ${{ inputs.drive_folders }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install google-auth google-api-python-client
+
+      - name: Run reviewer
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python scripts/content_creator/carousel_reviewer.py --dry-run
+          else
+            python scripts/content_creator/carousel_reviewer.py
+          fi

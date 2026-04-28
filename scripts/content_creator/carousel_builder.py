@@ -322,7 +322,8 @@ Rules:
 - Headlines in ALL CAPS
 - Caption hook = first line visible in feed — make it a question or surprising fact
 - NEVER promise what OPC does for clients
-- slides[]: emit context-image for at least 1 of the 3 middle slides — never all none"""
+- slides[]: emit context-image for at least 2 of the 3 middle slides — never all none
+- slide4_body must describe what is happening in the visual (not generic advice)"""
 
     for attempt in range(2):
         _prompt = prompt
@@ -1291,6 +1292,25 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
 
     s4_hl = content.get("slide4_headline", "THE PRO MOVE")
     s4_accent = s4_hl.split()[-1] if s4_hl else "MOVE"
+    opc_slides_meta = content.get("slides", []) if isinstance(content.get("slides", []), list) else []
+
+    def _opc_context_slot(slide_num, fallback_label):
+        slide_meta_idx = max(0, slide_num - 2)
+        slide_meta = opc_slides_meta[slide_meta_idx] if slide_meta_idx < len(opc_slides_meta) else {}
+        query = str(slide_meta.get("context_image_query", "")).strip()
+        img_path = ((media_paths or {}).get("slides", {}) or {}).get(slide_num, "")
+        if img_path:
+            return (
+                '<div class="context-img-slot">'
+                f'<img src="{img_path}" alt="{fallback_label}">'
+                '</div>'
+            )
+        fallback = query if query else fallback_label
+        return (
+            '<div class="context-img-slot">'
+            f'<div class="ctx-fallback">{fallback}</div>'
+            '</div>'
+        )
 
     cta = content.get("cta", "SAVE THIS.")
 
@@ -1317,8 +1337,10 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">The Real Number</div>
   <div class="headline">{s2_html}</div>
+  {_opc_context_slot(2, "PROJECT CONTEXT IMAGE")}
   <div class="stat-big">{content.get("slide2_stat", "—")}</div>
   <div class="stat-label">{content.get("slide2_label", "")}</div>
+  <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
   <div class="arrow">SWIPE →</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
@@ -1327,6 +1349,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">What To Know</div>
   <div class="headline" style="font-size:96px; margin-bottom:36px;">THE <span class="accent">LIST.</span></div>
+  {_opc_context_slot(3, "PROCESS IMAGE")}
   <div class="list">
 {items_html}  </div>
   <div class="arrow">SWIPE →</div>
@@ -1338,6 +1361,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
   <div class="tag">Pro Tip</div>
   <div class="tip-label">▸ The Pro Move</div>
   <div class="tip-big">{s4_hl.replace(s4_accent, f'<span style="color:{s4_accent_style};">{s4_accent}</span>')}</div>
+  {_opc_context_slot(4, "TIP IN ACTION IMAGE")}
   <div class="tip-explain">{content.get("slide4_body", "")}</div>
   <div class="arrow">SWIPE →</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
@@ -1782,6 +1806,16 @@ def visual_audit(content, niche):
             issues.append(
                 f"News visual floor miss: only {context_count} context-image slide(s); require >= 3."
             )
+    if niche == "opc":
+        context_count = sum(1 for s in slides if s.get("visual_hint") == "context-image")
+        if context_count < 2:
+            issues.append(
+                f"OPC visual floor miss: only {context_count} context-image slide(s); require >= 2."
+            )
+        if not content.get("slide4_body", "").strip():
+            issues.append("OPC explanation miss: slide4_body is empty.")
+        if len(content.get("slide3_items", [])) < 3:
+            issues.append("OPC detail miss: slide3_items has fewer than 3 points.")
 
     # Cover visual missing
     if not content.get("cover_visual"):

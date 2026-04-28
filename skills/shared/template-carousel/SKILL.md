@@ -39,6 +39,12 @@ Only after Priscila approves a style, move/copy it into a topic folder:
 
 Do not create the final topic folder tree before approval unless Priscila explicitly asks.
 
+### OPC Folder IDs (verified 2026-04-28)
+
+- Carousel only: `16P2JN74JAAW3HKnmNqPGPrAq7N5jDNii`
+- Reels and Shorts: `1jW3WUQEPpfJNgje-4YGyFT4inKgzWrt7`
+- Parent folder containing both: `1lyWGwQiUPAVoMzb8vfQ0fBw72M1A2UfR`
+
 ## Default Output
 
 Default to 3 visual directions per topic unless Priscila asks for fewer. For fast tests, 2 directions is acceptable.
@@ -128,4 +134,12 @@ Upload via OAuth Drive API with `supportsAllDrives=true`. The draft destination 
 
 The draft destination for Oak Park/OPC currently lives in Marketing:
 
-`Marketing > Claude Code Workspace > Content - Reels & TikTok > Templates - Claude` — folder ID `131YiSvRjQEeEVtrG7lQU5_EqcrVvH0FM`
+`Marketing > ... > Carousel` — folder ID `16P2JN74JAAW3HKnmNqPGPrAq7N5jDNii`
+
+Reels/shorts destination:
+
+`Marketing > ... > Reels and Shorts` — folder ID `1jW3WUQEPpfJNgje-4YGyFT4inKgzWrt7`
+
+Shared parent containing both folders:
+
+`Marketing > ...` — folder ID `1lyWGwQiUPAVoMzb8vfQ0fBw72M1A2UfR`
