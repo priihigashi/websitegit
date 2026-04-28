@@ -411,6 +411,27 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
         if not mp4s:
             issues.append("No MP4 files in motion folder — motion render failed")
 
+    # Realism/provenance check (if manifest exists): avoid AI-only look.
+    resources_folder_id = _find_folder_id(drive, folder_id, "resources")
+    if resources_folder_id:
+        res_files = _list_children(drive, resources_folder_id)
+        prov_file = next((f for f in res_files if f.get("name") == "media_provenance.json"), None)
+        if prov_file:
+            try:
+                prov = json.loads(_download_drive_text(drive, prov_file["id"]))
+                slides = prov.get("slides", {})
+                providers = [str(v.get("provider", "")).lower() for v in slides.values() if isinstance(v, dict)]
+                if providers:
+                    ai_count = sum(1 for p in providers if p in {"gemini", "seedream", "dall-e-3", "sdxl"})
+                    ratio = ai_count / max(1, len(providers))
+                    if ratio >= 0.75:
+                        issues.append(
+                            f"OPC realism risk: {ai_count}/{len(providers)} slide images are AI-generated "
+                            f"(target is mostly real photos/stock)."
+                        )
+            except Exception as e:
+                issues.append(f"media_provenance.json parse failed: {e}")
+
     return {
         "post_id": folder_id,
         "topic": folder_name[:60],

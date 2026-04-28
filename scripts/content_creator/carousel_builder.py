@@ -847,7 +847,34 @@ def fetch_all_media(content, niche, work_dir):
     All paths relative to work_dir (e.g. "resources/images/cover.jpg").
     Safe: all failures are caught and return empty string for that slot.
     """
-    paths = {"cover": "", "slides": {}}
+    paths = {
+        "cover": "",
+        "slides": {},
+        "provenance": {
+            "cover": {},
+            "slides": {}
+        }
+    }
+
+    def _set_cover(rel_path, provider, source_type, query="", prompt=""):
+        paths["cover"] = rel_path
+        paths["provenance"]["cover"] = {
+            "path": rel_path,
+            "provider": provider,
+            "source_type": source_type,
+            "query": query,
+            "prompt": prompt,
+        }
+
+    def _set_slide(slide_idx, rel_path, provider, source_type, query="", prompt=""):
+        paths["slides"][slide_idx] = rel_path
+        paths["provenance"]["slides"][str(slide_idx)] = {
+            "path": rel_path,
+            "provider": provider,
+            "source_type": source_type,
+            "query": query,
+            "prompt": prompt,
+        }
 
     # ── COVER IMAGE CASCADE ────────────────────────────────────────────────
     # Named-person covers: Wiki REST → Wikimedia Commons → bio-initials (NO AI).
@@ -865,24 +892,38 @@ def fetch_all_media(content, niche, work_dir):
 
         # Step 1 — real photo (Wiki REST + Wikimedia Commons)
         if search_q:
-            paths["cover"] = _fetch_person_photo(search_q, work_dir, cover_fname)
+            c = _fetch_person_photo(search_q, work_dir, cover_fname)
+            if c:
+                _set_cover(c, "wikimedia", "cc", query=search_q)
 
         # Step 2 — stock photos (skip if cover is a named person; bio-initials is safer)
         if not paths["cover"] and subject_type != "person":
             if search_q:
-                paths["cover"] = _fetch_pexels_image(search_q, work_dir, cover_fname)
+                c = _fetch_pexels_image(search_q, work_dir, cover_fname)
+                if c:
+                    _set_cover(c, "pexels", "stock", query=search_q)
             if not paths["cover"] and search_q:
-                paths["cover"] = _fetch_pixabay_image(search_q, work_dir, cover_fname)
+                c = _fetch_pixabay_image(search_q, work_dir, cover_fname)
+                if c:
+                    _set_cover(c, "pixabay", "stock", query=search_q)
 
         # Step 3 — AI cascade (again skipped for named persons per editorial rule)
         if not paths["cover"] and subject_type != "person" and ai_prompt:
-            paths["cover"] = _generate_gemini_image(ai_prompt, work_dir, cover_fname)
+            c = _generate_gemini_image(ai_prompt, work_dir, cover_fname)
+            if c:
+                _set_cover(c, "gemini", "ai", query=search_q, prompt=ai_prompt)
             if not paths["cover"]:
-                paths["cover"] = _generate_seedream_image(ai_prompt, work_dir, cover_fname)
+                c = _generate_seedream_image(ai_prompt, work_dir, cover_fname)
+                if c:
+                    _set_cover(c, "seedream", "ai", query=search_q, prompt=ai_prompt)
             if not paths["cover"]:
-                paths["cover"] = _generate_ai_cover(ai_prompt, work_dir, cover_fname)  # DALL-E
+                c = _generate_ai_cover(ai_prompt, work_dir, cover_fname)  # DALL-E
+                if c:
+                    _set_cover(c, "dall-e-3", "ai", query=search_q, prompt=ai_prompt)
             if not paths["cover"]:
-                paths["cover"] = _generate_replicate_sdxl(ai_prompt, work_dir, cover_fname)
+                c = _generate_replicate_sdxl(ai_prompt, work_dir, cover_fname)
+                if c:
+                    _set_cover(c, "sdxl", "ai", query=search_q, prompt=ai_prompt)
 
         # If cover is a person and all photo tiers missed, leave empty — the HTML
         # renderer falls back to .bio-initials card (see build_html step D).
@@ -900,42 +941,50 @@ def fetch_all_media(content, niche, work_dir):
             continue
         slug = re.sub(r"[^a-z0-9]+", "_", cq.lower()).strip("_")[:40] or "context"
         fname = f"slide{i}_{slug}.jpg"
-        ai_prompt = f"Editorial documentary photograph, {cq}, high contrast journalistic style, no text"
+        ai_prompt = (
+            f"Ultra photorealistic documentary photograph of {cq}, natural materials and textures, "
+            f"real lighting, no illustration, no 3D render, no cartoon, no plastic skin, no text."
+        )
 
         # Tier 1–3: real / royalty-free photos (never hallucinates)
         img_path = _fetch_person_photo(cq, work_dir, fname)
         if img_path:
             print(f"  Slide {i}: Wikimedia photo for '{cq[:50]}'")
+            _set_slide(i, img_path, "wikimedia", "cc", query=cq, prompt=ai_prompt)
         if not img_path:
             img_path = _fetch_pexels_image(cq, work_dir, fname)
             if img_path:
                 print(f"  Slide {i}: Pexels photo for '{cq[:50]}'")
+                _set_slide(i, img_path, "pexels", "stock", query=cq, prompt=ai_prompt)
         if not img_path:
             img_path = _fetch_pixabay_image(cq, work_dir, fname)
             if img_path:
                 print(f"  Slide {i}: Pixabay photo for '{cq[:50]}'")
+                _set_slide(i, img_path, "pixabay", "stock", query=cq, prompt=ai_prompt)
         # Tier 4: Gemini Imagen (free quota, Priscila's preferred AI)
         if not img_path:
             img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
             if img_path:
                 print(f"  Slide {i}: Gemini image for '{cq[:50]}'")
+                _set_slide(i, img_path, "gemini", "ai", query=cq, prompt=ai_prompt)
         # Tier 5: Seedream 4 (photoreal, strong with people/places)
         if not img_path:
             img_path = _generate_seedream_image(ai_prompt, work_dir, fname)
             if img_path:
                 print(f"  Slide {i}: Seedream image for '{cq[:50]}'")
+                _set_slide(i, img_path, "seedream", "ai", query=cq, prompt=ai_prompt)
         # Tier 6: DALL-E 3 (demoted — paid + less consistent)
         if not img_path:
             img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
             if img_path:
                 print(f"  Slide {i}: DALL-E image for '{cq[:50]}'")
+                _set_slide(i, img_path, "dall-e-3", "ai", query=cq, prompt=ai_prompt)
         # Tier 7: Replicate SDXL (cheapest last resort)
         if not img_path:
             img_path = _generate_replicate_sdxl(ai_prompt, work_dir, fname)
             if img_path:
                 print(f"  Slide {i}: SDXL image for '{cq[:50]}'")
-        if img_path:
-            paths["slides"][i] = img_path
+                _set_slide(i, img_path, "sdxl", "ai", query=cq, prompt=ai_prompt)
 
     fetched_total = (1 if paths["cover"] else 0) + len(paths["slides"])
     print(f"  Media fetch: {fetched_total} image(s) ready (cover={bool(paths['cover'])}, slides={list(paths['slides'].keys())})")
@@ -1180,7 +1229,7 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
         <source src="{rel_clip}" type="video/mp4">
       </video>
     </div>
-    <div class="swipe">SWIPE →</div>
+    <div class="swipe">SWIPE &#8594;</div>
   </div>
 </div>"""
         else:
@@ -1208,7 +1257,7 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
         <source src="{rel_clip}" type="video/mp4">
       </video>
     </div>
-    <div class="swipe">SWIPE →</div>
+    <div class="swipe">SWIPE &#8594;</div>
   </div>
 </div>"""
 
@@ -1267,6 +1316,9 @@ body{background:var(--ob);overflow:hidden}
 
 def build_html(content, niche, topic_slug, work_dir, handle="@HANDLE_PLACEHOLDER", media_paths=None):
     if niche == "opc":
+        template_key = content.get("_template_key", "tip")
+        if template_key == "progress":
+            return _build_opc_progress_html(content, topic_slug, work_dir, media_paths=media_paths)
         return _build_opc_html(content, topic_slug, work_dir, media_paths=media_paths)
     if niche in ("brazil", "usa"):
         return _build_brazil_html(content, topic_slug, work_dir, handle=handle, media_paths=media_paths)
@@ -1303,19 +1355,27 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
     def _opc_context_slot(slide_num, fallback_label):
         slide_meta_idx = max(0, slide_num - 2)
         slide_meta = opc_slides_meta[slide_meta_idx] if slide_meta_idx < len(opc_slides_meta) else {}
+        visual_hint = str(slide_meta.get("visual_hint", "context-image")).strip().lower()
         query = str(slide_meta.get("context_image_query", "")).strip()
         query_attr = query.replace('"', "&quot;")
         img_path = ((media_paths or {}).get("slides", {}) or {}).get(slide_num, "")
+        # If a real image was fetched, always show it
         if img_path:
             return (
                 f'<div class="context-img-slot" data-query="{query_attr}">'
                 f'<img src="{img_path}" alt="{fallback_label}">'
                 '</div>'
             )
-        fallback = query if query else fallback_label
+        # No image: if hint is explicitly "none", omit the slot entirely
+        if visual_hint == "none":
+            return ""
+        # No image but slot is expected: show a branded placeholder (not raw query text)
         return (
-            f'<div class="context-img-slot" data-query="{query_attr}">'
-            f'<div class="ctx-fallback">{fallback}</div>'
+            f'<div class="context-img-slot context-img-placeholder" data-query="{query_attr}">'
+            f'<div class="ctx-placeholder-inner">'
+            f'<div class="ctx-placeholder-icon">&#9632;</div>'
+            f'<div class="ctx-placeholder-label">{fallback_label}</div>'
+            f'</div>'
             '</div>'
         )
 
@@ -1347,7 +1407,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
   <div class="tag">Tip of the Week · Oak Park Construction</div>
   <div class="headline">{hl_html}</div>
   <div class="body-text">{content["subhead"]}</div>
-  <div class="arrow">SWIPE →</div>
+  <div class="arrow">SWIPE &#8594;</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
 
@@ -1355,11 +1415,10 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">The Real Number</div>
   <div class="headline">{s2_html}</div>
-  {_opc_context_slot(2, "PROJECT CONTEXT IMAGE")}
   <div class="stat-big">{content.get("slide2_stat", "—")}</div>
   <div class="stat-label">{content.get("slide2_label", "")}</div>
   <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
-  <div class="arrow">SWIPE →</div>
+  <div class="arrow">SWIPE &#8594;</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
 
@@ -1370,18 +1429,18 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
   {_opc_context_slot(3, "PROCESS IMAGE")}
   <div class="list">
 {items_html}  </div>
-  <div class="arrow">SWIPE →</div>
+  <div class="arrow">SWIPE &#8594;</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
 
 <div class="slide slide-tip {v_class}">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">Pro Tip</div>
-  <div class="tip-label">▸ The Pro Move</div>
+  <div class="tip-label"><span class="tip-arrow">&#9658;</span> The Pro Move</div>
   <div class="tip-big">{s4_hl.replace(s4_accent, f'<span style="color:{s4_accent_style};">{s4_accent}</span>')}</div>
   {_opc_context_slot(4, "TIP IN ACTION IMAGE")}
   <div class="tip-explain">{content.get("slide4_body", "")}</div>
-  <div class="arrow">SWIPE →</div>
+  <div class="arrow">SWIPE &#8594;</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
 
@@ -1430,6 +1489,179 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
     return str(html_path)
 
 
+def _build_opc_progress_html(content, slug, work_dir, media_paths=None):
+    """Progress post builder — cover + stage + what's done + what's next + credits.
+    Each photo slide has a caption overlay explaining what's in the image."""
+    project_name = content.get("project_name", slug.replace("-", " ").upper())
+    project_address = content.get("project_address", "")
+    stage = content.get("stage", "")
+    stage_date = content.get("stage_date", "")
+    whats_done = content.get("whats_done", "")
+    whats_done_caption = content.get("whats_done_caption", "")
+    whats_next = content.get("whats_next", "")
+    whats_next_caption = content.get("whats_next_caption", "")
+    project_id = content.get("project_id", "")
+    workers = content.get("workers", [])
+
+    def _prog_img(slide_key, fallback_label):
+        img_path = ((media_paths or {}).get(slide_key, ""))
+        if img_path:
+            return f'<div class="prog-photo" style="background-image:url(\'{img_path}\');"></div>'
+        return f'<div class="prog-photo prog-photo-empty"><span>{fallback_label}</span></div>'
+
+    cover_img = (media_paths or {}).get("cover", "")
+    cover_bg = (
+        f'<div class="bg-photo" style="background-image:url(\'{cover_img}\');"></div>'
+        if cover_img else '<div class="bg-photo"></div>'
+    )
+
+    workers_html = ""
+    for w in workers:
+        name = w.get("name", "")
+        role = w.get("role", "")
+        if name:
+            workers_html += f'<div class="cred-row"><span class="cred-name">{name}</span><span class="cred-role">{role}</span></div>'
+
+    def variant_block(v_class):
+        return f"""
+<!-- {v_class.upper()} PROGRESS -->
+<div class="slide slide-cover slide-progress-cover {v_class}">
+  {cover_bg}
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Progress · Oak Park Construction</div>
+  <div class="headline">{project_name}</div>
+  <div class="prog-address">{project_address}</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-stage {v_class}">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Current Stage</div>
+  <div class="headline prog-stage-hl">{stage}</div>
+  <div class="prog-date">{stage_date}</div>
+  {_prog_img("stage", "STAGE PHOTO")}
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-done {v_class}">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">What&#39;s Done</div>
+  {_prog_img("done", "COMPLETED WORK PHOTO")}
+  <div class="prog-caption">{whats_done_caption}</div>
+  <div class="prog-body">{whats_done}</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-next {v_class}">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">What&#39;s Next</div>
+  {_prog_img("next", "UPCOMING WORK PHOTO")}
+  <div class="prog-caption">{whats_next_caption}</div>
+  <div class="prog-body">{whats_next}</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-credits {v_class}">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">The Team</div>
+  <div class="headline prog-cred-hl">THE <span class="accent">CREW.</span></div>
+  <div class="cred-list">{workers_html}</div>
+  <div class="prog-project-id">{project_id}</div>
+  <div class="footer">
+    <span class="handle">@oakparkconstruction</span>
+    <span class="license">LIC · CBC1263425</span>
+  </div>
+</div>
+"""
+
+    v1 = variant_block("v1")
+    v2 = variant_block("v2")
+    v3 = variant_block("v3")
+
+    html_path = Path(work_dir) / "cover.html"
+    with open(Path(__file__).parent / "opc_tip_base.css") as f:
+        base_css = f.read()
+
+    progress_extra_css = """
+/* === Progress post additions === */
+.prog-address {
+  font-family:'JetBrains Mono', monospace; font-size:22px; font-weight:400;
+  letter-spacing:0.12em; text-transform:uppercase; color:var(--c-body);
+  margin-top:18px; max-width:820px;
+}
+.prog-date {
+  font-family:'JetBrains Mono', monospace; font-size:20px; font-weight:700;
+  letter-spacing:0.15em; text-transform:uppercase; color:#CBCC10;
+  margin-bottom:22px;
+}
+.prog-stage-hl { font-size:96px; line-height:0.96; margin-bottom:12px; }
+.prog-photo {
+  width:100%; flex:1; min-height:320px; max-height:560px;
+  background-size:cover; background-position:center;
+  border:2px solid var(--c-brk); border-radius:8px;
+  overflow:hidden; margin:20px 0 14px;
+}
+.prog-photo-empty {
+  background:repeating-linear-gradient(45deg, rgba(203,204,16,0.04), rgba(203,204,16,0.04) 2px, transparent 2px, transparent 14px);
+  border-style:dashed;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono', monospace; font-size:16px; font-weight:700;
+  letter-spacing:0.18em; color:rgba(203,204,16,0.4); text-transform:uppercase;
+}
+.prog-caption {
+  font-family:'Anton', sans-serif; font-size:34px; line-height:1.1;
+  color:#CBCC10; text-transform:uppercase; letter-spacing:0.02em;
+  margin-bottom:12px;
+}
+.prog-body {
+  font-family:'Roboto Condensed', sans-serif; font-size:30px; line-height:1.38;
+  color:var(--c-body); max-width:840px;
+}
+.prog-project-id {
+  font-family:'JetBrains Mono', monospace; font-size:16px; font-weight:700;
+  letter-spacing:0.2em; color:rgba(203,204,16,0.55); text-transform:uppercase;
+  margin-bottom:18px;
+}
+.cred-list { margin:32px 0 auto; }
+.cred-row {
+  display:flex; gap:28px; align-items:baseline;
+  padding:14px 0; border-bottom:1px solid var(--c-rule);
+  font-family:'Roboto Condensed', sans-serif;
+}
+.cred-name { font-size:36px; font-weight:700; color:var(--c-head); }
+.cred-role { font-size:22px; font-weight:400; color:var(--c-body); }
+.prog-cred-hl { font-size:96px; margin-bottom:8px; }
+.v2 .prog-date { color:#0A0A0A; }
+.v2 .prog-caption { color:#0A0A0A; }
+.v2 .prog-photo-empty { background:repeating-linear-gradient(45deg, rgba(10,10,10,0.04), rgba(10,10,10,0.04) 2px, transparent 2px, transparent 14px); border-style:dashed; color:rgba(10,10,10,0.3); }
+"""
+
+    full_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OPC — Progress — {slug}</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+{base_css}
+{progress_extra_css}
+</style>
+</head>
+<body>
+{v1}
+{v2}
+{v3}
+</body>
+</html>"""
+
+    html_path.write_text(full_html)
+    return str(html_path)
+
+
 def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", media_paths=None):
     """Generate Brazil News 1080x1350 carousel HTML — dark + Canário brand spec v1.1.
     handle: footer handle shown on slides — defaults to @HANDLE_PLACEHOLDER for non-Brazil niches."""
@@ -1465,7 +1697,7 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
   <div class="cover-date">{cover_date}</div>
   <div class="cover-hl">{cover_hl}</div>
   <div class="cover-en">{cover_en}</div>
-  <div class="swipe">SWIPE →</div>
+  <div class="swipe">SWIPE &#8594;</div>
   <div class="footer-handle">{handle}</div>
 </div>
 """
@@ -1522,7 +1754,7 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
     {sticker_el}
     <ul class="fact-list">{facts_li}</ul>
   </div>
-  <div class="swipe">SWIPE →</div>
+  <div class="swipe">SWIPE &#8594;</div>
 </div>
 """
 
@@ -1548,7 +1780,7 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
   <div class="slide-hl">{h_pt}</div>
   <div class="slide-en">{h_en}</div>{ctx_slot}
   <div class="nums-grid">{nums_html}</div>
-  <div class="swipe">SWIPE →</div>
+  <div class="swipe">SWIPE &#8594;</div>
 </div>
 """
 
@@ -1572,7 +1804,7 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
   <div class="slide-hl">{h_pt}</div>
   <div class="slide-en">{h_en}</div>{ctx_slot}
   <ul class="item-list">{items_li}</ul>
-  <div class="swipe">SWIPE →</div>
+  <div class="swipe">SWIPE &#8594;</div>
 </div>
 """
 
@@ -1600,7 +1832,7 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
     <div class="quote-source">— {esc(slide.get("source",""))}</div>
   </div>
   <div class="quote-context">{esc(slide.get("context_pt",""))}</div>
-  <div class="swipe">SWIPE →</div>
+  <div class="swipe">SWIPE &#8594;</div>
 </div>
 """
 

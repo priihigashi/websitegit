@@ -949,6 +949,31 @@ def process_one_topic(topic_entry, run_date, drive):
     except Exception as e:
         print(f"  image_suggestions.txt upload failed (non-fatal): {e}")
 
+    # Write/upload image provenance so we always know who generated each image next run.
+    try:
+        from googleapiclient.http import MediaInMemoryUpload
+        prov = media_paths.get("provenance", {}) if isinstance(media_paths, dict) else {}
+        prov_payload = {
+            "post_id": post_id,
+            "topic": topic,
+            "niche": niche,
+            "version_folder_id": version_folder_id,
+            "generated_at": datetime.now(ET).isoformat(),
+            "cover": prov.get("cover", {}),
+            "slides": prov.get("slides", {}),
+        }
+        drive.files().create(
+            body={"name": "media_provenance.json", "parents": [resources_sub]},
+            media_body=MediaInMemoryUpload(
+                json.dumps(prov_payload, indent=2, ensure_ascii=False).encode("utf-8"),
+                mimetype="application/json"
+            ),
+            supportsAllDrives=True, fields="id",
+        ).execute()
+        print("  media_provenance.json → resources/")
+    except Exception as e:
+        print(f"  media_provenance.json upload failed (non-fatal): {e}")
+
     # Upload any CC photos downloaded by _fetch_person_photo() into resources/images/
     # Filenames are human-readable slugs (slide1_trump_oval_office.jpg, slide2_congress_vote.jpg)
     # so Priscila can scan resources/images/ and see who/what each slide references.
