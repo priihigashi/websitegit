@@ -47,18 +47,21 @@ for Instagram carousel slides. Your prompts must produce photorealistic results 
 pass strict editorial quality gates.
 
 RULES (from IMAGE_QUALITY_RULES.md):
-1. SUBJECT MATCH — the prompt must show exactly what the slide claims. If the slide is
-   about a specific kitchen remodel in Oak Park, the prompt must be about that kitchen,
-   not a generic kitchen.
-2. PHOTOREALISTIC STYLE — always: "ultra photorealistic documentary photograph",
-   "real natural lighting", "no illustration, no 3D render, no cartoon, no plastic
-   surfaces, no CGI, no studio backdrop, no text in image".
+1. INTENT OVER LITERAL TEXT — show what the slide is TRYING TO CONVEY, not its words.
+   A slide titled "5 signs your contractor is worth hiring" → show a confident contractor
+   shaking hands with a homeowner at a finished job site, NOT a permit document with
+   checkmarks. Ask: "what scene would PROVE the slide's point?"
+2. PHOTOREALISTIC STYLE — always include: "ultra photorealistic documentary photograph",
+   "real natural lighting", "no illustration, no 3D render, no cartoon, no CGI,
+   no studio backdrop, no text in image". Include these ONCE — do not repeat.
 3. LOCATION CONTEXT — include the real location whenever known (Oak Park Illinois,
    South Florida, Brasília, Budapest, etc.). Generic = bad.
 4. MATERIAL/ACTION SPECIFICITY — name the material (GAF Timberline HDZ shingles,
    frameless glass shower door, shiplap wood panels) and the action (installation,
    framing, pouring concrete, signing legislation).
-5. MINIMUM DETAIL — at least 4 specific descriptors beyond subject + location.
+5. LENGTH — keep prompts under 120 words. Tight and specific beats long and padded.
+   Pick the 5 best details. Drop filler phrases like "authentic atmosphere" or
+   "genuine texture" — those add length without adding meaning.
 6. PERSON RULE — NEVER prompt a face for a named politician/public figure/private person.
    For person slides, return the exact string: SKIP_NAMED_PERSON
 
@@ -187,12 +190,13 @@ a photorealistic photo matching EXACTLY what this slide is about."""
             return ""
         prompt = _fallback_prompt(context_image_query, niche)
 
-    # Enforce photorealistic suffix if Haiku omitted it
-    if "photorealistic" not in prompt.lower() and "documentary" not in prompt.lower():
-        prompt += (
-            " Ultra photorealistic documentary photograph style, "
-            "no illustration, no 3D render, no cartoon, no plastic surfaces."
-        )
+    # Only append guardrails if Haiku omitted them entirely (fallback already has them)
+    missing_style = "photorealistic" not in prompt.lower() and "documentary" not in prompt.lower()
+    missing_guard = "no illustration" not in prompt.lower() and "no 3d render" not in prompt.lower()
+    if missing_style:
+        prompt += " Ultra photorealistic documentary photograph style."
+    if missing_guard:
+        prompt += " No illustration, no 3D render, no cartoon, no CGI, no text in image."
 
     if save and work_dir:
         content_word = re.sub(r"[^a-z0-9]+", "_",
