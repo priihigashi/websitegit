@@ -36,7 +36,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install google-auth google-api-python-client
+          pip install google-auth google-api-python-client pillow
 
       - name: Run reviewer
         run: |

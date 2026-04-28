@@ -23,6 +23,11 @@ from datetime import datetime
 import urllib.request, urllib.parse
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+try:
+    from PIL import Image, ImageStat  # type: ignore
+except Exception:
+    Image = None
+    ImageStat = None
 
 # Env vars
 SHEETS_TOKEN     = os.environ.get("SHEETS_TOKEN", "")
@@ -31,6 +36,18 @@ RUN_RESULTS_JSON = os.environ.get("CONTENT_CREATOR_RUN", "[]")  # JSON array of 
 REVIEW_DRIVE_FOLDERS = os.environ.get("REVIEW_DRIVE_FOLDERS", "").strip()  # CSV folder ids or links
 
 DRY_RUN = "--dry-run" in sys.argv
+
+STOPWORDS = {
+    "the","and","for","with","this","that","from","into","your","you","are","was","have",
+    "how","what","when","where","why","a","an","of","to","in","on","by","or","at","as",
+    "oak","park","construction","tip","week","pro","move","list","real","number","save",
+    "more","less","using","use","build","project","process","action","guide"
+}
+
+
+def _tokens(text: str) -> set[str]:
+    parts = re.findall(r"[a-z0-9]{3,}", (text or "").lower())
+    return {p for p in parts if p not in STOPWORDS}
 
 
 # ─── Checks ──────────────────────────────────────────────────────────────────
@@ -129,6 +146,28 @@ def check_html_placeholders(html_path: str) -> list[str]:
         sources_with_bg = len(re.findall(r'<div class="slide slide-sources[^"]*">\s*<div class="bg-photo"', html))
         if sources_blocks and sources_with_bg < sources_blocks:
             issues.append("OPC last slide miss: sources slide is missing hero background image block.")
+        # Relevance checks: each body slide context image query should share keywords with slide copy.
+        for slide_cls in ("slide-stat", "slide-list", "slide-tip"):
+            m_slide = re.search(rf'<div class="slide {slide_cls}[^"]*">([\s\S]*?)</div>\s*<div class="slide', html)
+            if not m_slide:
+                continue
+            block = m_slide.group(1)
+            m_q = re.search(r'data-query="([^"]*)"', block)
+            if not m_q:
+                issues.append(f"OPC relevance miss: {slide_cls} context slot has no data-query metadata.")
+                continue
+            query = m_q.group(1).replace("&quot;", '"').strip()
+            if not query:
+                issues.append(f"OPC relevance miss: {slide_cls} has empty image query.")
+                continue
+            txt = re.sub(r"<[^>]+>", " ", block)
+            q_tokens = _tokens(query)
+            t_tokens = _tokens(txt)
+            overlap = q_tokens.intersection(t_tokens)
+            if len(q_tokens) >= 2 and len(overlap) == 0:
+                issues.append(
+                    f"OPC relevance miss: {slide_cls} image query appears off-topic (no keyword overlap): '{query[:80]}'"
+                )
 
     return issues
 
@@ -146,6 +185,24 @@ def check_png_folder(png_dir: str, min_slides: int = 4) -> list[str]:
     tiny = [p.name for p in pngs if p.stat().st_size < 10_000]
     if tiny:
         issues.append(f"Suspiciously small PNGs (blank slide?): {', '.join(tiny)}")
+
+    # Rendered PNG QA: dimension + blankness check.
+    if Image is not None and ImageStat is not None:
+        for p in pngs:
+            try:
+                with Image.open(p) as im:
+                    w, h = im.size
+                    if (w, h) != (1080, 1350):
+                        issues.append(f"{p.name}: wrong dimensions {w}x{h} (expected 1080x1350).")
+                    stat = ImageStat.Stat(im.convert("L"))
+                    mean = stat.mean[0]
+                    stdv = stat.stddev[0]
+                    if stdv < 8:
+                        issues.append(f"{p.name}: low visual variance (stddev={stdv:.1f}) — likely flat/blank render.")
+                    if mean < 10 or mean > 245:
+                        issues.append(f"{p.name}: extreme brightness mean={mean:.1f} — likely rendering issue.")
+            except Exception as e:
+                issues.append(f"{p.name}: PNG QA read failed ({e})")
 
     return issues
 
@@ -212,6 +269,33 @@ def _download_drive_text(drive, file_id: str) -> str:
     return req.execute().decode("utf-8", errors="ignore")
 
 
+def _download_drive_bytes(drive, file_id: str) -> bytes:
+    req = drive.files().get_media(fileId=file_id)
+    return req.execute()
+
+
+def _check_drive_png_bytes(name: str, raw: bytes) -> list[str]:
+    issues = []
+    if Image is None or ImageStat is None:
+        return issues
+    try:
+        import io
+        with Image.open(io.BytesIO(raw)) as im:
+            w, h = im.size
+            if (w, h) != (1080, 1350):
+                issues.append(f"{name}: wrong dimensions {w}x{h} (expected 1080x1350).")
+            stat = ImageStat.Stat(im.convert("L"))
+            mean = stat.mean[0]
+            stdv = stat.stddev[0]
+            if stdv < 8:
+                issues.append(f"{name}: low visual variance (stddev={stdv:.1f}) — likely flat/blank render.")
+            if mean < 10 or mean > 245:
+                issues.append(f"{name}: extreme brightness mean={mean:.1f} — likely rendering issue.")
+    except Exception as e:
+        issues.append(f"{name}: PNG QA read failed ({e})")
+    return issues
+
+
 def _resolve_version_root(drive, folder_id: str) -> str:
     """If a child folder like png/motion/resources is passed, move up to version root."""
     meta = drive.files().get(
@@ -258,6 +342,13 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
         tiny = [p["name"] for p in pngs if int(p.get("size") or 0) < 10_000]
         if tiny:
             issues.append(f"Suspiciously small PNGs (blank slide?): {', '.join(tiny)}")
+        # Same rendered PNG QA used by local flow.
+        for p in pngs:
+            try:
+                raw = _download_drive_bytes(drive, p["id"])
+                issues.extend(_check_drive_png_bytes(p["name"], raw))
+            except Exception as e:
+                issues.append(f"{p.get('name','?')}: PNG download/QA failed ({e})")
 
     motion_folder_id = _find_folder_id(drive, folder_id, "motion")
     if not motion_folder_id:

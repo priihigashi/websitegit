@@ -1304,16 +1304,17 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
         slide_meta_idx = max(0, slide_num - 2)
         slide_meta = opc_slides_meta[slide_meta_idx] if slide_meta_idx < len(opc_slides_meta) else {}
         query = str(slide_meta.get("context_image_query", "")).strip()
+        query_attr = query.replace('"', "&quot;")
         img_path = ((media_paths or {}).get("slides", {}) or {}).get(slide_num, "")
         if img_path:
             return (
-                '<div class="context-img-slot">'
+                f'<div class="context-img-slot" data-query="{query_attr}">'
                 f'<img src="{img_path}" alt="{fallback_label}">'
                 '</div>'
             )
         fallback = query if query else fallback_label
         return (
-            '<div class="context-img-slot">'
+            f'<div class="context-img-slot" data-query="{query_attr}">'
             f'<div class="ctx-fallback">{fallback}</div>'
             '</div>'
         )
