@@ -114,6 +114,20 @@ ROUTES = {
         "story_prefix":       "BCI",
         "email_label":        "Book capture done",
     },
+    # ── AI ─────────────────────────────────────────────────────────────────────
+    "ai": {
+        "label":              "AI",
+        "pipeline":           "ai",
+        "drive_id":           "0ACJVarTjgmFUUk9PVA",
+        "drive_name":         "AI Content",
+        "capture_folder_id":  "1d-BHMgNfo1DqE4DPu0nPVh73hNgLirOU",  # AI Content/Captures
+        "content_control_id": "",
+        "content_control_tab":"",
+        "published_tab":      "",
+        "queue_dest":         "AI Content Drive",
+        "story_prefix":       "AIC",
+        "email_label":        "AI capture done",
+    },
     # ── Unrouted (auto-detect failed / low confidence) ─────────────────────────
     "unrouted": {
         "label":              "Not Identified",
