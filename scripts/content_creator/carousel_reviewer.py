@@ -165,8 +165,23 @@ def _download_drive_text(drive, file_id: str) -> str:
     return req.execute().decode("utf-8", errors="ignore")
 
 
+def _resolve_version_root(drive, folder_id: str) -> str:
+    """If a child folder like png/motion/resources is passed, move up to version root."""
+    meta = drive.files().get(
+        fileId=folder_id, fields="id,name,parents", supportsAllDrives=True
+    ).execute()
+    name = (meta.get("name") or "").strip().lower()
+    if name not in {"png", "motion", "resources"}:
+        return folder_id
+    parents = meta.get("parents") or []
+    if not parents:
+        return folder_id
+    return parents[0]
+
+
 def check_drive_folder(folder_id: str, drive) -> dict:
     issues = []
+    folder_id = _resolve_version_root(drive, folder_id)
     folder_meta = drive.files().get(
         fileId=folder_id, fields="id,name,webViewLink", supportsAllDrives=True
     ).execute()
