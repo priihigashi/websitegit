@@ -363,6 +363,69 @@ def _resolve_version_root(drive, folder_id: str) -> str:
     return parents[0]
 
 
+_AI_PROVIDERS = {"gemini", "seedream", "dall-e-3", "sdxl"}
+
+
+def _check_provenance(prov: dict) -> list[str]:
+    """Read media_provenance.json dict and flag AI-sourced images.
+
+    Per IMAGE_QUALITY_RULES.md:
+      - Any slide with source_type=="ai" means all real-photo tiers (Wikimedia/Pexels/Pixabay) missed.
+        These are flagged with [fix_type=regenerate] — the fix is always to improve the query and re-fetch.
+      - Cover with source_type=="ai" AND subject_type=="person" is a CRITICAL violation (editorial rule).
+    """
+    issues = []
+
+    # Cover check
+    cover = prov.get("cover", {})
+    if isinstance(cover, dict) and cover.get("source_type") == "ai":
+        provider = cover.get("provider", "unknown")
+        query = cover.get("query", "")
+        # Check if subject_type was recorded (not all builds store it, but flag either way)
+        subject_type = cover.get("subject_type", "")
+        if subject_type == "person":
+            issues.append(
+                f"[fix_type=regenerate] CRITICAL: cover image is AI-generated ({provider}) for a named person — "
+                f"editorial rule requires real CC photo only. Query was: '{query[:60]}'"
+            )
+        else:
+            issues.append(
+                f"[fix_type=regenerate] Cover image is AI-generated ({provider}) — "
+                f"real-photo tiers (Wikimedia/Pexels/Pixabay) all missed. Improve query: '{query[:60]}'"
+            )
+
+    # Per-slide check
+    slides = prov.get("slides", {})
+    for slide_key, slide_data in slides.items():
+        if not isinstance(slide_data, dict):
+            continue
+        if slide_data.get("source_type") == "ai":
+            provider = slide_data.get("provider", "unknown")
+            query = slide_data.get("query", "")
+            issues.append(
+                f"[fix_type=regenerate] Slide {slide_key}: AI image ({provider}) used — "
+                f"real-photo tiers missed. Make query more specific: '{query[:60]}'"
+            )
+
+    # Summary ratio warning (kept for dashboards/email scannability)
+    all_providers = []
+    if isinstance(cover, dict) and cover.get("provider"):
+        all_providers.append(cover["provider"].lower())
+    for v in slides.values():
+        if isinstance(v, dict) and v.get("provider"):
+            all_providers.append(v["provider"].lower())
+    if all_providers:
+        ai_count = sum(1 for p in all_providers if p in _AI_PROVIDERS)
+        ratio = ai_count / len(all_providers)
+        if ratio >= 0.5 and ai_count > 1:
+            issues.append(
+                f"Realism risk: {ai_count}/{len(all_providers)} images are AI-generated "
+                f"({ratio:.0%}) — target is mostly real photos/stock."
+            )
+
+    return issues
+
+
 def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
     issues = []
     original_id = folder_id
@@ -419,16 +482,7 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
         if prov_file:
             try:
                 prov = json.loads(_download_drive_text(drive, prov_file["id"]))
-                slides = prov.get("slides", {})
-                providers = [str(v.get("provider", "")).lower() for v in slides.values() if isinstance(v, dict)]
-                if providers:
-                    ai_count = sum(1 for p in providers if p in {"gemini", "seedream", "dall-e-3", "sdxl"})
-                    ratio = ai_count / max(1, len(providers))
-                    if ratio >= 0.75:
-                        issues.append(
-                            f"OPC realism risk: {ai_count}/{len(providers)} slide images are AI-generated "
-                            f"(target is mostly real photos/stock)."
-                        )
+                issues.extend(_check_provenance(prov))
             except Exception as e:
                 issues.append(f"media_provenance.json parse failed: {e}")
 
@@ -479,6 +533,15 @@ def check_built_post(result: dict) -> dict:
     # 3. Motion check
     motion_dir_local = Path(work_dir_env) / post_id / "motion"
     all_issues.extend(check_motion_folder(str(motion_dir_local)))
+
+    # 4. Provenance check — flag AI-sourced images (real-photo tiers missed)
+    prov_path = Path(work_dir_env) / post_id / "resources" / "media_provenance.json"
+    if prov_path.exists():
+        try:
+            prov = json.loads(prov_path.read_text(encoding="utf-8"))
+            all_issues.extend(_check_provenance(prov))
+        except Exception as e:
+            all_issues.append(f"media_provenance.json read/parse failed: {e}")
 
     passed = len(all_issues) == 0
     return {

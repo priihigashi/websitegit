@@ -19,7 +19,19 @@ GEMINI_KEY     = os.environ.get("GEMINI_API_KEY", "")
 PEXELS_KEY     = os.environ.get("PEXELS_API_KEY", "")
 PIXABAY_KEY    = os.environ.get("PIXABAY_API_KEY", "")
 REPLICATE_KEY  = os.environ.get("PRI_OP_REPLICATE_API_KEY", "")
+INFSH_KEY      = os.environ.get("PRI_OP_INFSH_API_KEY", "")
 APIFY_KEY      = os.environ.get("APIFY_API_KEY", "")
+
+# Shared image generation modules (image_providers + prompt_builder)
+try:
+    import sys as _sys
+    _sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
+    from image_providers import generate_ai_image as _gen_ai_image, make_filename as _make_img_filename
+    from prompt_builder import build_image_prompt as _build_img_prompt
+    _IMAGE_PROVIDERS_AVAILABLE = True
+except Exception as _ip_err:
+    _IMAGE_PROVIDERS_AVAILABLE = False
+    print(f"  Warning: image_providers/prompt_builder not loaded ({_ip_err}) — using legacy cascade")
 
 
 def _claude_with_fallback(prompt, *, max_tokens, timeout=60, context=""):
@@ -300,15 +312,15 @@ Return ONLY a JSON object with these fields:
   "slides": [
     {{
       "visual_hint": "context-image or none — use context-image when this slide benefits from a construction or materials photo",
-      "context_image_query": "Pexels/Wikimedia/stock search term if context-image — specific and visual (e.g. 'kitchen cabinet installation contractor', 'concrete driveway residential pour', 'bathroom tile remodel Florida'). Empty string if none."
+      "context_image_query": "Pexels/Wikimedia search term for THIS SLIDE'S SPECIFIC CLAIM — must include: material or action + location context. MINIMUM 4 words. GOOD: 'concrete driveway residential pour south florida', 'bathroom tile frameless shower door installation', 'shiplap wood accent wall interior residential'. BAD (banned): 'construction work', 'house', 'renovation', 'contractor', 'kitchen', 'bathroom', 'home improvement' — these are too generic and return unrelated images. The query must match what this specific slide is about, not the overall topic."
     }},
     {{
       "visual_hint": "context-image or none",
-      "context_image_query": "different search term matching slide 3 content — e.g. 'home addition framing construction', 'roof shingles installation aerial'"
+      "context_image_query": "Specific query matching SLIDE 3 content — different subject from slide 2. Must include material/action + location. GOOD: 'roof shingles GAF installation aerial residential', 'framing wood stud wall addition oak park illinois'. BAD: 'construction', 'building', 'outdoor work'."
     }},
     {{
       "visual_hint": "context-image or none",
-      "context_image_query": "search term matching slide 4 content — e.g. 'contractor measuring kitchen renovation', 'outdoor kitchen pergola South Florida'"
+      "context_image_query": "Specific query matching SLIDE 4 tip content — show the solution or tool being described. GOOD: 'contractor measuring kitchen cabinet installation south florida', 'outdoor kitchen pergola concrete patio residential'. BAD: 'contractor', 'renovation', 'home project'."
     }}
   ],
   "receipts_needed": ["URL or description of primary source to screenshot as evidence slide"],
@@ -323,7 +335,8 @@ Rules:
 - Caption hook = first line visible in feed — make it a question or surprising fact
 - NEVER promise what OPC does for clients
 - slides[]: emit context-image for at least 2 of the 3 middle slides — never all none
-- slide4_body must describe what is happening in the visual (not generic advice)"""
+- slide4_body must describe what is happening in the visual (not generic advice)
+- context_image_query: BANNED words that make queries too generic and WILL fail stock search — never use alone or as the whole query: "construction", "house", "home", "building", "renovation", "contractor", "kitchen", "bathroom", "outdoor", "indoor", "work", "project". Always combine with material type + location (e.g. "oak park illinois", "south florida", "residential") + action verb (installation, pour, framing, remodel). Minimum 4 words per query. A generic query means the pipeline falls back to AI images — avoid this."""
 
     for attempt in range(2):
         _prompt = prompt
@@ -907,23 +920,35 @@ def fetch_all_media(content, niche, work_dir):
                 if c:
                     _set_cover(c, "pixabay", "stock", query=search_q)
 
-        # Step 3 — AI cascade (again skipped for named persons per editorial rule)
-        if not paths["cover"] and subject_type != "person" and ai_prompt:
-            c = _generate_gemini_image(ai_prompt, work_dir, cover_fname)
-            if c:
-                _set_cover(c, "gemini", "ai", query=search_q, prompt=ai_prompt)
-            if not paths["cover"]:
-                c = _generate_seedream_image(ai_prompt, work_dir, cover_fname)
+        # Step 3 — AI cascade (skipped for named persons per editorial rule)
+        if not paths["cover"] and subject_type != "person":
+            if _IMAGE_PROVIDERS_AVAILABLE:
+                fresh_prompt = _build_img_prompt(
+                    slide_text=search_q, context_image_query=search_q,
+                    niche=niche, slide_num=1, subject_type=subject_type,
+                    work_dir=work_dir, save=True,
+                ) or ai_prompt
+                cover_fname = _make_img_filename(search_q, "ai", 1)
+                c, used_prov = _gen_ai_image(fresh_prompt, work_dir, cover_fname)
                 if c:
-                    _set_cover(c, "seedream", "ai", query=search_q, prompt=ai_prompt)
-            if not paths["cover"]:
-                c = _generate_ai_cover(ai_prompt, work_dir, cover_fname)  # DALL-E
+                    _set_cover(c, used_prov, "ai", query=search_q, prompt=fresh_prompt)
+            elif ai_prompt:
+                # Legacy fallback when image_providers not available
+                c = _generate_gemini_image(ai_prompt, work_dir, cover_fname)
                 if c:
-                    _set_cover(c, "dall-e-3", "ai", query=search_q, prompt=ai_prompt)
-            if not paths["cover"]:
-                c = _generate_replicate_sdxl(ai_prompt, work_dir, cover_fname)
-                if c:
-                    _set_cover(c, "sdxl", "ai", query=search_q, prompt=ai_prompt)
+                    _set_cover(c, "gemini", "ai", query=search_q, prompt=ai_prompt)
+                if not paths["cover"]:
+                    c = _generate_seedream_image(ai_prompt, work_dir, cover_fname)
+                    if c:
+                        _set_cover(c, "seedream", "ai", query=search_q, prompt=ai_prompt)
+                if not paths["cover"]:
+                    c = _generate_ai_cover(ai_prompt, work_dir, cover_fname)
+                    if c:
+                        _set_cover(c, "dall-e-3", "ai", query=search_q, prompt=ai_prompt)
+                if not paths["cover"]:
+                    c = _generate_replicate_sdxl(ai_prompt, work_dir, cover_fname)
+                    if c:
+                        _set_cover(c, "sdxl", "ai", query=search_q, prompt=ai_prompt)
 
         # If cover is a person and all photo tiers missed, leave empty — the HTML
         # renderer falls back to .bio-initials card (see build_html step D).
@@ -961,30 +986,35 @@ def fetch_all_media(content, niche, work_dir):
             if img_path:
                 print(f"  Slide {i}: Pixabay photo for '{cq[:50]}'")
                 _set_slide(i, img_path, "pixabay", "stock", query=cq, prompt=ai_prompt)
-        # Tier 4: Gemini Imagen (free quota, Priscila's preferred AI)
+        # AI cascade — NB2 → Seedream 4.5 → DALL-E 3 → Seedream 5.0 → Gemini → SDXL
         if not img_path:
-            img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
-            if img_path:
-                print(f"  Slide {i}: Gemini image for '{cq[:50]}'")
-                _set_slide(i, img_path, "gemini", "ai", query=cq, prompt=ai_prompt)
-        # Tier 5: Seedream 4 (photoreal, strong with people/places)
-        if not img_path:
-            img_path = _generate_seedream_image(ai_prompt, work_dir, fname)
-            if img_path:
-                print(f"  Slide {i}: Seedream image for '{cq[:50]}'")
-                _set_slide(i, img_path, "seedream", "ai", query=cq, prompt=ai_prompt)
-        # Tier 6: DALL-E 3 (demoted — paid + less consistent)
-        if not img_path:
-            img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
-            if img_path:
-                print(f"  Slide {i}: DALL-E image for '{cq[:50]}'")
-                _set_slide(i, img_path, "dall-e-3", "ai", query=cq, prompt=ai_prompt)
-        # Tier 7: Replicate SDXL (cheapest last resort)
-        if not img_path:
-            img_path = _generate_replicate_sdxl(ai_prompt, work_dir, fname)
-            if img_path:
-                print(f"  Slide {i}: SDXL image for '{cq[:50]}'")
-                _set_slide(i, img_path, "sdxl", "ai", query=cq, prompt=ai_prompt)
+            if _IMAGE_PROVIDERS_AVAILABLE:
+                fresh_prompt = _build_img_prompt(
+                    slide_text=cq, context_image_query=cq,
+                    niche=niche, slide_num=i, work_dir=work_dir, save=True,
+                ) or ai_prompt
+                fname = _make_img_filename(cq, "ai", i)
+                img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname)
+                if img_path:
+                    print(f"  Slide {i}: {used_prov} image for '{cq[:50]}'")
+                    _set_slide(i, img_path, used_prov, "ai", query=cq, prompt=fresh_prompt)
+            else:
+                # Legacy fallback when image_providers not available
+                img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
+                if img_path:
+                    _set_slide(i, img_path, "gemini", "ai", query=cq, prompt=ai_prompt)
+                if not img_path:
+                    img_path = _generate_seedream_image(ai_prompt, work_dir, fname)
+                    if img_path:
+                        _set_slide(i, img_path, "seedream", "ai", query=cq, prompt=ai_prompt)
+                if not img_path:
+                    img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
+                    if img_path:
+                        _set_slide(i, img_path, "dall-e-3", "ai", query=cq, prompt=ai_prompt)
+                if not img_path:
+                    img_path = _generate_replicate_sdxl(ai_prompt, work_dir, fname)
+                    if img_path:
+                        _set_slide(i, img_path, "sdxl", "ai", query=cq, prompt=ai_prompt)
 
     fetched_total = (1 if paths["cover"] else 0) + len(paths["slides"])
     print(f"  Media fetch: {fetched_total} image(s) ready (cover={bool(paths['cover'])}, slides={list(paths['slides'].keys())})")
