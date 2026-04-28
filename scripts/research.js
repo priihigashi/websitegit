@@ -9,14 +9,25 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { COMPANY } = require('./company-info.js');
 
-const client = new Anthropic();
-
 // ─── Config ───────────────────────────────────────────────────────────────────
 const YOUTUBE_API_KEY  = process.env.YOUTUBE_API_KEY;
 const NEWS_API_KEY     = process.env.NEWS_API_KEY;
 const SERP_API_KEY     = process.env.SERP_API_KEY;
 const GOOGLE_SHEET_ID  = process.env.GOOGLE_SHEET_ID;
 const SHEETS_TOKEN     = process.env.SHEETS_TOKEN; // OAuth token JSON (refresh token flow)
+const ANTHROPIC_API_KEY = (
+  process.env.CLAUDE_KEY_4_CONTENT ||
+  process.env.ANTHROPIC_API_KEY ||
+  ''
+).trim();
+
+if (!ANTHROPIC_API_KEY) {
+  throw new Error(
+    'Anthropic API key missing: set CLAUDE_KEY_4_CONTENT (or ANTHROPIC_API_KEY) in the workflow environment.'
+  );
+}
+
+const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 const TODAY = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
 
