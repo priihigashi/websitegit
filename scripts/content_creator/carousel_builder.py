@@ -1275,6 +1275,12 @@ def build_html(content, niche, topic_slug, work_dir, handle="@HANDLE_PLACEHOLDER
 
 def _build_opc_html(content, slug, work_dir, media_paths=None):
     hl = content["headline"]
+    # Guardrail: keep cover subhead short enough to avoid colliding with the bottom HUD lane.
+    raw_subhead = str(content.get("subhead", "")).strip()
+    if len(raw_subhead) > 110:
+        cut = raw_subhead[:107].rsplit(" ", 1)[0].strip() or raw_subhead[:107].strip()
+        raw_subhead = f"{cut}..."
+    content["subhead"] = raw_subhead
     accent = content.get("accent_word", hl.split()[-1])
     hl_html = hl.replace(accent, f'<span class="accent">{accent}</span>')
 

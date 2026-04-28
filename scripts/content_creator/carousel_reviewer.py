@@ -90,6 +90,40 @@ def check_html_placeholders(html_path: str) -> list[str]:
             issues.append(
                 "OPC explanation missing: project-note block not found on stat slide"
             )
+        # Cover subhead length guardrail (creator enforces <=110 chars).
+        m_sub = re.search(r'<div class="body-text">([\s\S]*?)</div>', html)
+        if m_sub:
+            sub_txt = re.sub(r"<[^>]+>", "", m_sub.group(1)).strip()
+            if len(sub_txt) > 110:
+                issues.append(
+                    f"OPC cover subhead too long ({len(sub_txt)} chars) — max 110 to avoid HUD overlap."
+                )
+        # Swipe text integrity + no clipping-prone typo patterns.
+        if "WIPE →" in html:
+            issues.append("OPC swipe label typo/clipping artifact detected ('WIPE →').")
+        swipe_count = html.count("SWIPE →")
+        if swipe_count < 4:
+            issues.append(f"OPC swipe indicator missing on expected slides (found {swipe_count}, expected >=4).")
+        # Ensure cover HUD lane classes are present.
+        if ".slide-cover .arrow" not in html or ".slide-cover .slide-logo" not in html:
+            issues.append("OPC cover HUD lane styles missing (.slide-cover .arrow / .slide-cover .slide-logo).")
+        # Safe-margin check for cover HUD: avoid edge clipping.
+        m_arrow = re.search(r"\.slide-cover\s+\.arrow\s*\{([\s\S]*?)\}", html)
+        if m_arrow:
+            m_right = re.search(r"right\s*:\s*(\d+)px", m_arrow.group(1))
+            m_bottom = re.search(r"bottom\s*:\s*(\d+)px", m_arrow.group(1))
+            if m_right and int(m_right.group(1)) < 56:
+                issues.append(f"OPC cover swipe too close to right edge ({m_right.group(1)}px).")
+            if m_bottom and int(m_bottom.group(1)) < 40:
+                issues.append(f"OPC cover swipe too close to bottom edge ({m_bottom.group(1)}px).")
+        m_logo = re.search(r"\.slide-cover\s+\.slide-logo\s*\{([\s\S]*?)\}", html)
+        if m_logo:
+            m_left = re.search(r"left\s*:\s*(\d+)px", m_logo.group(1))
+            m_bottom = re.search(r"bottom\s*:\s*(\d+)px", m_logo.group(1))
+            if m_left and int(m_left.group(1)) < 56:
+                issues.append(f"OPC cover license too close to left edge ({m_left.group(1)}px).")
+            if m_bottom and int(m_bottom.group(1)) < 40:
+                issues.append(f"OPC cover license too close to bottom edge ({m_bottom.group(1)}px).")
         # Last slide should mirror cover style with hero background.
         sources_blocks = len(re.findall(r'<div class="slide slide-sources', html))
         sources_with_bg = len(re.findall(r'<div class="slide slide-sources[^"]*">\s*<div class="bg-photo"', html))
