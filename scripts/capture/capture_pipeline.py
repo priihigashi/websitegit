@@ -726,6 +726,70 @@ def _try_apify_youtube_download(url: str, tmp_dir: str) -> str:
         return ""
 
 
+def _try_yt_dlp_slides(url: str, tmp_dir: str) -> list:
+    """Tier-3 carousel slide fallback: yt-dlp + PRI_OP_IG_COOKIES → local JPGs.
+    Uses --dump-single-json to pull GraphQL metadata via authenticated session,
+    extracts slide URLs, downloads them locally. Returns [] on any failure.
+    """
+    if not url:
+        return []
+    global _IG_COOKIES_PATH
+    if not _IG_COOKIES_PATH:
+        _IG_COOKIES_PATH = _write_ig_cookies_file()
+    if not _IG_COOKIES_PATH:
+        print("  yt-dlp_slides: PRI_OP_IG_COOKIES not set — skipping tier-3")
+        return []
+
+    print("  Trying yt-dlp + IG cookies for carousel slides (tier-3)...")
+    try:
+        result = subprocess.run(
+            ["yt-dlp", "--cookies", _IG_COOKIES_PATH,
+             "--dump-single-json", "--no-warnings", url],
+            capture_output=True, text=True, timeout=60,
+        )
+        if result.returncode != 0:
+            print(f"  yt-dlp_slides: dump-json failed: {result.stderr[:200]}")
+            return []
+
+        data = json.loads(result.stdout)
+        slide_urls = []
+        if isinstance(data.get("entries"), list):
+            for entry in data["entries"][:8]:
+                thumbs = entry.get("thumbnails") or []
+                if thumbs:
+                    slide_urls.append(thumbs[-1].get("url"))
+                elif entry.get("url"):
+                    slide_urls.append(entry["url"])
+        elif data.get("thumbnails"):
+            slide_urls.append(data["thumbnails"][-1].get("url"))
+
+        slide_urls = [u for u in slide_urls if u and u.startswith("http")]
+        if not slide_urls:
+            print("  yt-dlp_slides: no slide URLs in metadata")
+            return []
+
+        slides_dir = os.path.join(tmp_dir, "ytdlp_slides")
+        os.makedirs(slides_dir, exist_ok=True)
+        local_paths = []
+        for i, slide_url in enumerate(slide_urls):
+            try:
+                r = requests.get(slide_url, timeout=15)
+                if r.status_code == 200 and r.content:
+                    p = os.path.join(slides_dir, f"slide_{i:02d}.jpg")
+                    with open(p, "wb") as f:
+                        f.write(r.content)
+                    local_paths.append(p)
+            except Exception as e:
+                print(f"    slide {i} download failed: {e}")
+
+        if local_paths:
+            print(f"  Downloaded {len(local_paths)} slide(s) via yt-dlp + IG cookies")
+        return local_paths
+    except Exception as e:
+        print(f"  yt-dlp_slides failed: {e}")
+        return []
+
+
 def _try_instaloader_slides(url: str, tmp_dir: str) -> list:
     """Download Instagram carousel slides via instaloader (anonymous GraphQL).
     Fallback for when Apify returns no slide_image_urls (402, empty result, etc).
@@ -1303,18 +1367,29 @@ def _try_vision_fallback(audio: str, tmp_dir: str, metadata: dict) -> str:
     caption = metadata.get("caption", "")
 
     if audio == "__ig_carousel__":
+        # Tier 1: Apify (preferred when in credits)
         slide_urls = metadata.get("slide_image_urls", [])
-        if not slide_urls:
-            # Apify empty/402 → fall back to instaloader (downloads slides locally)
-            print("  Vision fallback: Apify slide_image_urls empty — trying instaloader")
-            local_slides = _try_instaloader_slides(metadata.get("source_url", ""), tmp_dir)
-            if not local_slides:
-                print("  Vision fallback: instaloader also returned no slides — skipping")
-                return ""
-            print(f"  Vision fallback: {len(local_slides)} carousel slide(s) via instaloader → Claude Haiku Vision")
+        if slide_urls:
+            print(f"  Vision fallback: {len(slide_urls)} carousel slide(s) via Apify → Claude Haiku Vision")
+            return _describe_with_claude_vision(slide_urls, context=caption)
+
+        source_url = metadata.get("source_url", "")
+        # Tier 2: instaloader anonymous GraphQL (no credentials, public posts)
+        print("  Vision fallback: Apify empty — trying instaloader (tier-2)")
+        local_slides = _try_instaloader_slides(source_url, tmp_dir)
+        if local_slides:
+            print(f"  Vision fallback: {len(local_slides)} slide(s) via instaloader → Claude Haiku Vision")
             return _describe_with_claude_vision(local_slides, context=caption)
-        print(f"  Vision fallback: {len(slide_urls)} carousel slide(s) → Claude Haiku Vision")
-        return _describe_with_claude_vision(slide_urls, context=caption)
+
+        # Tier 3: yt-dlp + PRI_OP_IG_COOKIES (last resort, cookies may be stale)
+        print("  Vision fallback: instaloader empty — trying yt-dlp + IG cookies (tier-3)")
+        local_slides = _try_yt_dlp_slides(source_url, tmp_dir)
+        if local_slides:
+            print(f"  Vision fallback: {len(local_slides)} slide(s) via yt-dlp+cookies → Claude Haiku Vision")
+            return _describe_with_claude_vision(local_slides, context=caption)
+
+        print("  Vision fallback: all 3 tiers empty — skipping carousel vision")
+        return ""
     else:
         # Scale keyframes by video duration so longer videos aren't under-sampled.
         # Rule: 1 frame per ~12s, floor 6, cap 15 (cost guardrail on Vision API).
