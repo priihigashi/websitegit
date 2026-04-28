@@ -1,1 +1,37 @@
-[]
+[
+  {
+    "task": "Fix misclassified reel DXJwN9xpU1r \u2014 get correct niche from Priscila, then move Drive folder, update Inspiration Library row, update story ID prefix, add few-shot example to detect_project()",
+    "context": "Auto-detect classified as BOOK (confidence 0.85) but Priscila marked it WRONG. She exited before naming correct niche. Story ID: BCI-202604271635. Blocks few-shot training improvement.",
+    "auto_actionable": false
+  },
+  {
+    "task": "AIOX audit \u2014 3-agent run (architect + devops + dev) for detect_project(), run_unrouted(), unrouted_digest.py, unrouted_digest.yml, capture_pipeline.yml changes",
+    "context": "Deferred security/quality review. New auto-detect pipeline needs validation before production confidence.",
+    "auto_actionable": false
+  },
+  {
+    "task": "Fix visual-only video + IG carousel classification gap using Claude Vision",
+    "context": "When transcript is empty (no audio), Haiku only has caption as signal, higher chance of falling to unrouted. Route A: Call Claude Vision on video keyframes (FFmpeg) for silent videos and on slide images (Apify) for IG carousels using existing CLAUDE_KEY_4_CONTENT.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Hand off to AIOX agent sequence (architect \u2192 dev \u2192 qa) with full brief",
+    "context": "Full handoff brief written with all files, script paths, spreadsheet IDs, and classification status clarification. Ready to escalate to AIOX-architect.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Complete 3 parallel research/audit docs (A=research, B=negative keywords, C=lifetime audit) for weekly report + dashboard project",
+    "context": "No reporting back until all 3 docs exist; synthesis and dashboard build depend on these being completed first",
+    "auto_actionable": false
+  },
+  {
+    "task": "Synthesize findings from A+B+C docs and build dashboard",
+    "context": "Follows completion of the 3 parallel audit docs; needed before weekly report and execution",
+    "auto_actionable": false
+  },
+  {
+    "task": "Ask Priscila Q1 (folder) and Q2 (bypass) at top of next chat",
+    "context": "Setup questions before starting A+B+C work in parallel",
+    "auto_actionable": true
+  }
+]
