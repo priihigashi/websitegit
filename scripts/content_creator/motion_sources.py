@@ -122,6 +122,7 @@ def tier_ytdlp_search(slide_cfg: dict, dest_path: Path) -> bool:
         return False
     ok = _try_ytdlp_download(dest_path, query)
     if not ok:
+        print(f"  motion_sources: yt-dlp search miss for '{query[:40]}'")
         return False
     _write_sidecar(
         dest_path,
@@ -146,6 +147,7 @@ def tier_ytdlp_ios(slide_cfg: dict, dest_path: Path) -> bool:
         ["--extractor-args", "youtube:player_client=ios,web_creator"],
     )
     if not ok:
+        print(f"  motion_sources: yt-dlp iOS miss for '{query[:40]}'")
         return False
     _write_sidecar(
         dest_path,
@@ -509,6 +511,12 @@ def tier_stock_scrapers(slide_cfg: dict, dest_path: Path) -> bool:
     Implementation deferred — returns False silently so Ken Burns kicks in.
     Wire here when Priscila authorizes the scraper cost.
     """
+    query = (slide_cfg.get("query")
+             or slide_cfg.get("youtube_query")
+             or slide_cfg.get("pexels_query")
+             or "")
+    if query:
+        print(f"  motion_sources: stock_scrapers tier disabled for '{query[:40]}'")
     return False
 
 
