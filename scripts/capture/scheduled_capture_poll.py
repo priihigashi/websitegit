@@ -63,7 +63,8 @@ NICHE_TO_PROJECT = {
     "stocks": "stocks",
 }
 
-SKIP_STATUS = {"captured", "queued", "error", "skip", "done"}
+# Keep failed items retryable so content is not lost after transient provider issues.
+SKIP_STATUS = {"captured", "queued", "skip", "done"}
 
 
 def _sheets():
