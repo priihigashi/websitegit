@@ -36,7 +36,10 @@ from pathlib import Path
 from typing import Optional
 
 # ── LLM client ────────────────────────────────────────────────────────────────
-ANTHROPIC_KEY = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
+ANTHROPIC_KEY = (
+    os.environ.get("CLAUDE_KEY_4_CONTENT", "")
+    or os.environ.get("ANTHROPIC_API_KEY", "")
+)
 
 _SYSTEM_PROMPT = """\
 You are a professional photography art director generating AI image generation prompts
@@ -197,6 +200,75 @@ a photorealistic photo matching EXACTLY what this slide is about."""
         _save_prompt(prompt, slide_num, content_word, work_dir)
 
     return prompt
+
+
+def extract_slide_texts(html: str) -> dict:
+    """Return {slide_num: plain_text} for carousel HTML.
+
+    Strategy (in order):
+    1. Pull text from .content / .body / .tip-body / .stat-body divs — these hold actual copy
+    2. Fall back to <h1>/<h2>/<p> tags
+    3. Last resort: .slide wrappers (original approach)
+    Deduplicates to handle v1/v2/v3 variants of the same slide.
+    """
+    def _strip(s: str) -> str:
+        t = re.sub(r"<[^>]+>", " ", s)
+        return re.sub(r"\s+", " ", t).strip()
+
+    # Strategy 1: .content and related copy-bearing divs
+    content_blocks = re.findall(
+        r'<div[^>]*class="[^"]*(?:content|body|tip-body|stat-body|list-body)[^"]*"[^>]*>(.*?)</div>',
+        html, re.DOTALL | re.IGNORECASE,
+    )
+    texts = []
+    for block in content_blocks:
+        t = _strip(block)
+        if len(t) > 15:
+            texts.append(t)
+
+    # Deduplicate while preserving order (v1/v2/v3 produce identical copies)
+    seen = set()
+    unique_texts = []
+    for t in texts:
+        key = t[:60]
+        if key not in seen:
+            seen.add(key)
+            unique_texts.append(t)
+
+    if unique_texts:
+        return {i: t for i, t in enumerate(unique_texts, start=1)}
+
+    # Strategy 2: heading + paragraph tags
+    headings_paras = re.findall(r'<(?:h[1-3]|p)[^>]*>(.*?)</(?:h[1-3]|p)>', html, re.DOTALL | re.IGNORECASE)
+    texts2 = []
+    seen2 = set()
+    for block in headings_paras:
+        t = _strip(block)
+        if len(t) > 15:
+            key = t[:60]
+            if key not in seen2:
+                seen2.add(key)
+                texts2.append(t)
+    if texts2:
+        return {i: t for i, t in enumerate(texts2, start=1)}
+
+    # Strategy 3: .slide wrappers (original fallback)
+    blocks = re.findall(
+        r'<(?:div|section)[^>]*class="[^"]*slide[^"]*"[^>]*>(.*?)</(?:div|section)>',
+        html, re.DOTALL | re.IGNORECASE,
+    )
+    result = {}
+    seen3 = set()
+    idx = 1
+    for block in blocks:
+        t = _strip(block)
+        if len(t) > 10:
+            key = t[:60]
+            if key not in seen3:
+                seen3.add(key)
+                result[idx] = t
+                idx += 1
+    return result
 
 
 def rebuild_prompts_from_html(html_path: str, niche: str, work_dir: str) -> dict:

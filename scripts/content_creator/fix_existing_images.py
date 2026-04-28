@@ -36,7 +36,7 @@ from image_providers import (
     fetch_real_photo, generate_ai_image, make_filename,
     PROVIDER_NB2, DEFAULT_AI_CASCADE,
 )
-from prompt_builder import build_image_prompt
+from prompt_builder import build_image_prompt, extract_slide_texts as _extract_slide_texts
 
 # ── Credentials ───────────────────────────────────────────────────────────────
 CREDENTIALS = os.environ.get(
@@ -128,26 +128,6 @@ def _find_or_create_folder(drive, parent_id: str, name: str) -> str:
         supportsAllDrives=True, fields="id",
     ).execute()
     return res["id"]
-
-
-# ── HTML text extraction ──────────────────────────────────────────────────────
-
-def _extract_slide_texts(html: str) -> dict:
-    """Return {slide_num: plain_text} by parsing .slide divs in the carousel HTML."""
-    blocks = re.findall(
-        r'<(?:div|section)[^>]*class="[^"]*slide[^"]*"[^>]*>(.*?)</(?:div|section)>',
-        html, re.DOTALL | re.IGNORECASE,
-    )
-    if not blocks:
-        # Fallback: numbered sections
-        blocks = re.findall(r'<section[^>]*>(.*?)</section>', html, re.DOTALL | re.IGNORECASE)
-    result = {}
-    for i, block in enumerate(blocks, start=1):
-        text = re.sub(r"<[^>]+>", " ", block)
-        text = re.sub(r"\s+", " ", text).strip()
-        if len(text) > 10:
-            result[i] = text
-    return result
 
 
 # ── Core repair logic ─────────────────────────────────────────────────────────
