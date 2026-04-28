@@ -27,6 +27,7 @@ Defaults:
 """
 import argparse, json, os, re, sys, tempfile, time
 from pathlib import Path
+from typing import Optional
 
 # Ensure scripts/content_creator is on path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -64,7 +65,7 @@ def _list_folders(drive, parent_id: str) -> list:
     return res.get("files", [])
 
 
-def _find_file(drive, folder_id: str, name: str) -> dict | None:
+def _find_file(drive, folder_id: str, name: str) -> Optional[dict]:
     """Return first file matching name in folder_id, or None."""
     q = f"'{folder_id}' in parents and name='{name}' and trashed=false"
     res = drive.files().list(
@@ -102,6 +103,18 @@ def _upload_file(drive, local_path: Path, parent_id: str, filename: str) -> str:
         media_body=media, supportsAllDrives=True, fields="id",
     ).execute()
     return result["id"]
+
+
+def _list_files(drive, folder_id: str) -> list:
+    """List all non-folder files in folder_id."""
+    q = (f"'{folder_id}' in parents and "
+         f"mimeType!='application/vnd.google-apps.folder' and trashed=false")
+    res = drive.files().list(
+        q=q, fields="files(id,name)",
+        supportsAllDrives=True, includeItemsFromAllDrives=True,
+        pageSize=100,
+    ).execute()
+    return res.get("files", [])
 
 
 def _find_or_create_folder(drive, parent_id: str, name: str) -> str:
@@ -144,7 +157,7 @@ def fix_version_folder(
     version_folder: dict,
     niche: str,
     dry_run: bool,
-    provider: str | None,
+    provider: Optional[str],
     work_dir: Path,
 ) -> dict:
     """Repair AI images in one version folder. Returns summary dict."""
@@ -163,19 +176,46 @@ def fix_version_folder(
 
     resources_id = resources_folder["id"]
 
-    # Read media_provenance.json
+    # Read media_provenance.json — if missing, build synthetic provenance from filenames
     prov_file = _find_file(drive, resources_id, "media_provenance.json")
-    if not prov_file:
-        print(f"  No media_provenance.json — skipping")
-        summary["skipped"] += 1
-        return summary
+    prov = None
+    if prov_file:
+        try:
+            prov = json.loads(_download_bytes(drive, prov_file["id"]).decode())
+        except Exception as e:
+            print(f"  Failed to read provenance: {e}")
+            summary["errors"] += 1
+            return summary
 
-    try:
-        prov = json.loads(_download_bytes(drive, prov_file["id"]).decode())
-    except Exception as e:
-        print(f"  Failed to read provenance: {e}")
-        summary["errors"] += 1
-        return summary
+    if prov is None:
+        # Old folder — no provenance file. Build synthetic slots from images/ filenames.
+        # Old naming: slide{N}_{slug}.jpg  e.g. slide2_concrete_driveway_pour.jpg
+        # We assume ALL body images are candidates for re-fetch (Gemini was first in old cascade).
+        images_folder_pre = _find_file(drive, resources_id, "images")
+        if not images_folder_pre:
+            print(f"  No resources/images/ folder either — skipping")
+            summary["skipped"] += 1
+            return summary
+        img_files = _list_files(drive, images_folder_pre["id"])
+        if not img_files:
+            print(f"  No images in resources/images/ — skipping")
+            summary["skipped"] += 1
+            return summary
+        # Synthesize provenance: treat every slide image as ai-sourced for re-fetch attempt
+        prov = {"cover": {}, "slides": {}}
+        for f in img_files:
+            m = re.match(r"slide(\d+)_(.+)\.(jpg|jpeg|png)$", f["name"], re.IGNORECASE)
+            if not m:
+                continue
+            slide_n = int(m.group(1))
+            slug = m.group(2).replace("_", " ")
+            entry = {"source_type": "ai", "provider": "gemini-legacy",
+                     "query": slug, "prompt": "", "path": f"resources/images/{f['name']}"}
+            if slide_n == 1:
+                prov["cover"] = entry
+            else:
+                prov["slides"][str(slide_n)] = entry
+        print(f"  No provenance — synthesized {len(img_files)} slot(s) from filenames (legacy folder)")
 
     # Find images/ subfolder
     images_folder = _find_file(drive, resources_id, "images")
