@@ -34,6 +34,7 @@ if (!ANTHROPIC_API_KEY) {
 const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 const TODAY = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+const CURRENT_YEAR = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', year: 'numeric' });
 const THIN_CONTENT_THRESHOLD = 18;
 
 // ─── Keywords we search for across all sources ────────────────────────────────
@@ -292,6 +293,12 @@ HOLD AS IDEA (don't approve) if:
 - Pure DIY with no contractor value
 - Ambiguous or could embarrass the company
 
+RECENCY + COMPLETENESS RULES:
+- Treat your recommendations as current best-practice framing for ${CURRENT_YEAR}.
+- If a source appears outdated or incomplete, modernize the angle and avoid repeating stale specifics without caution.
+- If a topic implies a process but omits steps, provide practical, high-level step guidance in topic_direction and reader_payoff.
+- Do not invent legal/code guarantees; when uncertain, keep the angle useful and add verification language.
+
 For EVERY idea (both Approved and Idea), generate ALL of these fields — no exceptions:
 topic_direction, focus_keyword, secondary_keyword, hook_professional, hook_emotional, hook_genz, master_hook, reader_payoff, ideal_for (Both/Blog Only/Reels Only), target_audience (Homeowner/Investor/Commercial/All), image_direction, social_one_liner, status (✅ Approved or 🆕 Idea)
 
@@ -416,7 +423,7 @@ async function writeToSheet(items, rawItems) {
       item.social_one_liner || '',// Social One-Liner
       item.status || '🆕 Idea',  // Status
       '',                         // Blog URL
-      '',                         // Notes
+      (raw.description || '').slice(0, 500), // Notes (original source excerpt)
     ];
   });
 
