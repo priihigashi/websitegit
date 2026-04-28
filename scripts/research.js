@@ -316,7 +316,44 @@ Example: [{"index":1,"status":"✅ Approved","topic_direction":"...","focus_keyw
 
   let raw = message.content[0].text.trim();
   raw = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/, '').trim();
-  return JSON.parse(raw);
+  return parseClaudeJsonArray(raw, offset, items.length);
+}
+
+function parseClaudeJsonArray(raw, offset, batchSize) {
+  try {
+    return JSON.parse(raw);
+  } catch (firstErr) {
+    const repaired = repairLikelyJson(raw);
+    try {
+      const parsed = JSON.parse(repaired);
+      console.log(`Claude JSON parse repaired for batch starting at index ${offset + 1}`);
+      return parsed;
+    } catch (secondErr) {
+      const preview = raw.slice(0, 600).replace(/\s+/g, ' ');
+      throw new Error(
+        `Claude JSON parse failed (batch ${offset + 1}-${offset + batchSize}). ` +
+        `First error: ${firstErr.message}. Second error: ${secondErr.message}. ` +
+        `Raw preview: ${preview}`
+      );
+    }
+  }
+}
+
+function repairLikelyJson(raw) {
+  let s = raw.trim();
+  // Keep only the first JSON array block if Claude adds extra prose.
+  const start = s.indexOf('[');
+  const end = s.lastIndexOf(']');
+  if (start !== -1 && end !== -1 && end > start) {
+    s = s.slice(start, end + 1);
+  }
+  // Remove trailing commas before object/array close.
+  s = s.replace(/,\s*([}\]])/g, '$1');
+  // Normalize smart quotes occasionally emitted by models.
+  s = s
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'");
+  return s;
 }
 
 async function enrichWithClaude(items) {
