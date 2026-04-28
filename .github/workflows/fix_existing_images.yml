@@ -1,0 +1,90 @@
+name: Fix Existing Carousel Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      folder_url:
+        description: "Drive folder link or ID to fix (leave blank = all OPC carousels)"
+        required: false
+        default: ""
+      niche:
+        description: "Niche: opc | brazil | usa | higashi"
+        required: false
+        default: "opc"
+      provider:
+        description: "Force a specific provider (leave blank = full cascade)"
+        required: false
+        default: ""
+      dry_run:
+        description: "Dry run — scan only, no changes"
+        required: false
+        default: "false"
+
+jobs:
+  fix-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+      CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      PRI_OP_INFSH_API_KEY: ${{ secrets.PRI_OP_INFSH_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      REPLICATE_API_TOKEN: ${{ secrets.PRI_OP_REPLICATE_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            google-auth \
+            google-api-python-client \
+            inferencesh \
+            requests
+
+      - name: Write credentials file
+        run: |
+          echo "$SHEETS_TOKEN" > /tmp/sheets_token.json
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+
+      - name: Build args
+        id: args
+        run: |
+          ARGS=""
+
+          # folder_url → extract ID if it's a full URL, else pass as-is
+          INPUT="${{ inputs.folder_url }}"
+          if [ -n "$INPUT" ]; then
+            # Extract ID from URL pattern /folders/<id> or /drive/u/0/folders/<id>
+            FOLDER_ID=$(echo "$INPUT" | grep -oP '(?<=/folders/)[a-zA-Z0-9_-]+' || echo "$INPUT")
+            ARGS="$ARGS --folder $FOLDER_ID"
+          fi
+
+          if [ -n "${{ inputs.niche }}" ]; then
+            ARGS="$ARGS --niche ${{ inputs.niche }}"
+          fi
+
+          if [ -n "${{ inputs.provider }}" ]; then
+            ARGS="$ARGS --provider ${{ inputs.provider }}"
+          fi
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+
+          echo "args=$ARGS" >> $GITHUB_OUTPUT
+
+      - name: Run fix_existing_images
+        run: |
+          cd scripts/content_creator
+          SHEETS_TOKEN_PATH=/tmp/sheets_token.json \
+          python fix_existing_images.py ${{ steps.args.outputs.args }}
