@@ -31,6 +31,15 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 }
 .headline .accent { color:#CBCC10; }
 
+/* Cover readability guardrail across photo-heavy backgrounds */
+.slide-cover .headline,
+.slide-cover .body-text,
+.slide-cover .tag,
+.slide-cover .arrow,
+.slide-cover .slide-logo {
+  text-shadow: 0 3px 18px rgba(0,0,0,0.65);
+}
+
 /* ---- Body ---- */
 .body-text {
   font-family:'Roboto Condensed', sans-serif; font-size:34px; line-height:1.38;
@@ -252,6 +261,14 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 .v2 .sticker-stamp { color:#0A0A0A; }
 .v2 .slide-cover .bg-photo { filter:grayscale(1) contrast(1.1) brightness(0.85); }
 .v2 .slide-cover .bg-photo::after { background:linear-gradient(180deg, rgba(240,235,227,0.25) 0%, rgba(240,235,227,0.85) 100%); }
+.v2.slide-cover .headline,
+.v2.slide-cover .body-text,
+.v2.slide-cover .tag,
+.v2.slide-cover .arrow,
+.v2.slide-cover .slide-logo {
+  color:#F0EBE3;
+}
+.v2.slide-cover .headline .accent { color:#CBCC10; }
 .v2 .slide-sources .bg-photo { filter:grayscale(1) contrast(1.08) brightness(0.88); }
 .v2 .slide-sources .bg-photo::after { background:linear-gradient(180deg, rgba(240,235,227,0.22) 0%, rgba(240,235,227,0.86) 100%); }
 .v2 .save-cta, .v2 .handle, .v2 .tip-label { color:#0A0A0A; }
