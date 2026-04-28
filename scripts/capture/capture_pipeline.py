@@ -76,6 +76,8 @@ GEMINI_API_KEY     = os.getenv("GEMINI_API_KEY", "")  # fallback transcription t
 # Key stored in GitHub Secrets as APIFY_API_KEY.
 # Get yours at: https://console.apify.com/account/integrations
 APIFY_API_KEY      = os.getenv("APIFY_API_KEY", "")
+SERP_API_KEY       = os.getenv("SERP_API_KEY", "")
+SUPADATA_API_KEY   = os.getenv("SUPADATA_API_KEY", "")
 
 # Shared quota / billing error helpers — see _quota_errors.py for patterns.
 try:
@@ -1204,14 +1206,123 @@ def transcribe_audio(audio_path: str, url: str = "") -> str:
                 if not fallback_audio and _is_youtube(url):
                     print("  Trying Apify YouTube download...")
                     fallback_audio = _try_apify_youtube_download(url, _td)
+                if not fallback_audio and _is_youtube(url):
+                    print("  Trying managed transcript API fallback (SerpApi/Supadata)...")
+                    managed = _try_managed_youtube_transcript(url)
+                    if managed:
+                        print(f"  Transcribed via managed transcript API ({len(managed)} chars)")
+                        return managed
                 if not fallback_audio:
                     raise RuntimeError(
                         f"All YouTube paths failed for {url}: transcript-api blocked + "
-                        f"yt-dlp + Apify all returned no audio"
+                        f"yt-dlp + Apify + managed transcript APIs returned no transcript/audio"
                     ) from e
                 return _whisper_with_fallback(fallback_audio, fmt="text", url=url)
 
     return _whisper_with_fallback(audio_path, fmt="text", url=url)
+
+
+def _collect_text_chunks(obj) -> list[str]:
+    """Recursively collect transcript-like text chunks from unknown API schemas."""
+    out = []
+    if isinstance(obj, str):
+        if obj.strip():
+            out.append(obj.strip())
+        return out
+    if isinstance(obj, list):
+        for item in obj:
+            out.extend(_collect_text_chunks(item))
+        return out
+    if isinstance(obj, dict):
+        # Prefer common transcript keys first to avoid pulling unrelated metadata
+        for key in ("text", "transcript", "content", "snippet", "caption"):
+            if key in obj:
+                out.extend(_collect_text_chunks(obj[key]))
+        # Also recurse all values in case schema is nested differently
+        for v in obj.values():
+            out.extend(_collect_text_chunks(v))
+    return out
+
+
+def _try_serpapi_transcript(url: str) -> str:
+    """Transcript fallback via SerpApi YouTube transcript engine (best-effort)."""
+    if not SERP_API_KEY:
+        return ""
+    vid_id = _extract_youtube_id(url)
+    if not vid_id:
+        return ""
+    try:
+        # SerpApi transcript endpoint can vary; try primary shape first.
+        params = {
+            "engine": "youtube_video_transcript",
+            "v": vid_id,
+            "api_key": SERP_API_KEY,
+        }
+        r = requests.get("https://serpapi.com/search.json", params=params, timeout=30)
+        if r.status_code != 200:
+            return ""
+        data = r.json()
+        chunks = _collect_text_chunks(data.get("transcript") or data.get("transcripts") or data)
+        # Dedupe while preserving order (API payloads can repeat nested content)
+        seen = set()
+        cleaned = []
+        for c in chunks:
+            if c and c not in seen:
+                seen.add(c)
+                cleaned.append(c)
+        text = " ".join(cleaned).strip()
+        return text if len(text) >= 40 else ""
+    except Exception as e:
+        print(f"  SerpApi transcript fallback failed (non-fatal): {type(e).__name__}: {e}")
+        return ""
+
+
+def _try_supadata_transcript(url: str) -> str:
+    """Transcript fallback via Supadata API (best-effort, optional key)."""
+    if not SUPADATA_API_KEY:
+        return ""
+    vid_id = _extract_youtube_id(url)
+    if not vid_id:
+        return ""
+    headers = {"x-api-key": SUPADATA_API_KEY}
+    candidate_urls = [
+        f"https://api.supadata.ai/v1/youtube/transcript?videoId={vid_id}",
+        f"https://api.supadata.ai/v1/transcript?videoId={vid_id}",
+        f"https://api.supadata.ai/v1/transcript?url={requests.utils.quote(url, safe='')}",
+    ]
+    try:
+        for endpoint in candidate_urls:
+            r = requests.get(endpoint, headers=headers, timeout=30)
+            if r.status_code != 200:
+                continue
+            data = r.json()
+            chunks = _collect_text_chunks(data.get("transcript") or data.get("content") or data)
+            seen = set()
+            cleaned = []
+            for c in chunks:
+                if c and c not in seen:
+                    seen.add(c)
+                    cleaned.append(c)
+            text = " ".join(cleaned).strip()
+            if len(text) >= 40:
+                return text
+        return ""
+    except Exception as e:
+        print(f"  Supadata transcript fallback failed (non-fatal): {type(e).__name__}: {e}")
+        return ""
+
+
+def _try_managed_youtube_transcript(url: str) -> str:
+    """Try managed transcript providers in order. Returns transcript text or ''."""
+    # 1) SerpApi first (already active in this ecosystem)
+    text = _try_serpapi_transcript(url)
+    if text:
+        return text
+    # 2) Supadata optional second route
+    text = _try_supadata_transcript(url)
+    if text:
+        return text
+    return ""
 
 
 def get_caption_srt(audio_path: str) -> str:
