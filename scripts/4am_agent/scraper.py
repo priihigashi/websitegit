@@ -130,7 +130,7 @@ def scrape_instagram_reels(username, niche):
 def scrape_instagram_hashtag(tag, niche, target_type):
     raw = _run_actor("apify~instagram-hashtag-scraper", {
         "hashtags":     [tag.lstrip("#")],
-        "resultsLimit": 50,
+        "resultsLimit": 12,
     })
     return raw, niche, target_type, tag
 
