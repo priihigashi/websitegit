@@ -16,6 +16,7 @@ const SERP_API_KEY     = process.env.SERP_API_KEY;
 const GOOGLE_SHEET_ID  = process.env.GOOGLE_SHEET_ID;
 const SHEETS_TOKEN     = process.env.SHEETS_TOKEN; // OAuth token JSON (refresh token flow)
 const SUPADATA_API_KEY = process.env.SUPADATA_API_KEY || '';
+const RESEARCH_FOCUS = (process.env.RESEARCH_FOCUS || '').trim();
 const ANTHROPIC_API_KEY = (
   process.env.CLAUDE_KEY_4_CONTENT ||
   process.env.ANTHROPIC_API_KEY ||
@@ -36,9 +37,10 @@ const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 const TODAY = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
 const CURRENT_YEAR = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', year: 'numeric' });
 const THIN_CONTENT_THRESHOLD = 18;
+const IS_SHEETS_FOCUS = /google sheets|spreadsheet|dashboard|sheet design|schema/i.test(RESEARCH_FOCUS);
 
 // ─── Keywords we search for across all sources ────────────────────────────────
-const SEARCH_QUERIES = [
+const DEFAULT_SEARCH_QUERIES = [
   'home renovation South Florida',
   'home addition Broward County',
   'contractor Fort Lauderdale',
@@ -50,10 +52,21 @@ const SEARCH_QUERIES = [
   'bathroom remodel Broward',
   'new construction Pompano Beach',
 ];
+const SHEETS_SEARCH_QUERIES = [
+  'Google Sheets dashboard design best practices',
+  'Google Sheets data validation schema governance',
+  'Google Sheets header based automation mapping',
+  'Google Sheets filter views operations workflow',
+  'Claude Google Sheets automation prompts',
+  'Google Sheets protected ranges for teams',
+];
+const SEARCH_QUERIES = IS_SHEETS_FOCUS ? SHEETS_SEARCH_QUERIES : DEFAULT_SEARCH_QUERIES;
 
 // ─── SOURCE 1: Reddit (public JSON — no API key needed) ───────────────────────
 async function fetchReddit() {
-  const subreddits = ['HomeImprovement', 'DIY', 'florida', 'realestateinvesting'];
+  const subreddits = IS_SHEETS_FOCUS
+    ? ['googlesheets', 'productivity', 'smallbusiness', 'dataisbeautiful']
+    : ['HomeImprovement', 'DIY', 'florida', 'realestateinvesting'];
   const results = [];
 
   for (const sub of subreddits) {
@@ -117,7 +130,9 @@ async function fetchYouTube() {
 async function fetchNews() {
   if (!NEWS_API_KEY) { console.log('News: no key, skipping'); return []; }
   const results = [];
-  const queries = ['home renovation Florida', 'construction Broward County', 'real estate South Florida'];
+  const queries = IS_SHEETS_FOCUS
+    ? ['Google Sheets dashboard', 'spreadsheet automation', 'workflow automation spreadsheet']
+    : ['home renovation Florida', 'construction Broward County', 'real estate South Florida'];
 
   for (const q of queries) {
     try {
@@ -147,7 +162,9 @@ async function fetchNews() {
 async function fetchSerp() {
   if (!SERP_API_KEY) { console.log('SerpAPI: no key, skipping'); return []; }
   const results = [];
-  const queries = ['home renovation contractor Broward County', 'concrete patio installation South Florida'];
+  const queries = IS_SHEETS_FOCUS
+    ? ['Google Sheets schema governance', 'Google Sheets filter views dashboard operations']
+    : ['home renovation contractor Broward County', 'concrete patio installation South Florida'];
 
   for (const q of queries) {
     try {
@@ -297,7 +314,30 @@ function dedupeRawIdeas(items) {
 
 // ─── Claude: Score + enrich a batch of ideas ─────────────────────────────────
 async function enrichBatch(items, offset) {
-  const SYSTEM = `You are a content strategist for ${COMPANY.name}, a licensed general contractor in ${COMPANY.location.headquarters} serving ${COMPANY.location.primaryMarket}. Services: ${COMPANY.services.core.slice(0,5).join(', ')}.`;
+  const SYSTEM = IS_SHEETS_FOCUS
+    ? 'You are a senior operations analyst for Google Sheets workflow design, schema governance, and AI-assisted spreadsheet automation.'
+    : `You are a content strategist for ${COMPANY.name}, a licensed general contractor in ${COMPANY.location.headquarters} serving ${COMPANY.location.primaryMarket}. Services: ${COMPANY.services.core.slice(0,5).join(', ')}.`;
+  const approvalRules = IS_SHEETS_FOCUS
+    ? `AUTO-APPROVE if the idea:
+- Improves spreadsheet clarity, dashboard usability, schema stability, or automation reliability
+- Includes actionable structure (naming conventions, validation rules, filters, protections, mapping by headers)
+- Helps prevent column drift, broken scripts, or inconsistent data entry
+
+HOLD AS IDEA (don't approve) if:
+- Generic productivity advice with no spreadsheet implementation details
+- Tool promotion with no practical workflow pattern
+- Not relevant to Google Sheets, dashboards, or AI spreadsheet operations`
+    : `AUTO-APPROVE if the idea:
+- Relates to construction, renovation, home improvement, additions, concrete, decks, commercial build-outs
+- Could attract homeowners, investors, or commercial clients in South Florida
+- Is NOT a handyman-only topic (installing a sink, hanging a picture, minor repairs)
+- Is NOT exclusively about a trade we don't offer standalone (roofing only, plumbing only, electrical only)
+
+HOLD AS IDEA (don't approve) if:
+- Completely unrelated to construction/renovation
+- Only relevant to a different region with no South Florida angle
+- Pure DIY with no contractor value
+- Ambiguous or could embarrass the company`;
 
   const message = await client.messages.create({
     model: 'claude-opus-4-6',
@@ -308,17 +348,7 @@ async function enrichBatch(items, offset) {
       content: `Review these raw content ideas collected from Reddit, YouTube, News, and Google.
 For each idea, decide if it's relevant enough to write a blog post about.
 
-AUTO-APPROVE if the idea:
-- Relates to construction, renovation, home improvement, additions, concrete, decks, commercial build-outs
-- Could attract homeowners, investors, or commercial clients in South Florida
-- Is NOT a handyman-only topic (installing a sink, hanging a picture, minor repairs)
-- Is NOT exclusively about a trade we don't offer standalone (roofing only, plumbing only, electrical only)
-
-HOLD AS IDEA (don't approve) if:
-- Completely unrelated to construction/renovation
-- Only relevant to a different region with no South Florida angle
-- Pure DIY with no contractor value
-- Ambiguous or could embarrass the company
+${approvalRules}
 
 RECENCY + COMPLETENESS RULES:
 - Treat your recommendations as current best-practice framing for ${CURRENT_YEAR}.
@@ -331,7 +361,7 @@ RECENCY + COMPLETENESS RULES:
 For EVERY idea (both Approved and Idea), generate ALL of these fields — no exceptions:
 topic_direction, focus_keyword, secondary_keyword, hook_professional, hook_emotional, hook_genz, master_hook, reader_payoff, ideal_for (Both/Blog Only/Reels Only), target_audience (Homeowner/Investor/Commercial/All), image_direction, social_one_liner, status (✅ Approved or 🆕 Idea)
 
-Only skip an item entirely if it is completely unrelated to construction, real estate, or South Florida business (e.g. celebrity gossip, sports scores, cooking recipes).
+Only skip an item entirely if it is completely unrelated to the current research goal.
 
 IMPORTANT — Content neutrality rule:
 If a topic involves political, immigration, or social issues (e.g. ICE raids, labor policy, housing regulations):
@@ -500,6 +530,10 @@ async function getOAuthToken() {
   try {
     console.log(`\n=== Oak Park Construction Research Script — ${TODAY} ===\n`);
     console.log(`[AUTH] Anthropic key source: ${ANTHROPIC_KEY_SOURCE}`);
+    if (RESEARCH_FOCUS) {
+      console.log(`[FOCUS] ${RESEARCH_FOCUS}`);
+      console.log(`[FOCUS_MODE] ${IS_SHEETS_FOCUS ? 'sheets' : 'default'}`);
+    }
 
     // Collect from all sources in parallel
     const [reddit, youtube, news, serp] = await Promise.all([

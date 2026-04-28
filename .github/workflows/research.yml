@@ -4,7 +4,12 @@ on:
   schedule:
     - cron: '15 11 * * *'
       timezone: 'America/New_York'  # Daily 11:15am ET (handles EST/EDT automatically)
-  workflow_dispatch:        # manual trigger
+  workflow_dispatch:
+    inputs:
+      research_focus:
+        description: "Optional focus (example: Claude + Google Sheets dashboard design and automation)"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -34,6 +39,7 @@ jobs:
           SERP_API_KEY:      ${{ secrets.SERP_API_KEY }}
           GOOGLE_SHEET_ID:   ${{ secrets.GOOGLE_SHEET_ID }}
           SHEETS_TOKEN:      ${{ secrets.SHEETS_TOKEN }}
+          RESEARCH_FOCUS:    ${{ github.event.inputs.research_focus }}
         run: node scripts/research.js
 
       - name: Notify via GitHub Issue on failure
