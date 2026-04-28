@@ -49,7 +49,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install google-auth google-api-python-client pytz requests
+          pip install google-auth google-api-python-client pytz requests yt-dlp pytubefix
           npm install playwright
           npx playwright install chromium --with-deps
 
@@ -170,7 +170,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install google-auth google-api-python-client pytz requests
+          pip install google-auth google-api-python-client pytz requests yt-dlp pytubefix
           npm install playwright
           npx playwright install chromium --with-deps
 

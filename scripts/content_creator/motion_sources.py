@@ -26,6 +26,8 @@ See MOTION_SOURCES_RESEARCH.md for full schema + failure behaviour spec.
 from __future__ import annotations
 import json
 import os
+import shutil
+import subprocess
 import time
 import urllib.parse
 import urllib.request
@@ -72,6 +74,89 @@ def _http_get_bytes(url: str, timeout: int = 60, max_bytes: int = MAX_CLIP_BYTES
             return raw
     except Exception:
         return b""
+
+
+# ─── FREE YouTube downloader fallbacks (no extra API key) ────────────────────
+
+def _try_ytdlp_download(dest_path: Path, query: str, extra_args: Optional[list] = None) -> bool:
+    """Use yt-dlp search+download for one query, then normalize to dest_path."""
+    if not query:
+        return False
+    if shutil.which("yt-dlp") is None:
+        return False
+    tmp_out = dest_path.parent / (dest_path.stem + ".ytdlp.%(ext)s")
+    cmd = [
+        "yt-dlp",
+        "--no-warnings",
+        "--no-playlist",
+        "--format", "mp4[height<=720]/best[height<=720]/best",
+        "--max-downloads", "1",
+        "--output", str(tmp_out),
+        f"ytsearch1:{query}",
+    ]
+    if extra_args:
+        cmd.extend(extra_args)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+        if proc.returncode != 0:
+            return False
+        produced = sorted(dest_path.parent.glob(dest_path.stem + ".ytdlp.*"))
+        if not produced:
+            return False
+        src = produced[0]
+        raw = src.read_bytes()
+        if len(raw) < MIN_CLIP_BYTES:
+            src.unlink(missing_ok=True)
+            return False
+        dest_path.write_bytes(raw)
+        src.unlink(missing_ok=True)
+        return True
+    except Exception:
+        return False
+
+
+def tier_ytdlp_search(slide_cfg: dict, dest_path: Path) -> bool:
+    """Free fallback: yt-dlp query search + direct download."""
+    query = slide_cfg.get("youtube_query") or slide_cfg.get("query") or ""
+    if not query:
+        return False
+    ok = _try_ytdlp_download(dest_path, query)
+    if not ok:
+        return False
+    _write_sidecar(
+        dest_path,
+        "ytdlp_search",
+        f"ytsearch1:{query}",
+        license_str="YouTube ToS (fair use editorial)",
+        attribution=f"via yt-dlp search — {query}",
+        query=query,
+    )
+    print(f"  motion_sources: yt-dlp search → {dest_path.name} ({dest_path.stat().st_size//1024}KB)")
+    return True
+
+
+def tier_ytdlp_ios(slide_cfg: dict, dest_path: Path) -> bool:
+    """Free fallback: yt-dlp with iOS client args (sometimes bypasses blocks)."""
+    query = slide_cfg.get("youtube_query") or slide_cfg.get("query") or ""
+    if not query:
+        return False
+    ok = _try_ytdlp_download(
+        dest_path,
+        query,
+        ["--extractor-args", "youtube:player_client=ios,web_creator"],
+    )
+    if not ok:
+        return False
+    _write_sidecar(
+        dest_path,
+        "ytdlp_ios",
+        f"ytsearch1:{query}",
+        license_str="YouTube ToS (fair use editorial)",
+        attribution=f"via yt-dlp iOS client — {query}",
+        query=query,
+    )
+    print(f"  motion_sources: yt-dlp iOS → {dest_path.name} ({dest_path.stat().st_size//1024}KB)")
+    return True
 
 
 # ─── TIER 1 — Apify YouTube ───────────────────────────────────────────────────
@@ -432,7 +517,9 @@ def tier_stock_scrapers(slide_cfg: dict, dest_path: Path) -> bool:
 TierFn = Callable[[dict, Path], bool]
 
 SOURCE_CHAIN: List[tuple] = [
+    ("ytdlp_search",     tier_ytdlp_search,     ("any",)),            # free fallback before Apify
     ("apify_youtube",    tier_apify_youtube,    ("any",)),            # people + places
+    ("ytdlp_ios",        tier_ytdlp_ios,        ("any",)),            # free fallback after Apify
     ("apify_instagram",  tier_apify_instagram,  ("any",)),            # creator reels
     ("pexels",           tier_pexels,           ("context-image", "place", "event", "product-photo")),
     ("pixabay",          tier_pixabay,          ("context-image", "place", "event", "product-photo")),
