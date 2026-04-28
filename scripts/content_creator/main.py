@@ -742,7 +742,8 @@ def process_one_topic(topic_entry, run_date, drive):
     slug = topic[:40].lower().replace(" ", "-").replace("'", "").replace('"', '')
     slug = "".join(c for c in slug if c.isalnum() or c == "-")
     if niche == "opc":
-        post_id = f"opc-tip-{run_date}-{slug[:20]}"
+        _opc_type = topic_entry.get("template_key", "tip")
+        post_id = f"opc-{_opc_type}-{run_date}-{slug[:20]}"
     elif niche == "usa":
         post_id = f"usa-{run_date}-{slug[:20]}"
     elif series_override == "VERIFICAMOS":
@@ -761,13 +762,16 @@ def process_one_topic(topic_entry, run_date, drive):
     if series_override == "VERIFICAMOS":
         template_key = "verificamos_clip" if fake_news_route == "A" else "verificamos"
     elif niche == "opc":
-        template_key = "tip"
+        template_key = topic_entry.get("template_key", "tip")
     else:
         template_key = None
     content = generate_carousel_content(topic, niche, template_key, brief=brief)
     if not content:
         print("  FAILED: content generation")
         return None
+
+    if content and template_key:
+        content["_template_key"] = template_key
 
     if niche in ("brazil", "usa"):
         content = _enforce_news_visual_targets(content, topic, niche)
