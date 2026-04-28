@@ -726,6 +726,53 @@ def _try_apify_youtube_download(url: str, tmp_dir: str) -> str:
         return ""
 
 
+def _try_instaloader_slides(url: str, tmp_dir: str) -> list:
+    """Download Instagram carousel slides via instaloader (anonymous GraphQL).
+    Fallback for when Apify returns no slide_image_urls (402, empty result, etc).
+    Returns list of local JPG paths (up to 8). Returns [] on any failure.
+    No cookies / no login — uses public GraphQL endpoint, same as _try_instaloader.
+    """
+    if not url:
+        return []
+    try:
+        import instaloader
+    except ImportError:
+        print("  instaloader not installed, skipping slide fallback")
+        return []
+
+    m = re.search(r'/(?:reel|p)/([A-Za-z0-9_-]+)', url)
+    if not m:
+        print("  instaloader_slides: cannot extract shortcode from URL")
+        return []
+
+    shortcode = m.group(1)
+    print(f"  Trying instaloader for carousel slides {shortcode}...")
+    slides_dir = os.path.join(tmp_dir, f"slides_{shortcode}")
+    os.makedirs(slides_dir, exist_ok=True)
+    try:
+        L = instaloader.Instaloader(
+            download_pictures=True,
+            download_videos=False,
+            download_video_thumbnails=False,
+            download_geotags=False,
+            download_comments=False,
+            save_metadata=False,
+            quiet=True,
+        )
+        post = instaloader.Post.from_shortcode(L.context, shortcode)
+        L.download_post(post, target=Path(slides_dir))
+
+        jpgs = sorted(Path(slides_dir).rglob("*.jpg"))[:8]
+        if not jpgs:
+            print("  instaloader_slides: no .jpg files after download")
+            return []
+        print(f"  Downloaded {len(jpgs)} carousel slide(s) via instaloader")
+        return [str(p) for p in jpgs]
+    except Exception as e:
+        print(f"  instaloader_slides failed: {e}")
+        return []
+
+
 def _try_instaloader(url: str, tmp_dir: str) -> str:
     """Download Instagram reel via instaloader (GraphQL API, not shared_data scraping).
     Works on public reels with no credentials. Returns audio path or empty string.
@@ -1258,8 +1305,14 @@ def _try_vision_fallback(audio: str, tmp_dir: str, metadata: dict) -> str:
     if audio == "__ig_carousel__":
         slide_urls = metadata.get("slide_image_urls", [])
         if not slide_urls:
-            print("  Vision fallback: no slide_image_urls from Apify — skipping")
-            return ""
+            # Apify empty/402 → fall back to instaloader (downloads slides locally)
+            print("  Vision fallback: Apify slide_image_urls empty — trying instaloader")
+            local_slides = _try_instaloader_slides(metadata.get("source_url", ""), tmp_dir)
+            if not local_slides:
+                print("  Vision fallback: instaloader also returned no slides — skipping")
+                return ""
+            print(f"  Vision fallback: {len(local_slides)} carousel slide(s) via instaloader → Claude Haiku Vision")
+            return _describe_with_claude_vision(local_slides, context=caption)
         print(f"  Vision fallback: {len(slide_urls)} carousel slide(s) → Claude Haiku Vision")
         return _describe_with_claude_vision(slide_urls, context=caption)
     else:
