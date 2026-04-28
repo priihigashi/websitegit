@@ -192,8 +192,9 @@ def _resolve_version_root(drive, folder_id: str) -> str:
     return parents[0]
 
 
-def check_drive_folder(folder_id: str, drive) -> dict:
+def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
     issues = []
+    original_id = folder_id
     folder_id = _resolve_version_root(drive, folder_id)
     folder_meta = drive.files().get(
         fileId=folder_id, fields="id,name,webViewLink", supportsAllDrives=True
@@ -239,6 +240,9 @@ def check_drive_folder(folder_id: str, drive) -> dict:
         "issues": issues,
         "passed": len(issues) == 0,
         "drive_link": folder_meta.get("webViewLink", ""),
+        "input_ref": input_ref or original_id,
+        "resolved_id": folder_id,
+        "original_id": original_id,
     }
 
 
@@ -363,17 +367,28 @@ def main():
         reviewed.extend(check_built_post(r) for r in results)
 
     manual_targets = [x.strip() for x in REVIEW_DRIVE_FOLDERS.split(",") if x.strip()]
-    manual_ids = [_extract_drive_id(x) for x in manual_targets]
-    manual_ids = [x for x in manual_ids if x]
-    if manual_ids:
-        print(f"  Reviewing {len(manual_ids)} existing Drive folder(s) on demand...")
+    manual_inputs = []
+    for raw in manual_targets:
+        fid = _extract_drive_id(raw)
+        if fid:
+            manual_inputs.append((raw, fid))
+    if manual_inputs:
+        print(f"  Reviewing {len(manual_inputs)} existing Drive folder(s) on demand...")
         drive = _build_drive_service()
         if not drive:
             print("  SHEETS_TOKEN missing — cannot review Drive folders")
         else:
-            for fid in manual_ids:
+            seen_resolved = set()
+            for raw_ref, fid in manual_inputs:
                 try:
-                    reviewed.append(check_drive_folder(fid, drive))
+                    result = check_drive_folder(fid, drive, input_ref=raw_ref)
+                    rid = result.get("resolved_id", "")
+                    if rid and rid in seen_resolved:
+                        print(f"  ↪ Skipping duplicate target (same resolved folder): {raw_ref} -> {rid}")
+                        continue
+                    if rid:
+                        seen_resolved.add(rid)
+                    reviewed.append(result)
                 except Exception as e:
                     reviewed.append({
                         "post_id": fid,
@@ -382,6 +397,9 @@ def main():
                         "issues": [f"Drive review failed: {e}"],
                         "passed": False,
                         "drive_link": f"https://drive.google.com/drive/folders/{fid}",
+                        "input_ref": raw_ref,
+                        "resolved_id": fid,
+                        "original_id": fid,
                     })
 
     if not reviewed:
@@ -394,6 +412,10 @@ def main():
     for r in reviewed:
         icon = "✅" if r["passed"] else "❌"
         print(f"  {icon} [{r['niche']}] {r['topic']}")
+        if r.get("niche") == "manual":
+            print(
+                f"       input: {r.get('input_ref','')} | resolved: {r.get('resolved_id', r.get('post_id',''))}"
+            )
         for issue in r["issues"]:
             print(f"       ⚠  {issue}")
 
