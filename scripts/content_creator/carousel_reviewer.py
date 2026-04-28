@@ -43,6 +43,10 @@ STOPWORDS = {
     "oak","park","construction","tip","week","pro","move","list","real","number","save",
     "more","less","using","use","build","project","process","action","guide"
 }
+GENERIC_IMAGE_QUERY_TOKENS = {
+    "construction","home","house","building","project","work","process","outdoor","indoor",
+    "renovation","contractor","garden","kitchen","bathroom","tools","site","job"
+}
 
 
 def _tokens(text: str) -> set[str]:
@@ -168,6 +172,55 @@ def check_html_placeholders(html_path: str) -> list[str]:
                 issues.append(
                     f"OPC relevance miss: {slide_cls} image query appears off-topic (no keyword overlap): '{query[:80]}'"
                 )
+            specific_tokens = {t for t in q_tokens if len(t) >= 6 and t not in GENERIC_IMAGE_QUERY_TOKENS}
+            if len(specific_tokens) < 1:
+                issues.append(
+                    f"OPC relevance miss: {slide_cls} image query too generic for reliable match: '{query[:80]}'"
+                )
+        # Text overflow/collision lint (enforce before render problems happen).
+        m_hl = re.search(r'<div class="headline">([\s\S]*?)</div>', html)
+        if m_hl:
+            hl_txt = re.sub(r"<[^>]+>", "", m_hl.group(1)).strip()
+            if len(hl_txt) > 42:
+                issues.append(f"OPC cover headline too long ({len(hl_txt)} chars) — risk of overflow/collision.")
+        items = re.findall(r'<div class="list-text">([\s\S]*?)</div>', html)
+        for idx, it in enumerate(items, start=1):
+            it_txt = re.sub(r"<[^>]+>", "", it).strip()
+            if len(it_txt) > 34:
+                issues.append(f"OPC list item {idx} too long ({len(it_txt)} chars) — risk of line wrap collision.")
+        # Source/readability quality checks.
+        sources = re.findall(
+            r'<div class="src-row">\s*<span class="src-num">[\s\S]*?</span>\s*<span>([\s\S]*?)</span>\s*</div>',
+            html
+        )
+        if len(sources) < 3:
+            issues.append(f"OPC sources quality miss: only {len(sources)} source line(s); require >=3.")
+        for idx, src in enumerate(sources, start=1):
+            s = re.sub(r"<[^>]+>", "", src).strip()
+            if len(s) < 12:
+                issues.append(f"OPC sources quality miss: source line {idx} too short/readability-poor.")
+            if len(s) > 120:
+                issues.append(f"OPC sources quality miss: source line {idx} too long ({len(s)} chars), likely tiny text.")
+        # CSS readability lints (font-size floor + known low-contrast cover bug).
+        def _css_px(selector: str):
+            m = re.search(rf'{re.escape(selector)}\s*\{{([\s\S]*?)\}}', html)
+            if not m:
+                return None
+            m2 = re.search(r'font-size\s*:\s*([0-9]+)px', m.group(1))
+            return int(m2.group(1)) if m2 else None
+        fs_tag = _css_px(".tag")
+        fs_body = _css_px(".body-text")
+        fs_src = _css_px(".src-row")
+        if fs_tag is not None and fs_tag < 16:
+            issues.append(f"OPC readability miss: .tag font-size too small ({fs_tag}px).")
+        if fs_body is not None and fs_body < 28:
+            issues.append(f"OPC readability miss: .body-text font-size too small ({fs_body}px).")
+        if fs_src is not None and fs_src < 20:
+            issues.append(f"OPC readability miss: .src-row font-size too small ({fs_src}px).")
+        if ".v2.slide-cover .headline" in html:
+            m_v2 = re.search(r"\.v2\.slide-cover\s+\.headline[^{]*\{([\s\S]*?)\}", html)
+            if m_v2 and "#0A0A0A" in m_v2.group(1):
+                issues.append("OPC readability miss: v2 cover headline uses near-black color over dark overlay.")
 
     return issues
 
