@@ -46,6 +46,12 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   color:var(--c-body); max-width:780px; margin-top:36px; font-weight:400;
 }
 
+/* Cover subtitle reserve: prevent collision with bottom HUD (SWIPE + license). */
+.slide-cover .body-text {
+  max-width:820px;
+  padding-bottom:150px;
+}
+
 /* ---- Big-number row (stat slide) ---- */
 .stat-big {
   font-family:'Anton', sans-serif; font-size:360px; line-height:0.85;
@@ -170,6 +176,17 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   letter-spacing:0.1em;
 }
 
+/* Cover HUD lane: keeps swipe + license out of title/subtitle flow. */
+.slide-cover .arrow {
+  bottom:46px;
+  right:108px;
+  font-size:30px;
+  line-height:1;
+  background:rgba(10,10,10,0.45);
+  padding:8px 12px;
+  border-radius:6px;
+}
+
 /* ---- Footer row (license + handle on last slide) ---- */
 .footer {
   display:flex; justify-content:space-between; align-items:flex-end;
@@ -193,6 +210,15 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   position:absolute; bottom:54px; left:108px;
   font-family:'Anton', sans-serif; font-size:20px; letter-spacing:0.2em;
   color:var(--c-tag); text-transform:uppercase; z-index:10;
+}
+
+.slide-cover .slide-logo {
+  bottom:46px;
+  left:108px;
+  line-height:1;
+  background:rgba(10,10,10,0.45);
+  padding:8px 12px;
+  border-radius:6px;
 }
 
 /* ---- OPC context-image panel for middle slides ---- */
