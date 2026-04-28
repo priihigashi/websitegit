@@ -1278,9 +1278,9 @@ def transcribe_audio(audio_path: str, url: str = "") -> str:
                     fallback_audio = _try_pytubefix_download(url, _td)
                 if not fallback_audio and _is_youtube(url):
                     print("  Trying managed transcript API fallback (SerpApi/Supadata)...")
-                    managed = _try_managed_youtube_transcript(url)
+                    managed_provider, managed = _try_managed_youtube_transcript(url)
                     if managed:
-                        print(f"  Transcribed via managed transcript API ({len(managed)} chars)")
+                        print(f"  Transcribed via managed transcript API [{managed_provider}] ({len(managed)} chars)")
                         return managed
                 if not fallback_audio:
                     raise RuntimeError(
@@ -1382,17 +1382,24 @@ def _try_supadata_transcript(url: str) -> str:
         return ""
 
 
-def _try_managed_youtube_transcript(url: str) -> str:
-    """Try managed transcript providers in order. Returns transcript text or ''."""
+def _try_managed_youtube_transcript(url: str) -> tuple[str, str]:
+    """Try managed transcript providers in order.
+
+    Returns: (provider_name, transcript_text). provider_name is '' on total miss.
+    """
     # 1) SerpApi first (already active in this ecosystem)
     text = _try_serpapi_transcript(url)
     if text:
-        return text
+        return ("SerpApi", text)
+    print("  Managed transcript: SerpApi miss")
+
     # 2) Supadata optional second route
     text = _try_supadata_transcript(url)
     if text:
-        return text
-    return ""
+        return ("Supadata", text)
+    print("  Managed transcript: Supadata miss")
+
+    return ("", "")
 
 
 def get_caption_srt(audio_path: str) -> str:
