@@ -171,6 +171,102 @@ async function fetchSerp() {
   return results;
 }
 
+function getYoutubeVideoId(url = '') {
+  const short = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+  if (short) return short[1];
+  const full = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+  return full ? full[1] : '';
+}
+
+function collectTextChunks(node, out = []) {
+  if (!node) return out;
+  if (typeof node === 'string') {
+    const s = node.trim();
+    if (s.length >= 20) out.push(s);
+    return out;
+  }
+  if (Array.isArray(node)) {
+    node.forEach((v) => collectTextChunks(v, out));
+    return out;
+  }
+  if (typeof node === 'object') {
+    ['snippet', 'text', 'transcript', 'content', 'caption'].forEach((k) => {
+      if (node[k]) collectTextChunks(node[k], out);
+    });
+    Object.values(node).forEach((v) => collectTextChunks(v, out));
+  }
+  return out;
+}
+
+async function getSerpTranscript(videoId) {
+  if (!SERP_API_KEY || !videoId) return '';
+  try {
+    const url = `https://serpapi.com/search.json?engine=youtube_video_transcript&v=${videoId}&type=asr&language_code=en&api_key=${SERP_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) return '';
+    const data = await res.json();
+    const chunks = collectTextChunks(data.transcript || data.transcripts || data);
+    return chunks.slice(0, 10).join(' ').slice(0, 300);
+  } catch {
+    return '';
+  }
+}
+
+async function getSupadataTranscript(videoId, sourceLink) {
+  if (!SUPADATA_API_KEY || !videoId) return '';
+  const urls = [
+    `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}`,
+    `https://api.supadata.ai/v1/transcript?videoId=${videoId}`,
+    `https://api.supadata.ai/v1/transcript?url=${encodeURIComponent(sourceLink || '')}`,
+  ];
+  for (const u of urls) {
+    try {
+      const res = await fetch(u, { headers: { 'x-api-key': SUPADATA_API_KEY } });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const chunks = collectTextChunks(data.transcript || data.content || data);
+      const text = chunks.slice(0, 10).join(' ').slice(0, 300);
+      if (text) return text;
+    } catch {
+      // best-effort fallback
+    }
+  }
+  return '';
+}
+
+async function fetchYoutubeTranscriptFallback(youtubeItems) {
+  const byVideo = new Map();
+  for (const item of youtubeItems) {
+    const videoId = getYoutubeVideoId(item.sourceLink || '');
+    if (videoId && !byVideo.has(videoId)) byVideo.set(videoId, item);
+  }
+
+  const fallback = [];
+  let serpHits = 0;
+  let supadataHits = 0;
+  for (const [videoId, item] of Array.from(byVideo.entries()).slice(0, 4)) {
+    let transcript = await getSerpTranscript(videoId);
+    if (transcript) serpHits += 1;
+    if (!transcript) {
+      transcript = await getSupadataTranscript(videoId, item.sourceLink);
+      if (transcript) supadataHits += 1;
+    }
+    if (!transcript) continue;
+
+    fallback.push({
+      source: 'YouTube Transcript Fallback',
+      sourceLink: item.sourceLink,
+      rawIdea: `${item.rawIdea} (transcript fallback)`,
+      description: transcript,
+    });
+  }
+
+  console.log(
+    `YouTube transcript fallback: ${fallback.length} added (SerpApi=${serpHits}, Supadata=${supadataHits})`
+  );
+  return fallback;
+}
+
 // ─── Claude: Score + enrich a batch of ideas ─────────────────────────────────
 async function enrichBatch(items, offset) {
   const SYSTEM = `You are a content strategist for ${COMPANY.name}, a licensed general contractor in ${COMPANY.location.headquarters} serving ${COMPANY.location.primaryMarket}. Services: ${COMPANY.services.core.slice(0,5).join(', ')}.`;
@@ -342,6 +438,14 @@ async function getOAuthToken() {
 
     const allRaw = [...reddit, ...youtube, ...news, ...serp];
     console.log(`\nTotal raw ideas collected: ${allRaw.length}`);
+
+    // If primary sources are thin, append transcript-derived YouTube ideas at the bottom.
+    if (allRaw.length < THIN_CONTENT_THRESHOLD && youtube.length > 0) {
+      console.log(`Thin source set detected (${allRaw.length} < ${THIN_CONTENT_THRESHOLD}) — running transcript fallback...`);
+      const transcriptFallbackItems = await fetchYoutubeTranscriptFallback(youtube);
+      allRaw.push(...transcriptFallbackItems);
+      console.log(`Total raw ideas after transcript fallback: ${allRaw.length}`);
+    }
 
     if (allRaw.length === 0) {
       console.log('No ideas found this run. Exiting.');
