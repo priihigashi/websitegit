@@ -37,6 +37,7 @@ jobs:
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PRI_OP_YT_COOKIES: ${{ secrets.PRI_OP_YT_COOKIES }}
+          APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
           python scripts/youtube_research.py \

@@ -57,6 +57,9 @@ import time
 CLAUDE_KEY_4_CONTENT = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
 GOOGLE_SA_KEY     = os.environ.get("GOOGLE_SA_KEY", "")
 GITHUB_TOKEN      = os.environ.get("GITHUB_TOKEN", "")
+APIFY_API_KEY     = os.environ.get("APIFY_API_KEY", "")
+APIFY_BASE        = "https://api.apify.com/v2"
+_apify_limit_hit  = False
 SHEET_ID          = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 DRIVE_FOLDER_ID   = "1-QRf4xToJf_7cnS5UW7BiDUjd6lXot6o"  # Resources/Video Creation Flow
 INSP_TAB          = "📥 Inspiration Library"
@@ -134,8 +137,9 @@ def _write_yt_cookies_file() -> str:
     return path
 
 
-def _ytdlp_whisper_fallback(video_id: str) -> str:
-    """Tier 2: yt-dlp (with PRI_OP_YT_COOKIES) → OpenAI Whisper. Mirrors capture_pipeline.py."""
+def _ytdlp_whisper_fallback(video_id: str, extra_args: list = None) -> str:
+    """Tier 2/3: yt-dlp (with PRI_OP_YT_COOKIES) → OpenAI Whisper. Mirrors capture_pipeline.py.
+    extra_args lets callers add things like --extractor-args youtube:player_client=ios."""
     global _YT_COOKIES_FILE
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     if not openai_key:
@@ -153,6 +157,8 @@ def _ytdlp_whisper_fallback(video_id: str) -> str:
         ]
         if _YT_COOKIES_FILE:
             cmd.extend(["--cookies", _YT_COOKIES_FILE])
+        if extra_args:
+            cmd.extend(extra_args)
         cmd.append(url)
         try:
             r = _sp.run(cmd, capture_output=True, text=True, timeout=180)
@@ -184,9 +190,120 @@ def _ytdlp_whisper_fallback(video_id: str) -> str:
             return ""
 
 
+def _whisper_transcribe(audio_path: str) -> str:
+    """Send mp3 to OpenAI Whisper. Returns text or ''."""
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not openai_key or not audio_path or not os.path.exists(audio_path):
+        return ""
+    try:
+        import openai
+        client = openai.OpenAI(api_key=openai_key)
+        with open(audio_path, "rb") as af:
+            resp = client.audio.transcriptions.create(
+                model="whisper-1", file=af, response_format="text"
+            )
+        text = resp if isinstance(resp, str) else getattr(resp, "text", "")
+        print(f"    Whisper transcribed ({len(text)} chars)")
+        return text
+    except Exception as e:
+        print(f"    Whisper failed: {e}")
+        return ""
+
+
+def _try_apify_youtube_audio(video_id: str) -> str:
+    """Tier 4: Apify YouTube actor → audio file → Whisper.
+    Mirrors capture_pipeline.py::_try_apify_youtube_download.
+    Routes via Apify proxy network so YouTube doesn't see the GHA runner IP.
+    Returns transcript text or ''.
+    """
+    global _apify_limit_hit
+    if _apify_limit_hit or not APIFY_API_KEY:
+        if not APIFY_API_KEY:
+            print("    SKIP Apify: APIFY_API_KEY not set")
+        return ""
+
+    print("    Trying Apify YouTube download...")
+    actor_id = "bernardo~youtube-scraper"
+    input_data = {
+        "startUrls": [{"url": f"https://www.youtube.com/watch?v={video_id}"}],
+        "maxResults": 1,
+        "proxy": {"useApifyProxy": True},
+    }
+    try:
+        run_resp = urllib.request.urlopen(
+            urllib.request.Request(
+                f"{APIFY_BASE}/acts/{actor_id}/runs?token={APIFY_API_KEY}",
+                data=json.dumps(input_data).encode(),
+                headers={"Content-Type": "application/json"},
+            ),
+            timeout=30,
+        )
+        run_id = json.loads(run_resp.read())["data"]["id"]
+        print(f"    Apify run: {run_id}")
+
+        # Poll up to ~3 min
+        status = ""
+        for _ in range(18):
+            time.sleep(10)
+            sresp = urllib.request.urlopen(
+                f"{APIFY_BASE}/actor-runs/{run_id}?token={APIFY_API_KEY}", timeout=15
+            )
+            status = json.loads(sresp.read())["data"]["status"]
+            if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
+                break
+        if status != "SUCCEEDED":
+            print(f"    Apify run ended: {status}")
+            return ""
+
+        items_resp = urllib.request.urlopen(
+            f"{APIFY_BASE}/actor-runs/{run_id}/dataset/items?token={APIFY_API_KEY}&limit=1&format=json",
+            timeout=30,
+        )
+        items = json.loads(items_resp.read())
+        if not items:
+            print("    Apify: no results")
+            return ""
+        item = items[0]
+        media_url = (
+            item.get("mediaUrl") or item.get("videoUrl")
+            or item.get("audioUrl") or item.get("url")
+        )
+        if not media_url or "youtube.com" in str(media_url):
+            print("    Apify: no direct media URL in result")
+            return ""
+
+        import tempfile as _tmp
+        with _tmp.TemporaryDirectory() as td:
+            audio_path = os.path.join(td, "audio.mp3")
+            print(f"    Downloading from Apify result...")
+            with urllib.request.urlopen(media_url, timeout=120) as dl:
+                with open(audio_path, "wb") as f:
+                    f.write(dl.read())
+            size_kb = os.path.getsize(audio_path) / 1024
+            if size_kb < 5:
+                print(f"    Apify: file too small ({size_kb:.0f} KB)")
+                return ""
+            print(f"    Apify download OK ({size_kb:.0f} KB)")
+            return _whisper_transcribe(audio_path)
+    except Exception as e:
+        msg = str(e)
+        if "limit" in msg.lower() and "403" in msg:
+            _apify_limit_hit = True
+            print(f"    Apify monthly limit hit — skipping for rest of run")
+        else:
+            print(f"    Apify download failed (non-fatal): {e}")
+        return ""
+
+
 def get_transcript(video_id: str) -> str:
-    """Tier 1: youtube-transcript-api → Tier 2: yt-dlp+Whisper. Mirrors capture_pipeline.py cascade."""
+    """Cascade — never give up on first failure:
+      Tier 1: youtube-transcript-api (free, blocked on GHA Azure IP)
+      Tier 2: yt-dlp + cookies + Whisper (cheap, breaks when cookies stale)
+      Tier 3: yt-dlp iOS client trick + Whisper (sometimes bypasses bot detection)
+      Tier 4: Apify YouTube actor + Whisper (paid, routes via Apify proxy — never blocked)
+    """
     last_error = None
+    # Tier 1
     for attempt, kwargs in enumerate([
         {"languages": ["en", "en-US", "en-GB", "pt", "es"]},
         {},
@@ -199,11 +316,29 @@ def get_transcript(video_id: str) -> str:
             last_error = e
             if attempt == 0:
                 time.sleep(3)
-    # Tier 2: yt-dlp + Whisper
-    print(f"    transcript-api blocked ({type(last_error).__name__}) — trying yt-dlp+Whisper...")
+    print(f"    Tier 1 blocked ({type(last_error).__name__}) — trying yt-dlp+Whisper...")
+
+    # Tier 2: yt-dlp default
     fallback_text = _ytdlp_whisper_fallback(video_id)
     if fallback_text:
         return fallback_text
+
+    # Tier 3: yt-dlp iOS client trick
+    print(f"    Tier 2 failed — retrying yt-dlp with iOS client...")
+    fallback_text = _ytdlp_whisper_fallback(
+        video_id,
+        extra_args=["--extractor-args", "youtube:player_client=ios,web_creator"],
+    )
+    if fallback_text:
+        return fallback_text
+
+    # Tier 4: Apify (paid, bypasses YouTube IP block)
+    print(f"    Tier 3 failed — trying Apify YouTube...")
+    fallback_text = _try_apify_youtube_audio(video_id)
+    if fallback_text:
+        return fallback_text
+
+    print(f"    All 4 tiers exhausted")
     return f"[transcript unavailable: {last_error}]"
 
 # ── CLAUDE ANALYSIS ───────────────────────────────────────────────────────────
