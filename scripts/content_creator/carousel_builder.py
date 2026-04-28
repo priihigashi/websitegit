@@ -1319,6 +1319,17 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
         f'<div class="bg-photo" style="background-image:url(\'{cover_img}\');"></div>'
         if cover_img else '<div class="bg-photo"></div>'
     )
+    # Last slide now follows cover visual language: full background + dark overlay.
+    last_img = (
+        ((media_paths or {}).get("slides", {}) or {}).get(5)
+        or ((media_paths or {}).get("slides", {}) or {}).get(4)
+        or ((media_paths or {}).get("slides", {}) or {}).get(2)
+        or cover_img
+    )
+    sources_bg_el = (
+        f'<div class="bg-photo" style="background-image:url(\'{last_img}\');"></div>'
+        if last_img else '<div class="bg-photo"></div>'
+    )
 
     def variant_block(v_class, cover_accent_style, s4_accent_style, src_accent_style):
         return f"""
@@ -1368,6 +1379,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
 </div>
 
 <div class="slide slide-sources {v_class}">
+  {sources_bg_el}
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">Sources</div>
   <div class="src-head">WHERE THIS<br>COMES <span style="color:{src_accent_style};">FROM.</span></div>

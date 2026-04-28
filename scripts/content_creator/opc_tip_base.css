@@ -108,6 +108,20 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 }
 .slide-cover > *:not(.bg-photo):not(.corner) { position:relative; z-index:3; }
 
+/* Last slide mirrors cover treatment for stronger close-out */
+.slide-sources .bg-photo {
+  background-size:cover;
+  background-position:center;
+  filter:grayscale(1) contrast(1.15) brightness(0.52);
+}
+.slide-sources .bg-photo::after {
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.88) 100%);
+}
+.slide-sources > *:not(.bg-photo):not(.corner) { position:relative; z-index:3; }
+
 /* ---- Sticker slot (cover — Mike placeholder) ---- */
 .sticker-slot {
   position:absolute; right:108px; top:240px;
@@ -238,6 +252,8 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 .v2 .sticker-stamp { color:#0A0A0A; }
 .v2 .slide-cover .bg-photo { filter:grayscale(1) contrast(1.1) brightness(0.85); }
 .v2 .slide-cover .bg-photo::after { background:linear-gradient(180deg, rgba(240,235,227,0.25) 0%, rgba(240,235,227,0.85) 100%); }
+.v2 .slide-sources .bg-photo { filter:grayscale(1) contrast(1.08) brightness(0.88); }
+.v2 .slide-sources .bg-photo::after { background:linear-gradient(180deg, rgba(240,235,227,0.22) 0%, rgba(240,235,227,0.86) 100%); }
 .v2 .save-cta, .v2 .handle, .v2 .tip-label { color:#0A0A0A; }
 .v2 .headline .accent, .v2 .stat-big, .v2 .list-num, .v2 .src-num, .v2 .arrow { color:#0A0A0A; }
 .v2 .sticker-placeholder { color:#0A0A0A; }
@@ -258,4 +274,3 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 .v3 .save-cta { color:#F0EBE3; }
 .v3 .handle, .v3 .tip-label, .v3 .arrow { color:#F0EBE3; }
 .v3 .sticker-stamp { color:#F0EBE3; }
-

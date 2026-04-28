@@ -71,6 +71,14 @@ def check_html_placeholders(html_path: str) -> list[str]:
             issues.append(
                 f"OPC visual floor miss: only {img_count} context slot(s) have real images; require >=2"
             )
+        # If there are more than 3 body slides (future longer topics), keep visual rhythm:
+        # at least every other body slide should have a real image.
+        if slot_count > 3:
+            min_by_rhythm = (slot_count + 1) // 2
+            if img_count < min_by_rhythm:
+                issues.append(
+                    f"OPC rhythm miss: {img_count}/{slot_count} body visuals have real images; require >= {min_by_rhythm}"
+                )
 
         fallback_count = len(re.findall(r'class="ctx-fallback"', html))
         if fallback_count > 1:
@@ -82,6 +90,11 @@ def check_html_placeholders(html_path: str) -> list[str]:
             issues.append(
                 "OPC explanation missing: project-note block not found on stat slide"
             )
+        # Last slide should mirror cover style with hero background.
+        sources_blocks = len(re.findall(r'<div class="slide slide-sources', html))
+        sources_with_bg = len(re.findall(r'<div class="slide slide-sources[^"]*">\s*<div class="bg-photo"', html))
+        if sources_blocks and sources_with_bg < sources_blocks:
+            issues.append("OPC last slide miss: sources slide is missing hero background image block.")
 
     return issues
 
