@@ -17,6 +17,8 @@ const GOOGLE_SHEET_ID  = process.env.GOOGLE_SHEET_ID;
 const SHEETS_TOKEN     = process.env.SHEETS_TOKEN; // OAuth token JSON (refresh token flow)
 const SUPADATA_API_KEY = process.env.SUPADATA_API_KEY || '';
 const RESEARCH_FOCUS = (process.env.RESEARCH_FOCUS || '').trim();
+const RESEARCH_DRIVE_ID = process.env.RESEARCH_DRIVE_ID || '0AIPzwsJD_qqzUk9PVA'; // Marketing shared drive
+const RESEARCH_FOLDER_NAME = process.env.RESEARCH_FOLDER_NAME || 'Research';
 const ANTHROPIC_API_KEY = (
   process.env.CLAUDE_KEY_4_CONTENT ||
   process.env.ANTHROPIC_API_KEY ||
@@ -38,6 +40,13 @@ const TODAY = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_Yo
 const CURRENT_YEAR = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', year: 'numeric' });
 const THIN_CONTENT_THRESHOLD = 18;
 const IS_SHEETS_FOCUS = /google sheets|spreadsheet|dashboard|sheet design|schema/i.test(RESEARCH_FOCUS);
+const RESEARCH_DOC_RULES = [
+  'Always create a Google Doc summary at the end of every successful run.',
+  'Store the summary in Marketing shared drive inside the Research folder.',
+  'Include run focus, tools used, source counts, step-by-step process, and top approved ideas.',
+  'Include YouTube findings with links and transcript/context excerpts when available.',
+  'Keep the summary as durable reference for future consultations and process improvements.',
+];
 
 // ─── Keywords we search for across all sources ────────────────────────────────
 const DEFAULT_SEARCH_QUERIES = [
@@ -505,6 +514,179 @@ async function writeToSheet(items, rawItems) {
   console.log(`\n✓ Written ${rows.length} rows to Google Sheet`);
 }
 
+function buildResearchSummary(allRaw, enriched, meta) {
+  const sourceCounts = allRaw.reduce((acc, i) => {
+    const k = i.source || 'Unknown';
+    acc[k] = (acc[k] || 0) + 1;
+    return acc;
+  }, {});
+  const approved = enriched.filter((i) => i.status === '✅ Approved');
+  const held = enriched.filter((i) => i.status !== '✅ Approved');
+  const youtubeItems = allRaw.filter((i) => (i.source || '').toLowerCase().includes('youtube'));
+  const topApproved = approved.slice(0, 15);
+
+  const sourceLines = Object.entries(sourceCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `- ${k}: ${v}`)
+    .join('\n');
+
+  const ytLines = youtubeItems.slice(0, 20).map((i, idx) =>
+    `${idx + 1}. ${i.rawIdea || '(no title)'}\n   Link: ${i.sourceLink || ''}\n   Extract: ${(i.description || '').slice(0, 260)}`
+  ).join('\n\n');
+
+  const approvedLines = topApproved.map((i, idx) => {
+    const raw = allRaw[i.index - 1] || {};
+    return `${idx + 1}. ${i.master_hook || i.topic_direction || '(no hook)'}\n` +
+      `   Status: ${i.status || ''} | Audience: ${i.target_audience || ''} | Ideal: ${i.ideal_for || ''}\n` +
+      `   Focus keyword: ${i.focus_keyword || ''}\n` +
+      `   Reader payoff: ${i.reader_payoff || ''}\n` +
+      `   Source: ${raw.source || ''} ${raw.sourceLink ? `(${raw.sourceLink})` : ''}`;
+  }).join('\n\n');
+
+  return [
+    `Research Summary`,
+    ``,
+    `Date: ${TODAY}`,
+    `Run mode: ${meta.mode}`,
+    `Focus: ${meta.focus || 'default scheduled research'}`,
+    `Total raw ideas: ${allRaw.length}`,
+    `Enriched ideas: ${enriched.length}`,
+    `Approved: ${approved.length}`,
+    `Held as ideas: ${held.length}`,
+    ``,
+    `Tools and sources used`,
+    `- Reddit JSON feed`,
+    `- YouTube Data API`,
+    `- NewsAPI`,
+    `- SerpAPI Google Search`,
+    `- Anthropic Claude enrichment`,
+    `- Google Sheets append write`,
+    `- YouTube transcript fallback via SerpAPI transcript engine`,
+    `${SUPADATA_API_KEY ? '- Supadata transcript fallback enabled' : '- Supadata transcript fallback not configured for this run'}`,
+    ``,
+    `Source counts`,
+    sourceLines || '- none',
+    ``,
+    `Step-by-step what was researched`,
+    `1. Pulled raw ideas from each configured source query set.`,
+    `2. If source set was thin, attempted transcript fallback for YouTube items.`,
+    `3. Deduplicated near-identical ideas.`,
+    `4. Sent batches to Claude for structured enrichment and qualification.`,
+    `5. Wrote structured rows into the Content Ideas sheet.`,
+    `6. Created this run summary document for future consultation.`,
+    ``,
+    `YouTube findings (title + extract + link)`,
+    ytLines || 'No YouTube items in this run.',
+    ``,
+    `Top approved ideas`,
+    approvedLines || 'No approved ideas in this run.',
+    ``,
+    `Run rules enforced`,
+    ...RESEARCH_DOC_RULES.map((r) => `- ${r}`),
+    ``,
+    `Notes`,
+    `- This document is intended as durable research memory for future spreadsheet/website/process consultations.`,
+  ].join('\n');
+}
+
+async function ensureResearchFolder(token) {
+  const query = encodeURIComponent(
+    `name='${RESEARCH_FOLDER_NAME.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
+  );
+  const listUrl =
+    `https://www.googleapis.com/drive/v3/files?q=${query}` +
+    `&corpora=drive&driveId=${RESEARCH_DRIVE_ID}&includeItemsFromAllDrives=true` +
+    `&supportsAllDrives=true&fields=files(id,name)&pageSize=20`;
+  const listRes = await fetch(listUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (listRes.ok) {
+    const data = await listRes.json();
+    if (data.files && data.files.length > 0) return data.files[0].id;
+  }
+
+  const createRes = await fetch(
+    'https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id,name,webViewLink',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: RESEARCH_FOLDER_NAME,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [RESEARCH_DRIVE_ID],
+      }),
+    }
+  );
+  if (!createRes.ok) {
+    const err = await createRes.text();
+    throw new Error(`Research folder create failed: ${err}`);
+  }
+  const created = await createRes.json();
+  return created.id;
+}
+
+async function createResearchSummaryDoc(allRaw, enriched, meta) {
+  if (!SHEETS_TOKEN) return null;
+  const token = await getOAuthToken();
+  const folderId = await ensureResearchFolder(token);
+  const titleSafeFocus = (meta.focus || meta.mode || 'default')
+    .replace(/[^\w\s-]/g, '')
+    .slice(0, 60)
+    .trim();
+  const docName = `RESEARCH_${TODAY.replace(/\//g, '-')}_${titleSafeFocus || 'default'}`;
+
+  const createDocRes = await fetch(
+    'https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id,name,webViewLink',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: docName,
+        mimeType: 'application/vnd.google-apps.document',
+        parents: [folderId],
+      }),
+    }
+  );
+  if (!createDocRes.ok) {
+    const err = await createDocRes.text();
+    throw new Error(`Research doc create failed: ${err}`);
+  }
+  const doc = await createDocRes.json();
+
+  const summaryText = buildResearchSummary(allRaw, enriched, meta);
+  const updateRes = await fetch(
+    `https://docs.googleapis.com/v1/documents/${doc.id}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            insertText: {
+              location: { index: 1 },
+              text: summaryText,
+            },
+          },
+        ],
+      }),
+    }
+  );
+  if (!updateRes.ok) {
+    const err = await updateRes.text();
+    throw new Error(`Research doc content write failed: ${err}`);
+  }
+  return doc.webViewLink || `https://docs.google.com/document/d/${doc.id}/edit`;
+}
+
 // ─── Google JWT Auth ──────────────────────────────────────────────────────────
 async function getOAuthToken() {
   const raw = SHEETS_TOKEN;
@@ -567,6 +749,11 @@ async function getOAuthToken() {
 
     // Write to sheet (or print if no sheet connected)
     await writeToSheet(enriched, allRaw);
+    const docLink = await createResearchSummaryDoc(allRaw, enriched, {
+      mode: IS_SHEETS_FOCUS ? 'sheets-focus' : 'default',
+      focus: RESEARCH_FOCUS,
+    });
+    if (docLink) console.log(`Research summary doc: ${docLink}`);
 
     const approved = enriched.filter(i => i.status === '✅ Approved').length;
     console.log(`\n✓ Done. ${approved} approved, ${enriched.length - approved} held as ideas.`);
