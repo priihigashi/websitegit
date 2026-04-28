@@ -49,14 +49,16 @@ def read_scraping_targets():
     """
     result = _service().spreadsheets().values().get(
         spreadsheetId=SPREADSHEET_ID,
-        range="'🎯 Scraping Targets'!A1:F50",
+        range="'🎯 Scraping Targets'!A1:Z50",
     ).execute()
     rows = result.get("values", [])
     if not rows:
         return {}
 
-    headers    = rows[0]          # TYPE/TARGET, OAK PARK, BRAZIL, UGC, NEWS/WORLD, NOTES
-    niche_cols = headers[1:-1]    # drop TYPE/TARGET and NOTES
+    headers = rows[0]
+    # Niche columns = every header except TYPE/TARGET (col 0), NOTES, DESTINATION
+    excluded = {"TYPE/TARGET", "NOTES", "DESTINATION"}
+    niche_cols = [(i, h) for i, h in enumerate(headers) if i > 0 and h.strip().upper() not in excluded]
 
     targets = {}
     for row in rows[1:]:
@@ -66,9 +68,8 @@ def read_scraping_targets():
         if not target_type:
             continue
         targets[target_type] = {}
-        for i, niche in enumerate(niche_cols):
-            col_idx = i + 1
-            cell    = row[col_idx].strip() if col_idx < len(row) else ""
+        for col_idx, niche in niche_cols:
+            cell = row[col_idx].strip() if col_idx < len(row) else ""
             targets[target_type][niche] = [v.strip() for v in cell.split(",") if v.strip()]
 
     return targets
@@ -134,16 +135,26 @@ def read_scraping_destinations():
     """
     result = _service().spreadsheets().values().get(
         spreadsheetId=SPREADSHEET_ID,
-        range="'🎯 Scraping Targets'!A1:G50",
+        range="'🎯 Scraping Targets'!A1:Z50",
     ).execute()
     rows = result.get("values", [])
+    if not rows:
+        return {}
+    headers = rows[0]
+    # Find DESTINATION column by header name (was hardcoded col G; now resolved dynamically
+    # so adding new niche columns doesn't shift the index).
+    dest_idx = next((i for i, h in enumerate(headers) if h.strip().upper() == "DESTINATION"), None)
     destinations = {}
     for row in rows[1:]:
         if not row:
             continue
         target_type = row[0].strip()
-        if target_type:
-            destinations[target_type] = row[6].strip().lower() if len(row) > 6 else "instagram"
+        if not target_type:
+            continue
+        if dest_idx is not None and len(row) > dest_idx:
+            destinations[target_type] = row[dest_idx].strip().lower() or "instagram"
+        else:
+            destinations[target_type] = "instagram"
     return destinations
 
 
