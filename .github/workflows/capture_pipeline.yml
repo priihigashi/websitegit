@@ -75,7 +75,8 @@ jobs:
             python-dotenv \
             requests \
             youtube-transcript-api \
-            instaloader
+            instaloader \
+            pytubefix
 
       - name: Run capture pipeline
         env:

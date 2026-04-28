@@ -728,6 +728,73 @@ def _try_apify_youtube_download(url: str, tmp_dir: str) -> str:
         return ""
 
 
+def _try_pytubefix_download(url: str, tmp_dir: str) -> str:
+    """Download YouTube via pytubefix, then extract mp3 for Whisper cascade.
+
+    Strategy:
+      1) Try audio-only stream (small/fast)
+      2) Fallback to progressive MP4 stream
+      3) Extract MP3 via ffmpeg
+    Returns audio path or ''.
+    """
+    if not _is_youtube(url):
+        return ""
+    try:
+        from pytubefix import YouTube
+    except Exception as e:
+        print(f"  pytubefix unavailable: {type(e).__name__}: {e}")
+        return ""
+
+    media_path = ""
+    try:
+        yt = YouTube(url)
+        # Tier A: audio-only first
+        stream = yt.streams.filter(only_audio=True).order_by("abr").desc().first()
+        if stream:
+            media_path = stream.download(output_path=tmp_dir, filename="pytubefix_audio")
+    except Exception as e:
+        print(f"  pytubefix audio-only failed: {type(e).__name__}: {e}")
+
+    if not media_path:
+        try:
+            yt = YouTube(url)
+            # Tier B: progressive MP4 fallback
+            stream = (
+                yt.streams
+                .filter(progressive=True, file_extension="mp4")
+                .order_by("resolution")
+                .desc()
+                .first()
+            )
+            if stream:
+                media_path = stream.download(output_path=tmp_dir, filename="pytubefix_video")
+        except Exception as e:
+            print(f"  pytubefix progressive failed: {type(e).__name__}: {e}")
+            media_path = ""
+
+    if not media_path or not os.path.exists(media_path):
+        return ""
+
+    audio_path = os.path.join(tmp_dir, "audio_pytubefix.mp3")
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-i", media_path, "-vn", "-acodec", "mp3", "-y", "-loglevel", "error", audio_path],
+            capture_output=True, text=True, timeout=120,
+        )
+        if result.returncode != 0 or not os.path.exists(audio_path):
+            print(f"  pytubefix: ffmpeg extraction failed: {result.stderr[:200]}")
+            return ""
+        size = os.path.getsize(audio_path) / 1024
+        if size < 5:
+            print(f"  pytubefix: extracted audio too small ({size:.0f} KB)")
+            return ""
+        print(f"  pytubefix download OK ({size:.0f} KB audio)")
+        return audio_path
+    except Exception as e:
+        print(f"  pytubefix: extraction failed (non-fatal): {e}")
+        return ""
+
+
 def _try_yt_dlp_slides(url: str, tmp_dir: str) -> list:
     """Tier-3 carousel slide fallback: yt-dlp + PRI_OP_IG_COOKIES → local JPGs.
     Uses --dump-single-json to pull GraphQL metadata via authenticated session,
@@ -1206,6 +1273,9 @@ def transcribe_audio(audio_path: str, url: str = "") -> str:
                 if not fallback_audio and _is_youtube(url):
                     print("  Trying Apify YouTube download...")
                     fallback_audio = _try_apify_youtube_download(url, _td)
+                if not fallback_audio and _is_youtube(url):
+                    print("  Trying pytubefix YouTube download fallback...")
+                    fallback_audio = _try_pytubefix_download(url, _td)
                 if not fallback_audio and _is_youtube(url):
                     print("  Trying managed transcript API fallback (SerpApi/Supadata)...")
                     managed = _try_managed_youtube_transcript(url)
