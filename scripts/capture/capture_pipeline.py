@@ -3323,6 +3323,69 @@ def run_unrouted(args, transcript: str, video_path: str = "", metadata: dict = N
         traceback.print_exc()
 
 
+# ─── STARTUP DIAGNOSTICS ─────────────────────────────────────────────────────
+
+def _startup_diagnostics(is_yt: bool) -> None:
+    """Print key/service status at the top of every run so failures are visible in logs."""
+
+    # 1. Supadata (YouTube transcript fallback) — optional but surfaced explicitly
+    if not SUPADATA_API_KEY:
+        print("  [DIAG] SUPADATA_API_KEY not set — YouTube transcript fallback (Supadata) disabled.")
+    else:
+        print("  [DIAG] SUPADATA_API_KEY present ✓")
+
+    # 2. Apify account — ping /v2/users/me so plan limits / 403s show up at run start
+    if APIFY_API_KEY:
+        try:
+            r = requests.get(
+                f"https://api.apify.com/v2/users/me?token={APIFY_API_KEY}",
+                timeout=8,
+            )
+            if r.status_code == 200:
+                d = r.json().get("data", {})
+                plan = d.get("plan", {}).get("id", "unknown")
+                print(f"  [DIAG] Apify account OK — plan={plan} ✓")
+            elif r.status_code == 401:
+                print(f"  [DIAG] APIFY_API_KEY invalid (401) — all Apify calls will fail.")
+            elif r.status_code == 403:
+                print(f"  [DIAG] Apify 403: insufficient-permissions — key may be expired or plan limit hit.")
+            else:
+                print(f"  [DIAG] Apify account check returned HTTP {r.status_code}.")
+        except Exception as e:
+            print(f"  [DIAG] Apify account check failed: {e}")
+    else:
+        print("  [DIAG] APIFY_API_KEY not set — Apify metadata fetch disabled.")
+
+    # 3. yt-dlp YouTube cookies — only relevant for YouTube URLs
+    if is_yt:
+        if not YT_COOKIES_RAW.strip():
+            print("  [DIAG] PRI_OP_YT_COOKIES not set — yt-dlp will run cookieless (age-gated/private videos may fail).")
+        else:
+            # Write the cookies to a temp file and do a quick --simulate test
+            import tempfile as _tf
+            _cpath = os.path.join(_tf.gettempdir(), "_diag_yt_cookies.txt")
+            with open(_cpath, "w") as _f:
+                _f.write(YT_COOKIES_RAW)
+            try:
+                result = subprocess.run(
+                    ["yt-dlp", "--cookies", _cpath, "--simulate", "--quiet",
+                     "https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
+                    capture_output=True, text=True, timeout=15,
+                )
+                cookie_err = result.stderr.lower()
+                if "cookies are no longer valid" in cookie_err or "login required" in cookie_err:
+                    print("  [DIAG] YT_COOKIES EXPIRED — update PRI_OP_YT_COOKIES secret with fresh browser export.")
+                else:
+                    print("  [DIAG] PRI_OP_YT_COOKIES present and appear valid ✓")
+            except Exception as e:
+                print(f"  [DIAG] yt-dlp cookie test skipped: {e}")
+            finally:
+                try:
+                    os.remove(_cpath)
+                except OSError:
+                    pass
+
+
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -3368,6 +3431,11 @@ def main():
     metadata = {}
     is_ig = "instagram.com" in args.url
     is_yt = _is_youtube(args.url)
+
+    print("\n[STARTUP DIAGNOSTICS]")
+    _startup_diagnostics(is_yt)
+    print()
+
     if is_yt:
         # YouTube: use official Data API (no yt-dlp, no IP blocking)
         metadata = _fetch_youtube_metadata_via_api(args.url)
