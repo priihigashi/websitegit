@@ -13,6 +13,8 @@ Env vars:
   CAPTURE_DROP_TAB          — default: '🎯 Drop Links'
   CAPTURE_FALLBACK_TAB      — default: '📥 Inspiration Library'
   CAPTURE_MAX_DISPATCH      — default: 5 (soft cap per run to protect quota)
+  CAPTURE_DAILY_DISPATCH_LIMIT — default: 6 (total queued by this poller per UTC day)
+  CAPTURE_OPC_FIRST_COUNT   — default: 2 (how many OPC rows to prioritize first)
 
 Sheet columns used (1-indexed):
   A = URL
@@ -40,6 +42,8 @@ SHEET_ID = os.getenv("CAPTURE_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpH
 DROP_TAB = os.getenv("CAPTURE_DROP_TAB", "🎯 Drop Links")
 FALLBACK_TAB = os.getenv("CAPTURE_FALLBACK_TAB", "📥 Inspiration Library")
 MAX_DISPATCH = int(os.getenv("CAPTURE_MAX_DISPATCH", "5"))
+DAILY_DISPATCH_LIMIT = int(os.getenv("CAPTURE_DAILY_DISPATCH_LIMIT", "6"))
+OPC_FIRST_COUNT = int(os.getenv("CAPTURE_OPC_FIRST_COUNT", "2"))
 
 REPO = os.getenv("GITHUB_REPOSITORY", "priihigashi/oak-park-ai-hub")
 GH_TOKEN = os.getenv("GITHUB_TOKEN", "")
@@ -178,6 +182,36 @@ def _write_status(svc, tab: str, row: int, status: str, note: str, col_pos: dict
     ).execute()
 
 
+def _note_column_name(tab: str) -> str:
+    if tab == FALLBACK_TAB:
+        return INSPO_COLS["my_comments"]
+    return "date / dispatched"
+
+
+def _count_today_queued(rows: list, tab: str, col_pos: dict) -> int:
+    """Best-effort count of rows this poller queued today.
+
+    We match rows with Status=Queued and today's UTC date in the note field.
+    """
+    status_name = INSPO_COLS["status"] if tab == FALLBACK_TAB else "status"
+    note_name = _note_column_name(tab)
+    status_idx = col_pos.get(status_name)
+    note_idx = col_pos.get(note_name)
+    if status_idx is None or note_idx is None:
+        return 0
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    total = 0
+    for row in rows:
+        max_idx = max(status_idx, note_idx)
+        row = row + [""] * (max_idx + 1 - len(row))
+        status = row[status_idx].strip().lower()
+        note = row[note_idx].strip().lower()
+        if status == "queued" and today in note and WORKFLOW_FILE in note:
+            total += 1
+    return total
+
+
 def main():
     svc = _sheets()
 
@@ -204,31 +238,61 @@ def main():
               f"(url={url_idx}, status={status_idx}, niche={niche_idx}). Aborting.")
         sys.exit(1)
 
+    today_queued = _count_today_queued(rows, active_tab, col_pos)
+    remaining_today = max(0, DAILY_DISPATCH_LIMIT - today_queued)
+    run_cap = min(MAX_DISPATCH, remaining_today)
+
     print(f"Scanning {len(rows)} rows in '{active_tab}' (max dispatch: {MAX_DISPATCH})")
     print(f"  Header positions: url=col {_col_letter(url_idx)}, "
           f"status=col {_col_letter(status_idx)}, niche=col {_col_letter(niche_idx)}")
+    print(f"  Daily cap: {DAILY_DISPATCH_LIMIT} | already queued today: {today_queued} | remaining today: {remaining_today}")
 
-    dispatched = 0
+    if run_cap <= 0:
+        print("Daily dispatch cap reached; nothing to do.")
+        print("Done. Dispatched 0 capture runs.")
+        return
+
+    candidates = []
     for i, row in enumerate(rows):
-        if dispatched >= MAX_DISPATCH:
-            print("Dispatch cap reached; stopping.")
-            break
-        # Pad row so positional reads never IndexError
         max_idx = max(url_idx, status_idx, niche_idx)
         row = row + [""] * (max_idx + 1 - len(row))
-        url    = row[url_idx].strip()
+        url = row[url_idx].strip()
         status = row[status_idx].strip().lower()
-        niche  = row[niche_idx].strip()
+        niche = row[niche_idx].strip()
         if not url or not url.startswith("http"):
             if url:
                 print(f"  row {i+2}: skipping non-URL in {INSPO_COLS['url']!r} col: {url[:40]!r}")
             continue
         if status in SKIP_STATUS:
             continue
-
         project = _project_for(niche)
+        candidates.append({
+            "row_i": i,
+            "sheet_row": i + 2,
+            "url": url,
+            "niche": niche,
+            "project": project,
+        })
+
+    opc_first = [c for c in candidates if c["project"] == "opc"][:OPC_FIRST_COUNT]
+    opc_sheet_rows = {c["sheet_row"] for c in opc_first}
+    ordered_rest = [c for c in candidates if c["sheet_row"] not in opc_sheet_rows]
+    to_dispatch = (opc_first + ordered_rest)[:run_cap]
+
+    print(
+        f"  Selection: OPC-first={len(opc_first)} (target {OPC_FIRST_COUNT}), "
+        f"then row order. Dispatching up to {len(to_dispatch)} this run."
+    )
+
+    dispatched = 0
+    for item in to_dispatch:
+        if dispatched >= run_cap:
+            print("Dispatch cap reached; stopping.")
+            break
+        url = item["url"]
+        project = item["project"]
         ok, info = _dispatch(url, project)
-        sheet_row = i + 2
+        sheet_row = item["sheet_row"]
         if ok:
             _write_status(svc, active_tab, sheet_row, "Queued", info, col_pos)
             dispatched += 1

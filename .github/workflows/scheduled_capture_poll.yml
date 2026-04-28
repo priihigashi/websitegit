@@ -50,4 +50,6 @@ jobs:
           CAPTURE_DROP_TAB: "🎯 Drop Links"
           CAPTURE_FALLBACK_TAB: "📥 Inspiration Library"
           CAPTURE_MAX_DISPATCH: ${{ inputs.max_dispatch || '5' }}
+          CAPTURE_DAILY_DISPATCH_LIMIT: "6"
+          CAPTURE_OPC_FIRST_COUNT: "2"
         run: python scripts/capture/scheduled_capture_poll.py
