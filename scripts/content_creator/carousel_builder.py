@@ -2566,7 +2566,7 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px;font-fam
 .slide{{width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);padding:var(--P);position:relative;overflow:hidden;display:flex;flex-direction:column}}
 .shared-shell{{position:relative}}
 .shared-bg{{position:absolute;inset:0;background-size:cover;background-position:center;opacity:.24;filter:grayscale(.08) contrast(1.14) brightness(.9)}}
-.shared-shell > *:not(.shared-bg){{position:relative;z-index:2}}
+.shared-shell > *:not(.shared-bg):not(.swipe):not(.footer-handle){{position:relative;z-index:2}}
 .tag{{font-family:'JetBrains Mono',monospace;font-size:24px;color:var(--mu);margin-bottom:22px;text-transform:uppercase}}
 .accent{{color:var(--ac)}}
 .cover-hl{{font-family:'Fraunces',serif;font-size:96px;line-height:1.02;text-transform:uppercase;margin-bottom:18px}}
@@ -2845,7 +2845,7 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}}
 /* Clip/photo full-bleed background (motion slides) */
 .clip-bg{{position:absolute;inset:0;background-size:cover;background-position:center;z-index:1}}
 .clip-bg::after{{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,10,.28) 0%,rgba(10,10,10,.82) 100%)}}
-.slide-motion > *:not(.clip-bg):not(.corner){{position:relative;z-index:3}}
+.slide-motion > *:not(.clip-bg):not(.corner):not(.swipe):not(.footer-handle){{position:relative;z-index:3}}
 .slide-motion .clip-bg[style*="background-image"]{{filter:grayscale(.15) contrast(1.1) brightness(.62)}}
 /* Clip placeholder shown when no clip fetched yet */
 .clip-placeholder{{position:absolute;inset:0;z-index:1;background:repeating-linear-gradient(45deg,rgba(203,204,16,.035),rgba(203,204,16,.035) 2px,transparent 2px,transparent 14px);border:none}}
