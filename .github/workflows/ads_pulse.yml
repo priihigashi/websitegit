@@ -30,6 +30,8 @@ jobs:
           GOOGLE_ADS_CLIENT_SECRET:   ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
           GOOGLE_ADS_REFRESH_TOKEN:   ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
           PRI_OP_GMAIL_APP_PASSWORD:  ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          SHEETS_TOKEN:               ${{ secrets.SHEETS_TOKEN }}
+          OPC_ADS_SHEET_ID:           ${{ secrets.OPC_ADS_SHEET_ID }}
         run: python scripts/ads_dashboard.py
 
       - name: Commit updated dashboard

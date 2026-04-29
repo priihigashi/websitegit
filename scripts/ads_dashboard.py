@@ -323,7 +323,169 @@ def send_email(subject, body, gmail_password):
         s.send_message(msg)
 
 
-def build_email_body(today, periods_data, calls):
+def build_mom_insight(periods_data, change_log):
+    """Evidence-driven MoM analysis — mirrors investigateMOM() JS logic.
+    Investigation runs first; only concrete findings surface in output."""
+    c = periods_data.get("cur_month", {}).get("campaign", {})
+    p = periods_data.get("prev_month", {}).get("campaign", {})
+    if not c or not p:
+        return None
+
+    # Observation
+    calls_delta = int(c.get("calls", 0)) - int(p.get("calls", 0))
+    spend_delta = c.get("spend", 0) - p.get("spend", 0)
+    obs_parts = []
+    if abs(calls_delta) >= 1:
+        arrow = "↑" if calls_delta > 0 else "↓"
+        obs_parts.append(f"calls {arrow}{abs(calls_delta)} ({int(p.get('calls',0))} → {int(c.get('calls',0))})")
+    if abs(spend_delta) >= 10:
+        arrow = "↑" if spend_delta > 0 else "↓"
+        obs_parts.append(f"spend {arrow}${abs(spend_delta):.0f} (${p.get('spend',0):.0f} → ${c.get('spend',0):.0f})")
+    obs = "; ".join(obs_parts) if obs_parts else "No significant MoM change"
+
+    # Investigation 1 — change_log (last 45 days)
+    now = datetime.datetime.now()
+    cutoff = now - datetime.timedelta(days=45)
+    recent = []
+    for entry in change_log:
+        try:
+            ts = datetime.datetime.fromisoformat(entry.get("ts", "")[:19])
+            if ts >= cutoff:
+                recent.append((ts, entry))
+        except Exception:
+            pass
+    inv_log = [f"change_log: {len(recent)}/{len(change_log)} events in last 45d"]
+    primary = None
+
+    if recent:
+        ts, entry = max(recent, key=lambda x: x[0])
+        days_ago = (now - ts).days
+        primary = {
+            "kind": "change", "ts": entry.get("ts", ""), "days_ago": days_ago,
+            "type": entry.get("type", ""), "op": entry.get("op", ""),
+            "by": entry.get("by", ""), "fields": (entry.get("fields", "") or "")[:80],
+        }
+
+    # Investigation 2 — keyword set comparison (spend >= $15)
+    kw_cur  = {k["text"] for k in periods_data.get("cur_month",  {}).get("keywords", []) if k.get("spend", 0) >= 15}
+    kw_prev = {k["text"] for k in periods_data.get("prev_month", {}).get("keywords", []) if k.get("spend", 0) >= 15}
+    disappeared = kw_prev - kw_cur
+    appeared    = kw_cur  - kw_prev
+    inv_log.append(f"keywords: {len(disappeared)} disappeared, {len(appeared)} new (spend≥$15)")
+    if not primary:
+        if disappeared:
+            primary = {"kind": "kw_drop", "keywords": list(disappeared)[:3]}
+        elif appeared:
+            primary = {"kind": "kw_new",  "keywords": list(appeared)[:3]}
+
+    # Investigation 3 — ad group shifts > $100
+    ag_cur  = {a["name"]: a.get("spend", 0) for a in periods_data.get("cur_month",  {}).get("adgroups", [])}
+    ag_prev = {a["name"]: a.get("spend", 0) for a in periods_data.get("prev_month", {}).get("adgroups", [])}
+    ag_shifts = [(ag, ag_cur.get(ag, 0) - ag_prev.get(ag, 0)) for ag in set(ag_cur) | set(ag_prev)
+                 if abs(ag_cur.get(ag, 0) - ag_prev.get(ag, 0)) > 100]
+    inv_log.append(f"ad groups: {len(ag_shifts)} shifted >$100")
+    if not primary and ag_shifts:
+        biggest = max(ag_shifts, key=lambda x: abs(x[1]))
+        primary = {"kind": "ag_shift", "name": biggest[0], "delta": biggest[1]}
+
+    # Build WHY / REC
+    if primary is None:
+        why   = f"Investigated: {'; '.join(inv_log)}. No internal cause found."
+        rec   = "Monitor 1 more week before action. Cannot confirm external cause without Auction Insights data."
+        steps = ""
+    elif primary["kind"] == "change":
+        days     = primary["days_ago"]
+        date_str = primary["ts"][:10]
+        by       = primary.get("by", "unknown")
+        res_type = primary.get("type", "resource")
+        op       = primary.get("op", "change")
+        fields   = primary.get("fields", "")
+        why = f"Account change: {op} on {res_type} made {days}d ago ({date_str}) by {by}."
+        if fields:
+            why += f" Changed: {fields}"
+        if days <= 14:
+            resume = (now + datetime.timedelta(days=14 - days)).strftime("%b %d")
+            rec = (f"WAIT — change is only {days}d old. Smart Bidding needs 14 days to restabilize. "
+                   f"Re-evaluate on {resume}. Reverting now destroys the signal.")
+        else:
+            rec = (f"Change is {days}d old — past stabilization window. "
+                   f"If metrics still degraded, revert the {op} on {res_type} from {date_str}.")
+        steps = (f"1. ads.google.com → Change History → filter to {date_str}\n"
+                 f"2. Find the '{op}' on '{res_type}'\n"
+                 f"3. Note current value before reverting")
+    elif primary["kind"] == "kw_drop":
+        kws   = ", ".join(primary.get("keywords", []))
+        why   = f"Keywords spending ≥$15 last month but not this month: {kws}. May have been paused or lost eligibility."
+        rec   = "Check these keywords: if paused accidentally, re-enable. If budget-capped, cut lower performers to free budget."
+        steps = f"1. ads.google.com → Keywords\n2. Search for: {kws}\n3. Check Status + First Page Bid estimate"
+    elif primary["kind"] == "kw_new":
+        kws   = ", ".join(primary.get("keywords", []))
+        why   = f"New keywords spending this month not present last month: {kws}."
+        rec   = "Check Quality Score on these keywords. QS < 5 → pause and rewrite ad copy to match keyword intent."
+        steps = f"1. ads.google.com → Keywords\n2. Filter to: {kws}\n3. Check Quality Score + conversion rate"
+    elif primary["kind"] == "ag_shift":
+        name  = primary.get("name", "")
+        delta = primary.get("delta", 0)
+        dir_  = "increased" if delta > 0 else "decreased"
+        why   = f"Ad group '{name}' spend {dir_} by ${abs(delta):.0f} MoM — largest shift in account."
+        rec   = f"Review '{name}' ad group: check bid strategy changes and keyword competition shift."
+        steps = (f"1. ads.google.com → Campaigns → Ad groups → '{name}'\n"
+                 f"2. Check bid strategy + keyword bids\n"
+                 f"3. Compare CTR and Quality Scores vs last month")
+    else:
+        why   = "No clear cause identified."
+        rec   = "Monitor 1 more week."
+        steps = ""
+
+    return {"obs": obs, "why": why, "rec": rec, "steps": steps, "investigation_log": inv_log}
+
+
+def write_to_ads_sheet(today, periods_data, change_log, sheet_id, sheets_token_json):
+    """Append one row of weekly snapshot data to the OPC Ads Data sheet."""
+    import urllib.parse, urllib.request
+    td = json.loads(sheets_token_json)
+    data = urllib.parse.urlencode({
+        "client_id": td["client_id"], "client_secret": td["client_secret"],
+        "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
+    }).encode()
+    resp = json.loads(urllib.request.urlopen(
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+    token = resp["access_token"]
+
+    c = periods_data.get("cur_month", {}).get("campaign", {})
+    p = periods_data.get("prev_month", {}).get("campaign", {})
+    cpl = c.get("spend", 0) / max(int(c.get("calls", 0)), 1)
+
+    row = [
+        today,
+        round(c.get("spend", 0), 2),
+        int(c.get("calls", 0)),
+        int(c.get("clicks", 0)),
+        round(c.get("ctr", 0), 2),
+        round(c.get("avg_cpc", 0), 2),
+        round(cpl, 0),
+        int(c.get("conversions", 0)),
+        round(c.get("is_pct", 0) or 0, 1),
+        round(p.get("spend", 0), 2),
+        int(p.get("calls", 0)),
+        len(change_log),
+    ]
+
+    url = (f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}"
+           f"/values/Weekly%20Snapshot:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS")
+    body = json.dumps({"values": [row]}).encode()
+    req = urllib.request.Request(url, data=body, headers={
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    })
+    try:
+        urllib.request.urlopen(req, timeout=15)
+        print(f"  Ads sheet updated: {sheet_id}")
+    except Exception as e:
+        print(f"  Ads sheet write failed: {e}")
+
+
+def build_email_body(today, periods_data, calls, insight=None):
     c30 = periods_data["30d"]["campaign"]
     spend  = c30.get("spend", 0)
     clicks = c30.get("clicks", 0)
@@ -379,6 +541,26 @@ REQUIRES ATTENTION
 
     body += "🟡 Website has NO tracking code (GA4 not installed on oakpark-construction.com)\n"
 
+    # MoM AI analysis — evidence-driven
+    if insight:
+        body += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MONTH-OVER-MONTH ANALYSIS (AI)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WHAT CHANGED
+  {insight['obs']}
+
+WHY
+  {insight['why']}
+
+RECOMMENDATION
+  {insight['rec']}
+"""
+        if insight.get("steps"):
+            body += f"\nSTEPS\n"
+            for line in insight["steps"].split("\n"):
+                body += f"  {line}\n"
+
     return body
 
 
@@ -418,10 +600,21 @@ def main():
             inject_data(path, data)
             print(f"Dashboard updated: {path}")
 
+    # Server-side evidence-driven MoM analysis
+    insight = build_mom_insight(periods_data, change_log)
+    if insight:
+        print(f"  MoM insight: {insight['obs']}")
+
     if gmail_pw:
-        body = build_email_body(today, periods_data, calls)
-        send_email(f"OPC Ads Weekly Report — {today}", body, gmail_pw)
+        body = build_email_body(today, periods_data, calls, insight)
+        send_email(f"OPC Ads Weekly — {today}", body, gmail_pw)
         print("Email sent.")
+
+    # Write weekly snapshot to Ads Data spreadsheet (if SHEETS_TOKEN available)
+    sheets_token = os.environ.get("SHEETS_TOKEN", "")
+    ads_sheet_id = os.environ.get("OPC_ADS_SHEET_ID", "")
+    if sheets_token and ads_sheet_id:
+        write_to_ads_sheet(today, periods_data, change_log, ads_sheet_id, sheets_token)
 
 
 if __name__ == "__main__":
