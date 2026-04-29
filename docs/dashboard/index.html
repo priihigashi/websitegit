@@ -83,11 +83,39 @@ body.night-mode .periodtag{background:var(--ld);color:var(--obsidian)}
 body.night-mode .ins-part-lbl{color:#9ac070}
 body.night-mode .ins-part-txt{color:#cfdebc}
 .changes-section{margin-bottom:22px}
-.changes-table{font-size:11px}
-.changes-table thead th{font-size:9px}
-.changes-table .ce-fields{font-family:monospace;font-size:10px;color:#666;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-body.night-mode .changes-table .ce-fields{color:#888}
+/* ── change-event cards (replaces table) ── */
+.ce-cards{display:flex;flex-direction:column;gap:0}
+.ce-card{padding:11px 14px;border-bottom:1px solid rgba(0,0,0,.06);display:flex;flex-direction:column;gap:4px}
+.ce-card:last-child{border-bottom:none}
+.ce-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.ce-what{font-size:12px;font-weight:700;color:#2a3a1a;flex:1;min-width:0}
+.ce-when{font-size:10px;color:var(--mut);white-space:nowrap;flex-shrink:0}
+.ce-bottom{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.ce-fields-txt{font-family:monospace;font-size:10px;color:#666;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ce-by-txt{font-size:10px;color:var(--mut);white-space:nowrap;flex-shrink:0}
+.ce-op-tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;padding:1px 6px;border-radius:3px;margin-right:5px;text-transform:uppercase}
+.ce-op-create{background:#e6f4d7;color:#3a7a10}
+.ce-op-update{background:#e8f0fe;color:#1a55c0}
+.ce-op-remove{background:#fde8e8;color:#b91c1c}
+body.night-mode .ce-card{border-bottom-color:rgba(255,255,255,.07)}
+body.night-mode .ce-what{color:#ccdcaa}
+body.night-mode .ce-fields-txt{color:#888}
+body.night-mode .ce-op-create{background:#1a3a08;color:#7dcb40}
+body.night-mode .ce-op-update{background:#0f1f44;color:#7aacff}
+body.night-mode .ce-op-remove{background:#3a0808;color:#ff7a7a}
 .ce-empty{padding:14px 16px;color:var(--mut);font-size:12px;text-align:center}
+/* ── keyword table ── tighter columns, GROUP narrower */
+#kwt th:nth-child(1),#kwt td:nth-child(1){width:34%;word-break:break-word}
+#kwt th:nth-child(2),#kwt td:nth-child(2){width:12%;font-size:9px;padding-left:4px;padding-right:4px}
+#kwt th:nth-child(3),#kwt td:nth-child(3),#kwt th:nth-child(4),#kwt td:nth-child(4){width:11%}
+#kwt th:nth-child(5),#kwt td:nth-child(5){width:10%}
+#kwt th:nth-child(6),#kwt td:nth-child(6),#kwt th:nth-child(7),#kwt td:nth-child(7){width:11%}
+/* ── collapsible recommendation ── */
+.ins-rec-wrap{overflow:hidden;transition:max-height .3s ease}
+.ins-rec-wrap.collapsed{max-height:0}
+.ins-rec-wrap.expanded{max-height:600px}
+.ins-rec-toggle{font-size:10px;color:var(--acc);cursor:pointer;user-select:none;margin-top:8px;display:inline-block}
+.ins-rec-toggle:hover{text-decoration:underline}
 .api-note{background:#fef9e7;border-left:3px solid var(--ylw);padding:8px 12px;font-size:11px;color:#8a5a00;margin-top:8px;border-radius:3px}
 body.night-mode .api-note{background:#2a1a00;color:#d09040}
 .qs-pill{display:inline-block;font-family:'Anton',sans-serif;font-size:11px;padding:1px 6px;border-radius:3px;letter-spacing:.5px}
@@ -235,7 +263,7 @@ canvas{max-height:180px}
   <div class="sec">
     <div class="sech">Top Keywords by Spend <span class="periodtag" id="ptag-kw">&mdash;</span></div>
     <div class="card" style="padding:0;overflow:hidden;border-radius:8px">
-      <table><thead><tr><th>Keyword</th><th>Group</th><th>Spend</th><th>Clicks</th><th>CTR</th><th>Conv</th><th>QS</th></tr></thead><tbody id="kwt"></tbody></table>
+      <table id="kwt"><thead><tr><th>Keyword</th><th>Grp</th><th>Spend</th><th>Clicks</th><th>CTR</th><th>Conv</th><th>QS</th></tr></thead><tbody id="kwt-body"></tbody></table>
     </div>
     <div class="ins-box">
       <div class="ins-head" onclick="toggleIns('ins-kw-steps')">
@@ -274,7 +302,7 @@ canvas{max-height:180px}
   <div class="sec changes-section">
     <div class="sech">&#128295; Recent Changes &mdash; Last 30 Days</div>
     <div class="card" style="padding:0;overflow:hidden;border-radius:8px">
-      <table class="changes-table"><thead><tr><th>Date / Time</th><th>Resource</th><th>Op</th><th>Fields Changed</th><th>By</th></tr></thead><tbody id="ce-body"></tbody></table>
+      <div class="ce-cards" id="ce-body"></div>
     </div>
     <div class="api-note">&#9888;&#65039; Google Ads change-history API only supports the last 30 days. For older changes: Google Ads &rarr; Tools &rarr; Change History.</div>
     <div class="ins-box">
@@ -2565,16 +2593,17 @@ function fillIns(bodyId,stepsId,key,text){
 }
 
 // 4-part AI insight: OBSERVATION -> WHY -> RECOMMENDATION -> STEPS
-function make4Part(obs, why, rec){
+// OBS + WHY always visible; REC + STEPS go into the collapsible stepsId panel
+function make4Part(obs, why){
   return '<div class="ins-part"><div class="ins-part-lbl">&#128202; Observation</div><div class="ins-part-txt">'+obs+'</div></div>'+
-         '<div class="ins-part"><div class="ins-part-lbl">&#128269; Why this is happening</div><div class="ins-part-txt">'+why+'</div></div>'+
-         '<div class="ins-part"><div class="ins-part-lbl">&#128161; Recommendation</div><div class="ins-part-txt">'+rec+'</div></div>';
+         '<div class="ins-part"><div class="ins-part-lbl">&#128269; Why this is happening</div><div class="ins-part-txt">'+why+'</div></div>';
 }
 function fillIns4(bodyId, stepsId, obs, why, rec, steps){
-  document.getElementById(bodyId).innerHTML = make4Part(obs, why, rec);
-  if(steps && steps.length){
-    document.getElementById(stepsId).innerHTML = '<ol>'+steps.map(s=>'<li>'+s+'</li>').join('')+'</ol>';
-  }
+  document.getElementById(bodyId).innerHTML = make4Part(obs, why);
+  let html = '';
+  if(rec) html += '<div class="ins-part"><div class="ins-part-lbl">&#128161; Recommendation</div><div class="ins-part-txt">'+rec+'</div></div>';
+  if(steps && steps.length) html += '<ol>'+steps.map(s=>'<li>'+s+'</li>').join('')+'</ol>';
+  document.getElementById(stepsId).innerHTML = html;
 }
 function bidStrategyHuman(s){
   if(!s) return 'unknown bid strategy';
@@ -2611,7 +2640,7 @@ function qsPill(qs){
   return '<span class="qs-pill '+cls+'">'+qs+'/10</span>';
 }
 function rKW(kw){
-  const tb=document.getElementById('kwt'); tb.innerHTML='';
+  const tb=document.getElementById('kwt-body'); tb.innerHTML='';
   kw.forEach(k=>{tb.innerHTML+='<tr><td style="font-weight:500">'+k.text+'</td><td><span class="t">'+k.ag+'</span></td><td>$'+k.spend.toFixed(0)+'</td><td>'+k.clicks+'</td><td>'+k.ctr+'%</td><td>'+(k.conv>0?'<span class="t gn">'+k.conv+'</span>':'<span class="t rd">0</span>')+'</td><td>'+qsPill(k.qs)+'</td></tr>';});
 }
 
@@ -2805,45 +2834,250 @@ function buildMOM(){
   ];
   document.getElementById('mom-body').innerHTML=rows.map(r=>'<tr><td style="font-weight:700">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td>'+r[4]+'</td></tr>').join('');
 
-  const findings=[];
-  if(p.calls>0&&c.calls>=3*p.calls) findings.push('&#128200; <strong>Calls jumped '+(c.calls/p.calls).toFixed(1)+'&times;</strong> ('+p.calls+' &rarr; '+c.calls+') from '+lp+' to '+lc+'. This is a major shift &mdash; worth investigating what changed.');
-  else if(c.calls>p.calls) findings.push('&#128200; Calls up from '+p.calls+' to '+c.calls+' (+'+(c.calls-p.calls)+').');
-  else if(c.calls<p.calls) findings.push('&#128201; Calls down from '+p.calls+' to '+c.calls+' (-'+(p.calls-c.calls)+').');
-  if(p.spend>0){
-    const sr=c.spend/p.spend;
-    if(sr>=1.5) findings.push('&#128184; Spend grew '+sr.toFixed(1)+'&times; ($'+p.spend.toFixed(0)+' &rarr; $'+c.spend.toFixed(0)+'). Expected if budget was raised &mdash; flag if not.');
-    else if(sr<=0.7) findings.push('&#128184; Spend dropped to '+Math.round(sr*100)+'% of '+lp+' &mdash; check if a campaign was paused or budget cut.');
-  }
+  // ── EVIDENCE-DRIVEN INVESTIGATION ──
+  // Run an internal investigation across change_log + keyword sets + ad-group shifts
+  // BEFORE writing any prose. Surface concrete findings, not generic possibilities.
+  const f=investigateMOM(c,p,p2,lc,lp);
+
+  // OBSERVATION = concrete movement (not narrative)
+  const obsLines=[];
+  if(Math.abs(c.calls-p.calls)>=1) obsLines.push('Calls '+lp+'→'+lc+': <strong>'+(c.calls-p.calls>=0?'+':'')+(c.calls-p.calls)+'</strong> ('+p.calls+'→'+c.calls+')');
+  if(Math.abs(c.spend-p.spend)>=50) obsLines.push('Spend '+lp+'→'+lc+': <strong>'+(c.spend-p.spend>=0?'+$':'-$')+Math.abs(c.spend-p.spend).toFixed(0)+'</strong> ($'+p.spend.toFixed(0)+'→$'+c.spend.toFixed(0)+')');
   if(p.calls>0&&c.calls>0){
     const cplC=cpl(c), cplP=cpl(p);
-    if(cplC<cplP*0.6) findings.push('&#9989; Cost-per-call dropped from $'+cplP.toFixed(0)+' to $'+cplC.toFixed(0)+' &mdash; efficiency improved sharply.');
-    else if(cplC>cplP*1.4) findings.push('&#9888;&#65039; Cost-per-call rose from $'+cplP.toFixed(0)+' to $'+cplC.toFixed(0)+' &mdash; paying more for fewer leads.');
+    if(Math.abs(cplC-cplP)>=20) obsLines.push('Cost/call '+lp+'→'+lc+': <strong>$'+cplP.toFixed(0)+'→$'+cplC.toFixed(0)+'</strong>');
   }
-  if(c.calls>p.calls&&c.calls>p2.calls&&p.calls<=p2.calls+2){
-    findings.push('<em>'+lc+' is your strongest month of the three. If you made changes mid-'+lp+' (new keywords, bid strategy, ad copy, pauses), they may be driving the lift now. Open Change History to correlate dates.</em>');
-  }
-  if(c.calls===p.calls&&c.calls===p2.calls) findings.push('Volume is flat across all three months.');
-  if(findings.length===0) findings.push('Numbers are roughly steady across the last 3 months.');
+  if(obsLines.length===0) obsLines.push('Volume roughly steady across all 3 months.');
+  const obs=obsLines.join('<br>');
 
-  // 4-part MoM insight
-  const camp=(DATA.config&&DATA.config.campaign)||{};
-  const strat=bidStrategyHuman(camp.bid_strategy);
-  const obs=findings.join('<br><br>');
-  let why='Month-over-month deltas can come from: <strong>(a)</strong> account-side changes (budget, bid strategy, keyword adds/pauses, ad copy edits), <strong>(b)</strong> seasonal demand shifts, <strong>(c)</strong> competitor activity raising auction prices, or <strong>(d)</strong> tracking changes that surface or hide existing leads. ';
-  why+='Current bid strategy is <strong>'+strat+'</strong>'+(camp.daily_budget?', daily budget $'+camp.daily_budget.toFixed(0):'')+'. ';
-  why+='The <em>Recent Changes</em> section below this card shows the actual edits made in the last 30 days &mdash; correlate the dates against the spend/calls movement above to identify which lever drove the shift.';
-  let rec='<strong>1.</strong> Open the <em>Recent Changes</em> table below and look for edits dated near the inflection point. ';
-  rec+='<strong>2.</strong> If a change preceded a lift &rarr; document it in the Ads playbook so it can be repeated. ';
-  rec+='<strong>3.</strong> If a change preceded a drop &rarr; revert it (Google Ads keeps prior values in Change History). ';
-  rec+='<strong>4.</strong> If no change correlates &rarr; it\'s likely seasonal or competitive; check Auction Insights (Reports &rarr; Predefined &rarr; Auction Insights) to see if competitor share-of-voice grew.';
-  const steps=[
-    'Scroll down to <em>Recent Changes</em> table &mdash; sort by date, find edits during '+lp+' or early '+lc,
-    'Open <a href="https://ads.google.com/aw/changehistory" target="_blank">Google Ads &rarr; Tools &rarr; Change History</a> for the full chronology (UI shows everything, not just last 30 days)',
-    'For lifts: document the change + its date in your playbook so it can be repeated on slow months',
-    'For drops: revert the change via Change History &rarr; click the entry &rarr; <strong>Undo</strong>',
-    'If nothing correlates: check Auction Insights to see if a new competitor entered the market'
-  ];
+  // WHY = evidence-driven from investigation (no generic possibilities surfaced to user)
+  const why=renderMOMWhy(f,lc,lp);
+
+  // RECOMMENDATION = tied to evidence
+  const rec=renderMOMRec(f);
+
+  // STEPS = concrete next actions, also tied to evidence
+  const steps=renderMOMSteps(f);
+
   fillIns4('ins-mom','ins-mom-steps',obs,why,rec,steps);
+}
+
+// Internal investigation engine — runs the checklist, returns structured findings.
+// All "generic possibilities" stay INTERNAL here (investigationLog) and only surface
+// to user as "I checked X, Y, Z" if no concrete cause is found.
+function investigateMOM(c,p,p2,lc,lp){
+  const f={
+    changesInWindow:[],
+    keywordsDisappeared:[],
+    keywordsAppeared:[],
+    adGroupShifts:[],
+    investigationLog:[],
+    primaryEvidence:null,
+    daysSinceLastChange:null
+  };
+  const today=new Date();
+
+  // 1. Changes in last 45 days (covers prev_month + cur_month)
+  const cutoff=new Date(); cutoff.setDate(today.getDate()-45);
+  (DATA.changes||[]).forEach(e=>{
+    const dt=new Date(e.ts);
+    if(!isNaN(dt)&&dt>=cutoff) f.changesInWindow.push(Object.assign({},e,{dt}));
+  });
+  f.investigationLog.push('checked '+(DATA.changes||[]).length+' change-log entries → '+f.changesInWindow.length+' in last 45 days');
+
+  // 2. Keyword set comparison: high-spend keywords from prev that vanished in cur, and new in cur
+  const curKW=(DATA.periods.cur_month&&DATA.periods.cur_month.keywords)||[];
+  const prevKW=(DATA.periods.prev_month&&DATA.periods.prev_month.keywords)||[];
+  const curMap=new Map(curKW.map(k=>[k.text,k]));
+  const prevMap=new Map(prevKW.map(k=>[k.text,k]));
+  prevKW.forEach(k=>{ if(k.spend>=15&&!curMap.has(k.text)) f.keywordsDisappeared.push({text:k.text,spend:k.spend,clicks:k.clicks}); });
+  curKW.forEach(k=>{ if(k.spend>=15&&!prevMap.has(k.text)) f.keywordsAppeared.push({text:k.text,spend:k.spend,clicks:k.clicks}); });
+  f.keywordsDisappeared.sort((a,b)=>b.spend-a.spend);
+  f.keywordsAppeared.sort((a,b)=>b.spend-a.spend);
+  f.investigationLog.push('compared '+prevKW.length+' '+lp+' keywords vs '+curKW.length+' '+lc+' → '+f.keywordsDisappeared.length+' high-spend disappeared, '+f.keywordsAppeared.length+' new');
+
+  // 3. Ad-group spend shifts >$100
+  const curAG=(DATA.periods.cur_month&&DATA.periods.cur_month.adgroups)||[];
+  const prevAG=(DATA.periods.prev_month&&DATA.periods.prev_month.adgroups)||[];
+  const prevAGMap=new Map(prevAG.map(a=>[a.name,a]));
+  curAG.forEach(a=>{
+    const prev=prevAGMap.get(a.name); if(!prev) return;
+    const ds=a.spend-prev.spend;
+    if(Math.abs(ds)>=100) f.adGroupShifts.push({name:a.name,prev_spend:prev.spend,cur_spend:a.spend,delta:ds,prev_calls:prev.calls||0,cur_calls:a.calls||0});
+  });
+  f.adGroupShifts.sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+  f.investigationLog.push('compared '+prevAG.length+' '+lp+' ad groups vs '+curAG.length+' '+lc+' → '+f.adGroupShifts.length+' shifted >$100');
+
+  // Pick the strongest evidence (account-side beats keyword set beats ad-group)
+  if(f.changesInWindow.length>0){
+    f.changesInWindow.sort((a,b)=>b.dt-a.dt);
+    f.primaryEvidence={kind:'change',detail:f.changesInWindow[0]};
+    f.daysSinceLastChange=Math.floor((today-f.changesInWindow[0].dt)/86400000);
+  } else if(f.keywordsDisappeared.length>0){
+    f.primaryEvidence={kind:'kw_drop',detail:f.keywordsDisappeared[0]};
+  } else if(f.keywordsAppeared.length>0){
+    f.primaryEvidence={kind:'kw_new',detail:f.keywordsAppeared[0]};
+  } else if(f.adGroupShifts.length>0){
+    f.primaryEvidence={kind:'ag_shift',detail:f.adGroupShifts[0]};
+  }
+  return f;
+}
+
+function renderMOMWhy(f,lc,lp){
+  if(!f.primaryEvidence){
+    // Truly nothing internal — be explicit about what was checked, then offer external as last resort
+    return '<strong>No internal cause found.</strong> Investigated: '+f.investigationLog.join('; ')+'. '+
+      'No account changes, keyword drops/adds, or ad-group spend shifts large enough to explain the movement. '+
+      'That leaves external factors: seasonal demand, competitor bid increase, or audience saturation. '+
+      'These cannot be confirmed without checking <em>Auction Insights</em> for competitor share-of-voice change.';
+  }
+  const ev=f.primaryEvidence;
+  if(ev.kind==='change'){
+    const c=ev.detail;
+    const dateStr=c.dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const who=c.user||c.client||'unknown';
+    const fields=c.fields?c.fields.substring(0,120):'';
+    const more=f.changesInWindow.length>1?' ('+(f.changesInWindow.length-1)+' more change(s) in window — see <em>Recent Changes</em> table)':'';
+    return '<strong>Found cause:</strong> <span class="t">'+c.op+'</span> on <strong>'+c.type+'</strong> dated <strong>'+dateStr+'</strong> by '+who+
+      (fields?' — <em>'+fields+'</em>':'')+'. That is <strong>'+f.daysSinceLastChange+' day(s) ago</strong>.'+more;
+  }
+  if(ev.kind==='kw_drop'){
+    const k=ev.detail;
+    const more=f.keywordsDisappeared.length>1?' ('+(f.keywordsDisappeared.length-1)+' more high-spend keyword(s) also missing — see Keywords tab to compare)':'';
+    return '<strong>Found cause:</strong> keyword "<strong>'+k.text+'</strong>" spent $'+k.spend.toFixed(0)+' / '+k.clicks+' clicks in '+lp+' but does <strong>not appear</strong> in '+lc+'. Was paused, removed, or stopped triggering.'+more;
+  }
+  if(ev.kind==='kw_new'){
+    const k=ev.detail;
+    return '<strong>Found cause:</strong> new keyword "<strong>'+k.text+'</strong>" entered '+lc+' with $'+k.spend.toFixed(0)+' / '+k.clicks+' clicks — not present in '+lp+'. New traffic is being driven through this term.';
+  }
+  if(ev.kind==='ag_shift'){
+    const a=ev.detail;
+    const dir=a.delta>=0?'up':'down';
+    return '<strong>Found cause:</strong> ad group "<strong>'+a.name+'</strong>" spend shifted <strong>'+dir+' $'+Math.abs(a.delta).toFixed(0)+'</strong> ($'+a.prev_spend.toFixed(0)+'→$'+a.cur_spend.toFixed(0)+'), calls '+a.prev_calls+'→'+a.cur_calls+'. Account-level change-log shows no edits — likely a budget pacing or auction-level shift inside this ad group.';
+  }
+  return '';
+}
+
+function renderMOMRec(f){
+  if(!f.primaryEvidence){
+    return '<strong>Monitor for 1 more week.</strong> Internal investigation is clean. If degradation continues, run Auction Insights (<em>Reports → Predefined → Auction Insights</em>) to confirm whether a competitor grew share-of-voice. Acting before that data is guessing.';
+  }
+  const ev=f.primaryEvidence;
+  if(ev.kind==='change'){
+    const days=f.daysSinceLastChange;
+    const c=ev.detail;
+    if(days<=14){
+      const reEval=new Date(c.dt); reEval.setDate(reEval.getDate()+14);
+      const reStr=reEval.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      return '<strong>Wait — change is '+days+' day(s) old.</strong> Smart Bidding needs ~14 days to stabilize after any edit. Re-evaluate on <strong>'+reStr+'</strong>. Reverting now would kill the data needed to judge the change.';
+    }
+    return '<strong>Act — change is '+days+' day(s) old.</strong> Should have stabilized by now. If metric is degraded → Tools → Change History → click the row → <strong>Undo</strong>. If improved → log the change in your Ads playbook (date + change + result) so it can be reused.';
+  }
+  if(ev.kind==='kw_drop'){
+    const k=ev.detail;
+    return '<strong>Investigate the keyword.</strong> Open Keywords tab, search "'+k.text+'". Check status (enabled / paused / removed / disapproved) and quality score. If unintentionally paused → re-enable. If removed → re-add as exact match.';
+  }
+  if(ev.kind==='kw_new'){
+    return '<strong>Monitor the new keyword for 14 days.</strong> If conversions match or beat existing keywords, scale CPC. If clicks but no conversions, narrow match type (broad → phrase → exact) or add as negative if irrelevant.';
+  }
+  if(ev.kind==='ag_shift'){
+    const a=ev.detail;
+    return '<strong>Drill into "'+a.name+'".</strong> Open Ad Groups → '+a.name+' → review max CPC, daily budget split, and last 14 days of impression share. The shift is large enough to investigate before acting.';
+  }
+  return '';
+}
+
+function renderMOMSteps(f){
+  const s=[];
+  if(!f.primaryEvidence){
+    s.push('Open <a href="https://ads.google.com/aw/reports" target="_blank">Reports → Predefined → Auction Insights</a>');
+    s.push('Compare your <em>Impression Share</em> '+lpName()+' vs '+lcName()+' — drop = competitor pressure');
+    s.push('Compare <em>Outranking Share</em> — drop = competitors outbidding you');
+    s.push('If both stable → demand-side (seasonal). Wait 1 more week before any action.');
+    s.push('If competitor pressure: raise max CPC by 15% on top-converting keywords, monitor 7 days');
+    return s;
+  }
+  const ev=f.primaryEvidence;
+  if(ev.kind==='change'){
+    const c=ev.detail;
+    const dateStr=c.dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    s.push('Open <a href="https://ads.google.com/aw/changehistory" target="_blank">Tools → Change History</a> and locate the <strong>'+dateStr+'</strong> '+c.op+' on '+c.type);
+    if(f.daysSinceLastChange<=14){
+      s.push('Add a calendar reminder for 14 days after the change to re-check this dashboard');
+      s.push('Do not revert before then — early reverts destroy the signal');
+    } else {
+      s.push('If metric is degraded: click the row → <strong>Undo</strong> (Google Ads restores prior values)');
+      s.push('If metric is improved: log change details + date + delta in your Ads playbook');
+    }
+    if(f.changesInWindow.length>1) s.push('Review the other '+(f.changesInWindow.length-1)+' change(s) in <em>Recent Changes</em> table below to confirm none compound this effect');
+    return s;
+  }
+  if(ev.kind==='kw_drop'){
+    const k=ev.detail;
+    s.push('Open <a href="https://ads.google.com/aw/keywords" target="_blank">Google Ads → Keywords</a> and search "<strong>'+k.text+'</strong>"');
+    s.push('Check the status column: enabled / paused / removed / disapproved');
+    s.push('If paused unintentionally → click status → Enable');
+    s.push('If removed → re-add as exact match: [<em>'+k.text+'</em>]');
+    s.push('If status is enabled but 0 impressions → check Quality Score and bid (likely losing the auction)');
+    return s;
+  }
+  if(ev.kind==='kw_new'){
+    const k=ev.detail;
+    s.push('Open Keywords tab on this dashboard, find "<strong>'+k.text+'</strong>", check QS and conv-rate');
+    s.push('Wait 14 days from first impression — Smart Bidding needs the data');
+    s.push('If conv-rate matches/beats existing top keywords → scale CPC up 15%');
+    s.push('If clicks but no conv → tighten match type (phrase → exact) or add competitor terms as negatives');
+    return s;
+  }
+  if(ev.kind==='ag_shift'){
+    const a=ev.detail;
+    s.push('Open <a href="https://ads.google.com/aw/adgroups" target="_blank">Google Ads → Ad Groups</a> → <strong>'+a.name+'</strong>');
+    s.push('Verify: max CPC, daily-budget share, status, and impression share trend (last 14d)');
+    s.push('Check this ad group\'s row in the Ad Groups tab on this dashboard for QS / CTR shifts');
+    s.push('If impression share dropped → raise CPC. If CTR dropped → refresh ad copy.');
+    return s;
+  }
+  return s;
+}
+function lcName(){ return getMonthLabel('cur_month'); }
+function lpName(){ return getMonthLabel('prev_month'); }
+
+// ── ENUM DECODE HELPERS (fallback for both string names and numeric IDs) ──
+function ceResourceHuman(t){
+  const m={
+    'AD_GROUP':'Ad Group','AD_GROUP_AD':'Ad','AD_GROUP_CRITERION':'Keyword',
+    'CAMPAIGN':'Campaign','CAMPAIGN_BUDGET':'Budget','CAMPAIGN_BIDDING_STRATEGY':'Bidding',
+    'AD_GROUP_BID_MODIFIER':'Bid Modifier','CAMPAIGN_CRITERION':'Targeting',
+    'FEED':'Feed','FEED_ITEM':'Feed Item','SMART_CAMPAIGN_SETTING':'Smart Campaign',
+    'CAMPAIGN_ASSET':'Campaign Asset','CUSTOMER_ASSET':'Account Asset','AD_GROUP_ASSET':'Group Asset',
+    '0':'—','1':'—','2':'Ad Group','3':'Ad','4':'Keyword','5':'Campaign','6':'Budget',
+    '7':'Bid Modifier','8':'Targeting','9':'Feed','10':'Feed Item','11':'Bidding',
+    '16':'Smart Campaign','17':'Campaign Asset','18':'Account Asset','19':'Group Asset'
+  };
+  return m[String(t)]||t;
+}
+function ceOpHuman(o){
+  const m={
+    'CREATE':'added','UPDATE':'updated','REMOVE':'removed',
+    '0':'—','1':'—','2':'added','3':'updated','4':'removed'
+  };
+  return m[String(o)]||o;
+}
+function ceOpClass(o){
+  const s=String(o);
+  if(s==='CREATE'||s==='2') return 'ce-op-create';
+  if(s==='REMOVE'||s==='4') return 'ce-op-remove';
+  return 'ce-op-update';
+}
+function ceByLabel(e){
+  const who=e.user||e.client||'';
+  if(!who) return '—';
+  // email → first part before @ only; long client_type strings → shorten
+  if(who.includes('@')) return who.split('@')[0];
+  const short={'GOOGLE_ADS_SCRIPTS':'Script','GOOGLE_ADS_BULK_UPLOAD':'Bulk Upload',
+    'GOOGLE_ADS_WEB_CLIENT':'UI','GOOGLE_ADS_API':'API','GOOGLE_ADS_EDITOR':'Editor',
+    'GOOGLE_ADS_AUTOMATED_RULE':'Auto Rule','3':'Script','1':'UI','4':'Bulk Upload','5':'API','6':'Editor'};
+  return short[who]||who.replace('GOOGLE_ADS_','').replace(/_/g,' ').toLowerCase();
 }
 
 // ── CHANGE HISTORY (last 30 days) ──
@@ -2852,21 +3086,38 @@ function rChanges(){
   if(!tb) return;
   const ev=(DATA.changes||[]);
   if(ev.length===0){
-    tb.innerHTML='<tr><td colspan="5" class="ce-empty">No changes recorded in the last 30 days. (API limit: only last 30 days.)</td></tr>';
+    tb.innerHTML='<div class="ce-empty">No changes recorded in the last 30 days.<br><small style="font-size:10px">API limit: only last 30 days. Older changes: Google Ads → Tools → Change History.</small></div>';
     document.getElementById('ins-ce').innerHTML=make4Part(
       'No account changes in the last 30 days.',
-      'When the account is stable, performance shifts come from external factors: seasonal demand, competitor bids, or audience saturation.',
-      'Use the Auction Insights report to see if competitors increased share-of-voice during this window.'
+      'Investigated change-log API: 0 entries returned. When the account is stable, performance shifts come from external factors: seasonal demand, competitor bids, or audience saturation.'
     );
-    document.getElementById('ins-ce-steps').innerHTML='<ol><li>Open <a href="https://ads.google.com/aw/reports" target="_blank">Reports &rarr; Predefined reports &rarr; Auction insights</a></li><li>Compare share of voice month-over-month</li></ol>';
+    document.getElementById('ins-ce-steps').innerHTML='<div class="ins-part"><div class="ins-part-lbl">&#128161; Recommendation</div><div class="ins-part-txt">Check Auction Insights for competitor share-of-voice before acting.</div></div>'+
+      '<ol><li>Open <a href="https://ads.google.com/aw/reports" target="_blank">Reports → Predefined reports → Auction Insights</a></li><li>Compare Impression Share and Outranking Share vs prior month</li></ol>';
     return;
   }
-  const fmtDate=s=>{const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});};
-  tb.innerHTML=ev.slice(0,40).map(e=>'<tr><td>'+fmtDate(e.ts)+'</td><td><span class="t">'+e.type+'</span></td><td>'+e.op+'</td><td class="ce-fields" title="'+e.fields.replace(/"/g,'&quot;')+'">'+e.fields+'</td><td style="font-size:11px;color:var(--mut)">'+(e.user||e.client||'&mdash;')+'</td></tr>').join('');
+  const fmtDate=s=>{
+    const d=new Date(s); if(isNaN(d)) return s;
+    return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' · '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}).toLowerCase();
+  };
+  const cleanFields=f=>{if(!f) return '';return f.replace(/paths:\s*/g,'').replace(/"\s*\n\s*"/g,' · ').replace(/"/g,'').replace(/\n/g,' · ').substring(0,80).trim();};
+  tb.innerHTML=ev.slice(0,40).map(e=>{
+    const opCls=ceOpClass(e.op);
+    const res=ceResourceHuman(e.type);
+    const op=ceOpHuman(e.op);
+    const by=ceByLabel(e);
+    const fields=cleanFields(e.fields);
+    return '<div class="ce-card">'+
+      '<div class="ce-top">'+
+        '<span class="ce-what"><span class="ce-op-tag '+opCls+'">'+op+'</span>'+res+'</span>'+
+        '<span class="ce-when">'+fmtDate(e.ts)+'</span>'+
+      '</div>'+
+      (fields?'<div class="ce-bottom"><span class="ce-fields-txt" title="'+e.fields.replace(/"/g,'&quot;')+'">'+fields+'</span><span class="ce-by-txt">'+by+'</span></div>':'')+
+    '</div>';
+  }).join('');
 
-  // correlation insight
+  // correlation insight — use human labels for resource types
   const byType={};
-  ev.forEach(e=>{byType[e.type]=(byType[e.type]||0)+1;});
+  ev.forEach(e=>{byType[ceResourceHuman(e.type)]=(byType[ceResourceHuman(e.type)]||0)+1;});
   const summary=Object.entries(byType).map(([k,v])=>v+' '+k.toLowerCase()).join(', ');
   const obs='<strong>'+ev.length+' change(s)</strong> recorded in last 30 days &mdash; '+summary+'.';
   const cur=DATA.periods.cur_month&&DATA.periods.cur_month.campaign;
@@ -2880,14 +3131,14 @@ function rChanges(){
       why+='Month-over-month numbers are relatively stable, so changes here are tuning, not turning points.';
     }
   }
-  const rec='Click any row that lines up with a metric jump or drop. In Google Ads, Change History supports <strong>Undo</strong> on most edits if a change was harmful. Document the kept changes in an Ads playbook so wins can be reproduced.';
-  document.getElementById('ins-ce').innerHTML=make4Part(obs,why,rec);
-  document.getElementById('ins-ce-steps').innerHTML='<ol>'+
+  const rec='Click any card that lines up with a metric jump or drop. In Google Ads, Change History supports <strong>Undo</strong> on most edits if a change was harmful. Document kept changes in an Ads playbook so wins can be reproduced.';
+  document.getElementById('ins-ce').innerHTML=make4Part(obs,why);
+  document.getElementById('ins-ce-steps').innerHTML='<div class="ins-part"><div class="ins-part-lbl">&#128161; Recommendation</div><div class="ins-part-txt">'+rec+'</div></div><ol>'+
     '<li>Open <a href="https://ads.google.com/aw/changehistory" target="_blank">Google Ads &rarr; Tools &rarr; Change History</a> to see full detail (old vs new values)</li>'+
-    '<li>Click the change row matching the metric inflection &rarr; review old/new values</li>'+
+    '<li>Click the change matching the metric inflection &rarr; review old/new values</li>'+
     '<li>If harmful: click <strong>Undo</strong> (restores prior config)</li>'+
     '<li>If beneficial: log it in your Ads playbook with date + result</li>'+
-    '<li>For changes &gt;30 days old: only available in the Google Ads UI Change History (not via API)</li>'+
+    '<li>For changes &gt;30 days old: only available in Google Ads UI Change History (not via API)</li>'+
   '</ol>';
 }
 

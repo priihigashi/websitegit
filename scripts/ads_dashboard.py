@@ -160,6 +160,12 @@ def get_change_log(ga, customer_id):
     events = []
     today = datetime.date.today()
     start = today - datetime.timedelta(days=29)
+    # NOTE: do NOT filter by change_event.campaign — bulk Google Ads Scripts often
+    # populate only the most-specific resource path (ad_group / criterion), leaving
+    # campaign empty. Filtering on it silently drops those changes. The customer_id
+    # scope already constrains us to the OPC sub-account.
+    expected_camp_path = f"customers/{customer_id}/campaigns/{CAMPAIGN_ID}"
+    raw_count = 0
     try:
         r = ga.search(customer_id=customer_id, query=f"""
             SELECT change_event.change_date_time,
@@ -173,12 +179,17 @@ def get_change_log(ga, customer_id):
             FROM change_event
             WHERE change_event.change_date_time >= '{start} 00:00:00'
               AND change_event.change_date_time <= '{today} 23:59:59'
-              AND change_event.campaign = 'customers/{customer_id}/campaigns/{CAMPAIGN_ID}'
             ORDER BY change_event.change_date_time DESC
-            LIMIT 100
+            LIMIT 500
         """)
         for row in r:
             ce = row.change_event
+            raw_count += 1
+            # Keep events scoped to our campaign when campaign field is set;
+            # keep events with empty campaign too (bulk scripts may omit it).
+            camp = str(ce.campaign or "")
+            if camp and camp != expected_camp_path:
+                continue
             try:
                 fields_raw = str(ce.changed_fields)
                 fields = fields_raw.replace("paths: ", "").replace('"', "").strip()
@@ -194,6 +205,7 @@ def get_change_log(ga, customer_id):
             })
     except Exception as e:
         print(f"  change_log failed: {e}")
+    print(f"  change_log: {raw_count} raw events fetched, {len(events)} kept after campaign-scope filter")
     return events
 
 
