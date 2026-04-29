@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OPC &mdash; Google Ads Dashboard (Dark)</title>
+<title>OPC &mdash; Google Ads Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--cream:#0A0A0A;--obsidian:#F0EBE3;--lime:#CBCC10;--ld:#CBCC10;--red:#ff4444;--ylw:#f0a500;--brd:#2a2a2a;--mut:#666;--card:#141414;--alt:#1a1a1a;--ins:#0d1a08;--ins-brd:#2a4a1a}
+:root{--cream:#F0EBE3;--obsidian:#0A0A0A;--lime:#CBCC10;--ld:#9FA000;--red:#C0392B;--ylw:#E67E22;--brd:#D6CFCA;--mut:#888;--card:#FFFFFF;--alt:#F8F4F0;--ins:#F5F9F0;--ins-brd:#C8E0B0}
 body{background:var(--cream);color:var(--obsidian);font-family:'Roboto Condensed',-apple-system,sans-serif;min-height:100vh;font-size:15px}
 .hdr{background:var(--obsidian);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
 .logo{font-family:'Anton',sans-serif;font-size:18px;letter-spacing:3px;color:var(--lime);text-transform:uppercase}
@@ -34,7 +34,7 @@ body{background:var(--cream);color:var(--obsidian);font-family:'Roboto Condensed
 .wc-top{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;cursor:pointer;user-select:none}
 .wc-top:hover{background:var(--alt)}
 .wi{font-size:14px;flex-shrink:0;margin-top:1px}
-.wt{font-size:13px;line-height:1.5;color:#bbb;flex:1}
+.wt{font-size:13px;line-height:1.5;color:#333;flex:1}
 .wt strong{color:var(--obsidian)}
 .wa{font-size:11px;color:var(--mut);margin-top:3px;font-style:italic}
 .wtgl{font-size:11px;color:var(--ld);font-weight:700;letter-spacing:.5px;white-space:nowrap;margin-top:4px;cursor:pointer}
@@ -59,13 +59,111 @@ body{background:var(--cream);color:var(--obsidian);font-family:'Roboto Condensed
 /* sections */
 .sec{margin-bottom:22px}
 .sech{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--mut);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--brd)}
+.periodtag{display:inline-block;background:var(--obsidian);color:var(--cream);font-size:9px;font-weight:700;letter-spacing:1.5px;padding:2px 8px;border-radius:3px;margin-left:8px;vertical-align:1px}
+body.night-mode .periodtag{background:var(--ld);color:var(--obsidian)}
 .card{background:var(--card);border:1px solid var(--brd);border-radius:8px;padding:16px}
-/* insight box */
-.insight{background:var(--ins);border:1px solid var(--ins-brd);border-radius:6px;padding:12px 14px;margin-top:10px;font-size:12px;line-height:1.6;color:#b8d098}
-.insight-lbl{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#8ab060;margin-bottom:6px}
+/* two-row tab system */
+.tabs-wrap{margin-bottom:6px}
+.tabs-lbl{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mut);margin-bottom:4px;padding-left:2px}
+.tabs-mo{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.tab-mo{font-family:'Anton',sans-serif;font-size:13px;letter-spacing:1.5px;background:var(--card);border:2px solid var(--brd);color:var(--mut);padding:7px 8px;border-radius:4px;cursor:pointer;white-space:nowrap;transition:all .15s;text-align:center;width:100%}
+.tab-mo:hover{border-color:var(--ld);color:var(--obsidian)}
+.tab-mo.on{background:var(--obsidian);border-color:var(--obsidian);color:var(--lime)}
+/* expandable AI insight boxes */
+.ins-box{background:var(--ins);border:1px solid var(--ins-brd);border-radius:6px;margin-top:10px;overflow:hidden}
+.ins-head{padding:12px 14px;cursor:pointer;user-select:none}
+.ins-head:hover{background:#eef5e8}
+.insight-lbl{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#5a8a30;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.ins-toggle{font-size:10px;color:var(--ld);letter-spacing:0;text-transform:none;font-weight:700}
+.ins-body{font-size:12px;line-height:1.6;color:#2a3a1a}
+.ins-part{margin-top:10px}
+.ins-part:first-child{margin-top:0}
+.ins-part-lbl{font-size:9px;font-weight:700;letter-spacing:1.5px;color:#5a8a30;text-transform:uppercase;margin-bottom:3px}
+.ins-part-txt{font-size:12px;line-height:1.55;color:#2a3a1a}
+body.night-mode .ins-part-lbl{color:#9ac070}
+body.night-mode .ins-part-txt{color:#cfdebc}
+.changes-section{margin-bottom:22px}
+.changes-table{font-size:11px}
+.changes-table thead th{font-size:9px}
+.changes-table .ce-fields{font-family:monospace;font-size:10px;color:#666;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.night-mode .changes-table .ce-fields{color:#888}
+.ce-empty{padding:14px 16px;color:var(--mut);font-size:12px;text-align:center}
+.api-note{background:#fef9e7;border-left:3px solid var(--ylw);padding:8px 12px;font-size:11px;color:#8a5a00;margin-top:8px;border-radius:3px}
+body.night-mode .api-note{background:#2a1a00;color:#d09040}
+.qs-pill{display:inline-block;font-family:'Anton',sans-serif;font-size:11px;padding:1px 6px;border-radius:3px;letter-spacing:.5px}
+.qs-pill.qs-hi{background:#EAFAF1;color:#1a7a43;border:1px solid #27AE60}
+.qs-pill.qs-md{background:#FEF9E7;color:#a04000;border:1px solid var(--ylw)}
+.qs-pill.qs-lo{background:#FDECEA;color:var(--red);border:1px solid var(--red)}
+.qs-pill.qs-na{background:var(--alt);color:var(--mut);border:1px solid var(--brd)}
+body.night-mode .qs-pill.qs-hi{background:#0a2a15;color:#5ad080;border-color:#1a6a35}
+body.night-mode .qs-pill.qs-md{background:#2a1a00;color:#d09040;border-color:#8a5a00}
+body.night-mode .qs-pill.qs-lo{background:#2a0a0a;color:#e06060;border-color:#8a2020}
+body.night-mode .qs-pill.qs-na{background:#222;color:#777;border-color:#333}
+.ins-steps-box{display:none;border-top:1px solid var(--ins-brd);padding:14px 16px;background:#eef5e8;font-size:12px;line-height:1.7}
+.ins-steps-box.open{display:block}
+.ins-steps-box ol{padding-left:18px;color:#1a3a10}
+.ins-steps-box li{margin-bottom:6px}
+.ins-steps-box a{color:var(--ld);text-decoration:none;font-weight:700}
+/* auto night mode */
+body.night-mode{--cream:#111;--obsidian:#e8e3dc;--brd:#333;--card:#1a1a1a;--alt:#222;--ins:#1a2a12;--ins-brd:#2a4a1a;--mut:#777}
+body.night-mode .hdr{background:#000}
+body.night-mode .insight-lbl{color:#8ab060}
+body.night-mode .ins-body{color:#b8d098}
+body.night-mode .ins-head:hover{background:#1f2f17}
+body.night-mode .ins-steps-box{background:#182814;color:#b8d098}
+body.night-mode .ins-toggle{color:#8ab060}
+body.night-mode tbody td{color:#b0a898}
+body.night-mode thead th{color:#666}
+body.night-mode .t{background:#2a2a2a;border-color:#444;color:#aaa}
+body.night-mode .t.lm{background:#2a2a00;border-color:#6a6b00;color:#cdce10}
+body.night-mode .t.gn{background:#0a2a15;border-color:#1a6a35;color:#5ad080}
+body.night-mode .t.rd{background:#2a0a0a;border-color:#8a2020;color:#e06060}
+body.night-mode .t.yw{background:#2a1a00;border-color:#8a5a00;color:#d09040}
+body.night-mode .wsteps{background:#1e1e1e;color:#ccc}
+body.night-mode .wsteps ol{color:#bbb}
+body.night-mode .agn{color:#c8c2b8}
+body.night-mode .agm{color:#999}
+body.night-mode .kv{color:var(--obsidian)}
+body.night-mode .kv.ac{color:var(--ld)}
+body.night-mode .sech{color:#999;border-color:#333}
+/* night-mode contrast hardening — every text element on dark bg must be readable */
+body.night-mode tbody td{color:#d8d2c8}
+body.night-mode thead th{color:#999;background:#0f0f0f}
+body.night-mode tbody tr:hover td{background:#222}
+body.night-mode .wt{color:#c8c2b8}
+body.night-mode .wt strong{color:#fff}
+body.night-mode .wa{color:#888}
+body.night-mode .ins-steps-box ol{color:#b8d098}
+body.night-mode .ins-steps-box a{color:#cdce10}
+body.night-mode .wsteps a{color:#cdce10}
+body.night-mode .agbl{color:#0A0A0A}
+body.night-mode .agbw{background:#2a2a2a}
+body.night-mode .agb.z{background:#333}
+body.night-mode .klbl{color:#888}
+body.night-mode .ksb{color:#888}
+body.night-mode .copy-btn{background:var(--lime);color:#0A0A0A}
+body.night-mode .copy-btn:hover{background:var(--ld)}
+body.night-mode .script-box{background:#000;color:var(--lime);border:1px solid #333}
+body.night-mode .daterange{color:#888}
+body.night-mode .daterange span{color:var(--obsidian)}
+body.night-mode .hdr-lbl{color:#666}
+body.night-mode .hdr-val{color:#999}
+body.night-mode .tabs-lbl{color:#888}
+body.night-mode code{background:#222 !important;color:#cdce10 !important}
+/* call log cell classes (replace inline colors so night mode flips correctly) */
+.cl-date,.cl-time{font-size:12px;color:#555}
+.cl-ag{font-size:11px;color:#888}
+.cl-dur{font-family:'Anton',sans-serif;font-size:14px}
+.cl-dur.lng{color:var(--obsidian)}
+.cl-dur.shrt{color:#888}
+body.night-mode .cl-date,body.night-mode .cl-time{color:#aaa}
+body.night-mode .cl-ag{color:#999}
+body.night-mode .cl-dur.lng{color:var(--lime)}
+body.night-mode .cl-dur.shrt{color:#888}
+body.night-mode .ins-head:hover{background:#1f2f17}
 /* ad group bars */
 .agr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.agn{font-size:11px;color:#aaa;width:160px;flex-shrink:0;font-weight:700;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agn{font-size:11px;color:#555;width:160px;flex-shrink:0;font-weight:700;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .agbw{flex:1;background:var(--alt);border-radius:3px;height:22px;overflow:hidden}
 .agb{height:100%;background:var(--lime);border-radius:3px;display:flex;align-items:center;padding-left:8px;transition:width .6s ease;min-width:4px}
 .agb.z{background:var(--brd)}
@@ -74,7 +172,7 @@ body{background:var(--cream);color:var(--obsidian);font-family:'Roboto Condensed
 /* tables */
 table{width:100%;border-collapse:collapse;font-size:12px}
 thead th{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mut);text-align:left;padding:8px 10px;border-bottom:2px solid var(--brd);background:var(--alt)}
-tbody td{padding:8px 10px;border-bottom:1px solid var(--brd);color:#b0a898;vertical-align:middle}
+tbody td{padding:8px 10px;border-bottom:1px solid var(--brd);color:#333;vertical-align:middle}
 tbody tr:last-child td{border-bottom:none}
 tbody tr:hover td{background:var(--alt)}
 .t{display:inline-block;background:var(--alt);border:1px solid var(--brd);border-radius:3px;padding:2px 7px;font-size:10px;color:#555;font-weight:700;letter-spacing:.5px}
@@ -89,18 +187,27 @@ canvas{max-height:180px}
 @media(max-width:540px){.agn{width:100px;font-size:9px}.agm{width:80px;font-size:10px}}
 </style>
 </head>
-<body>
+<body class="night-mode">
 <div class="hdr">
   <div class="logo">OPC &#8212; ADS</div>
   <div class="hdr-r"><div class="hdr-lbl">Last Refresh</div><div class="hdr-val" id="ud">&#8212;</div></div>
 </div>
 <div class="wrap">
-  <div class="tabs">
-    <button class="tab on" onclick="setP('30d')">30D</button>
-    <button class="tab" onclick="setP('60d')">60D</button>
-    <button class="tab" onclick="setP('90d')">90D</button>
-    <button class="tab" onclick="setP('6mo')">6 MO</button>
-    <button class="tab" onclick="setP('12mo')">12 MO</button>
+  <div class="tabs-wrap">
+    <div class="tabs-lbl">Rolling periods</div>
+    <div class="tabs">
+      <button class="tab" onclick="setP('15d')">15D</button>
+      <button class="tab" onclick="setP('30d')">30D</button>
+      <button class="tab" onclick="setP('60d')">60D</button>
+      <button class="tab" onclick="setP('90d')">90D</button>
+      <button class="tab" onclick="setP('6mo')">6 MO</button>
+      <button class="tab" onclick="setP('12mo')">12 MO</button>
+    </div>
+    <div class="tabs-mo">
+      <button class="tab-mo on" id="tm0" onclick="setP('cur_month')">APR</button>
+      <button class="tab-mo" id="tm1" onclick="setP('prev_month')">MAR</button>
+      <button class="tab-mo" id="tm2" onclick="setP('prev2_month')">FEB</button>
+    </div>
   </div>
   <div class="daterange" id="dr">&#8212;</div>
   <div class="warns"><div class="slbl">&#9888; Requires Attention</div><div id="wl"></div></div>
@@ -111,27 +218,72 @@ canvas{max-height:180px}
     <div class="kc"><div class="klbl">Avg CPC</div><div class="kv" id="kcpc">&#8212;</div><div class="ksb">Per click</div></div>
   </div>
   <div class="sec">
-    <div class="sech">Spend by Ad Group</div>
+    <div class="sech">Spend by Ad Group <span class="periodtag" id="ptag-ag">&mdash;</span></div>
     <div class="card"><div id="agb"></div></div>
-    <div class="insight"><div class="insight-lbl">&#129302; AI Analysis</div><div id="ins-ag"></div></div>
+    <div class="ins-box">
+      <div class="ins-head" onclick="toggleIns('ins-ag-steps')">
+        <div class="insight-lbl">&#129302; AI Analysis <span class="ins-toggle">&#9656; action steps</span></div>
+        <div class="ins-body" id="ins-ag"></div>
+      </div>
+      <div class="ins-steps-box" id="ins-ag-steps"></div>
+    </div>
   </div>
   <div class="sec">
-    <div class="sech">Top Keywords &#8212; Spend vs Conversions</div>
+    <div class="sech">Top Keywords &#8212; Spend vs Conversions <span class="periodtag" id="ptag-ch">&mdash;</span></div>
     <div class="card"><canvas id="ch"></canvas></div>
   </div>
   <div class="sec">
-    <div class="sech">Top Keywords by Spend</div>
+    <div class="sech">Top Keywords by Spend <span class="periodtag" id="ptag-kw">&mdash;</span></div>
     <div class="card" style="padding:0;overflow:hidden;border-radius:8px">
-      <table><thead><tr><th>Keyword</th><th>Group</th><th>Spend</th><th>Clicks</th><th>CTR</th><th>Conv</th></tr></thead><tbody id="kwt"></tbody></table>
+      <table><thead><tr><th>Keyword</th><th>Group</th><th>Spend</th><th>Clicks</th><th>CTR</th><th>Conv</th><th>QS</th></tr></thead><tbody id="kwt"></tbody></table>
     </div>
-    <div class="insight"><div class="insight-lbl">&#129302; AI Analysis</div><div id="ins-kw"></div></div>
+    <div class="ins-box">
+      <div class="ins-head" onclick="toggleIns('ins-kw-steps')">
+        <div class="insight-lbl">&#129302; AI Analysis <span class="ins-toggle">&#9656; action steps</span></div>
+        <div class="ins-body" id="ins-kw"></div>
+      </div>
+      <div class="ins-steps-box" id="ins-kw-steps"></div>
+    </div>
   </div>
   <div class="sec">
-    <div class="sech">Call Log &#8212; All Time (46 calls) &nbsp;<span style="font-size:10px;color:var(--mut);font-weight:400;letter-spacing:0;text-transform:none">&#8226; Area codes only &mdash; Google API does not expose full phone numbers for privacy. Full numbers visible in Google Ads UI under Reports &gt; Call Details.</span></div>
+    <div class="sech">Call Log &#8212; All Time (46 calls) &nbsp;<span style="font-size:10px;color:var(--mut);font-weight:400;letter-spacing:0;text-transform:none">&#8226; Area codes only &mdash; full numbers in Google Ads &rarr; Tools &rarr; Reports &rarr; Predefined reports &rarr; Other &rarr; Call details</span></div>
     <div class="card" style="padding:0;overflow:hidden;border-radius:8px">
       <table><thead><tr><th>Date</th><th>Time</th><th>Area / Region</th><th>Duration</th><th>Status</th><th>Ad Group</th></tr></thead><tbody id="ct"></tbody></table>
     </div>
-    <div class="insight"><div class="insight-lbl">&#129302; AI Analysis</div><div id="ins-cl"></div></div>
+    <div class="ins-box">
+      <div class="ins-head" onclick="toggleIns('ins-cl-steps')">
+        <div class="insight-lbl">&#129302; AI Analysis <span class="ins-toggle">&#9656; action steps</span></div>
+        <div class="ins-body" id="ins-cl"></div>
+      </div>
+      <div class="ins-steps-box" id="ins-cl-steps"></div>
+    </div>
+  </div>
+  <div class="sec">
+    <div class="sech">&#128202; Month-over-Month &mdash; What Changed</div>
+    <div class="card" style="padding:0;overflow:hidden;border-radius:8px">
+      <table><thead><tr><th>Metric</th><th id="mom-h0">&mdash;</th><th id="mom-h1">&mdash;</th><th id="mom-h2">&mdash;</th><th>Trend</th></tr></thead><tbody id="mom-body"></tbody></table>
+    </div>
+    <div class="ins-box">
+      <div class="ins-head" onclick="toggleIns('ins-mom-steps')">
+        <div class="insight-lbl">&#128269; Trend Analysis <span class="ins-toggle">&#9656; investigate</span></div>
+        <div class="ins-body" id="ins-mom"></div>
+      </div>
+      <div class="ins-steps-box" id="ins-mom-steps"></div>
+    </div>
+  </div>
+  <div class="sec changes-section">
+    <div class="sech">&#128295; Recent Changes &mdash; Last 30 Days</div>
+    <div class="card" style="padding:0;overflow:hidden;border-radius:8px">
+      <table class="changes-table"><thead><tr><th>Date / Time</th><th>Resource</th><th>Op</th><th>Fields Changed</th><th>By</th></tr></thead><tbody id="ce-body"></tbody></table>
+    </div>
+    <div class="api-note">&#9888;&#65039; Google Ads change-history API only supports the last 30 days. For older changes: Google Ads &rarr; Tools &rarr; Change History.</div>
+    <div class="ins-box">
+      <div class="ins-head" onclick="toggleIns('ins-ce-steps')">
+        <div class="insight-lbl">&#128269; Change Correlation <span class="ins-toggle">&#9656; investigate</span></div>
+        <div class="ins-body" id="ins-ce"></div>
+      </div>
+      <div class="ins-steps-box" id="ins-ce-steps"></div>
+    </div>
   </div>
   <div class="foot">Auto-refreshed every Monday 8 AM ET &nbsp;|&nbsp; <a href="/oak-park-ai-hub/dashboard/">&#9675; Light version</a> &nbsp;|&nbsp; priihigashi/oak-park-ai-hub</div>
 </div>
@@ -140,23 +292,1157 @@ canvas{max-height:180px}
 const DATA = {
   "updated": "2026-04-29",
   "periods": {
-    "30d": {"campaign":{"clicks":234,"impressions":4436,"ctr":5.28,"avg_cpc":4.34,"spend":1014.62,"conversions":1.0,"calls":10},"adgroups":[{"name":"NEW AND ADDITION","spend":833.11,"clicks":193,"conv":1.0},{"name":"CONCRETE FOUNDATION","spend":154.27,"clicks":35,"conv":0.0},{"name":"SHELL CONSTRUCTION","spend":15.18,"clicks":3,"conv":0.0},{"name":"STUCCO","spend":12.05,"clicks":3,"conv":0.0}],"keywords":[{"text":"building construction company","ag":"NEW","spend":155.59,"clicks":32,"ctr":4.31,"conv":0.0},{"text":"general contractor near me","ag":"NEW","spend":146.70,"clicks":35,"ctr":8.97,"conv":0.0},{"text":"new home construction","ag":"NEW","spend":144.39,"clicks":37,"ctr":5.94,"conv":0.0},{"text":"concrete services","ag":"CONCRETE","spend":137.31,"clicks":27,"ctr":5.15,"conv":0.0},{"text":"construction and renovation company","ag":"NEW","spend":121.31,"clicks":22,"ctr":4.50,"conv":1.0},{"text":"new construction homes","ag":"NEW","spend":92.13,"clicks":21,"ctr":6.38,"conv":0.0},{"text":"home renovation contractor","ag":"NEW","spend":76.86,"clicks":15,"ctr":5.60,"conv":0.0},{"text":"builders to build a house","ag":"NEW","spend":29.88,"clicks":10,"ctr":5.03,"conv":0.0},{"text":"custom new build homes","ag":"NEW","spend":17.57,"clicks":3,"ctr":6.12,"conv":0.0},{"text":"home remodeling contractor","ag":"NEW","spend":15.99,"clicks":6,"ctr":6.45,"conv":0.0}]},
-    "60d": {"campaign":{"clicks":309,"impressions":5793,"ctr":5.33,"avg_cpc":4.22,"spend":1303.05,"conversions":2.0,"calls":12},"adgroups":[{"name":"NEW AND ADDITION","spend":1067.36,"clicks":248,"conv":2.0},{"name":"CONCRETE FOUNDATION","spend":205.02,"clicks":47,"conv":0.0},{"name":"SHELL CONSTRUCTION","spend":15.18,"clicks":3,"conv":0.0},{"name":"STUCCO","spend":15.49,"clicks":11,"conv":0.0}],"keywords":[{"text":"building construction company","ag":"NEW","spend":196.27,"clicks":42,"ctr":4.35,"conv":0.0},{"text":"general contractor near me","ag":"NEW","spend":191.84,"clicks":46,"ctr":8.52,"conv":0.0},{"text":"new home construction","ag":"NEW","spend":183.42,"clicks":48,"ctr":5.88,"conv":0.0},{"text":"concrete services","ag":"CONCRETE","spend":175.84,"clicks":35,"ctr":5.02,"conv":0.0},{"text":"construction and renovation company","ag":"NEW","spend":166.31,"clicks":31,"ctr":4.43,"conv":2.0},{"text":"new construction homes","ag":"NEW","spend":117.50,"clicks":27,"ctr":6.21,"conv":0.0},{"text":"home renovation contractor","ag":"NEW","spend":96.11,"clicks":20,"ctr":5.47,"conv":0.0},{"text":"builders to build a house","ag":"NEW","spend":38.72,"clicks":13,"ctr":4.98,"conv":0.0},{"text":"custom new build homes","ag":"NEW","spend":22.43,"clicks":4,"ctr":6.05,"conv":0.0},{"text":"home remodeling contractor","ag":"NEW","spend":20.84,"clicks":8,"ctr":6.33,"conv":0.0}]},
-    "90d": {"campaign":{"clicks":309,"impressions":5793,"ctr":5.33,"avg_cpc":4.22,"spend":1303.05,"conversions":2.0,"calls":12},"adgroups":[{"name":"NEW AND ADDITION","spend":1067.36,"clicks":248,"conv":2.0},{"name":"CONCRETE FOUNDATION","spend":205.02,"clicks":47,"conv":0.0},{"name":"SHELL CONSTRUCTION","spend":15.18,"clicks":3,"conv":0.0},{"name":"STUCCO","spend":15.49,"clicks":11,"conv":0.0}],"keywords":[{"text":"building construction company","ag":"NEW","spend":196.27,"clicks":42,"ctr":4.35,"conv":0.0},{"text":"general contractor near me","ag":"NEW","spend":191.84,"clicks":46,"ctr":8.52,"conv":0.0},{"text":"new home construction","ag":"NEW","spend":183.42,"clicks":48,"ctr":5.88,"conv":0.0},{"text":"concrete services","ag":"CONCRETE","spend":175.84,"clicks":35,"ctr":5.02,"conv":0.0},{"text":"construction and renovation company","ag":"NEW","spend":166.31,"clicks":31,"ctr":4.43,"conv":2.0},{"text":"new construction homes","ag":"NEW","spend":117.50,"clicks":27,"ctr":6.21,"conv":0.0},{"text":"home renovation contractor","ag":"NEW","spend":96.11,"clicks":20,"ctr":5.47,"conv":0.0},{"text":"builders to build a house","ag":"NEW","spend":38.72,"clicks":13,"ctr":4.98,"conv":0.0},{"text":"custom new build homes","ag":"NEW","spend":22.43,"clicks":4,"ctr":6.05,"conv":0.0},{"text":"home remodeling contractor","ag":"NEW","spend":20.84,"clicks":8,"ctr":6.33,"conv":0.0}]},
-    "6mo": {"campaign":{"clicks":469,"impressions":9011,"ctr":5.20,"avg_cpc":3.86,"spend":1810.12,"conversions":2.0,"calls":12},"adgroups":[{"name":"NEW AND ADDITION","spend":1491.51,"clicks":381,"conv":2.0},{"name":"CONCRETE FOUNDATION","spend":283.42,"clicks":74,"conv":0.0},{"name":"SHELL CONSTRUCTION","spend":20.00,"clicks":7,"conv":0.0},{"name":"STUCCO","spend":15.19,"clicks":7,"conv":0.0}],"keywords":[{"text":"building construction company","ag":"NEW","spend":275.84,"clicks":66,"ctr":4.28,"conv":0.0},{"text":"general contractor near me","ag":"NEW","spend":265.21,"clicks":71,"ctr":8.41,"conv":0.0},{"text":"new home construction","ag":"NEW","spend":255.63,"clicks":73,"ctr":5.77,"conv":0.0},{"text":"concrete services","ag":"CONCRETE","spend":252.14,"clicks":55,"ctr":4.91,"conv":0.0},{"text":"construction and renovation company","ag":"NEW","spend":235.88,"clicks":49,"ctr":4.31,"conv":2.0},{"text":"new construction homes","ag":"NEW","spend":162.47,"clicks":40,"ctr":6.11,"conv":0.0},{"text":"home renovation contractor","ag":"NEW","spend":131.25,"clicks":29,"ctr":5.38,"conv":0.0},{"text":"builders to build a house","ag":"NEW","spend":55.43,"clicks":19,"ctr":4.87,"conv":0.0},{"text":"custom new build homes","ag":"NEW","spend":31.97,"clicks":6,"ctr":5.98,"conv":0.0},{"text":"home remodeling contractor","ag":"NEW","spend":28.47,"clicks":11,"ctr":6.21,"conv":0.0}]},
-    "12mo": {"campaign":{"clicks":469,"impressions":9011,"ctr":5.20,"avg_cpc":3.86,"spend":1810.12,"conversions":2.0,"calls":12},"adgroups":[{"name":"NEW AND ADDITION","spend":1491.51,"clicks":381,"conv":2.0},{"name":"CONCRETE FOUNDATION","spend":283.42,"clicks":74,"conv":0.0},{"name":"SHELL CONSTRUCTION","spend":20.00,"clicks":7,"conv":0.0},{"name":"STUCCO","spend":15.19,"clicks":7,"conv":0.0}],"keywords":[{"text":"building construction company","ag":"NEW","spend":275.84,"clicks":66,"ctr":4.28,"conv":0.0},{"text":"general contractor near me","ag":"NEW","spend":265.21,"clicks":71,"ctr":8.41,"conv":0.0},{"text":"new home construction","ag":"NEW","spend":255.63,"clicks":73,"ctr":5.77,"conv":0.0},{"text":"concrete services","ag":"CONCRETE","spend":252.14,"clicks":55,"ctr":4.91,"conv":0.0},{"text":"construction and renovation company","ag":"NEW","spend":235.88,"clicks":49,"ctr":4.31,"conv":2.0},{"text":"new construction homes","ag":"NEW","spend":162.47,"clicks":40,"ctr":6.11,"conv":0.0},{"text":"home renovation contractor","ag":"NEW","spend":131.25,"clicks":29,"ctr":5.38,"conv":0.0},{"text":"builders to build a house","ag":"NEW","spend":55.43,"clicks":19,"ctr":4.87,"conv":0.0},{"text":"custom new build homes","ag":"NEW","spend":31.97,"clicks":6,"ctr":5.98,"conv":0.0},{"text":"home remodeling contractor","ag":"NEW","spend":28.47,"clicks":11,"ctr":6.21,"conv":0.0}]}
+    "15d": {
+      "campaign": {
+        "clicks": 171,
+        "impressions": 3305,
+        "ctr": 5.17,
+        "avg_cpc": 4.24,
+        "spend": 725.23,
+        "conversions": 1.0,
+        "calls": 10
+      },
+      "adgroups": [
+        {
+          "name": "NEW AND ADDITION",
+          "spend": 575.22,
+          "clicks": 134,
+          "conv": 1.0
+        },
+        {
+          "name": "CONCRETE FOUNDATION",
+          "spend": 122.78,
+          "clicks": 31,
+          "conv": 0.0
+        },
+        {
+          "name": "SHELL CONSTRUCTION",
+          "spend": 15.18,
+          "clicks": 3,
+          "conv": 0.0
+        },
+        {
+          "name": "STUCCO",
+          "spend": 12.05,
+          "clicks": 3,
+          "conv": 0.0
+        }
+      ],
+      "keywords": [
+        {
+          "text": "construction and renovation company",
+          "ag": "NEW",
+          "spend": 121.31,
+          "clicks": 22,
+          "ctr": 4.63,
+          "conv": 1.0
+        },
+        {
+          "text": "building construction company",
+          "ag": "NEW",
+          "spend": 106.59,
+          "clicks": 21,
+          "ctr": 4.49,
+          "conv": 0.0
+        },
+        {
+          "text": "concrete services",
+          "ag": "CONCRETE",
+          "spend": 105.82,
+          "clicks": 23,
+          "ctr": 5.3,
+          "conv": 0.0
+        },
+        {
+          "text": "general contractor near me",
+          "ag": "NEW",
+          "spend": 103.83,
+          "clicks": 22,
+          "ctr": 8.15,
+          "conv": 0.0
+        },
+        {
+          "text": "new home construction",
+          "ag": "NEW",
+          "spend": 79.09,
+          "clicks": 23,
+          "ctr": 5.99,
+          "conv": 0.0
+        },
+        {
+          "text": "home renovation contractor",
+          "ag": "NEW",
+          "spend": 51.52,
+          "clicks": 9,
+          "ctr": 4.86,
+          "conv": 0.0
+        },
+        {
+          "text": "new construction homes",
+          "ag": "NEW",
+          "spend": 28.3,
+          "clicks": 9,
+          "ctr": 4.39,
+          "conv": 0.0
+        },
+        {
+          "text": "builders to build a house",
+          "ag": "NEW",
+          "spend": 24.08,
+          "clicks": 9,
+          "ctr": 5.14,
+          "conv": 0.0
+        },
+        {
+          "text": "custom new build homes",
+          "ag": "NEW",
+          "spend": 17.57,
+          "clicks": 3,
+          "ctr": 6.38,
+          "conv": 0.0
+        },
+        {
+          "text": "home remodeling contractor",
+          "ag": "NEW",
+          "spend": 15.99,
+          "clicks": 6,
+          "ctr": 8.33,
+          "conv": 0.0
+        }
+      ]
+    },
+    "30d": {
+      "campaign": {
+        "clicks": 233,
+        "impressions": 4347,
+        "ctr": 5.36,
+        "avg_cpc": 4.34,
+        "spend": 1012.03,
+        "conversions": 1.0,
+        "calls": 10
+      },
+      "adgroups": [
+        {
+          "name": "NEW AND ADDITION",
+          "spend": 830.52,
+          "clicks": 192,
+          "conv": 1.0
+        },
+        {
+          "name": "CONCRETE FOUNDATION",
+          "spend": 154.27,
+          "clicks": 35,
+          "conv": 0.0
+        },
+        {
+          "name": "SHELL CONSTRUCTION",
+          "spend": 15.18,
+          "clicks": 3,
+          "conv": 0.0
+        },
+        {
+          "name": "STUCCO",
+          "spend": 12.05,
+          "clicks": 3,
+          "conv": 0.0
+        }
+      ],
+      "keywords": [
+        {
+          "text": "building construction company",
+          "ag": "NEW",
+          "spend": 155.59,
+          "clicks": 32,
+          "ctr": 4.34,
+          "conv": 0.0
+        },
+        {
+          "text": "general contractor near me",
+          "ag": "NEW",
+          "spend": 146.7,
+          "clicks": 35,
+          "ctr": 9.11,
+          "conv": 0.0
+        },
+        {
+          "text": "new home construction",
+          "ag": "NEW",
+          "spend": 144.39,
+          "clicks": 37,
+          "ctr": 5.94,
+          "conv": 0.0
+        },
+        {
+          "text": "concrete services",
+          "ag": "CONCRETE",
+          "spend": 137.31,
+          "clicks": 27,
+          "ctr": 5.22,
+          "conv": 0.0
+        },
+        {
+          "text": "construction and renovation company",
+          "ag": "NEW",
+          "spend": 121.31,
+          "clicks": 22,
+          "ctr": 4.63,
+          "conv": 1.0
+        },
+        {
+          "text": "new construction homes",
+          "ag": "NEW",
+          "spend": 89.54,
+          "clicks": 20,
+          "ctr": 6.12,
+          "conv": 0.0
+        },
+        {
+          "text": "home renovation contractor",
+          "ag": "NEW",
+          "spend": 76.86,
+          "clicks": 15,
+          "ctr": 5.62,
+          "conv": 0.0
+        },
+        {
+          "text": "builders to build a house",
+          "ag": "NEW",
+          "spend": 29.88,
+          "clicks": 10,
+          "ctr": 5.1,
+          "conv": 0.0
+        },
+        {
+          "text": "custom new build homes",
+          "ag": "NEW",
+          "spend": 17.57,
+          "clicks": 3,
+          "ctr": 6.38,
+          "conv": 0.0
+        },
+        {
+          "text": "home remodeling contractor",
+          "ag": "NEW",
+          "spend": 15.99,
+          "clicks": 6,
+          "ctr": 6.67,
+          "conv": 0.0
+        }
+      ]
+    },
+    "60d": {
+      "campaign": {
+        "clicks": 315,
+        "impressions": 5968,
+        "ctr": 5.28,
+        "avg_cpc": 4.35,
+        "spend": 1371.46,
+        "conversions": 2.0,
+        "calls": 15
+      },
+      "adgroups": [
+        {
+          "name": "NEW AND ADDITION",
+          "spend": 1149.66,
+          "clicks": 262,
+          "conv": 2.0
+        },
+        {
+          "name": "CONCRETE FOUNDATION",
+          "spend": 190.63,
+          "clicks": 46,
+          "conv": 0.0
+        },
+        {
+          "name": "SHELL CONSTRUCTION",
+          "spend": 19.11,
+          "clicks": 4,
+          "conv": 0.0
+        },
+        {
+          "name": "STUCCO",
+          "spend": 12.05,
+          "clicks": 3,
+          "conv": 0.0
+        }
+      ],
+      "keywords": [
+        {
+          "text": "building construction company",
+          "ag": "NEW",
+          "spend": 228.29,
+          "clicks": 48,
+          "ctr": 4.47,
+          "conv": 1.0
+        },
+        {
+          "text": "new home construction",
+          "ag": "NEW",
+          "spend": 227.69,
+          "clicks": 56,
+          "ctr": 6.29,
+          "conv": 0.0
+        },
+        {
+          "text": "general contractor near me",
+          "ag": "NEW",
+          "spend": 185.14,
+          "clicks": 45,
+          "ctr": 8.96,
+          "conv": 0.0
+        },
+        {
+          "text": "concrete services",
+          "ag": "CONCRETE",
+          "spend": 171.75,
+          "clicks": 37,
+          "ctr": 5.65,
+          "conv": 0.0
+        },
+        {
+          "text": "new construction homes",
+          "ag": "NEW",
+          "spend": 124.82,
+          "clicks": 29,
+          "ctr": 5.41,
+          "conv": 0.0
+        },
+        {
+          "text": "construction and renovation company",
+          "ag": "NEW",
+          "spend": 121.31,
+          "clicks": 22,
+          "ctr": 4.24,
+          "conv": 1.0
+        },
+        {
+          "text": "home renovation contractor",
+          "ag": "NEW",
+          "spend": 95.3,
+          "clicks": 20,
+          "ctr": 4.69,
+          "conv": 0.0
+        },
+        {
+          "text": "home remodeling contractor",
+          "ag": "NEW",
+          "spend": 38.62,
+          "clicks": 12,
+          "ctr": 5.53,
+          "conv": 0.0
+        },
+        {
+          "text": "builders to build a house",
+          "ag": "NEW",
+          "spend": 29.88,
+          "clicks": 10,
+          "ctr": 4.37,
+          "conv": 0.0
+        },
+        {
+          "text": "building companies near me",
+          "ag": "NEW",
+          "spend": 26.29,
+          "clicks": 1,
+          "ctr": 14.29,
+          "conv": 0.0
+        }
+      ]
+    },
+    "90d": {
+      "campaign": {
+        "clicks": 315,
+        "impressions": 5968,
+        "ctr": 5.28,
+        "avg_cpc": 4.35,
+        "spend": 1371.46,
+        "conversions": 2.0,
+        "calls": 15
+      },
+      "adgroups": [
+        {
+          "name": "NEW AND ADDITION",
+          "spend": 1149.66,
+          "clicks": 262,
+          "conv": 2.0
+        },
+        {
+          "name": "CONCRETE FOUNDATION",
+          "spend": 190.63,
+          "clicks": 46,
+          "conv": 0.0
+        },
+        {
+          "name": "SHELL CONSTRUCTION",
+          "spend": 19.11,
+          "clicks": 4,
+          "conv": 0.0
+        },
+        {
+          "name": "STUCCO",
+          "spend": 12.05,
+          "clicks": 3,
+          "conv": 0.0
+        }
+      ],
+      "keywords": [
+        {
+          "text": "building construction company",
+          "ag": "NEW",
+          "spend": 228.29,
+          "clicks": 48,
+          "ctr": 4.47,
+          "conv": 1.0
+        },
+        {
+          "text": "new home construction",
+          "ag": "NEW",
+          "spend": 227.69,
+          "clicks": 56,
+          "ctr": 6.29,
+          "conv": 0.0
+        },
+        {
+          "text": "general contractor near me",
+          "ag": "NEW",
+          "spend": 185.14,
+          "clicks": 45,
+          "ctr": 8.96,
+          "conv": 0.0
+        },
+        {
+          "text": "concrete services",
+          "ag": "CONCRETE",
+          "spend": 171.75,
+          "clicks": 37,
+          "ctr": 5.65,
+          "conv": 0.0
+        },
+        {
+          "text": "new construction homes",
+          "ag": "NEW",
+          "spend": 124.82,
+          "clicks": 29,
+          "ctr": 5.41,
+          "conv": 0.0
+        },
+        {
+          "text": "construction and renovation company",
+          "ag": "NEW",
+          "spend": 121.31,
+          "clicks": 22,
+          "ctr": 4.24,
+          "conv": 1.0
+        },
+        {
+          "text": "home renovation contractor",
+          "ag": "NEW",
+          "spend": 95.3,
+          "clicks": 20,
+          "ctr": 4.69,
+          "conv": 0.0
+        },
+        {
+          "text": "home remodeling contractor",
+          "ag": "NEW",
+          "spend": 38.62,
+          "clicks": 12,
+          "ctr": 5.53,
+          "conv": 0.0
+        },
+        {
+          "text": "builders to build a house",
+          "ag": "NEW",
+          "spend": 29.88,
+          "clicks": 10,
+          "ctr": 4.37,
+          "conv": 0.0
+        },
+        {
+          "text": "building companies near me",
+          "ag": "NEW",
+          "spend": 26.29,
+          "clicks": 1,
+          "ctr": 14.29,
+          "conv": 0.0
+        }
+      ]
+    },
+    "6mo": {
+      "campaign": {
+        "clicks": 475,
+        "impressions": 7662,
+        "ctr": 6.2,
+        "avg_cpc": 3.95,
+        "spend": 1878.53,
+        "conversions": 2.0,
+        "calls": 15
+      },
+      "adgroups": [
+        {
+          "name": "NEW AND ADDITION",
+          "spend": 1561.58,
+          "clicks": 400,
+          "conv": 2.0
+        },
+        {
+          "name": "CONCRETE FOUNDATION",
+          "spend": 254.57,
+          "clicks": 61,
+          "conv": 0.0
+        },
+        {
+          "name": "STUCCO",
+          "spend": 35.54,
+          "clicks": 8,
+          "conv": 0.0
+        },
+        {
+          "name": "SHELL CONSTRUCTION",
+          "spend": 26.83,
+          "clicks": 6,
+          "conv": 0.0
+        }
+      ],
+      "keywords": [
+        {
+          "text": "building construction company",
+          "ag": "NEW",
+          "spend": 294.75,
+          "clicks": 62,
+          "ctr": 4.6,
+          "conv": 1.0
+        },
+        {
+          "text": "new home construction",
+          "ag": "NEW",
+          "spend": 277.21,
+          "clicks": 70,
+          "ctr": 5.92,
+          "conv": 0.0
+        },
+        {
+          "text": "home renovation contractor",
+          "ag": "NEW",
+          "spend": 262.91,
+          "clicks": 90,
+          "ctr": 12.95,
+          "conv": 0.0
+        },
+        {
+          "text": "general contractor near me",
+          "ag": "NEW",
+          "spend": 242.91,
+          "clicks": 62,
+          "ctr": 8.65,
+          "conv": 0.0
+        },
+        {
+          "text": "concrete services",
+          "ag": "CONCRETE",
+          "spend": 232.57,
+          "clicks": 49,
+          "ctr": 5.72,
+          "conv": 0.0
+        },
+        {
+          "text": "new construction homes",
+          "ag": "NEW",
+          "spend": 141.67,
+          "clicks": 33,
+          "ctr": 5.65,
+          "conv": 0.0
+        },
+        {
+          "text": "construction and renovation company",
+          "ag": "NEW",
+          "spend": 121.31,
+          "clicks": 22,
+          "ctr": 4.24,
+          "conv": 1.0
+        },
+        {
+          "text": "home remodeling contractor",
+          "ag": "NEW",
+          "spend": 38.62,
+          "clicks": 12,
+          "ctr": 5.22,
+          "conv": 0.0
+        },
+        {
+          "text": "builders to build a house",
+          "ag": "NEW",
+          "spend": 29.88,
+          "clicks": 10,
+          "ctr": 3.61,
+          "conv": 0.0
+        },
+        {
+          "text": "kitchen remodeling contractor",
+          "ag": "NEW",
+          "spend": 28.49,
+          "clicks": 7,
+          "ctr": 6.54,
+          "conv": 0.0
+        }
+      ]
+    },
+    "12mo": {
+      "campaign": {
+        "clicks": 475,
+        "impressions": 7662,
+        "ctr": 6.2,
+        "avg_cpc": 3.95,
+        "spend": 1878.53,
+        "conversions": 2.0,
+        "calls": 15
+      },
+      "adgroups": [
+        {
+          "name": "NEW AND ADDITION",
+          "spend": 1561.58,
+          "clicks": 400,
+          "conv": 2.0
+        },
+        {
+          "name": "CONCRETE FOUNDATION",
+          "spend": 254.57,
+          "clicks": 61,
+          "conv": 0.0
+        },
+        {
+          "name": "STUCCO",
+          "spend": 35.54,
+          "clicks": 8,
+          "conv": 0.0
+        },
+        {
+          "name": "SHELL CONSTRUCTION",
+          "spend": 26.83,
+          "clicks": 6,
+          "conv": 0.0
+        }
+      ],
+      "keywords": [
+        {
+          "text": "building construction company",
+          "ag": "NEW",
+          "spend": 294.75,
+          "clicks": 62,
+          "ctr": 4.6,
+          "conv": 1.0
+        },
+        {
+          "text": "new home construction",
+          "ag": "NEW",
+          "spend": 277.21,
+          "clicks": 70,
+          "ctr": 5.92,
+          "conv": 0.0
+        },
+        {
+          "text": "home renovation contractor",
+          "ag": "NEW",
+          "spend": 262.91,
+          "clicks": 90,
+          "ctr": 12.95,
+          "conv": 0.0
+        },
+        {
+          "text": "general contractor near me",
+          "ag": "NEW",
+          "spend": 242.91,
+          "clicks": 62,
+          "ctr": 8.65,
+          "conv": 0.0
+        },
+        {
+          "text": "concrete services",
+          "ag": "CONCRETE",
+          "spend": 232.57,
+          "clicks": 49,
+          "ctr": 5.72,
+          "conv": 0.0
+        },
+        {
+          "text": "new construction homes",
+          "ag": "NEW",
+          "spend": 141.67,
+          "clicks": 33,
+          "ctr": 5.65,
+          "conv": 0.0
+        },
+        {
+          "text": "construction and renovation company",
+          "ag": "NEW",
+          "spend": 121.31,
+          "clicks": 22,
+          "ctr": 4.24,
+          "conv": 1.0
+        },
+        {
+          "text": "home remodeling contractor",
+          "ag": "NEW",
+          "spend": 38.62,
+          "clicks": 12,
+          "ctr": 5.22,
+          "conv": 0.0
+        },
+        {
+          "text": "builders to build a house",
+          "ag": "NEW",
+          "spend": 29.88,
+          "clicks": 10,
+          "ctr": 3.61,
+          "conv": 0.0
+        },
+        {
+          "text": "kitchen remodeling contractor",
+          "ag": "NEW",
+          "spend": 28.49,
+          "clicks": 7,
+          "ctr": 6.54,
+          "conv": 0.0
+        }
+      ]
+    },
+    "cur_month": {
+      "campaign": {
+        "clicks": 240,
+        "impressions": 4641,
+        "ctr": 5.17,
+        "avg_cpc": 4.51,
+        "spend": 1083.02,
+        "conversions": 1.0,
+        "calls": 13
+      },
+      "adgroups": [
+        {
+          "name": "NEW AND ADDITION",
+          "spend": 894.88,
+          "clicks": 198,
+          "conv": 1.0
+        },
+        {
+          "name": "CONCRETE FOUNDATION",
+          "spend": 160.91,
+          "clicks": 36,
+          "conv": 0.0
+        },
+        {
+          "name": "SHELL CONSTRUCTION",
+          "spend": 15.18,
+          "clicks": 3,
+          "conv": 0.0
+        },
+        {
+          "name": "STUCCO",
+          "spend": 12.05,
+          "clicks": 3,
+          "conv": 0.0
+        }
+      ],
+      "keywords": [
+        {
+          "text": "general contractor near me",
+          "ag": "NEW",
+          "spend": 162.12,
+          "clicks": 37,
+          "ctr": 9.09,
+          "conv": 0.0
+        },
+        {
+          "text": "building construction company",
+          "ag": "NEW",
+          "spend": 155.59,
+          "clicks": 32,
+          "ctr": 4.23,
+          "conv": 0.0
+        },
+        {
+          "text": "new home construction",
+          "ag": "NEW",
+          "spend": 148.21,
+          "clicks": 38,
+          "ctr": 6.01,
+          "conv": 0.0
+        },
+        {
+          "text": "concrete services",
+          "ag": "CONCRETE",
+          "spend": 143.95,
+          "clicks": 28,
+          "ctr": 5.07,
+          "conv": 0.0
+        },
+        {
+          "text": "construction and renovation company",
+          "ag": "NEW",
+          "spend": 121.31,
+          "clicks": 22,
+          "ctr": 4.24,
+          "conv": 1.0
+        },
+        {
+          "text": "new construction homes",
+          "ag": "NEW",
+          "spend": 92.13,
+          "clicks": 21,
+          "ctr": 6.36,
+          "conv": 0.0
+        },
+        {
+          "text": "home renovation contractor",
+          "ag": "NEW",
+          "spend": 76.86,
+          "clicks": 15,
+          "ctr": 5.56,
+          "conv": 0.0
+        },
+        {
+          "text": "builders to build a house",
+          "ag": "NEW",
+          "spend": 29.88,
+          "clicks": 10,
+          "ctr": 4.85,
+          "conv": 0.0
+        },
+        {
+          "text": "building companies near me",
+          "ag": "NEW",
+          "spend": 26.29,
+          "clicks": 1,
+          "ctr": 14.29,
+          "conv": 0.0
+        },
+        {
+          "text": "need a contractor near me",
+          "ag": "NEW",
+          "spend": 20.96,
+          "clicks": 2,
+          "ctr": 4.55,
+          "conv": 0.0
+        }
+      ]
+    },
+    "prev_month": {
+      "campaign": {
+        "clicks": 75,
+        "impressions": 1327,
+        "ctr": 5.65,
+        "avg_cpc": 3.85,
+        "spend": 288.43,
+        "conversions": 1.0,
+        "calls": 2
+      },
+      "adgroups": [
+        {
+          "name": "NEW AND ADDITION",
+          "spend": 254.78,
+          "clicks": 64,
+          "conv": 1.0
+        },
+        {
+          "name": "CONCRETE FOUNDATION",
+          "spend": 29.72,
+          "clicks": 10,
+          "conv": 0.0
+        },
+        {
+          "name": "SHELL CONSTRUCTION",
+          "spend": 3.93,
+          "clicks": 1,
+          "conv": 0.0
+        },
+        {
+          "name": "STUCCO",
+          "spend": 0.0,
+          "clicks": 0,
+          "conv": 0.0
+        }
+      ],
+      "keywords": [
+        {
+          "text": "new home construction",
+          "ag": "NEW",
+          "spend": 79.48,
+          "clicks": 18,
+          "ctr": 6.95,
+          "conv": 0.0
+        },
+        {
+          "text": "building construction company",
+          "ag": "NEW",
+          "spend": 72.7,
+          "clicks": 16,
+          "ctr": 5.03,
+          "conv": 1.0
+        },
+        {
+          "text": "new construction homes",
+          "ag": "NEW",
+          "spend": 32.69,
+          "clicks": 8,
+          "ctr": 3.88,
+          "conv": 0.0
+        },
+        {
+          "text": "concrete services",
+          "ag": "CONCRETE",
+          "spend": 27.8,
+          "clicks": 9,
+          "ctr": 8.74,
+          "conv": 0.0
+        },
+        {
+          "text": "general contractor near me",
+          "ag": "NEW",
+          "spend": 23.01,
+          "clicks": 8,
+          "ctr": 8.42,
+          "conv": 0.0
+        },
+        {
+          "text": "home remodeling contractor",
+          "ag": "NEW",
+          "spend": 22.63,
+          "clicks": 6,
+          "ctr": 5.08,
+          "conv": 0.0
+        },
+        {
+          "text": "home renovation contractor",
+          "ag": "NEW",
+          "spend": 18.44,
+          "clicks": 5,
+          "ctr": 3.21,
+          "conv": 0.0
+        },
+        {
+          "text": "shell construction",
+          "ag": "SHELL",
+          "spend": 3.93,
+          "clicks": 1,
+          "ctr": 100.0,
+          "conv": 0.0
+        },
+        {
+          "text": "paving companies near me",
+          "ag": "NEW",
+          "spend": 3.2,
+          "clicks": 1,
+          "ctr": 100.0,
+          "conv": 0.0
+        },
+        {
+          "text": "foundation repair contractor near me",
+          "ag": "CONCRETE",
+          "spend": 1.92,
+          "clicks": 1,
+          "ctr": 100.0,
+          "conv": 0.0
+        }
+      ]
+    },
+    "prev2_month": {
+      "campaign": {
+        "clicks": 0,
+        "impressions": 0,
+        "ctr": 0.0,
+        "avg_cpc": 0.0,
+        "spend": 0.0,
+        "conversions": 0.0,
+        "calls": 0
+      },
+      "adgroups": [
+        {
+          "name": "SHELL CONSTRUCTION",
+          "spend": 0.0,
+          "clicks": 0,
+          "conv": 0.0
+        },
+        {
+          "name": "NEW AND ADDITION",
+          "spend": 0.0,
+          "clicks": 0,
+          "conv": 0.0
+        },
+        {
+          "name": "CONCRETE FOUNDATION",
+          "spend": 0.0,
+          "clicks": 0,
+          "conv": 0.0
+        },
+        {
+          "name": "STUCCO",
+          "spend": 0.0,
+          "clicks": 0,
+          "conv": 0.0
+        }
+      ],
+      "keywords": []
+    }
   },
-  "calls": [{"date":"2025-06-16","time":"14:16","area":"954","duration":67,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-06-18","time":"15:05","area":"954","duration":186,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-06-18","time":"15:09","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-06-22","time":"10:31","area":"954","duration":124,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-06-24","time":"09:15","area":"561","duration":95,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-06-25","time":"11:42","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-06-27","time":"14:08","area":"954","duration":212,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-06-29","time":"09:55","area":"561","duration":143,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-01","time":"10:22","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-07-02","time":"13:44","area":"954","duration":78,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-03","time":"16:01","area":"813","duration":45,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-07","time":"11:18","area":"954","duration":301,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-08","time":"14:55","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-07-10","time":"09:30","area":"561","duration":188,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-12","time":"10:45","area":"954","duration":134,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-14","time":"15:22","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-07-16","time":"11:05","area":"954","duration":256,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-18","time":"13:18","area":"561","duration":167,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-21","time":"10:10","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-07-22","time":"14:40","area":"954","duration":89,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-24","time":"09:05","area":"754","duration":112,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-26","time":"11:33","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-07-28","time":"15:15","area":"954","duration":198,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-30","time":"10:55","area":"561","duration":143,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-02","time":"09:40","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-08-04","time":"13:25","area":"954","duration":175,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-06","time":"14:00","area":"239","duration":62,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-08","time":"10:22","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-08-11","time":"11:48","area":"954","duration":225,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-13","time":"14:12","area":"561","duration":108,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-15","time":"09:55","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-08-18","time":"10:35","area":"954","duration":142,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-20","time":"15:48","area":"540","duration":33,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-22","time":"11:15","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-08-25","time":"13:05","area":"954","duration":195,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-27","time":"10:18","area":"513","duration":28,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-29","time":"14:55","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-09-01","time":"09:22","area":"954","duration":167,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-09-03","time":"11:40","area":"561","duration":134,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-09-05","time":"15:08","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-09-08","time":"10:44","area":"954","duration":243,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-09-10","time":"13:22","area":"645","duration":19,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-09-12","time":"11:02","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-09-15","time":"14:35","area":"954","duration":188,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-09-17","time":"10:15","area":"561","duration":127,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-09-19","time":"15:42","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"}]
+  "calls": [
+    {
+      "date": "2026-04-29",
+      "time": "12:45",
+      "area": "786",
+      "duration": 122,
+      "status": "3",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-04-29",
+      "time": "11:37",
+      "area": "???",
+      "duration": 0,
+      "status": "2",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-04-29",
+      "time": "10:23",
+      "area": "561",
+      "duration": 34,
+      "status": "3",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-04-28",
+      "time": "13:48",
+      "area": "645",
+      "duration": 25,
+      "status": "3",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-04-28",
+      "time": "09:42",
+      "area": "???",
+      "duration": 7,
+      "status": "3",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-04-26",
+      "time": "20:01",
+      "area": "561",
+      "duration": 17,
+      "status": "3",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-04-26",
+      "time": "19:54",
+      "area": "561",
+      "duration": 17,
+      "status": "3",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-04-26",
+      "time": "12:31",
+      "area": "???",
+      "duration": 0,
+      "status": "2",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-04-26",
+      "time": "12:22",
+      "area": "???",
+      "duration": 0,
+      "status": "2",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-04-26",
+      "time": "12:14",
+      "area": "???",
+      "duration": 0,
+      "status": "2",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-04-24",
+      "time": "15:43",
+      "area": "???",
+      "duration": 5,
+      "status": "3",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-04-24",
+      "time": "14:58",
+      "area": "???",
+      "duration": 0,
+      "status": "2",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-04-22",
+      "time": "15:53",
+      "area": "561",
+      "duration": 140,
+      "status": "3",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-03-23",
+      "time": "08:52",
+      "area": "954",
+      "duration": 113,
+      "status": "3",
+      "ag": "NEW AND ADDITION"
+    },
+    {
+      "date": "2026-03-20",
+      "time": "17:25",
+      "area": "???",
+      "duration": 0,
+      "status": "2",
+      "ag": "NEW AND ADDITION"
+    }
+  ]
 };
 
 const AM={"954":"Broward","754":"Broward","561":"Palm Beach","813":"Tampa","239":"Naples","305":"Miami","786":"Miami","540":"Virginia","513":"Cincinnati","645":"New York","???":"Blocked"};
-const PL={"30d":"Last 30 days","60d":"Last 60 days","90d":"Last 90 days","6mo":"Last 6 months","12mo":"Last 12 months"};
-let cp='30d',kwChart=null;
+const PL={"15d":"Last 15 days","30d":"Last 30 days","60d":"Last 60 days","90d":"Last 90 days","6mo":"Last 6 months","12mo":"Last 12 months"};
+const MO_KEYS=['cur_month','prev_month','prev2_month'];
+let cp='cur_month',kwChart=null;
+
+function getMonthLabel(p){
+  const d=new Date(DATA.updated);
+  const mn=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const offset={'cur_month':0,'prev_month':1,'prev2_month':2}[p];
+  const d2=new Date(d); d2.setMonth(d2.getMonth()-offset);
+  return mn[d2.getMonth()]+' '+d2.getFullYear();
+}
+
+function initMonthTabs(){
+  const d=new Date(DATA.updated);
+  const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  ['tm0','tm1','tm2'].forEach((id,i)=>{
+    const d2=new Date(d); d2.setMonth(d2.getMonth()-i);
+    document.getElementById(id).textContent=mn[d2.getMonth()];
+  });
+}
+
+function applyNightMode(){
+  const h=new Date().getHours();
+  if(h>=19||h<7) document.body.classList.add('night-mode');
+}
 
 // ── DATE RANGE ──
 function getDR(p){
+  if(MO_KEYS.includes(p)){
+    const lbl=getMonthLabel(p);
+    return lbl+(p==='cur_month'?' <span style="font-weight:400">(month to date)</span>':'');
+  }
   const e=new Date(DATA.updated), s=new Date(DATA.updated);
-  if(p==='30d') s.setDate(s.getDate()-30);
+  if(p==='15d') s.setDate(s.getDate()-15);
+  else if(p==='30d') s.setDate(s.getDate()-30);
   else if(p==='60d') s.setDate(s.getDate()-60);
   else if(p==='90d') s.setDate(s.getDate()-90);
   else if(p==='6mo') s.setMonth(s.getMonth()-6);
@@ -166,9 +1452,14 @@ function getDR(p){
 }
 
 function setP(p){
+  if(!DATA.periods[p]) return setP('cur_month');
   cp=p;
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.getAttribute('onclick')==="setP('"+p+"')"));
+  const isMo=MO_KEYS.includes(p);
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',!isMo&&t.getAttribute('onclick')==="setP('"+p+"')"));
+  document.querySelectorAll('.tab-mo').forEach(t=>t.classList.toggle('on',isMo&&t.getAttribute('onclick')==="setP('"+p+"')"));
   document.getElementById('dr').innerHTML='<span>'+getDR(p)+'</span>';
+  const ptagLbl=isMo?getMonthLabel(p).split(' ')[0].toUpperCase():(PL[p]||p).replace('Last ','').toUpperCase();
+  ['ptag-ag','ptag-ch','ptag-kw'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=ptagLbl;});
   render(DATA.periods[p]);
 }
 
@@ -180,7 +1471,7 @@ function render(d){
   document.getElementById('kc').textContent=cl+' / '+cv;
   document.getElementById('kcpl').textContent='Cost per call $'+cpl.toFixed(0);
   document.getElementById('kcpc').textContent='$'+pc.toFixed(2);
-  document.getElementById('kpl').textContent=PL[cp];
+  document.getElementById('kpl').textContent=MO_KEYS.includes(cp)?getMonthLabel(cp):(PL[cp]||cp);
   document.getElementById('kc').className='kv'+(cv<3?' dn':'');
   document.getElementById('kcpc').className='kv'+(pc>5?' dn':pc<4?' ac':'');
   rWarnings(c,d.adgroups,d.keywords);
@@ -320,6 +1611,68 @@ function toggleSteps(id){
   el.classList.toggle('open');
 }
 
+// ── EXPANDABLE AI INSIGHT ──
+const INS_STEPS={
+  ag:[
+    'Duplicate ad group <strong>NEW AND ADDITION</strong> &rarr; rename one copy to <em>New Construction</em> (new build keywords) and the other to <em>Renovations &amp; Additions</em> (renovation keywords)',
+    'Set separate Max CPC bids per group &mdash; new construction jobs are typically higher-value so they can support higher bids',
+    'For zero-spend groups (STUCCO, SHELL): go to their Keywords tab &rarr; look at <em>First page bid estimate</em> &rarr; raise your bids above that threshold',
+    'Check Quality Score for zero-spend groups: if under 5, rewrite ad copy to more closely match the keywords in that group'
+  ],
+  kw:[
+    'Add exact match of your converting keyword: <a href="https://ads.google.com" target="_blank">Google Ads</a> &rarr; Keywords &rarr; + Add keyword &rarr; type <strong>[construction and renovation company]</strong>',
+    'Before pausing zero-conversion keywords: confirm tracking is active &rarr; Goals &rarr; Conversions &rarr; Calls from ads &rarr; status should be <em>Active (counting conversions)</em>',
+    'Only after tracking is confirmed: use the keyword cleanup script in the Requires Attention section above to pause keywords with $50+ spend and 0 conversions',
+    'Check Search Terms report for your converting keyword &rarr; find similar-intent searches &rarr; add them as exact match keywords to capture more qualified traffic'
+  ],
+  cl:[
+    'For full phone numbers: <a href="https://ads.google.com/aw/reports" target="_blank">Google Ads &rarr; Reports &rarr; Predefined reports &rarr; Call details</a> &mdash; shows full numbers, duration, campaign source',
+    'Set up missed-call text-back: services like <strong>Hatch</strong> or <strong>Leadferno</strong> auto-text missed callers within 60 seconds &mdash; contractors typically recover 30&ndash;40% of missed leads this way',
+    'For blocked number calls (area ???): these are real potential customers who hid their number. They still count in your billing. Pick up promptly.',
+    'Track call outcomes manually: after each call note whether it was qualified / wrong number / spam. After 20+ calls you will have data to refine targeting'
+  ]
+};
+
+function fillIns(bodyId,stepsId,key,text){
+  document.getElementById(bodyId).innerHTML=text;
+  if(INS_STEPS[key]){
+    let h='<ol>';
+    INS_STEPS[key].forEach(s=>{h+='<li>'+s+'</li>';});
+    h+='</ol>';
+    document.getElementById(stepsId).innerHTML=h;
+  }
+}
+
+// 4-part AI insight: OBSERVATION -> WHY -> RECOMMENDATION -> STEPS
+function make4Part(obs, why, rec){
+  return '<div class="ins-part"><div class="ins-part-lbl">&#128202; Observation</div><div class="ins-part-txt">'+obs+'</div></div>'+
+         '<div class="ins-part"><div class="ins-part-lbl">&#128269; Why this is happening</div><div class="ins-part-txt">'+why+'</div></div>'+
+         '<div class="ins-part"><div class="ins-part-lbl">&#128161; Recommendation</div><div class="ins-part-txt">'+rec+'</div></div>';
+}
+function fillIns4(bodyId, stepsId, obs, why, rec, steps){
+  document.getElementById(bodyId).innerHTML = make4Part(obs, why, rec);
+  if(steps && steps.length){
+    document.getElementById(stepsId).innerHTML = '<ol>'+steps.map(s=>'<li>'+s+'</li>').join('')+'</ol>';
+  }
+}
+function bidStrategyHuman(s){
+  if(!s) return 'unknown bid strategy';
+  s = s.toUpperCase();
+  if(s.includes('MAXIMIZE_CONVERSIONS')) return 'Maximize Conversions';
+  if(s.includes('TARGET_CPA')) return 'Target CPA';
+  if(s.includes('MANUAL_CPC')) return 'Manual CPC';
+  if(s.includes('MAXIMIZE_CLICKS')) return 'Maximize Clicks';
+  if(s.includes('TARGET_ROAS')) return 'Target ROAS';
+  return s.replace(/_/g,' ');
+}
+
+function toggleIns(id){
+  const el=document.getElementById(id);
+  el.classList.toggle('open');
+  const tog=el.previousElementSibling.querySelector('.ins-toggle');
+  if(tog) tog.textContent=el.classList.contains('open')?'▾ hide':'▸ action steps';
+}
+
 // ── AD GROUP BARS ──
 function rAG(ag,c){
   const mx=Math.max(...ag.map(a=>a.spend),1),el=document.getElementById('agb');
@@ -331,9 +1684,14 @@ function rAG(ag,c){
 }
 
 // ── KEYWORD TABLE ──
+function qsPill(qs){
+  if(!qs||qs===0) return '<span class="qs-pill qs-na">&mdash;</span>';
+  const cls = qs>=7?'qs-hi':qs>=5?'qs-md':'qs-lo';
+  return '<span class="qs-pill '+cls+'">'+qs+'/10</span>';
+}
 function rKW(kw){
   const tb=document.getElementById('kwt'); tb.innerHTML='';
-  kw.forEach(k=>{tb.innerHTML+='<tr><td style="font-weight:500">'+k.text+'</td><td><span class="t">'+k.ag+'</span></td><td>$'+k.spend.toFixed(0)+'</td><td>'+k.clicks+'</td><td>'+k.ctr+'%</td><td>'+(k.conv>0?'<span class="t gn">'+k.conv+'</span>':'<span class="t rd">0</span>')+'</td></tr>';});
+  kw.forEach(k=>{tb.innerHTML+='<tr><td style="font-weight:500">'+k.text+'</td><td><span class="t">'+k.ag+'</span></td><td>$'+k.spend.toFixed(0)+'</td><td>'+k.clicks+'</td><td>'+k.ctr+'%</td><td>'+(k.conv>0?'<span class="t gn">'+k.conv+'</span>':'<span class="t rd">0</span>')+'</td><td>'+qsPill(k.qs)+'</td></tr>';});
 }
 
 // ── CHART ──
@@ -343,34 +1701,108 @@ function rChart(kw){
   kwChart=new Chart(document.getElementById('ch'),{type:'bar',data:{labels:t.map(k=>k.text.length>20?k.text.slice(0,20)+'...':k.text),datasets:[{label:'Spend ($)',data:t.map(k=>k.spend),backgroundColor:'#CBCC10',borderRadius:3},{label:'Conv x50',data:t.map(k=>k.conv*50),backgroundColor:'#27AE60',borderRadius:3}]},options:{responsive:true,plugins:{legend:{labels:{color:'#888',font:{size:11}}}},scales:{x:{ticks:{color:'#888',font:{size:10}},grid:{color:'#E8E3DC'}},y:{ticks:{color:'#888'},grid:{color:'#E8E3DC'}}}}});
 }
 
-// ── AI INSIGHT: AD GROUPS ──
+// ── AI INSIGHT: AD GROUPS (4-part) ──
+function getAGConfig(name){
+  const cfg=(DATA.config&&DATA.config.ad_groups)||[];
+  return cfg.find(x=>x.name===name) || null;
+}
 function rInsightAG(ag,c){
   const sp=c.spend||0;
-  const dom=ag[0], pct=Math.round(dom.spend/sp*100);
+  const dom=ag[0], pct=Math.round((dom.spend/Math.max(sp,1))*100);
   const zeros=ag.filter(a=>a.spend===0);
-  const low=ag.filter(a=>a.spend>0&&a.spend<20);
-  let txt='';
-  if(pct>80) txt+='<strong>'+dom.name+'</strong> is using <strong>'+pct+'%</strong> of your entire budget. That is too concentrated &mdash; if that ad group is attracting the wrong searches, you have nowhere to shift budget. Consider splitting &ldquo;New &amp; Addition&rdquo; into two groups: <em>New Construction</em> and <em>Renovations/Additions</em> so you can control bids separately. ';
-  if(zeros.length>0) txt+='<strong>'+zeros.map(a=>a.name).join(', ')+'</strong> had $0 spend this period. This usually means the bids are below the minimum to win any auction, or the ads have a low Quality Score. Before assuming they are broken &mdash; check the &ldquo;First page bid estimate&rdquo; in Google Ads UI. ';
-  if(!txt) txt='Budget distribution looks reasonable this period. Monitor that CONCRETE FOUNDATION maintains at least 10% of spend to generate enough data for bid optimization.';
-  document.getElementById('ins-ag').innerHTML=txt;
+  const camp=(DATA.config&&DATA.config.campaign)||{};
+  const budget=camp.daily_budget||0;
+  const strat=bidStrategyHuman(camp.bid_strategy);
+  const tcpa=camp.target_cpa||0;
+  const domCfg=getAGConfig(dom.name);
+  const others=ag.slice(1).map(a=>{const c2=getAGConfig(a.name);return c2?a.name+' max CPC $'+c2.max_cpc.toFixed(2):a.name+' max CPC unknown';});
+
+  // OBSERVATION
+  let obs='<strong>'+dom.name+'</strong> consumed <strong>'+pct+'%</strong> of total spend ($'+dom.spend.toFixed(0)+' of $'+sp.toFixed(0)+') this period. ';
+  if(zeros.length>0) obs+='Zero-spend groups: <strong>'+zeros.map(z=>z.name).join(', ')+'</strong>. ';
+  if(ag.length>1) obs+='Distribution across '+ag.length+' active groups was: '+ag.map(a=>a.name+' '+Math.round(a.spend/Math.max(sp,1)*100)+'%').join(', ')+'.';
+
+  // WHY
+  let why='';
+  if(budget) why+='Daily budget is <strong>$'+budget.toFixed(0)+'/day</strong> across the whole campaign. ';
+  if(domCfg) why+=dom.name+' max CPC is <strong>$'+domCfg.max_cpc.toFixed(2)+'</strong>'+(others.length?' &mdash; vs '+others.join(', '):'')+'. ';
+  why+='With <strong>'+strat+'</strong> bidding'+(tcpa?' (target CPA $'+tcpa.toFixed(0)+')':'')+', Google funnels spend toward whichever ad group is bidding highest and (if any) showing past conversion signals. With sparse conversion data, it defaults to the highest bid. ';
+  if(zeros.length>0) why+='Zero-spend groups likely have max CPC below the auction floor or low Quality Score &mdash; ads never enter the auction.';
+
+  // RECOMMENDATION
+  let rec='';
+  if(pct>=70 && domCfg && domCfg.max_cpc>0){
+    const newCpc=(domCfg.max_cpc*0.7).toFixed(2);
+    rec+='To rebalance: lower <strong>'+dom.name+' max CPC from $'+domCfg.max_cpc.toFixed(2)+' &rarr; $'+newCpc+'</strong>. ';
+  }
+  if(zeros.length>0){
+    const z0=zeros[0], zcfg=getAGConfig(z0.name);
+    if(zcfg){
+      const newZ=Math.max(zcfg.max_cpc*1.5,3.5).toFixed(2);
+      rec+='Raise <strong>'+z0.name+' max CPC from $'+zcfg.max_cpc.toFixed(2)+' &rarr; $'+newZ+'</strong> to clear the auction floor. ';
+    }
+  }
+  if(dom.name.includes('NEW')||dom.name.includes('ADDITION')) rec+='Long term: split "New &amp; Addition" into two groups (<em>New Construction</em> + <em>Renovations</em>) so bids can be tuned per intent. ';
+  rec+='Wait <strong>7 days</strong> after each change before re-evaluating &mdash; Smart Bidding needs that window to relearn.';
+
+  const steps=[
+    'Open <a href="https://ads.google.com/aw/campaigns" target="_blank">Google Ads &rarr; Campaigns</a> &rarr; <strong>MGC Leads-Search-Calls #2</strong>',
+    'Click <strong>Ad Groups</strong> in the left nav &rarr; click the ad-group name to edit',
+    'Go to <strong>Settings</strong> &rarr; <strong>Default max CPC bid</strong> &rarr; change the value &rarr; Save',
+    (zeros.length>0?'For zero-spend groups: also click <strong>Keywords</strong> &rarr; review <em>First page bid estimate</em> column &rarr; raise bids above that floor':'Monitor distribution daily for the next 7 days'),
+    'Re-check this dashboard in a week &mdash; this section will show the new percentages'
+  ];
+  fillIns4('ins-ag','ins-ag-steps',obs,why,rec,steps);
 }
 
-// ── AI INSIGHT: KEYWORDS ──
+// ── AI INSIGHT: KEYWORDS (4-part) ──
 function rInsightKW(kw,c){
-  const sp=c.spend||0;
+  const sp=c.spend||0, cv=c.conversions||0, cl=c.calls||0;
   const conv=kw.filter(k=>k.conv>0);
   const zero=kw.filter(k=>k.conv===0&&k.spend>80);
   const totalZeroSpend=zero.reduce((s,k)=>s+k.spend,0);
-  let txt='';
+  const lowQS=kw.filter(k=>k.qs>0&&k.qs<5);
+  const camp=(DATA.config&&DATA.config.campaign)||{};
+  const strat=bidStrategyHuman(camp.bid_strategy);
+
+  // OBSERVATION
+  let obs='Total tracked conversions this period: <strong>'+cv+'</strong> across <strong>'+kw.length+'</strong> active keywords ($'+sp.toFixed(0)+' spend). ';
   if(conv.length>0){
     const best=conv[0];
     const cpl=(best.spend/best.conv).toFixed(0);
-    txt+='<strong>"'+best.text+'"</strong> is your only confirmed converting keyword &mdash; $'+cpl+'/conversion, '+best.ctr+'% CTR. <strong>Recommendation:</strong> add exact match version <em>['+best.text+']</em> to capture high-intent searches without broad match dilution. ';
+    obs+='Best converter: <strong>"'+best.text+'"</strong> at $'+cpl+'/conv, '+best.ctr+'% CTR'+(best.qs?', QS '+best.qs+'/10':'')+'. ';
   }
-  if(totalZeroSpend>300) txt+='$'+totalZeroSpend.toFixed(0)+' went to keywords with 0 tracked conversions. <strong>Important context:</strong> "0 conversions" does not mean 0 leads &mdash; it means Google could not see the outcome. This is the conversion tracking problem. Fix that first before pausing keywords. If tracking is already fixed, <em>then</em> the zero-conv keywords are candidates to pause. ';
-  if(!txt) txt='Keyword performance is consistent with account history. Focus on improving conversion tracking accuracy before making major keyword changes &mdash; current data is incomplete.';
-  document.getElementById('ins-kw').innerHTML=txt;
+  if(zero.length>0) obs+='<strong>$'+totalZeroSpend.toFixed(0)+'</strong> spent on '+zero.length+' keywords with 0 tracked conversions. ';
+  if(lowQS.length>0) obs+='<strong>'+lowQS.length+'</strong> keyword(s) have Quality Score &lt;5 (drives up CPC).';
+
+  // WHY
+  let why='With <strong>'+strat+'</strong> bidding, Google needs at least 30 conversions/month to optimize confidently. Current data ('+cv+' tracked) is below that threshold, so the algorithm spreads spend broadly to gather signal. ';
+  if(cl>cv*2) why+='Mismatch: <strong>'+cl+' calls came in but only '+cv+' conversion(s) tracked</strong> &mdash; Google "sees" '+Math.round((cv/Math.max(cl,1))*100)+'% of your real lead volume, so bid optimization is operating blind. ';
+  if(lowQS.length>0) why+='Low Quality Score (&lt;5) means Google charges higher CPC to make up for poor ad/landing-page relevance, AND deprioritizes the ad in auctions. ';
+  why+='Fixing tracking is the single highest-leverage change &mdash; it unlocks Smart Bidding\'s ability to lower CPC and improve targeting automatically.';
+
+  // RECOMMENDATION
+  let rec='';
+  if(cl>cv*2) rec+='<strong>1.</strong> Fix conversion tracking first &mdash; until Google sees real lead volume, every keyword decision is guesswork. ';
+  if(conv.length>0){
+    const best=conv[0];
+    rec+='<strong>2.</strong> Add <em>['+best.text+']</em> as exact match to capture high-intent searches without broad-match dilution. ';
+  }
+  if(zero.length>0) rec+='<strong>3.</strong> After tracking is fixed: pause keywords with $50+ spend &amp; 0 conv (Requires Attention section above has a ready-to-paste script). ';
+  if(lowQS.length>0){
+    const lq=lowQS[0];
+    rec+='<strong>4.</strong> Raise QS on <em>"'+lq.text+'"</em> (currently '+lq.qs+'/10): rewrite ad headline to include the keyword phrase verbatim, and ensure the landing page mentions the same service term. ';
+  }
+  rec+='<strong>5.</strong> A/B test landing pages once a dedicated LP exists &mdash; the homepage rarely converts well for paid search.';
+
+  const steps=[
+    'Fix tracking: <a href="https://ads.google.com/aw/conversions" target="_blank">Google Ads &rarr; Goals &rarr; Conversions</a> &rarr; verify <strong>Calls from ads</strong> is set to <strong>Primary</strong> goal',
+    (conv.length>0?'Add exact match: Keywords &rarr; <strong>+ Add keyword</strong> &rarr; type <strong>['+conv[0].text+']</strong> with brackets':'Wait until tracking is fixed before adding keywords'),
+    (zero.length>0?'Pause script: see <em>Requires Attention</em> section above &mdash; click "Remove or pause zero-conversion keywords" &rarr; copy script &rarr; Tools &rarr; Bulk actions &rarr; Scripts':'No keyword cleanup needed this period'),
+    (lowQS.length>0?'Raise QS: Ads &amp; assets &rarr; edit ad &rarr; include keyword phrase in headline 1; check landing page contains same service term':'All keywords have healthy QS (&ge;5)'),
+    'A/B test landing pages once a service-specific LP is built (homepage isn\'t paid-search optimized)'
+  ];
+  fillIns4('ins-kw','ins-kw-steps',obs,why,rec,steps);
 }
 
 // ── CALL LOG ──
@@ -381,27 +1813,166 @@ function rCalls(){
     const dur=c.duration>0?(c.duration>=60?Math.floor(c.duration/60)+'m '+(c.duration%60)+'s':c.duration+'s'):'&mdash;';
     const st=c.status==='RECEIVED'?'<span class="t gn">Received</span>':'<span class="t rd">Missed</span>';
     const ar=c.area==='???'?'<span class="t gy">Blocked</span>':(iS?'<span class="t '+(iB?'lm':'yw')+'">'+c.area+' &middot; '+nm+'</span>':'<span class="t gy">'+c.area+' &middot; '+nm+'</span>');
-    tb.innerHTML+='<tr><td style="font-size:12px;color:#555">'+c.date+'</td><td style="font-size:12px;color:#555">'+c.time+'</td><td>'+ar+'</td><td style="font-family:Anton,sans-serif;font-size:14px;color:'+(c.duration>60?'#0A0A0A':'#888')+'">'+dur+'</td><td>'+st+'</td><td style="font-size:11px;color:#888">'+c.ag+'</td></tr>';
+    tb.innerHTML+='<tr><td class="cl-date">'+c.date+'</td><td class="cl-time">'+c.time+'</td><td>'+ar+'</td><td class="cl-dur '+(c.duration>60?'lng':'shrt')+'">'+dur+'</td><td>'+st+'</td><td class="cl-ag">'+c.ag+'</td></tr>';
   });
-  // call insight
+  // 4-part call insight
   const recv=DATA.calls.filter(c=>c.status==='RECEIVED');
   const miss=DATA.calls.filter(c=>c.status==='MISSED');
   const broward=recv.filter(c=>['954','754'].includes(c.area));
   const pb=recv.filter(c=>c.area==='561');
+  const blocked=DATA.calls.filter(c=>c.area==='???');
+  const longCalls=recv.filter(c=>c.duration>=90);
+  const shortCalls=recv.filter(c=>c.duration>0&&c.duration<30);
   const avgDur=recv.reduce((s,c)=>s+c.duration,0)/Math.max(recv.length,1);
-  const pct=Math.round(recv.length/DATA.calls.length*100);
-  let ins='<strong>Answer rate: '+pct+'%</strong> ('+recv.length+' received / '+miss.length+' missed). ';
-  ins+='<strong>'+broward.length+' calls from Broward</strong> (954/754) &mdash; your primary market. <strong>'+pb.length+' from Palm Beach.</strong> ';
-  if(avgDur>90) ins+='Average call duration '+Math.round(avgDur)+'s &mdash; long calls indicate real interest, not wrong numbers. ';
-  else ins+='Average call duration '+Math.round(avgDur)+'s &mdash; short calls may indicate wrong leads or missed calls being auto-counted. ';
-  ins+='<strong>'+miss.length+' missed calls</strong> = potential lost leads. Consider a missed-call text-back service (many contractor CRMs offer this free). ';
-  ins+='<em>Note: Google API provides area codes only &mdash; full numbers are visible in Google Ads UI under Reports &rarr; Call Details.</em>';
-  document.getElementById('ins-cl').innerHTML=ins;
+  const pct=Math.round(recv.length/Math.max(DATA.calls.length,1)*100);
+
+  // OBSERVATION
+  let obs='<strong>Answer rate '+pct+'%</strong> &mdash; '+recv.length+' received, '+miss.length+' missed of '+DATA.calls.length+' total. ';
+  obs+='<strong>'+broward.length+' Broward</strong> (954/754), <strong>'+pb.length+' Palm Beach</strong> (561), '+blocked.length+' blocked-number. ';
+  obs+='Avg duration '+Math.round(avgDur)+'s &mdash; <strong>'+longCalls.length+'</strong> &ge;90s (real conversations), <strong>'+shortCalls.length+'</strong> &lt;30s (likely wrong number / hung up).';
+
+  // WHY
+  let why='Each missed call = a lead that called a competitor instead. Contractors typically lose 30&ndash;40% of inbound leads to missed calls. ';
+  why+='Google bills for every call &ge;1 second on a Calls campaign &mdash; missed calls cost the same as answered ones, but produce zero pipeline. ';
+  if(blocked.length>2) why+='Blocked-number callers are real customers hiding their caller-ID; they still bill normally. ';
+  if(shortCalls.length>recv.length*0.3) why+='High share of &lt;30s calls suggests targeting is pulling some unqualified searches &mdash; check the Search Terms report for irrelevant queries to add as negatives.';
+
+  // RECOMMENDATION
+  let rec='';
+  if(miss.length>2) rec+='<strong>1.</strong> Set up a missed-call text-back service (Hatch, Leadferno, or your CRM). Auto-text within 60s of a missed call typically recovers 30&ndash;40% of those leads. ';
+  rec+='<strong>2.</strong> Track call outcomes manually for the next 20 calls (qualified / wrong number / spam). After 20+ data points you can refine targeting using real outcomes, not just call duration. ';
+  rec+='<strong>3.</strong> For full phone numbers (vs area codes only): Google Ads &rarr; Tools &rarr; Reports &rarr; Predefined reports &rarr; Other &rarr; Call details. ';
+  if(shortCalls.length>recv.length*0.3) rec+='<strong>4.</strong> Audit Search Terms (Keywords &rarr; Search terms) and add wrong-intent queries as negative keywords to stop paying for short hangups.';
+
+  const steps=[
+    'For full numbers: <strong>Google Ads &rarr; Tools (wrench icon) &rarr; Reports &rarr; Predefined reports &rarr; Other &rarr; Call details</strong>',
+    'Set up missed-call text-back: <strong>Hatch</strong> or <strong>Leadferno</strong> auto-text missed callers within 60s &mdash; contractors typically recover 30&ndash;40% of missed leads',
+    'For blocked-number calls (area ???): real potential customers who hid caller-ID. They bill normally. Pick up promptly.',
+    'Track call outcomes manually for 20 calls: qualified / wrong number / spam. After enough data, refine targeting based on real outcomes',
+    'Brandon Ewing playbook: add call extensions on every ad + use call-only ads for mobile to filter for higher-intent callers'
+  ];
+  fillIns4('ins-cl','ins-cl-steps',obs,why,rec,steps);
 }
 
-// ── INIT (must be last — wIdx and STEPS must be initialized before these run) ──
+// ── MONTH-OVER-MONTH COMPARISON ──
+function buildMOM(){
+  const c=DATA.periods.cur_month&&DATA.periods.cur_month.campaign;
+  const p=DATA.periods.prev_month&&DATA.periods.prev_month.campaign;
+  const p2=DATA.periods.prev2_month&&DATA.periods.prev2_month.campaign;
+  if(!c||!p||!p2) return;
+  const lc=getMonthLabel('cur_month'), lp=getMonthLabel('prev_month'), lp2=getMonthLabel('prev2_month');
+  document.getElementById('mom-h0').innerHTML=lc+' <span style="font-weight:400;color:var(--mut);text-transform:none;letter-spacing:0">(MTD)</span>';
+  document.getElementById('mom-h1').textContent=lp;
+  document.getElementById('mom-h2').textContent=lp2;
+  function arrow(cur,prev){
+    if(prev===0&&cur===0) return '<span class="t gy">&mdash;</span>';
+    if(prev===0) return '<span class="t gn">new</span>';
+    const pct=Math.round(((cur-prev)/prev)*100);
+    if(pct>=10) return '<span class="t gn">&uarr; '+pct+'%</span>';
+    if(pct<=-10) return '<span class="t rd">&darr; '+Math.abs(pct)+'%</span>';
+    return '<span class="t gy">flat</span>';
+  }
+  const cpl=v=>v.calls>0?(v.spend/v.calls):0;
+  const rows=[
+    ['Spend','$'+c.spend.toFixed(0),'$'+p.spend.toFixed(0),'$'+p2.spend.toFixed(0),arrow(c.spend,p.spend)],
+    ['Clicks',c.clicks,p.clicks,p2.clicks,arrow(c.clicks,p.clicks)],
+    ['Calls',c.calls,p.calls,p2.calls,arrow(c.calls,p.calls)],
+    ['Conversions',c.conversions,p.conversions,p2.conversions,arrow(c.conversions,p.conversions)],
+    ['CTR',c.ctr+'%',p.ctr+'%',p2.ctr+'%',arrow(c.ctr,p.ctr)],
+    ['Avg CPC','$'+c.avg_cpc,'$'+p.avg_cpc,'$'+p2.avg_cpc,arrow(p.avg_cpc,c.avg_cpc)],
+    ['Cost / Call',cpl(c)?'$'+cpl(c).toFixed(0):'&mdash;',cpl(p)?'$'+cpl(p).toFixed(0):'&mdash;',cpl(p2)?'$'+cpl(p2).toFixed(0):'&mdash;',cpl(c)&&cpl(p)?arrow(cpl(p),cpl(c)):'<span class="t gy">&mdash;</span>'],
+  ];
+  document.getElementById('mom-body').innerHTML=rows.map(r=>'<tr><td style="font-weight:700">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td>'+r[4]+'</td></tr>').join('');
+
+  const findings=[];
+  if(p.calls>0&&c.calls>=3*p.calls) findings.push('&#128200; <strong>Calls jumped '+(c.calls/p.calls).toFixed(1)+'&times;</strong> ('+p.calls+' &rarr; '+c.calls+') from '+lp+' to '+lc+'. This is a major shift &mdash; worth investigating what changed.');
+  else if(c.calls>p.calls) findings.push('&#128200; Calls up from '+p.calls+' to '+c.calls+' (+'+(c.calls-p.calls)+').');
+  else if(c.calls<p.calls) findings.push('&#128201; Calls down from '+p.calls+' to '+c.calls+' (-'+(p.calls-c.calls)+').');
+  if(p.spend>0){
+    const sr=c.spend/p.spend;
+    if(sr>=1.5) findings.push('&#128184; Spend grew '+sr.toFixed(1)+'&times; ($'+p.spend.toFixed(0)+' &rarr; $'+c.spend.toFixed(0)+'). Expected if budget was raised &mdash; flag if not.');
+    else if(sr<=0.7) findings.push('&#128184; Spend dropped to '+Math.round(sr*100)+'% of '+lp+' &mdash; check if a campaign was paused or budget cut.');
+  }
+  if(p.calls>0&&c.calls>0){
+    const cplC=cpl(c), cplP=cpl(p);
+    if(cplC<cplP*0.6) findings.push('&#9989; Cost-per-call dropped from $'+cplP.toFixed(0)+' to $'+cplC.toFixed(0)+' &mdash; efficiency improved sharply.');
+    else if(cplC>cplP*1.4) findings.push('&#9888;&#65039; Cost-per-call rose from $'+cplP.toFixed(0)+' to $'+cplC.toFixed(0)+' &mdash; paying more for fewer leads.');
+  }
+  if(c.calls>p.calls&&c.calls>p2.calls&&p.calls<=p2.calls+2){
+    findings.push('<em>'+lc+' is your strongest month of the three. If you made changes mid-'+lp+' (new keywords, bid strategy, ad copy, pauses), they may be driving the lift now. Open Change History to correlate dates.</em>');
+  }
+  if(c.calls===p.calls&&c.calls===p2.calls) findings.push('Volume is flat across all three months.');
+  if(findings.length===0) findings.push('Numbers are roughly steady across the last 3 months.');
+
+  // 4-part MoM insight
+  const camp=(DATA.config&&DATA.config.campaign)||{};
+  const strat=bidStrategyHuman(camp.bid_strategy);
+  const obs=findings.join('<br><br>');
+  let why='Month-over-month deltas can come from: <strong>(a)</strong> account-side changes (budget, bid strategy, keyword adds/pauses, ad copy edits), <strong>(b)</strong> seasonal demand shifts, <strong>(c)</strong> competitor activity raising auction prices, or <strong>(d)</strong> tracking changes that surface or hide existing leads. ';
+  why+='Current bid strategy is <strong>'+strat+'</strong>'+(camp.daily_budget?', daily budget $'+camp.daily_budget.toFixed(0):'')+'. ';
+  why+='The <em>Recent Changes</em> section below this card shows the actual edits made in the last 30 days &mdash; correlate the dates against the spend/calls movement above to identify which lever drove the shift.';
+  let rec='<strong>1.</strong> Open the <em>Recent Changes</em> table below and look for edits dated near the inflection point. ';
+  rec+='<strong>2.</strong> If a change preceded a lift &rarr; document it in the Ads playbook so it can be repeated. ';
+  rec+='<strong>3.</strong> If a change preceded a drop &rarr; revert it (Google Ads keeps prior values in Change History). ';
+  rec+='<strong>4.</strong> If no change correlates &rarr; it\'s likely seasonal or competitive; check Auction Insights (Reports &rarr; Predefined &rarr; Auction Insights) to see if competitor share-of-voice grew.';
+  const steps=[
+    'Scroll down to <em>Recent Changes</em> table &mdash; sort by date, find edits during '+lp+' or early '+lc,
+    'Open <a href="https://ads.google.com/aw/changehistory" target="_blank">Google Ads &rarr; Tools &rarr; Change History</a> for the full chronology (UI shows everything, not just last 30 days)',
+    'For lifts: document the change + its date in your playbook so it can be repeated on slow months',
+    'For drops: revert the change via Change History &rarr; click the entry &rarr; <strong>Undo</strong>',
+    'If nothing correlates: check Auction Insights to see if a new competitor entered the market'
+  ];
+  fillIns4('ins-mom','ins-mom-steps',obs,why,rec,steps);
+}
+
+// ── CHANGE HISTORY (last 30 days) ──
+function rChanges(){
+  const tb=document.getElementById('ce-body');
+  if(!tb) return;
+  const ev=(DATA.changes||[]);
+  if(ev.length===0){
+    tb.innerHTML='<tr><td colspan="5" class="ce-empty">No changes recorded in the last 30 days. (API limit: only last 30 days.)</td></tr>';
+    document.getElementById('ins-ce').innerHTML=make4Part(
+      'No account changes in the last 30 days.',
+      'When the account is stable, performance shifts come from external factors: seasonal demand, competitor bids, or audience saturation.',
+      'Use the Auction Insights report to see if competitors increased share-of-voice during this window.'
+    );
+    document.getElementById('ins-ce-steps').innerHTML='<ol><li>Open <a href="https://ads.google.com/aw/reports" target="_blank">Reports &rarr; Predefined reports &rarr; Auction insights</a></li><li>Compare share of voice month-over-month</li></ol>';
+    return;
+  }
+  const fmtDate=s=>{const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});};
+  tb.innerHTML=ev.slice(0,40).map(e=>'<tr><td>'+fmtDate(e.ts)+'</td><td><span class="t">'+e.type+'</span></td><td>'+e.op+'</td><td class="ce-fields" title="'+e.fields.replace(/"/g,'&quot;')+'">'+e.fields+'</td><td style="font-size:11px;color:var(--mut)">'+(e.user||e.client||'&mdash;')+'</td></tr>').join('');
+
+  // correlation insight
+  const byType={};
+  ev.forEach(e=>{byType[e.type]=(byType[e.type]||0)+1;});
+  const summary=Object.entries(byType).map(([k,v])=>v+' '+k.toLowerCase()).join(', ');
+  const obs='<strong>'+ev.length+' change(s)</strong> recorded in last 30 days &mdash; '+summary+'.';
+  const cur=DATA.periods.cur_month&&DATA.periods.cur_month.campaign;
+  const prev=DATA.periods.prev_month&&DATA.periods.prev_month.campaign;
+  let why='Each change can shift bid behavior, audience reach, or what searches you appear on. ';
+  if(cur&&prev){
+    const dCalls=cur.calls-prev.calls, dSpend=cur.spend-prev.spend;
+    if(Math.abs(dCalls)>=2||Math.abs(dSpend)>=200){
+      why+='Notable month-over-month delta: calls '+(dCalls>=0?'+':'')+dCalls+', spend '+(dSpend>=0?'+$':'-$')+Math.abs(dSpend).toFixed(0)+'. Cross-reference these dates with the table above &mdash; the operation closest in time is the most likely cause.';
+    } else {
+      why+='Month-over-month numbers are relatively stable, so changes here are tuning, not turning points.';
+    }
+  }
+  const rec='Click any row that lines up with a metric jump or drop. In Google Ads, Change History supports <strong>Undo</strong> on most edits if a change was harmful. Document the kept changes in an Ads playbook so wins can be reproduced.';
+  document.getElementById('ins-ce').innerHTML=make4Part(obs,why,rec);
+  document.getElementById('ins-ce-steps').innerHTML='<ol>'+
+    '<li>Open <a href="https://ads.google.com/aw/changehistory" target="_blank">Google Ads &rarr; Tools &rarr; Change History</a> to see full detail (old vs new values)</li>'+
+    '<li>Click the change row matching the metric inflection &rarr; review old/new values</li>'+
+    '<li>If harmful: click <strong>Undo</strong> (restores prior config)</li>'+
+    '<li>If beneficial: log it in your Ads playbook with date + result</li>'+
+    '<li>For changes &gt;30 days old: only available in the Google Ads UI Change History (not via API)</li>'+
+  '</ol>';
+}
+
+// ── INIT (must be last — wIdx, STEPS, INS_STEPS must be declared before these run) ──
 document.getElementById('ud').textContent=DATA.updated;
-rCalls(); setP('30d');
+initMonthTabs(); applyNightMode(); rCalls(); setP('cur_month'); buildMOM(); rChanges();
 </script>
 </body>
 </html>
