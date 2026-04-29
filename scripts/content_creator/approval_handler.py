@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 import pytz
 
 ET = pytz.timezone("America/New_York")
+APPROVAL_REMINDER_SUBJECT = "⏰ Content approvals pending"
 
 SHEET_ID = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
 CATALOG_TAB = "📸 Project Content Catalog"
@@ -735,12 +736,32 @@ def _send_approval_reminder(stale_posts):
             f"- {p['topic'][:80]} ({p['niche'].upper()})\n  Drive: {p['static_link']}"
         )
     count = len(stale_posts)
-    subject = f"\u23f0 {count} post{'s' if count != 1 else ''} waiting for your approval"
+    subject = APPROVAL_REMINDER_SUBJECT
     body = (
+        f"{count} post(s) are currently waiting for your approval.\n\n"
         "The following posts are waiting for your approval:\n\n"
         + "\n\n".join(lines)
         + "\n\nReply 'black approved', 'cream approved', or 'skip' to the original preview email."
     )
+    # Keep only one active reminder thread in inbox: archive older reminders first.
+    try:
+        token, _ = get_gmail_token()
+        q = urllib.parse.quote(f'subject:"{APPROVAL_REMINDER_SUBJECT}" in:inbox')
+        url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages?q={q}&maxResults=200"
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        msgs = json.loads(urllib.request.urlopen(req).read()).get("messages", [])
+        ids = [m["id"] for m in msgs]
+        if ids:
+            mod_req = urllib.request.Request(
+                "https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify",
+                data=json.dumps({"ids": ids, "removeLabelIds": ["INBOX"]}).encode(),
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(mod_req).read()
+            print(f"  Archived {len(ids)} older approval reminder email(s) before sending new one")
+    except Exception as exc:
+        print(f"  Could not pre-archive older approval reminders: {exc}")
     try:
         subprocess.run(
             [gh, "workflow", "run", "send_email.yml",
@@ -756,6 +777,20 @@ def _send_approval_reminder(stale_posts):
 
 
 def _check_stale_reminders(pending):
+    # Send max once per 24h even if workflow runs hourly.
+    try:
+        token, _ = get_gmail_token()
+        q = urllib.parse.quote(f'subject:"{APPROVAL_REMINDER_SUBJECT}" newer_than:1d')
+        req = urllib.request.Request(
+            f"https://gmail.googleapis.com/gmail/v1/users/me/messages?q={q}&maxResults=1",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        existing = json.loads(urllib.request.urlopen(req).read()).get("messages", [])
+        if existing:
+            print("  Approval reminder already sent in last 24h — skipping duplicate")
+            return
+    except Exception as exc:
+        print(f"  Reminder dedupe check failed (continuing): {exc}")
     today = datetime.now(ET).strftime("%Y-%m-%d")
     stale = [p for p in pending if p.get("date_created") and p["date_created"] < today]
     if stale:
