@@ -2,27 +2,41 @@
 ads_dashboard.py — Pull Google Ads data, regenerate docs/dashboard/index.html
 Run by ads_pulse.yml every Monday 8 AM ET.
 """
-import json, os, re, sys, smtplib, datetime
+import json, os, re, sys, smtplib, datetime, calendar
 from email.message import EmailMessage
 from pathlib import Path
 
-PERIODS = {
-    "30d":  ("LAST_30_DAYS", None, None),
-    "60d":  ("LAST_60_DAYS", None, None),
-    "90d":  ("LAST_90_DAYS", None, None),
-    "6mo":  ("LAST_6_MONTHS", None, None),
-    "12mo": ("LAST_12_MONTHS", None, None),
-}
+
+def _build_periods():
+    today = datetime.date.today()
+    first_this = today.replace(day=1)
+    first_prev = (first_this - datetime.timedelta(days=1)).replace(day=1)
+    last_prev2 = first_prev - datetime.timedelta(days=1)
+    first_prev2 = last_prev2.replace(day=1)
+    return {
+        "15d":        "segments.date DURING LAST_14_DAYS",
+        "30d":        "segments.date DURING LAST_30_DAYS",
+        "60d":        "segments.date DURING LAST_60_DAYS",
+        "90d":        "segments.date DURING LAST_90_DAYS",
+        "6mo":        "segments.date DURING LAST_6_MONTHS",
+        "12mo":       "segments.date DURING LAST_12_MONTHS",
+        "cur_month":  "segments.date DURING THIS_MONTH",
+        "prev_month": "segments.date DURING LAST_MONTH",
+        "prev2_month":f"segments.date BETWEEN '{first_prev2}' AND '{last_prev2}'",
+    }
+
+
+PERIODS = _build_periods()
 
 CAMPAIGN_ID = "23314409466"
 
 
-def get_period_data(ga, customer_id, period_expr):
+def get_period_data(ga, customer_id, date_filter):
     r1 = ga.search(customer_id=customer_id, query=f"""
         SELECT campaign.name, metrics.clicks, metrics.impressions, metrics.ctr,
                metrics.average_cpc, metrics.cost_micros, metrics.conversions, metrics.phone_calls
         FROM campaign
-        WHERE segments.date DURING {period_expr} AND campaign.id = {CAMPAIGN_ID}
+        WHERE {date_filter} AND campaign.id = {CAMPAIGN_ID}
     """)
     campaign = {}
     for row in r1:
@@ -40,7 +54,7 @@ def get_period_data(ga, customer_id, period_expr):
     r2 = ga.search(customer_id=customer_id, query=f"""
         SELECT ad_group.name, metrics.clicks, metrics.cost_micros, metrics.conversions
         FROM ad_group
-        WHERE segments.date DURING {period_expr} AND campaign.id = {CAMPAIGN_ID}
+        WHERE {date_filter} AND campaign.id = {CAMPAIGN_ID}
         ORDER BY metrics.cost_micros DESC
     """)
     adgroups = [
@@ -56,7 +70,7 @@ def get_period_data(ga, customer_id, period_expr):
                metrics.clicks, metrics.impressions, metrics.ctr,
                metrics.cost_micros, metrics.conversions, metrics.average_cpc
         FROM keyword_view
-        WHERE segments.date DURING {period_expr} AND campaign.id = {CAMPAIGN_ID}
+        WHERE {date_filter} AND campaign.id = {CAMPAIGN_ID}
           AND metrics.cost_micros > 0
         ORDER BY metrics.cost_micros DESC LIMIT 10
     """)
@@ -113,9 +127,9 @@ def get_all_data(customer_id, config):
     ga = client.get_service("GoogleAdsService")
 
     periods_data = {}
-    for label, (expr, _start, _end) in PERIODS.items():
+    for label, date_filter in PERIODS.items():
         print(f"  Pulling {label}...")
-        camp, ags, kws = get_period_data(ga, customer_id, expr)
+        camp, ags, kws = get_period_data(ga, customer_id, date_filter)
         periods_data[label] = {"campaign": camp, "adgroups": ags, "keywords": kws}
 
     print("  Pulling call log...")
