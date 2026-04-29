@@ -63,6 +63,15 @@ YouTube (Apify) → Instagram (Apify) → Pexels → Pixabay → Archive.org →
 - If every tier fails, Ken Burns animates the poster. Never empty motion folder.
 Source: scripts/content_creator/motion_sources.py + MOTION_SOURCES_RESEARCH.md
 
+**BRAZIL NATIVE TEMPLATE — V1 RACHADINHA MOTION TREATMENT (added 2026-04-29)**
+Every Brazil native carousel uses the Rachadinha v1 visual system. Applies to all agents (carousel_reviewer, content_creator, 4AM agent, any skill that builds or reviews Brazil carousels):
+- Cover slide: full-bleed CC photo as `.bg-photo` with `filter:grayscale(1) contrast(1.1) brightness(.55)` + `.halftone` dot overlay + `.sticker-slot` portrait (absolute right 7% top 18%, same photo, `filter:grayscale(1) contrast(1.15) brightness(.95)`). Cover text constrained to max-width 54% to avoid collision.
+- Middle slides: ODD indices (3, 5, 7…) = motion slide with `.bg-photo` + `.halftone`. EVEN indices (2, 4, 6…) = static, no background.
+- Photo source: `photo_query` field in `clip_suggestions` → Wikipedia REST → Wikimedia Commons → Pexels fallback. Haiku MUST emit `photo_query` + `photo_bg_position` for every motion slide.
+- `motion_renderer` must be `"kenburns"` for Brazil native — Ken Burns zoom applied to the rendered slide PNG.
+- NO placeholder divs ever. If no photo fetched → slide renders as clean dark text, no dashed box.
+Source: v1_rachadinha/cover.html (Drive 1TgH7nDM2BDFznL9jS9jmzCdt9XNT3y0y) + carousel_builder.py::_build_brazil_html
+
 **VISUAL-EVERY-OTHER-SLIDE**
 Never ship 3+ consecutive text-only slides. At least every other middle slide carries a visual anchor.
 News = face for named person OR contextual image (institution, event).
