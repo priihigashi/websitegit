@@ -2,19 +2,18 @@
 """
 fix_existing_images.py — Retroactive image quality repair for carousel Drive folders.
 
-Scans version folders in a Drive carousel folder, finds AI-generated images via
-media_provenance.json, regenerates prompts via prompt_builder, re-fetches with
-image_providers (AI cascade first for realistic prompt-specific images, then
-real-photo fallback), re-uploads to Drive.
+Scans version folders in a Drive carousel folder, Vision-validates every existing
+image, re-fetches any that don't match their slide content, re-uploads to Drive.
 
 Flow per slot:
-  1. Read media_provenance.json → find source_type == "ai" slots
-  2. Read cover.html (or slide HTML) → extract slide text for that slot
-  3. Call prompt_builder.build_image_prompt() → fresh specific prompt
-  4. Try AI cascade first (NB2 → Seedream4.5 → Seedream5.0 → Gemini → SDXL → DALL-E)
-  5. If AI fails or duplicates: real-photo fallback (Wikimedia → Pexels → Pixabay)
-  6. Persons (subject_type=="person") skip AI and go straight to Wikimedia
-  7. Upload fixed image to Drive, update media_provenance.json
+  1. Read media_provenance.json → collect ALL slots (ai, cc, stock)
+  2. For real-photo slots (cc/stock): download existing image → run Claude Haiku Vision
+     - Vision says YES (image matches content) → keep, skip
+     - Vision says NO or file missing → queue for re-fetch
+  3. For AI slots: always queue for re-fetch (AI images are commonly wrong/generic)
+  4. Persons (subject_type=="person") skip AI and go straight to Wikimedia
+  5. Re-fetch queued slots: AI cascade first, real-photo fallback
+  6. Upload fixed image to Drive, archive old to images/replaced/, update provenance
 
 Usage:
   python fix_existing_images.py --dry-run
@@ -271,47 +270,87 @@ def fix_version_folder(
         except Exception as e:
             print(f"  Could not read cover.html: {e}")
 
-    # Collect AI-sourced slots
-    ai_slots = []
+    # Collect ALL provenance slots, then Vision-screen real-photo ones.
+    # AI slots always re-fetch. Real-photo (cc/stock): only re-fetch if Vision rejects.
+    def _make_slot(label, num, data):
+        return {
+            "slot": label,
+            "slide_num": num,
+            "query": data.get("query", ""),
+            "prompt": data.get("prompt", ""),
+            "subject_type": data.get("subject_type", "place"),
+            "old_provider": data.get("provider", ""),
+            "old_path": data.get("path", ""),
+            "source_type": data.get("source_type", ""),
+        }
 
+    all_slots = []
     cover = prov.get("cover", {})
-    if isinstance(cover, dict) and cover.get("source_type") == "ai":
-        subject_type = cover.get("subject_type", "place")
-        if subject_type != "person":  # never re-generate named-person covers via AI
-            ai_slots.append({
-                "slot": "cover",
-                "slide_num": 1,
-                "query": cover.get("query", ""),
-                "prompt": cover.get("prompt", ""),
-                "subject_type": subject_type,
-                "old_provider": cover.get("provider", ""),
-                "old_path": cover.get("path", ""),
-            })
+    if isinstance(cover, dict) and cover.get("source_type") and cover.get("subject_type", "place") != "person":
+        all_slots.append(_make_slot("cover", 1, cover))
 
     for slide_key, slide_data in prov.get("slides", {}).items():
-        if isinstance(slide_data, dict) and slide_data.get("source_type") == "ai":
-            ai_slots.append({
-                "slot": f"slide_{slide_key}",
-                "slide_num": int(slide_key),
-                "query": slide_data.get("query", ""),
-                "prompt": slide_data.get("prompt", ""),
-                "subject_type": slide_data.get("subject_type", "place"),
-                "old_provider": slide_data.get("provider", ""),
-                "old_path": slide_data.get("path", ""),
-            })
+        if isinstance(slide_data, dict) and slide_data.get("source_type"):
+            all_slots.append(_make_slot(f"slide_{slide_key}", int(slide_key), slide_data))
 
-    if not ai_slots:
-        print(f"  No AI-sourced slots — nothing to fix")
+    if not all_slots:
+        print(f"  No provenance slots found — skipping")
         summary["skipped"] += 1
         return summary
 
-    print(f"  Found {len(ai_slots)} AI-sourced slot(s)")
+    # Vision-screen real-photo slots: download existing image → validate → skip if correct
+    vision_tmp = work_dir / folder_name / "_vision_tmp"
+    vision_tmp.mkdir(parents=True, exist_ok=True)
+    fix_slots = []
+    for slot in all_slots:
+        src = slot["source_type"]
+        old_path = slot.get("old_path", "")
+        if src == "ai":
+            fix_slots.append(slot)
+            continue
+        # Real-photo: check if existing image actually matches content
+        vision_query = (slide_texts.get(slot["slide_num"], "") or slot["query"] or "").strip()
+        if not old_path or not images_id:
+            fix_slots.append(slot)
+            continue
+        old_filename = old_path.split("/")[-1]
+        try:
+            q_str = (f"'{images_id}' in parents and name='{old_filename}' "
+                     f"and mimeType!='application/vnd.google-apps.folder' and trashed=false")
+            res = drive.files().list(
+                q=q_str, fields="files(id,name)",
+                supportsAllDrives=True, includeItemsFromAllDrives=True,
+            ).execute()
+            existing = res.get("files", [])
+            if not existing:
+                print(f"  {slot['slot']}: not found in Drive → queuing for fix")
+                fix_slots.append(slot)
+                continue
+            img_bytes = _download_bytes(drive, existing[0]["id"])
+            tmp_img = vision_tmp / old_filename
+            tmp_img.write_bytes(img_bytes)
+            ok, reason = _vision_validate(str(tmp_img), vision_query)
+            if ok:
+                print(f"  {slot['slot']}: Vision OK ({src}) — keeping existing image")
+            else:
+                print(f"  {slot['slot']}: Vision REJECT ({src}) — {reason[:100]} → queuing")
+                fix_slots.append(slot)
+        except Exception as e:
+            print(f"  {slot['slot']}: Vision check error ({e}) — queuing anyway")
+            fix_slots.append(slot)
+
+    if not fix_slots:
+        print(f"  All {len(all_slots)} slot(s) passed Vision check — nothing to fix")
+        summary["skipped"] += 1
+        return summary
+
+    print(f"  Queued {len(fix_slots)} slot(s) for re-fetch (of {len(all_slots)} total)")
 
     # Create local work dir for this version folder
     local_dir = work_dir / folder_name
     local_dir.mkdir(parents=True, exist_ok=True)
 
-    for slot in ai_slots:
+    for slot in fix_slots:
         slide_num = slot["slide_num"]
         query = slot["query"]
         subject_type = slot["subject_type"]
