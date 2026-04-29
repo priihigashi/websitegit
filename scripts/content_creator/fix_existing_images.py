@@ -25,7 +25,7 @@ Defaults:
   --niche   opc
   --provider (none = full cascade)
 """
-import argparse, json, os, re, sys, tempfile, time
+import argparse, hashlib, json, os, re, sys, tempfile, time
 from pathlib import Path
 from typing import Optional
 
@@ -181,6 +181,7 @@ def fix_version_folder(
     folder_id = version_folder["id"]
     folder_name = version_folder["name"]
     summary = {"folder": folder_name, "fixed": 0, "skipped": 0, "errors": 0, "details": []}
+    seen_hashes: set = set()  # MD5 hashes of images already accepted in this folder
 
     # PNG backup (Goal 2 hook — runs BEFORE any image work so we can always roll back)
     if backup_pngs and not dry_run:
@@ -352,13 +353,37 @@ def fix_version_folder(
         img_path, used_provider = fetch_real_photo(query, str(local_dir), filename)
         source_type = "cc" if used_provider == "wikimedia" else ("stock" if used_provider else "")
 
-        # Step 3: AI cascade if real photos miss
+        # Duplicate guard: if same bytes as another slot in this carousel, reject and
+        # fall through to AI cascade (Pixabay returns the same top image for similar queries)
+        if img_path:
+            local_candidate = local_dir / "resources" / "images" / filename
+            if local_candidate.exists():
+                img_hash = hashlib.md5(local_candidate.read_bytes()).hexdigest()
+                if img_hash in seen_hashes:
+                    print(f"    Duplicate image detected (same as previous slot) → retrying with AI cascade")
+                    local_candidate.unlink()
+                    img_path, used_provider, source_type = None, "", ""
+                else:
+                    seen_hashes.add(img_hash)
+
+        # Step 3: AI cascade if real photos miss or produced a duplicate
         if not img_path and subject_type != "person":
             img_path, used_provider = generate_ai_image(
                 fresh_prompt, str(local_dir), filename, provider,
                 skip_providers=skip_list,
             )
             source_type = "ai" if img_path else ""
+            # Duplicate guard for AI results too
+            if img_path:
+                local_candidate = local_dir / "resources" / "images" / filename
+                if local_candidate.exists():
+                    img_hash = hashlib.md5(local_candidate.read_bytes()).hexdigest()
+                    if img_hash in seen_hashes:
+                        print(f"    AI result is also a duplicate — all tiers exhausted for {slot_label}")
+                        local_candidate.unlink()
+                        img_path, used_provider, source_type = None, "", ""
+                    else:
+                        seen_hashes.add(img_hash)
 
         if not img_path:
             print(f"    All tiers failed for {slot_label}")
