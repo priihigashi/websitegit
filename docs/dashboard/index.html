@@ -147,34 +147,138 @@ const DATA = {
     "clicks": 220,
     "impressions": 4106,
     "ctr": 5.36,
+    "avg_cpc": 4.05,
     "spend": 892.03,
     "conversions": 1.0,
-    "calls": 8,
-    "avg_cpc": 4.05
+    "calls": 8
   },
   "adgroups": [
-    {"name": "NEW AND ADDITION",    "spend": 742.42, "clicks": 185, "conv": 1.0},
-    {"name": "CONCRETE FOUNDATION", "spend": 134.42, "clicks": 32,  "conv": 0.0},
-    {"name": "SHELL CONSTRUCTION",  "spend": 15.18,  "clicks": 3,   "conv": 0.0},
-    {"name": "STUCCO",              "spend": 0.0,    "clicks": 0,   "conv": 0.0}
+    {
+      "name": "NEW AND ADDITION",
+      "spend": 742.42,
+      "clicks": 185,
+      "conv": 1.0
+    },
+    {
+      "name": "CONCRETE FOUNDATION",
+      "spend": 134.42,
+      "clicks": 32,
+      "conv": 0.0
+    },
+    {
+      "name": "SHELL CONSTRUCTION",
+      "spend": 15.18,
+      "clicks": 3,
+      "conv": 0.0
+    },
+    {
+      "name": "STUCCO",
+      "spend": 0.0,
+      "clicks": 0,
+      "conv": 0.0
+    }
   ],
   "keywords": [
-    {"text": "building construction company",    "ag": "NEW AND ADDITION",    "spend": 151.07, "clicks": 31, "ctr": 0, "conv": 0.0},
-    {"text": "new home construction",            "ag": "NEW AND ADDITION",    "spend": 144.39, "clicks": 37, "ctr": 0, "conv": 0.0},
-    {"text": "general contractor near me",       "ag": "NEW AND ADDITION",    "spend": 117.98, "clicks": 32, "ctr": 0, "conv": 0.0},
-    {"text": "concrete services",                "ag": "CONCRETE FOUNDATION", "spend": 117.46, "clicks": 24, "ctr": 0, "conv": 0.0},
-    {"text": "new construction homes",           "ag": "NEW AND ADDITION",    "spend": 89.54,  "clicks": 20, "ctr": 0, "conv": 0.0},
-    {"text": "home renovation contractor",       "ag": "NEW AND ADDITION",    "spend": 76.86,  "clicks": 15, "ctr": 0, "conv": 0.0},
-    {"text": "construction and renovation company","ag":"NEW AND ADDITION",   "spend": 70.75,  "clicks": 20, "ctr": 0, "conv": 1.0},
-    {"text": "builders to build a house",        "ag": "NEW AND ADDITION",    "spend": 25.58,  "clicks": 9,  "ctr": 0, "conv": 0.0},
-    {"text": "custom new build homes",           "ag": "NEW AND ADDITION",    "spend": 17.57,  "clicks": 3,  "ctr": 0, "conv": 0.0},
-    {"text": "home remodeling contractor",       "ag": "NEW AND ADDITION",    "spend": 15.99,  "clicks": 6,  "ctr": 0, "conv": 0.0}
+    {
+      "text": "building construction company",
+      "ag": "NEW AND ADDITION",
+      "spend": 151.07,
+      "clicks": 31,
+      "ctr": 4.28,
+      "conv": 0.0
+    },
+    {
+      "text": "new home construction",
+      "ag": "NEW AND ADDITION",
+      "spend": 144.39,
+      "clicks": 37,
+      "ctr": 5.94,
+      "conv": 0.0
+    },
+    {
+      "text": "general contractor near me",
+      "ag": "NEW AND ADDITION",
+      "spend": 117.98,
+      "clicks": 32,
+      "ctr": 8.99,
+      "conv": 0.0
+    },
+    {
+      "text": "concrete services",
+      "ag": "CONCRETE FOUNDATION",
+      "spend": 117.46,
+      "clicks": 24,
+      "ctr": 5.27,
+      "conv": 0.0
+    },
+    {
+      "text": "new construction homes",
+      "ag": "NEW AND ADDITION",
+      "spend": 89.54,
+      "clicks": 20,
+      "ctr": 6.17,
+      "conv": 0.0
+    },
+    {
+      "text": "home renovation contractor",
+      "ag": "NEW AND ADDITION",
+      "spend": 76.86,
+      "clicks": 15,
+      "ctr": 5.86,
+      "conv": 0.0
+    },
+    {
+      "text": "construction and renovation company",
+      "ag": "NEW AND ADDITION",
+      "spend": 70.75,
+      "clicks": 20,
+      "ctr": 4.58,
+      "conv": 1.0
+    },
+    {
+      "text": "builders to build a house",
+      "ag": "NEW AND ADDITION",
+      "spend": 25.58,
+      "clicks": 9,
+      "ctr": 5.17,
+      "conv": 0.0
+    },
+    {
+      "text": "custom new build homes",
+      "ag": "NEW AND ADDITION",
+      "spend": 17.57,
+      "clicks": 3,
+      "ctr": 7.5,
+      "conv": 0.0
+    },
+    {
+      "text": "home remodeling contractor",
+      "ag": "NEW AND ADDITION",
+      "spend": 15.99,
+      "clicks": 6,
+      "ctr": 6.98,
+      "conv": 0.0
+    }
   ],
   "warnings": [
-    {"level": "red",    "icon": "🔴", "text": "<strong>$892 spent → 1 conversion.</strong> Cost per lead = $892. Google needs conversion tracking fixed to optimise bids.", "action": "Fix: Set conversion value in Ads UI → Goals → Conversion actions → Calls from ads → set value"},
-    {"level": "red",    "icon": "🔴", "text": "<strong>Top 4 keywords burned $531 with 0 conversions:</strong> building construction company ($151), new home construction ($144), general contractor near me ($118), concrete services ($117).", "action": "Consider pausing or adding negative keywords to tighten these"},
-    {"level": "yellow", "icon": "🟡", "text": "<strong>STUCCO ad group: $0 spend, 0 clicks.</strong> Ads not showing at all — may be below minimum bid or Quality Score issue.", "action": "Check bid vs. first-page bid estimate in Google Ads UI"},
-    {"level": "yellow", "icon": "🟡", "text": "<strong>8 calls tracked but only 1 conversion logged.</strong> Conversion tracking is misconfigured — 7 real leads may be invisible to Google's algorithm.", "action": "Fix: Link GA4 to Google Ads + verify Call conversion action is set as Primary"}
+    {
+      "level": "red",
+      "icon": "\ud83d\udd34",
+      "text": "<strong>$756 spent on 0-conversion keywords.</strong> Top offenders: building construction company ($151), new home construction ($144), general contractor near me ($118).",
+      "action": "Consider pausing these or adding as negatives"
+    },
+    {
+      "level": "yellow",
+      "icon": "\ud83d\udfe1",
+      "text": "<strong>STUCCO ad group: $0 spend, 0 clicks.</strong> Ads not showing \u2014 below minimum bid or Quality Score issue.",
+      "action": "Check bid vs. first-page estimate in Google Ads UI"
+    },
+    {
+      "level": "yellow",
+      "icon": "\ud83d\udfe1",
+      "text": "<strong>8 calls tracked but only 1 conversion logged.</strong> 7 real leads may be invisible to Google.",
+      "action": "Link GA4 to Google Ads + verify Call conversion action is set as Primary"
+    }
   ]
 };
 
