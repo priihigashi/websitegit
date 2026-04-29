@@ -522,6 +522,8 @@ Return ONLY a valid JSON object with this exact structure:
   ],
   "clip_suggestions": [
     {{"person_or_topic": "name or topic", "slide": 3, "duration_hint": "5-8 seconds", "reason": "why this clip fits this slide",
+      "photo_query": "Wikipedia/Wikimedia search term for a CC-licensed still photo of this person or place — used as slide background in v1 motion treatment. For people: 'Firstname Lastname' in English. For places: English or PT landmark name.",
+      "photo_bg_position": "CSS background-position for the photo crop (e.g. 'center 20%' for face, '50% 40%' for building, 'center top' for portrait). Default: 'center 20%'.",
       "youtube_query": "specific YouTube search — proper names OK, best for speeches/press",
       "instagram_query": "IG-style phrasing — lowercase hashtag-friendly, creator reels",
       "pexels_query": "stock-style phrasing — place/event/institution, NO proper names",
@@ -529,7 +531,7 @@ Return ONLY a valid JSON object with this exact structure:
       "archive_query": "archival phrasing for public-domain footage (Archive.org)",
       "wikimedia_query": "CC-licensed historical/institutional footage query",
       "motion_prompt": "5s visual direction for the animated cover (Remotion/Kling): camera, mood, framing",
-      "motion_renderer": "remotion|playwright|kenburns",
+      "motion_renderer": "kenburns",
       "visual_hint": "bio-card|context-image|place|event|product-photo|none"
     }}
   ],
@@ -574,7 +576,9 @@ For every slide that would benefit from motion (cover + any slide naming a speec
   - archive_query   → public-domain / archival phrasing (vintage footage, historical film)
   - wikimedia_query → CC-licensed historical or institutional footage
   - motion_prompt   → 5-second directorial note: camera move + mood + framing (e.g. "slow push-in on Brasília facade, dusk, cinematic, 24mm", "archival grain, slight zoom on signing ceremony"). This drives Remotion animation + serves as AI-video prompt if we escalate to Runway/Kling.
-  - motion_renderer → "remotion" (default for cover/template slides), "playwright" (HTML-driven motion), or "kenburns" (photo-only). Never omit.
+  - photo_query     → Wikipedia/Wikimedia search term for a CC still photo used as slide background. For people: English full name. For places: landmark name. This is the PRIMARY source — always populate.
+  - photo_bg_position → CSS background-position for the crop (default "center 20%"). Use "center top" for portraits, "50% 40%" for buildings.
+  - motion_renderer → always "kenburns" for Brazil native template (Ken Burns zoom on the CC photo). Never omit.
   - visual_hint     → same values as slides.visual_hint. Determines whether stock tiers are allowed (stock skips for bio-card).
 
 If NO tier could plausibly succeed (hyper-local story, no public footage, no place to film) return an empty clip_suggestions array — do not invent false queries. Ken Burns floor will still animate the poster image, so every cover gets motion regardless.
@@ -690,6 +694,55 @@ def _fetch_person_photo(search_query, dest_dir, filename):
     except Exception as e:
         print(f"  Photo fetch failed ({search_query}): {e}")
     return ""
+
+
+def _fetch_slide_photos_brazil(content, work_dir):
+    """Fetch per-slide photos for Brazil native motion template.
+    For each odd-indexed middle slide (3, 5, 7 …) that has a photo_query in
+    clip_suggestions, tries Wikipedia → Wikimedia Commons (person) or
+    Pexels (context) to get a CC-licensed photo.
+    Returns dict {slide_i: "resources/images/<file>"} — empty string = not found.
+    """
+    result = {}
+    clip_suggestions = content.get("clip_suggestions", [])
+    # Build a lookup by slide index
+    sugg_by_slide = {s.get("slide", 0): s for s in clip_suggestions if s.get("slide")}
+
+    for slide_i, slide in enumerate(content.get("slides", []), start=2):
+        if slide_i % 2 == 0:
+            continue  # even slides are static — no bg photo needed
+        sugg = sugg_by_slide.get(slide_i, {})
+        photo_query = sugg.get("photo_query", "") or sugg.get("youtube_query", "")
+        if not photo_query:
+            # Fallback: use slide heading as query
+            photo_query = slide.get("heading_pt", "") or slide.get("heading_en", "")
+        if not photo_query:
+            continue
+
+        safe = re.sub(r"[^\w]", "_", photo_query.lower())[:30]
+        fname = f"slide{slide_i}_{safe}.jpg"
+        bg_pos = sugg.get("photo_bg_position", "center 20%")
+
+        # Route A: person photo (Wikipedia → Wikimedia)
+        visual_hint = sugg.get("visual_hint", "")
+        if visual_hint == "bio-card" or slide.get("type") == "profile":
+            path = _fetch_person_photo(photo_query, work_dir, fname)
+        else:
+            path = _fetch_person_photo(photo_query, work_dir, fname)
+            if not path:
+                path = _fetch_pexels_image(photo_query, work_dir, fname)
+            if not path:
+                path = _fetch_pixabay_image(photo_query, work_dir, fname)
+
+        if path:
+            result[slide_i] = path
+            # Embed the bg_position hint as a sidecar so the HTML can read it
+            pos_file = Path(work_dir) / "resources" / "images" / f"{fname}.bgpos"
+            pos_file.write_text(bg_pos)
+        else:
+            print(f"  slide_photos_brazil: no photo for slide {slide_i} ({photo_query[:40]})")
+
+    return result
 
 
 def _generate_ai_cover(prompt, work_dir, filename="cover.jpg"):
@@ -1358,6 +1411,21 @@ def fetch_all_media(content, niche, work_dir):
                 print(f"  Slide {i}: Pixabay fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "pixabay", "stock", query=cq, prompt=ai_prompt)
                 accepted = True
+
+    # ── BRAZIL NATIVE SLIDE PHOTOS (motion alternating slides) ────────────────
+    # Fetches per-slide CC photos for odd slides (3, 5, 7…) in the Brazil native
+    # template. Uses photo_query from clip_suggestions (set by Haiku) or falls
+    # back to slide heading. Stores in paths["slide_photos"] = {slide_i: path}.
+    if niche in ("brazil", "usa"):
+        try:
+            slide_ph = _fetch_slide_photos_brazil(content, work_dir)
+            paths["slide_photos"] = slide_ph
+            print(f"  Slide photos fetched: {list(slide_ph.keys())}")
+        except Exception as _e:
+            paths["slide_photos"] = {}
+            print(f"  Slide photos fetch failed (non-fatal): {_e}")
+    else:
+        paths["slide_photos"] = {}
 
     fetched_total = (1 if paths["cover"] else 0) + len(paths["slides"])
     _generate_cutouts_for_cutout_template(content, paths, work_dir)
@@ -2648,12 +2716,25 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
 
     clips = (media_paths or {}).get("clips", {})
     cover_img = (media_paths or {}).get("cover", "")
+    # slide_photos: per-slide CC photos fetched by _fetch_slide_photos_brazil()
+    # Keys are slide_i (int, 1-based matching the enumerate below starting at 2)
+    slide_photos = (media_paths or {}).get("slide_photos", {})
     # Cover is always a motion slide — full-bleed photo/clip background
-    cover_clip_el = f'<div class="clip-bg" style="background-image:url(\'{cover_img}\');"></div>' if cover_img else ""
+    # Cover background: full-bleed grayscale photo + halftone (v1 Rachadinha treatment)
+    cover_bg_el = (
+        f'<div class="bg-photo" style="background-image:url(\'{cover_img}\');"></div>'
+        f'<div class="halftone"></div>'
+    ) if cover_img else ""
+    # Cover sticker-slot: portrait photo absolutely positioned at right, same photo
+    cover_sticker_el = (
+        f'<div class="sticker-slot"><img src="{cover_img}" alt="cover portrait"></div>'
+    ) if cover_img else ""
+    cover_sticker_class = "cover-with-sticker" if cover_img else ""
     slides_html = f"""
-<div class="slide slide-cover slide-motion">
+<div class="slide slide-cover slide-motion {cover_sticker_class}">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-  {cover_clip_el}
+  {cover_bg_el}
+  {cover_sticker_el}
   <div class="tag">Quem decidiu isso?</div>
   <div class="cover-date">{cover_date}</div>
   <div class="cover-hl">{cover_hl}</div>
@@ -2667,12 +2748,21 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
         stype = slide.get("type", "list")
         h_pt  = esc(slide.get("heading_pt", ""))
         h_en  = esc(slide.get("heading_en", ""))
-        # Alternating motion pattern: odd slide_i (3, 5) = motion (clip bg), even (2, 4, 6) = static
+        # Alternating motion pattern: odd slide_i (3, 5, 7) = motion (grayscale photo + halftone)
+        # even (2, 4, 6) = static (no bg, clean dark slide)
         is_motion_slide = (slide_i % 2 == 1)
         motion_class = "slide-motion" if is_motion_slide else ""
-        clip_path = clips.get(slide_i, "") or (media_paths or {}).get("slides", {}).get(slide_i, "")
-        if is_motion_slide and clip_path:
-            clip_el = f'<div class="clip-bg" style="background-image:url(\'{clip_path}\');"></div>'
+        # Priority: dedicated slide photo → clip (video poster) → cover photo reuse
+        slide_photo = (
+            slide_photos.get(slide_i, "")
+            or clips.get(slide_i, "")
+            or (media_paths or {}).get("slides", {}).get(slide_i, "")
+        )
+        if is_motion_slide and slide_photo:
+            clip_el = (
+                f'<div class="bg-photo" style="background-image:url(\'{slide_photo}\');"></div>'
+                f'<div class="halftone"></div>'
+            )
         else:
             clip_el = ""
         corners = '<div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>'
@@ -2844,11 +2934,19 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}}
 .corner.tr{{top:40px;right:40px;border-top:2px solid rgba(203,204,16,.6);border-right:2px solid rgba(203,204,16,.6)}}
 .corner.bl{{bottom:40px;left:40px;border-bottom:2px solid rgba(203,204,16,.6);border-left:2px solid rgba(203,204,16,.6)}}
 .corner.br{{bottom:40px;right:40px;border-bottom:2px solid rgba(203,204,16,.6);border-right:2px solid rgba(203,204,16,.6)}}
-/* Clip/photo full-bleed background (motion slides) */
-.clip-bg{{position:absolute;inset:0;background-size:cover;background-position:center;z-index:1}}
-.clip-bg::after{{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,10,.28) 0%,rgba(10,10,10,.82) 100%)}}
-.slide-motion > *:not(.clip-bg):not(.corner):not(.swipe):not(.footer-handle){{position:relative;z-index:3}}
-.slide-motion .clip-bg[style*="background-image"]{{filter:grayscale(.15) contrast(1.1) brightness(.62)}}
+/* Full-bleed photo background — v1 Rachadinha treatment */
+.bg-photo{{position:absolute;inset:0;background-size:cover;background-position:center 20%;z-index:1;filter:grayscale(1) contrast(1.1) brightness(.55)}}
+.bg-photo::after{{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,10,.18) 0%,rgba(10,10,10,.78) 100%)}}
+/* Halftone newspaper dot overlay */
+.halftone{{position:absolute;inset:0;z-index:2;pointer-events:none;background-image:radial-gradient(circle,rgba(10,10,10,.55) 1px,transparent 1px);background-size:6px 6px}}
+.slide-motion > *:not(.bg-photo):not(.halftone):not(.corner):not(.swipe):not(.footer-handle):not(.sticker-slot){{position:relative;z-index:3}}
+/* Cover sticker-slot — portrait card, absolutely positioned right side */
+.sticker-slot{{position:absolute;right:7%;top:18%;width:320px;height:420px;z-index:4;border:3px solid var(--ca);border-radius:4px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.7)}}
+.sticker-slot img{{width:100%;height:100%;object-fit:cover;object-position:center top;filter:grayscale(1) contrast(1.15) brightness(.95)}}
+/* Cover text constrained so it doesn't collide with sticker */
+.cover-with-sticker .cover-hl{{max-width:54%}}
+.cover-with-sticker .cover-en{{max-width:54%}}
+.cover-with-sticker .cover-date{{max-width:54%}}
 /* Typography */
 .tag{{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--gr);margin-bottom:32px}}
 .accent{{color:var(--ca)}}
