@@ -251,7 +251,9 @@ def get_call_log(ga, customer_id):
 
 def get_dayofweek_data(ga, customer_id):
     """Pull last-30d spend + calls broken out by day of week. Used for day-parting warnings."""
-    DAY_NAMES = {0:"Sunday",1:"Monday",2:"Tuesday",3:"Wednesday",4:"Thursday",5:"Friday",6:"Saturday"}
+    # Google Ads DayOfWeek enum is 1-based: 1=MONDAY … 7=SUNDAY (0=UNSPECIFIED)
+    INT_TO_DAY = {1:"Monday",2:"Tuesday",3:"Wednesday",4:"Thursday",5:"Friday",6:"Saturday",7:"Sunday"}
+    STR_TO_DAY = {v.upper(): v for v in INT_TO_DAY.values()}  # {"MONDAY":"Monday", ...}
     dow = {}
     try:
         r = ga.search(customer_id=customer_id, query=f"""
@@ -260,13 +262,10 @@ def get_dayofweek_data(ga, customer_id):
             WHERE segments.date DURING LAST_30_DAYS AND campaign.id = {CAMPAIGN_ID}
         """)
         for row in r:
-            name = _enum_name(row.segments.day_of_week)
-            # Try to get integer index from enum
-            try:
-                idx = row.segments.day_of_week.value
-                name = DAY_NAMES.get(idx, name)
-            except Exception:
-                pass
+            raw = _enum_name(row.segments.day_of_week)  # "MONDAY" or bare int string
+            name = (STR_TO_DAY.get(raw.upper())
+                    or INT_TO_DAY.get(getattr(row.segments.day_of_week, "value", None))
+                    or raw)
             if name not in dow:
                 dow[name] = {"spend": 0, "calls": 0, "clicks": 0}
             dow[name]["spend"]  = round(dow[name]["spend"]  + row.metrics.cost_micros / 1e6, 2)
@@ -274,9 +273,9 @@ def get_dayofweek_data(ga, customer_id):
             dow[name]["clicks"] += row.metrics.clicks
     except Exception as e:
         print(f"  dayofweek failed: {e}")
-    # Return ordered Sun-Sat
-    order = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
-    return [{"day": d, **dow.get(d, {"spend": 0, "calls": 0, "clicks": 0})} for d in order if d in dow or dow]
+    # Return Mon–Sun ordered, only days that had actual data
+    order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+    return [{"day": d, **dow[d]} for d in order if d in dow]
 
 
 def get_all_data(customer_id, config):
