@@ -1,0 +1,54 @@
+name: TEST — Image API probe
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      PRI_OP_REPLICATE_API_KEY: ${{ secrets.PRI_OP_REPLICATE_API_KEY }}
+      PRI_OP_INFSH_API_KEY: ${{ secrets.PRI_OP_INFSH_API_KEY }}
+    steps:
+      - name: Probe Pexels
+        run: |
+          echo "=== PEXELS ==="
+          echo "key length: ${#PEXELS_API_KEY}"
+          curl -sS -o /tmp/p.json -w "HTTP %{http_code}\n" \
+            -H "Authorization: $PEXELS_API_KEY" \
+            "https://api.pexels.com/v1/search?query=construction&per_page=1&orientation=portrait" || true
+          head -c 400 /tmp/p.json; echo
+      - name: Probe Pixabay
+        run: |
+          echo "=== PIXABAY ==="
+          echo "key length: ${#PIXABAY_API_KEY}"
+          curl -sS -o /tmp/x.json -w "HTTP %{http_code}\n" \
+            "https://pixabay.com/api/?key=$PIXABAY_API_KEY&q=construction&image_type=photo&orientation=vertical&per_page=3&safesearch=true" || true
+          head -c 400 /tmp/x.json; echo
+      - name: Probe Replicate Seedream-4
+        run: |
+          echo "=== REPLICATE bytedance/seedream-4 ==="
+          echo "key length: ${#PRI_OP_REPLICATE_API_KEY}"
+          curl -sS -o /tmp/r.json -w "HTTP %{http_code}\n" \
+            -X POST \
+            -H "Authorization: Bearer $PRI_OP_REPLICATE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: wait=30" \
+            -d '{"input":{"prompt":"a wooden gazebo in a backyard","aspect_ratio":"4:5"}}' \
+            "https://api.replicate.com/v1/models/bytedance/seedream-4/predictions" || true
+          head -c 800 /tmp/r.json; echo
+      - name: Probe Replicate model existence (GET)
+        run: |
+          echo "=== REPLICATE GET model meta ==="
+          curl -sS -o /tmp/m.json -w "HTTP %{http_code}\n" \
+            -H "Authorization: Bearer $PRI_OP_REPLICATE_API_KEY" \
+            "https://api.replicate.com/v1/models/bytedance/seedream-4" || true
+          head -c 500 /tmp/m.json; echo
+      - name: Probe inference.sh (NB2)
+        run: |
+          echo "=== INFERENCE.SH ==="
+          echo "key length: ${#PRI_OP_INFSH_API_KEY}"
+          # they expose the key validity via /v1/me-style endpoint; otherwise we can hit base
+          curl -sS -o /tmp/i.json -w "HTTP %{http_code}\n" \
+            -H "Authorization: Bearer $PRI_OP_INFSH_API_KEY" \
+            "https://api.inference.sh/v1/me" || true
+          head -c 400 /tmp/i.json; echo
