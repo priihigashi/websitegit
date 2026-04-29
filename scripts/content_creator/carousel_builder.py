@@ -1237,8 +1237,23 @@ def fetch_all_media(content, niche, work_dir):
                 if c and _vision_accept(c, search_q, "cover/pixabay"):
                     _set_cover(c, "pixabay", "stock", query=search_q)
 
-        # If cover is a person and all photo tiers missed, leave empty — the HTML
-        # renderer falls back to .bio-initials card (see build_html step D).
+        # Person photo missed all CC tiers → contextual Pexels fallback (no face, topic context).
+        # This ensures the cover is never empty — a courtroom/institution/event photo is
+        # better than black text on black. Editorial rule preserved: we never AI-generate
+        # the person's face, but a contextual background is always acceptable.
+        if not paths["cover"] and subject_type == "person" and search_q:
+            # Use topic text or option_b prompt to build a context query (strip personal names)
+            ctx_q = cv.get("option_b", {}).get("prompt", "") or f"{search_q} justice court law"
+            ctx_q = ctx_q[:80]
+            c = _fetch_pexels_image(ctx_q, work_dir, cover_fname)
+            if c:
+                _set_cover(c, "pexels", "stock", query=ctx_q)
+                print(f"  cover fallback → Pexels context image for person miss: {ctx_q[:50]}")
+            if not paths["cover"]:
+                c = _fetch_pixabay_image(ctx_q, work_dir, cover_fname)
+                if c:
+                    _set_cover(c, "pixabay", "stock", query=ctx_q)
+                    print(f"  cover fallback → Pixabay context image for person miss")
 
     # ── MIDDLE SLIDES — CONTEXT IMAGES ────────────────────────────────────
     # Cascade: AI cascade FIRST (NB2 → Seedream4.5 → Seedream5.0 → Gemini → SDXL
@@ -2170,12 +2185,6 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
   letter-spacing:.14em; text-transform:uppercase; color:var(--c-tag);
   margin-top:9px; padding:0 2px;
 }
-.ill-empty {
-  width:100%; min-height:200px; display:flex; align-items:center; justify-content:center;
-  border:2px dashed rgba(203,204,16,.38); border-radius:4px;
-  color:rgba(203,204,16,.38); font-family:'JetBrains Mono',monospace;
-  letter-spacing:.15em; font-size:14px; margin:14px 0 6px;
-}
 .v2 .ill-bg { opacity:.18; filter: grayscale(0.06) contrast(1.1) brightness(1.04) saturate(1.05); }
 .v2 .ill-grain { background-image:
   repeating-linear-gradient(0deg, rgba(0,0,0,0.032) 0px, rgba(0,0,0,0.032) 1px, transparent 1px, transparent 3px),
@@ -2463,8 +2472,7 @@ def _build_news_shared_template_html(content, slug, work_dir, style, handle="@HA
             cls = "cutout-img" if use_cutout else "ill-photo"
             wrap = "cutout-wrap" if use_cutout else "ill-panel"
             return f'<div class="{wrap}"><img src="{src}" alt="{label}" class="{cls}"></div>'
-        empty = "cutout-wrap cutout-empty" if use_cutout else "ill-panel ill-empty"
-        return f'<div class="{empty}"><span>{label}</span></div>'
+        return ""  # No image — render nothing, never a placeholder box
 
     html = []
     html.append(f"""
@@ -2641,10 +2649,7 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
     clips = (media_paths or {}).get("clips", {})
     cover_img = (media_paths or {}).get("cover", "")
     # Cover is always a motion slide — full-bleed photo/clip background
-    if cover_img:
-        cover_clip_el = f'<div class="clip-bg" style="background-image:url(\'{cover_img}\');"></div>'
-    else:
-        cover_clip_el = '<div class="clip-bg clip-placeholder"><div class="clip-placeholder-label">▶ CLIP — COVER</div></div>'
+    cover_clip_el = f'<div class="clip-bg" style="background-image:url(\'{cover_img}\');"></div>' if cover_img else ""
     slides_html = f"""
 <div class="slide slide-cover slide-motion">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
@@ -2666,11 +2671,8 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
         is_motion_slide = (slide_i % 2 == 1)
         motion_class = "slide-motion" if is_motion_slide else ""
         clip_path = clips.get(slide_i, "") or (media_paths or {}).get("slides", {}).get(slide_i, "")
-        if is_motion_slide:
-            if clip_path:
-                clip_el = f'<div class="clip-bg" style="background-image:url(\'{clip_path}\');"></div>'
-            else:
-                clip_el = f'<div class="clip-bg clip-placeholder"><div class="clip-placeholder-label">▶ CLIP — SLIDE {slide_i}</div></div>'
+        if is_motion_slide and clip_path:
+            clip_el = f'<div class="clip-bg" style="background-image:url(\'{clip_path}\');"></div>'
         else:
             clip_el = ""
         corners = '<div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>'
@@ -2847,9 +2849,6 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}}
 .clip-bg::after{{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,10,.28) 0%,rgba(10,10,10,.82) 100%)}}
 .slide-motion > *:not(.clip-bg):not(.corner):not(.swipe):not(.footer-handle){{position:relative;z-index:3}}
 .slide-motion .clip-bg[style*="background-image"]{{filter:grayscale(.15) contrast(1.1) brightness(.62)}}
-/* Clip placeholder shown when no clip fetched yet */
-.clip-placeholder{{position:absolute;inset:0;z-index:1;background:repeating-linear-gradient(45deg,rgba(203,204,16,.035),rgba(203,204,16,.035) 2px,transparent 2px,transparent 14px);border:none}}
-.clip-placeholder-label{{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:rgba(203,204,16,.35);white-space:nowrap}}
 /* Typography */
 .tag{{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--gr);margin-bottom:32px}}
 .accent{{color:var(--ca)}}
