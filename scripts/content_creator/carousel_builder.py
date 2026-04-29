@@ -2235,9 +2235,7 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
     repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 4px);
   mix-blend-mode: soft-light;
 }
-.ill-shell > *:not(.ill-bg):not(.ill-grain) { position:relative; z-index:2; }
-/* Arrow, logo and corners must stay absolutely positioned — override the rule above */
-.ill-shell .arrow, .ill-shell .slide-logo, .ill-shell .corner { position:absolute !important; }
+.ill-shell > *:not(.ill-bg):not(.ill-grain):not(.arrow):not(.slide-logo):not(.corner) { position:relative; z-index:2; }
 /* Editorial image panel — no border, cinematic treatment */
 .ill-panel-wrap { margin:14px 0 6px; }
 .ill-panel {
@@ -2423,9 +2421,7 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
   filter: grayscale(0.1) contrast(1.15) brightness(0.85);
   opacity:0.16; z-index:0;
 }
-.cut-shell > *:not(.cut-bg) { position:relative; z-index:2; }
-/* Arrow, logo and corners must stay absolutely positioned — override the rule above */
-.cut-shell .arrow, .cut-shell .slide-logo, .cut-shell .corner { position:absolute !important; }
+.cut-shell > *:not(.cut-bg):not(.arrow):not(.slide-logo):not(.corner) { position:relative; z-index:2; }
 /* Museum artifact hero — large centered floating object */
 .cut-artifact {
   width:100%; display:flex; flex-direction:column; align-items:center;

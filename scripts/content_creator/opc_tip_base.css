@@ -121,7 +121,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   content:''; position:absolute; inset:0;
   background:linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.85) 100%);
 }
-.slide-cover > *:not(.bg-photo):not(.corner) { position:relative; z-index:3; }
+.slide-cover > *:not(.bg-photo):not(.corner):not(.arrow):not(.slide-logo):not(.sticker-slot):not(.sticker-stamp) { position:relative; z-index:3; }
 
 /* Last slide mirrors cover treatment for stronger close-out */
 .slide-sources .bg-photo {
@@ -135,7 +135,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   inset:0;
   background:linear-gradient(180deg, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.88) 100%);
 }
-.slide-sources > *:not(.bg-photo):not(.corner) { position:relative; z-index:3; }
+.slide-sources > *:not(.bg-photo):not(.corner):not(.arrow):not(.slide-logo) { position:relative; z-index:3; }
 
 /* ---- Sticker slot (cover — Mike placeholder) ---- */
 .sticker-slot {
