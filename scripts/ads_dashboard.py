@@ -38,7 +38,7 @@ def get_period_data(ga, customer_id, date_filter):
         SELECT campaign.name, metrics.clicks, metrics.impressions, metrics.ctr,
                metrics.average_cpc, metrics.cost_micros, metrics.conversions,
                metrics.phone_calls, metrics.search_impression_share,
-               metrics.search_top_impression_percentage
+               metrics.search_top_impression_share
         FROM campaign
         WHERE {date_filter} AND campaign.id = {CAMPAIGN_ID}
     """)
@@ -46,7 +46,7 @@ def get_period_data(ga, customer_id, date_filter):
     for row in r1:
         m = row.metrics
         is_pct = round(m.search_impression_share * 100, 1) if m.search_impression_share else None
-        top_pct = round(m.search_top_impression_percentage * 100, 1) if m.search_top_impression_percentage else None
+        top_pct = round(m.search_top_impression_share * 100, 1) if m.search_top_impression_share else None
         campaign = {
             "clicks":      m.clicks,
             "impressions": m.impressions,
