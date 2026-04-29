@@ -93,7 +93,7 @@ def get_call_log(ga, customer_id):
     """Pull all available call details. No date filter — call_view doesn't support segments.date."""
     r = ga.search(customer_id=customer_id, query=f"""
         SELECT call_view.call_status, call_view.call_duration_seconds,
-               call_view.start_call_date_time, call_view.area_code,
+               call_view.start_call_date_time, call_view.caller_area_code,
                ad_group.name
         FROM call_view
         WHERE campaign.id = {CAMPAIGN_ID}
@@ -111,7 +111,7 @@ def get_call_log(ga, customer_id):
         except Exception:
             date_s = dt_str[:10]
             time_s = dt_str[11:16]
-        area = str(cv.area_code) if cv.area_code else "???"
+        area = str(cv.caller_area_code) if cv.caller_area_code else "???"
         calls.append({
             "date":     date_s,
             "time":     time_s,

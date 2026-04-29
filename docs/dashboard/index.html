@@ -59,6 +59,8 @@ body{background:var(--cream);color:var(--obsidian);font-family:'Roboto Condensed
 /* sections */
 .sec{margin-bottom:22px}
 .sech{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--mut);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--brd)}
+.periodtag{display:inline-block;background:var(--obsidian);color:var(--cream);font-size:9px;font-weight:700;letter-spacing:1.5px;padding:2px 8px;border-radius:3px;margin-left:8px;vertical-align:1px}
+body.night-mode .periodtag{background:var(--ld);color:var(--obsidian)}
 .card{background:var(--card);border:1px solid var(--brd);border-radius:8px;padding:16px}
 /* two-row tab system */
 .tabs-wrap{margin-bottom:6px}
@@ -157,7 +159,7 @@ canvas{max-height:180px}
     <div class="kc"><div class="klbl">Avg CPC</div><div class="kv" id="kcpc">&#8212;</div><div class="ksb">Per click</div></div>
   </div>
   <div class="sec">
-    <div class="sech">Spend by Ad Group</div>
+    <div class="sech">Spend by Ad Group <span class="periodtag" id="ptag-ag">&mdash;</span></div>
     <div class="card"><div id="agb"></div></div>
     <div class="ins-box">
       <div class="ins-head" onclick="toggleIns('ins-ag-steps')">
@@ -168,11 +170,11 @@ canvas{max-height:180px}
     </div>
   </div>
   <div class="sec">
-    <div class="sech">Top Keywords &#8212; Spend vs Conversions</div>
+    <div class="sech">Top Keywords &#8212; Spend vs Conversions <span class="periodtag" id="ptag-ch">&mdash;</span></div>
     <div class="card"><canvas id="ch"></canvas></div>
   </div>
   <div class="sec">
-    <div class="sech">Top Keywords by Spend</div>
+    <div class="sech">Top Keywords by Spend <span class="periodtag" id="ptag-kw">&mdash;</span></div>
     <div class="card" style="padding:0;overflow:hidden;border-radius:8px">
       <table><thead><tr><th>Keyword</th><th>Group</th><th>Spend</th><th>Clicks</th><th>CTR</th><th>Conv</th></tr></thead><tbody id="kwt"></tbody></table>
     </div>
@@ -185,7 +187,7 @@ canvas{max-height:180px}
     </div>
   </div>
   <div class="sec">
-    <div class="sech">Call Log &#8212; All Time (46 calls) &nbsp;<span style="font-size:10px;color:var(--mut);font-weight:400;letter-spacing:0;text-transform:none">&#8226; Area codes only &mdash; full numbers in <a href="https://ads.google.com/aw/reports" target="_blank" style="color:var(--ld);text-transform:none;letter-spacing:0;font-weight:700">Google Ads &rarr; Reports &rarr; Call Details</a></span></div>
+    <div class="sech">Call Log &#8212; All Time (46 calls) &nbsp;<span style="font-size:10px;color:var(--mut);font-weight:400;letter-spacing:0;text-transform:none">&#8226; Area codes only &mdash; full numbers in Google Ads &rarr; Tools &rarr; Reports &rarr; Predefined reports &rarr; Other &rarr; Call details</span></div>
     <div class="card" style="padding:0;overflow:hidden;border-radius:8px">
       <table><thead><tr><th>Date</th><th>Time</th><th>Area / Region</th><th>Duration</th><th>Status</th><th>Ad Group</th></tr></thead><tbody id="ct"></tbody></table>
     </div>
@@ -281,6 +283,8 @@ function setP(p){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',!isMo&&t.getAttribute('onclick')==="setP('"+p+"')"));
   document.querySelectorAll('.tab-mo').forEach(t=>t.classList.toggle('on',isMo&&t.getAttribute('onclick')==="setP('"+p+"')"));
   document.getElementById('dr').innerHTML='<span>'+getDR(p)+'</span>';
+  const ptagLbl=isMo?getMonthLabel(p).split(' ')[0].toUpperCase():(PL[p]||p).replace('Last ','').toUpperCase();
+  ['ptag-ag','ptag-ch','ptag-kw'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=ptagLbl;});
   render(DATA.periods[p]);
 }
 
@@ -546,7 +550,7 @@ function rCalls(){
   if(avgDur>90) ins+='Average call duration '+Math.round(avgDur)+'s &mdash; long calls indicate real interest, not wrong numbers. ';
   else ins+='Average call duration '+Math.round(avgDur)+'s &mdash; short calls may indicate wrong leads or missed calls being auto-counted. ';
   ins+='<strong>'+miss.length+' missed calls</strong> = potential lost leads. Consider a missed-call text-back service (many contractor CRMs offer this free). ';
-  ins+='<em>Note: Google API provides area codes only &mdash; full numbers are visible in <a href="https://ads.google.com/aw/reports" target="_blank" style="color:var(--ld)">Google Ads &rarr; Reports &rarr; Call Details</a>.</em>';
+  ins+='<em>Note: Google API provides area codes only &mdash; full numbers are visible in Google Ads &rarr; Tools &rarr; Reports &rarr; Predefined reports &rarr; Other &rarr; Call details.</em>';
   fillIns('ins-cl','ins-cl-steps','cl',ins);
 }
 
