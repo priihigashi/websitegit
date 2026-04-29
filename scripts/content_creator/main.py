@@ -64,6 +64,8 @@ MANUAL_TOPIC = os.environ.get("MANUAL_TOPIC", "").strip()
 MANUAL_NICHE = os.environ.get("MANUAL_NICHE", "").strip().lower()
 MANUAL_TEMPLATE = os.environ.get("MANUAL_TEMPLATE", "auto").strip().lower()
 MANUAL_TEMPLATE_SET = os.environ.get("MANUAL_TEMPLATE_SET", "").strip().lower()
+# When set, all Drive uploads go to this test folder instead of normal series destinations.
+TEST_OUTPUT_FOLDER = os.environ.get("TEST_OUTPUT_FOLDER", "").strip()
 
 
 def _send_alert(msg: str):
@@ -985,7 +987,7 @@ def process_one_topic(topic_entry, run_date, drive):
     # Shape (NEW 2026-04-20): <carousel_folder_id>/v<N>_<slug>/{cover.html, png/, motion/, resources/, story doc}
     # carousel_folder_id is the niche-level Carousel parent (no series, no _TEMPLATE_CAROUSEL middle layer).
     print("  Uploading to Drive...")
-    parent = get_route(niche).get("carousel_folder_id", "")
+    parent = TEST_OUTPUT_FOLDER or get_route(niche).get("carousel_folder_id", "")
     if not parent:
         _send_alert(f"No carousel_folder_id configured for niche '{niche}' in routing.py — skipping upload for '{topic[:40]}'")
         return None

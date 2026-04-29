@@ -55,6 +55,10 @@ on:
         options:
           - 'single'
           - 'all'
+      test_output_folder:
+        description: 'Override Drive folder ID for all uploads (test runs)'
+        required: false
+        default: ''
 
 jobs:
   create-content:
@@ -115,6 +119,7 @@ jobs:
           MANUAL_TOPIC: ${{ github.event.inputs.manual_topic || '' }}
           MANUAL_TEMPLATE: ${{ github.event.inputs.manual_template || 'auto' }}
           MANUAL_TEMPLATE_SET: ${{ github.event.inputs.manual_template_set || 'single' }}
+          TEST_OUTPUT_FOLDER: ${{ github.event.inputs.test_output_folder || '' }}
 
       - name: Run carousel reviewer (post-build quality check)
         if: always()
@@ -236,6 +241,7 @@ jobs:
           MANUAL_TOPIC: ${{ github.event.inputs.manual_topic || '' }}
           MANUAL_TEMPLATE: ${{ github.event.inputs.manual_template || 'auto' }}
           MANUAL_TEMPLATE_SET: ${{ github.event.inputs.manual_template_set || 'single' }}
+          TEST_OUTPUT_FOLDER: ${{ github.event.inputs.test_output_folder || '' }}
 
       - name: Run carousel reviewer (post-build quality check)
         if: always()
