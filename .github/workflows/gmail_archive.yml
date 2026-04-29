@@ -8,7 +8,7 @@ name: Gmail Inbox Auto-Archive (every 2h)
 #   🤖 Automation/Captures       → archived after 18h
 #   🤖 Automation/Daily Digests  → archived after 12h
 #   🤖 Automation/Notifications  → archived after 12h
-#   🚨 Automation Errors         → archived after 18h
+#   🚨 Automation Errors         → archived after 12h
 #   google ads help              → archived after 12h
 #   🔒 Security                  → archived after 7d
 #
@@ -60,7 +60,7 @@ jobs:
               ("🤖 Automation/Captures",      18),
               ("🤖 Automation/Daily Digests", 12),
               ("🤖 Automation/Notifications", 12),
-              ("🚨 Automation Errors",        18),
+              ("🚨 Automation Errors",        12),
               ("google ads help",             12),
               ("🔒 Security",                 24 * 7),
           ]

@@ -118,6 +118,29 @@ jobs:
           path: transcripts/
           retention-days: 30
 
+      - name: Send failure notification (realtime, compact thread)
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: priscila@oakpark-construction.com
+          password: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          to: priscila@oakpark-construction.com
+          from: Oak Park AI <priscila@oakpark-construction.com>
+          subject: "CAPTURE FAILED — Realtime Alert"
+          body: |
+            A capture run failed.
+
+            URL: ${{ inputs.url }}
+            Project: ${{ inputs.project }}
+            Story ID: ${{ inputs.story_id || 'auto' }}
+            Run number: ${{ github.run_number }}
+
+            Check the run logs:
+            https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}
+
       - name: Update Build Tracker
         if: always()
         env:
