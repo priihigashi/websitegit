@@ -2010,8 +2010,11 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
 
     def img_panel(src, label):
         if src:
-            return f'<div class="ill-panel"><img src="{src}" alt="{label}" class="ill-photo"></div>'
-        return f'<div class="ill-panel ill-empty"><span>{label}</span></div>'
+            return (f'<div class="ill-panel-wrap">'
+                    f'<div class="ill-panel"><img src="{src}" alt="{label}" class="ill-photo"></div>'
+                    f'<div class="ill-caption">&#x25B6; {label}</div>'
+                    f'</div>')
+        return f'<div class="ill-empty"><span>{label}</span></div>'
 
     s4_hl = content.get("slide4_headline", "THE PRO MOVE")
     s4_accent = s4_hl.split()[-1] if s4_hl else "MOVE"
@@ -2089,8 +2092,8 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
 .ill-shell { position:relative; overflow:hidden; }
 .ill-bg {
   position:absolute; inset:0; background-size:cover; background-position:center;
-  filter: grayscale(0.15) contrast(1.2) brightness(0.9) saturate(0.9);
-  opacity:0.26; z-index:0;
+  filter: grayscale(0.18) contrast(1.22) brightness(0.88) saturate(0.82);
+  opacity:0.22; z-index:0;
 }
 .ill-grain {
   position:absolute; inset:0; z-index:1; pointer-events:none;
@@ -2102,27 +2105,34 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
 .ill-shell > *:not(.ill-bg):not(.ill-grain) { position:relative; z-index:2; }
 /* Arrow, logo and corners must stay absolutely positioned — override the rule above */
 .ill-shell .arrow, .ill-shell .slide-logo, .ill-shell .corner { position:absolute !important; }
+/* Editorial image panel — no border, cinematic treatment */
+.ill-panel-wrap { margin:14px 0 6px; }
 .ill-panel {
-  width:100%; min-height:210px; max-height:300px; margin:16px 0 18px;
-  border:2px solid rgba(203,204,16,.55); border-radius:8px; overflow:hidden;
-  background:#141414;
+  width:100%; min-height:240px; max-height:320px; overflow:hidden;
+  border-radius:4px; box-shadow: 0 8px 32px rgba(0,0,0,.58);
 }
 .ill-photo {
   width:100%; height:100%; object-fit:cover;
-  filter: contrast(1.35) saturate(1.1) brightness(1.02);
+  filter: contrast(1.2) saturate(0.72) brightness(0.94) sepia(0.06);
+}
+.ill-caption {
+  font-family:'JetBrains Mono', monospace; font-size:13px; font-weight:400;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--c-tag);
+  margin-top:9px; padding:0 2px;
 }
 .ill-empty {
-  display:flex; align-items:center; justify-content:center;
-  border-style:dashed; color:rgba(203,204,16,.45);
-  font-family:'JetBrains Mono', monospace; letter-spacing:.15em; font-size:15px;
+  width:100%; min-height:200px; display:flex; align-items:center; justify-content:center;
+  border:2px dashed rgba(203,204,16,.38); border-radius:4px;
+  color:rgba(203,204,16,.38); font-family:'JetBrains Mono',monospace;
+  letter-spacing:.15em; font-size:14px; margin:14px 0 6px;
 }
-.v2 .ill-bg { opacity:.21; filter: grayscale(0.05) contrast(1.08) brightness(1.06) saturate(1.05); }
+.v2 .ill-bg { opacity:.18; filter: grayscale(0.06) contrast(1.1) brightness(1.04) saturate(1.05); }
 .v2 .ill-grain { background-image:
-  repeating-linear-gradient(0deg, rgba(0,0,0,0.035) 0px, rgba(0,0,0,0.035) 1px, transparent 1px, transparent 3px),
-  repeating-linear-gradient(90deg, rgba(0,0,0,0.02) 0px, rgba(0,0,0,0.02) 1px, transparent 1px, transparent 4px); }
-.v2 .ill-panel { border-color: rgba(10,10,10,.45); background:#efe9dd; }
-.v2 .ill-photo { filter: grayscale(0.05) contrast(1.22) saturate(1.15); }
-.v2 .ill-empty { color:rgba(10,10,10,.35); border-color:rgba(10,10,10,.35); }
+  repeating-linear-gradient(0deg, rgba(0,0,0,0.032) 0px, rgba(0,0,0,0.032) 1px, transparent 1px, transparent 3px),
+  repeating-linear-gradient(90deg, rgba(0,0,0,0.018) 0px, rgba(0,0,0,0.018) 1px, transparent 1px, transparent 4px); }
+.v2 .ill-panel { box-shadow: 0 6px 22px rgba(0,0,0,.22); }
+.v2 .ill-photo { filter: contrast(1.12) saturate(0.88) brightness(1.03); }
+.v2 .ill-empty { border-color:rgba(10,10,10,.32); color:rgba(10,10,10,.32); }
 """
 
     full_html = f"""<!DOCTYPE html>
@@ -2192,7 +2202,30 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
     def variant_block(v_class):
         cut3_src = "resources/cutouts/slide_3.png" if cut3.exists() else ""
         cut4_src = "resources/cutouts/slide_4.png" if cut4.exists() else ""
-        cut5_src = "resources/cutouts/slide_5.png" if cut5.exists() else ""
+
+        # Slide 3: museum artifact centered above list
+        art3_src = cut3_src or slide3_img
+        if art3_src:
+            art3 = (f'<div class="cut-artifact">'
+                    f'<img src="{art3_src}" alt="material" class="cut-artifact-img">'
+                    f'<div class="cut-artifact-label">&#x25BC; detail</div>'
+                    f'</div>')
+        else:
+            art3 = '<div class="cut-artifact"><div class="cut-artifact-empty">MATERIAL PHOTO</div></div>'
+
+        # Slide 4: split layout — artifact left, tip text right; fall back to stacked if no image
+        art4_src = cut4_src or slide4_img
+        s4_hl_html = s4_hl.replace(s4_accent, f'<span class="accent">{s4_accent}</span>')
+        if art4_src:
+            slide4_inner = (f'<div class="cut-split-grid">'
+                            f'<div class="cut-split-art"><img src="{art4_src}" alt="pro tip detail"></div>'
+                            f'<div><div class="tip-big">{s4_hl_html}</div>'
+                            f'<div class="tip-explain">{content.get("slide4_body", "")}</div></div>'
+                            f'</div>')
+        else:
+            slide4_inner = (f'<div class="tip-big">{s4_hl_html}</div>'
+                            f'<div class="tip-explain">{content.get("slide4_body", "")}</div>')
+
         return f"""
 <div class="slide slide-cover {v_class} cut-shell">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
@@ -2217,7 +2250,7 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
 <div class="slide slide-list {v_class} cut-shell">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">What To Know</div>
-  {_sticker_tag(slide3_img, "CUTOUT IMAGE", cut3_src)}
+  {art3}
   <div class="list">
 {items_html}  </div>
   <div class="arrow">SWIPE &#8594;</div>
@@ -2228,9 +2261,7 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">Pro Tip</div>
   <div class="tip-label"><span class="tip-arrow">&#9658;</span> The Pro Move</div>
-  <div class="tip-big">{s4_hl.replace(s4_accent, f'<span class="accent">{s4_accent}</span>')}</div>
-  {_sticker_tag(slide4_img, "CUTOUT DETAIL", cut4_src)}
-  <div class="tip-explain">{content.get("slide4_body", "")}</div>
+  {slide4_inner}
   <div class="arrow">SWIPE &#8594;</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
@@ -2238,7 +2269,6 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
 <div class="slide slide-sources {v_class} cut-shell">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="cut-bg" style="background-image:url('{source_img}');"></div>
-  {_sticker_tag(source_img, "CUTOUT SOURCE", cut5_src)}
   <div class="tag">Sources</div>
   <div class="src-head">WHERE THIS<br>COMES <span class="accent">FROM.</span></div>
   <div class="src-list">
@@ -2263,30 +2293,49 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
 .cut-shell { position:relative; overflow:hidden; }
 .cut-bg {
   position:absolute; inset:0; background-size:cover; background-position:center;
-  filter: grayscale(0.08) contrast(1.18) brightness(0.88);
-  opacity:0.22; z-index:0;
+  filter: grayscale(0.1) contrast(1.15) brightness(0.85);
+  opacity:0.16; z-index:0;
 }
 .cut-shell > *:not(.cut-bg) { position:relative; z-index:2; }
 /* Arrow, logo and corners must stay absolutely positioned — override the rule above */
 .cut-shell .arrow, .cut-shell .slide-logo, .cut-shell .corner { position:absolute !important; }
-.cutout-wrap {
-  width:100%; min-height:220px; max-height:330px; margin:14px 0 16px;
-  display:flex; align-items:flex-end; justify-content:center; overflow:hidden;
+/* Museum artifact hero — large centered floating object */
+.cut-artifact {
+  width:100%; display:flex; flex-direction:column; align-items:center;
+  margin:10px 0 4px;
 }
-.cutout-img {
-  max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;
-  filter: drop-shadow(0 10px 24px rgba(0,0,0,.35)) contrast(1.15) saturate(1.1);
+.cut-artifact-img {
+  max-height:390px; max-width:68%; object-fit:contain;
+  filter: drop-shadow(0 16px 40px rgba(0,0,0,.44)) contrast(1.1) saturate(1.06);
 }
-.cutout-empty {
-  border:2px dashed rgba(203,204,16,.45); border-radius:8px;
-  align-items:center; color:rgba(203,204,16,.5);
-  font-family:'JetBrains Mono', monospace; letter-spacing:.14em; font-size:14px;
+.cut-artifact-label {
+  font-family:'JetBrains Mono', monospace; font-size:13px; font-weight:700;
+  letter-spacing:.2em; text-transform:uppercase; color:rgba(203,204,16,.52);
+  margin-top:9px; text-align:center;
 }
-.v2 .cut-bg { opacity:.18; filter: grayscale(0.03) contrast(1.05) brightness(1.02); }
-.v2 .cutout-img { filter: drop-shadow(0 8px 18px rgba(0,0,0,.22)) contrast(1.08) saturate(1.08); }
-.v2 .cutout-empty {
-  border-color:rgba(10,10,10,.38); color:rgba(10,10,10,.42);
+.cut-artifact-empty {
+  min-height:180px; width:70%; border:2px dashed rgba(203,204,16,.36);
+  border-radius:4px; display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono',monospace; font-size:13px;
+  letter-spacing:.16em; color:rgba(203,204,16,.34);
 }
+/* Side-by-side: artifact left + tip text right */
+.cut-split-grid {
+  display:grid; grid-template-columns:1fr 1.25fr; gap:24px;
+  align-items:center; margin:14px 0;
+}
+.cut-split-art {
+  display:flex; justify-content:center; align-items:center;
+}
+.cut-split-art img {
+  max-height:300px; max-width:100%; object-fit:contain;
+  filter: drop-shadow(0 10px 26px rgba(0,0,0,.40)) contrast(1.08);
+}
+.v2 .cut-bg { opacity:.12; filter: grayscale(0.04) contrast(1.06) brightness(1.04); }
+.v2 .cut-artifact-img { filter: drop-shadow(0 14px 34px rgba(0,0,0,.22)) contrast(1.08) saturate(1.04); }
+.v2 .cut-artifact-label { color:rgba(10,10,10,.38); }
+.v2 .cut-artifact-empty { border-color:rgba(10,10,10,.3); color:rgba(10,10,10,.3); }
+.v2 .cut-split-art img { filter: drop-shadow(0 8px 20px rgba(0,0,0,.18)) contrast(1.06); }
 """
 
     full_html = f"""<!DOCTYPE html>
