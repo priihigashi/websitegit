@@ -13,13 +13,15 @@ def _build_periods():
     first_prev = (first_this - datetime.timedelta(days=1)).replace(day=1)
     last_prev2 = first_prev - datetime.timedelta(days=1)
     first_prev2 = last_prev2.replace(day=1)
+    def back(n):
+        return f"segments.date BETWEEN '{today - datetime.timedelta(days=n)}' AND '{today}'"
     return {
         "15d":        "segments.date DURING LAST_14_DAYS",
         "30d":        "segments.date DURING LAST_30_DAYS",
-        "60d":        "segments.date DURING LAST_60_DAYS",
-        "90d":        "segments.date DURING LAST_90_DAYS",
-        "6mo":        "segments.date DURING LAST_6_MONTHS",
-        "12mo":       "segments.date DURING LAST_12_MONTHS",
+        "60d":        back(60),
+        "90d":        back(90),
+        "6mo":        back(180),
+        "12mo":       back(365),
         "cur_month":  "segments.date DURING THIS_MONTH",
         "prev_month": "segments.date DURING LAST_MONTH",
         "prev2_month":f"segments.date BETWEEN '{first_prev2}' AND '{last_prev2}'",

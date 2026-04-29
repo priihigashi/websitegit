@@ -197,6 +197,19 @@ canvas{max-height:180px}
       <div class="ins-steps-box" id="ins-cl-steps"></div>
     </div>
   </div>
+  <div class="sec">
+    <div class="sech">&#128202; Month-over-Month &mdash; What Changed</div>
+    <div class="card" style="padding:0;overflow:hidden;border-radius:8px">
+      <table><thead><tr><th>Metric</th><th id="mom-h0">&mdash;</th><th id="mom-h1">&mdash;</th><th id="mom-h2">&mdash;</th><th>Trend</th></tr></thead><tbody id="mom-body"></tbody></table>
+    </div>
+    <div class="ins-box">
+      <div class="ins-head" onclick="toggleIns('ins-mom-steps')">
+        <div class="insight-lbl">&#128269; Trend Analysis <span class="ins-toggle">&#9656; investigate</span></div>
+        <div class="ins-body" id="ins-mom"></div>
+      </div>
+      <div class="ins-steps-box" id="ins-mom-steps"></div>
+    </div>
+  </div>
   <div class="foot">Auto-refreshed every Monday 8 AM ET &nbsp;|&nbsp; <a href="/oak-park-ai-hub/dashboard/dark.html">&#9679; Dark version</a> &nbsp;|&nbsp; priihigashi/oak-park-ai-hub</div>
 </div>
 <script>
@@ -537,9 +550,70 @@ function rCalls(){
   fillIns('ins-cl','ins-cl-steps','cl',ins);
 }
 
+// ── MONTH-OVER-MONTH COMPARISON ──
+function buildMOM(){
+  const c=DATA.periods.cur_month&&DATA.periods.cur_month.campaign;
+  const p=DATA.periods.prev_month&&DATA.periods.prev_month.campaign;
+  const p2=DATA.periods.prev2_month&&DATA.periods.prev2_month.campaign;
+  if(!c||!p||!p2) return;
+  const lc=getMonthLabel('cur_month'), lp=getMonthLabel('prev_month'), lp2=getMonthLabel('prev2_month');
+  document.getElementById('mom-h0').innerHTML=lc+' <span style="font-weight:400;color:var(--mut);text-transform:none;letter-spacing:0">(MTD)</span>';
+  document.getElementById('mom-h1').textContent=lp;
+  document.getElementById('mom-h2').textContent=lp2;
+  function arrow(cur,prev){
+    if(prev===0&&cur===0) return '<span class="t gy">&mdash;</span>';
+    if(prev===0) return '<span class="t gn">new</span>';
+    const pct=Math.round(((cur-prev)/prev)*100);
+    if(pct>=10) return '<span class="t gn">&uarr; '+pct+'%</span>';
+    if(pct<=-10) return '<span class="t rd">&darr; '+Math.abs(pct)+'%</span>';
+    return '<span class="t gy">flat</span>';
+  }
+  const cpl=v=>v.calls>0?(v.spend/v.calls):0;
+  const rows=[
+    ['Spend','$'+c.spend.toFixed(0),'$'+p.spend.toFixed(0),'$'+p2.spend.toFixed(0),arrow(c.spend,p.spend)],
+    ['Clicks',c.clicks,p.clicks,p2.clicks,arrow(c.clicks,p.clicks)],
+    ['Calls',c.calls,p.calls,p2.calls,arrow(c.calls,p.calls)],
+    ['Conversions',c.conversions,p.conversions,p2.conversions,arrow(c.conversions,p.conversions)],
+    ['CTR',c.ctr+'%',p.ctr+'%',p2.ctr+'%',arrow(c.ctr,p.ctr)],
+    ['Avg CPC','$'+c.avg_cpc,'$'+p.avg_cpc,'$'+p2.avg_cpc,arrow(p.avg_cpc,c.avg_cpc)],
+    ['Cost / Call',cpl(c)?'$'+cpl(c).toFixed(0):'&mdash;',cpl(p)?'$'+cpl(p).toFixed(0):'&mdash;',cpl(p2)?'$'+cpl(p2).toFixed(0):'&mdash;',cpl(c)&&cpl(p)?arrow(cpl(p),cpl(c)):'<span class="t gy">&mdash;</span>'],
+  ];
+  document.getElementById('mom-body').innerHTML=rows.map(r=>'<tr><td style="font-weight:700">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td>'+r[4]+'</td></tr>').join('');
+
+  const findings=[];
+  if(p.calls>0&&c.calls>=3*p.calls) findings.push('&#128200; <strong>Calls jumped '+(c.calls/p.calls).toFixed(1)+'&times;</strong> ('+p.calls+' &rarr; '+c.calls+') from '+lp+' to '+lc+'. This is a major shift &mdash; worth investigating what changed.');
+  else if(c.calls>p.calls) findings.push('&#128200; Calls up from '+p.calls+' to '+c.calls+' (+'+(c.calls-p.calls)+').');
+  else if(c.calls<p.calls) findings.push('&#128201; Calls down from '+p.calls+' to '+c.calls+' (-'+(p.calls-c.calls)+').');
+  if(p.spend>0){
+    const sr=c.spend/p.spend;
+    if(sr>=1.5) findings.push('&#128184; Spend grew '+sr.toFixed(1)+'&times; ($'+p.spend.toFixed(0)+' &rarr; $'+c.spend.toFixed(0)+'). Expected if budget was raised &mdash; flag if not.');
+    else if(sr<=0.7) findings.push('&#128184; Spend dropped to '+Math.round(sr*100)+'% of '+lp+' &mdash; check if a campaign was paused or budget cut.');
+  }
+  if(p.calls>0&&c.calls>0){
+    const cplC=cpl(c), cplP=cpl(p);
+    if(cplC<cplP*0.6) findings.push('&#9989; Cost-per-call dropped from $'+cplP.toFixed(0)+' to $'+cplC.toFixed(0)+' &mdash; efficiency improved sharply.');
+    else if(cplC>cplP*1.4) findings.push('&#9888;&#65039; Cost-per-call rose from $'+cplP.toFixed(0)+' to $'+cplC.toFixed(0)+' &mdash; paying more for fewer leads.');
+  }
+  if(c.calls>p.calls&&c.calls>p2.calls&&p.calls<=p2.calls+2){
+    findings.push('<em>'+lc+' is your strongest month of the three. If you made changes mid-'+lp+' (new keywords, bid strategy, ad copy, pauses), they may be driving the lift now. Open Change History to correlate dates.</em>');
+  }
+  if(c.calls===p.calls&&c.calls===p2.calls) findings.push('Volume is flat across all three months.');
+  if(findings.length===0) findings.push('Numbers are roughly steady across the last 3 months.');
+  document.getElementById('ins-mom').innerHTML=findings.join('<br><br>');
+
+  const steps=[
+    'Open <a href="https://ads.google.com/aw/changehistory" target="_blank">Google Ads &rarr; Tools &rarr; Change History</a> and filter to '+lp+' &amp; '+lc+'.',
+    'Note any bid-strategy switches, budget edits, keyword adds/pauses, or ad copy changes &mdash; with their exact dates.',
+    'Compare those dates against the call-log above &mdash; which keywords were live when calls landed?',
+    'If a change correlates with the lift, document it in the Ads playbook. If a change correlates with a drop, revert it.',
+    'Pro move: build a "Change Log" tab in the campaign sheet so future month-over-month deltas auto-link to what you actually did.',
+  ];
+  document.getElementById('ins-mom-steps').innerHTML='<ol>'+steps.map(s=>'<li>'+s+'</li>').join('')+'</ol>';
+}
+
 // ── INIT (must be last — wIdx, STEPS, INS_STEPS must be declared before these run) ──
 document.getElementById('ud').textContent=DATA.updated;
-initMonthTabs(); applyNightMode(); rCalls(); setP('cur_month');
+initMonthTabs(); applyNightMode(); rCalls(); setP('cur_month'); buildMOM();
 </script>
 </body>
 </html>
