@@ -148,7 +148,10 @@ jobs:
               "Enhance existing pixels only with minor photographic adjustments. "
               "Allowed adjustments only: exposure balancing, white balance correction, subtle contrast, "
               "subtle color correction, highlight recovery, gentle shadow lift, mild dehaze, mild noise reduction, "
-              "and light natural sharpening. "
+              "light natural sharpening, lens glare cleanup, and mild perspective/vertical alignment correction. "
+              "Remove lens grease glare/starburst halos and ghost reflections around lights while keeping fixture positions unchanged. "
+              "Use clean window-driven lighting balance, neutral color rendering (not yellow), cozy warm-morning feel. "
+              "If perspective correction is needed, keep it subtle and preserve field of view with minimal crop. "
               "Do not add/remove/move/replace anything: furniture, decor, plants, rugs, fixtures, doors, windows, "
               "appliances, wall art, sky content, pool water features, or landscaping. "
               "Do not alter materials, finishes, room dimensions, reflections, or architectural details. "
@@ -180,6 +183,10 @@ jobs:
               "07_video_8576": (
                   "EXCEPTION FOR THIS IMAGE ONLY: improve pool water cleanliness and clarity only; "
                   "no changes to pool shape, edges, deck, reflections, landscaping, or architecture."
+              ),
+              "16_area_gourmet": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: remove visible hose near pool if present, "
+                  "and improve pool water cleanliness/clarity while preserving scene geometry and all architecture."
               ),
           }
           REPLICATE_PROMPT = (
