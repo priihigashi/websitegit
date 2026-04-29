@@ -97,6 +97,14 @@ def get_period_data(ga, customer_id, date_filter):
     return campaign, adgroups, keywords
 
 
+def _enum_name(v):
+    """Proto-plus enums: prefer .name; otherwise strip 'EnumName.' prefix from str()."""
+    n = getattr(v, "name", None)
+    if n: return n
+    s = str(v)
+    return s.split(".", 1)[1] if "." in s else s
+
+
 def get_config_data(ga, customer_id):
     """Pull campaign + ad-group config (budget, bidding strategy, max CPC) — drives 'why' clauses."""
     config = {"campaign": {}, "ad_groups": []}
@@ -119,8 +127,8 @@ def get_config_data(ga, customer_id):
             except Exception: pass
             config["campaign"] = {
                 "name":          row.campaign.name,
-                "status":        str(row.campaign.status).replace("CampaignStatus.", ""),
-                "bid_strategy":  str(row.campaign.bidding_strategy_type).replace("BiddingStrategyType.", ""),
+                "status":        _enum_name(row.campaign.status),
+                "bid_strategy":  _enum_name(row.campaign.bidding_strategy_type),
                 "daily_budget":  round(row.campaign_budget.amount_micros / 1e6, 2),
                 "target_cpa":    round(max(tcpa_targetcpa, tcpa_maxconv), 2),
             }
@@ -138,7 +146,7 @@ def get_config_data(ga, customer_id):
             config["ad_groups"].append({
                 "id":        str(row.ad_group.id),
                 "name":      row.ad_group.name,
-                "status":    str(row.ad_group.status).replace("AdGroupStatus.", ""),
+                "status":    _enum_name(row.ad_group.status),
                 "max_cpc":   round(row.ad_group.cpc_bid_micros / 1e6, 2) if row.ad_group.cpc_bid_micros else 0,
                 "tcpa":      round(row.ad_group.target_cpa_micros / 1e6, 2) if row.ad_group.target_cpa_micros else 0,
             })
@@ -178,10 +186,10 @@ def get_change_log(ga, customer_id):
                 fields = ""
             events.append({
                 "ts":     str(ce.change_date_time)[:19],
-                "type":   str(ce.change_resource_type).replace("ChangeEventResourceType.", ""),
-                "op":    str(ce.resource_change_operation).replace("ResourceChangeOperation.", ""),
+                "type":   _enum_name(ce.change_resource_type),
+                "op":     _enum_name(ce.resource_change_operation),
                 "user":   ce.user_email or "",
-                "client": str(ce.client_type).replace("ChangeClientType.", ""),
+                "client": _enum_name(ce.client_type),
                 "fields": fields[:200],
             })
     except Exception as e:
@@ -217,7 +225,7 @@ def get_call_log(ga, customer_id):
             "time":     time_s,
             "area":     area,
             "duration": int(cv.call_duration_seconds),
-            "status":   str(cv.call_status).replace("CallStatus.", ""),
+            "status":   _enum_name(cv.call_status),
             "ag":       row.ad_group.name,
         })
     return calls
