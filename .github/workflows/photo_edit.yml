@@ -188,6 +188,35 @@ jobs:
                   "EXCEPTION FOR THIS IMAGE ONLY: remove visible hose near pool if present, "
                   "and improve pool water cleanliness/clarity while preserving scene geometry and all architecture."
               ),
+              "01_fachada": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: gently clean and even out driveway/paver appearance while keeping material realistic, "
+                  "and apply subtle vertical alignment correction."
+              ),
+              "11_fachada_2": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: create a tasteful early-evening/night ambience while preserving exact structure and composition; "
+                  "keep architecture identical, with natural realistic exterior lighting and no fake CGI look."
+              ),
+              "04_sala_jantar": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: brighten exposure and lift shadows moderately while keeping natural contrast and realistic highlights."
+              ),
+              "07_escritorio": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: brighten exposure and lift shadows moderately while keeping natural contrast and realistic highlights."
+              ),
+              "23_banheiro_jacuzzi": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: improve clarity and highlight control around lighting reflections while preserving all surfaces and geometry."
+              ),
+              "24_cozinha_interna_pia": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: enhance lighting balance, reduce glare around fixtures, and keep exact layout and materials."
+              ),
+              "25_cozinha_interna_fornos": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: enhance lighting balance, reduce glare around fixtures, and keep exact layout and materials."
+              ),
+              "26_cozinha_interna_ilha": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: enhance lighting balance, reduce glare around fixtures, and keep exact layout and materials."
+              ),
+              "28_banheiro_master_passagem": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: improve highlight control around lights and mirrors while preserving exact reflections and geometry."
+              ),
           }
           REPLICATE_PROMPT = (
               "professional real estate photography, architectural photography, ultra-realistic 4K, "
