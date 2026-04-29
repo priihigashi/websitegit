@@ -65,7 +65,7 @@ body{background:var(--cream);color:var(--obsidian);font-family:'Roboto Condensed
 .insight-lbl{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#5a8a30;margin-bottom:6px}
 /* ad group bars */
 .agr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.agn{font-size:11px;color:#555;width:140px;flex-shrink:0;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.agn{font-size:11px;color:#555;width:160px;flex-shrink:0;font-weight:700;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .agbw{flex:1;background:var(--alt);border-radius:3px;height:22px;overflow:hidden}
 .agb{height:100%;background:var(--lime);border-radius:3px;display:flex;align-items:center;padding-left:8px;transition:width .6s ease;min-width:4px}
 .agb.z{background:var(--brd)}
@@ -152,9 +152,6 @@ const DATA = {
 const AM={"954":"Broward","754":"Broward","561":"Palm Beach","813":"Tampa","239":"Naples","305":"Miami","786":"Miami","540":"Virginia","513":"Cincinnati","645":"New York","???":"Blocked"};
 const PL={"30d":"Last 30 days","60d":"Last 60 days","90d":"Last 90 days","6mo":"Last 6 months","12mo":"Last 12 months"};
 let cp='30d',kwChart=null;
-
-document.getElementById('ud').textContent=DATA.updated;
-rCalls(); setP('30d');
 
 // ── DATE RANGE ──
 function getDR(p){
@@ -329,7 +326,7 @@ function rAG(ag,c){
   el.innerHTML='';
   ag.forEach(a=>{
     const p=(a.spend/mx*100).toFixed(1);
-    el.innerHTML+='<div class="agr"><div class="agn">'+a.name.split(' ')[0]+'</div><div class="agbw"><div class="agb '+(a.spend===0?'z':'')+'" style="width:'+Math.max(p,2)+'%">'+(a.spend>30?'<span class="agbl">$'+a.spend.toFixed(0)+'</span>':'')+'</div></div><div class="agm">'+a.clicks+' clicks &middot; '+(a.conv>0?'<span style="color:#27AE60;font-weight:700">'+a.conv+' conv</span>':'0 conv')+'</div></div>';
+    el.innerHTML+='<div class="agr"><div class="agn" title="'+a.name+'">'+a.name+'</div><div class="agbw"><div class="agb '+(a.spend===0?'z':'')+'" style="width:'+Math.max(p,2)+'%">'+(a.spend>30?'<span class="agbl">$'+a.spend.toFixed(0)+'</span>':'')+'</div></div><div class="agm">'+a.clicks+' clicks &middot; '+(a.conv>0?'<span style="color:#27AE60;font-weight:700">'+a.conv+' conv</span>':'0 conv')+'</div></div>';
   });
 }
 
@@ -401,6 +398,10 @@ function rCalls(){
   ins+='<em>Note: Google API provides area codes only &mdash; full numbers are visible in Google Ads UI under Reports &rarr; Call Details.</em>';
   document.getElementById('ins-cl').innerHTML=ins;
 }
+
+// ── INIT (must be last — wIdx and STEPS must be initialized before these run) ──
+document.getElementById('ud').textContent=DATA.updated;
+rCalls(); setP('30d');
 </script>
 </body>
 </html>
