@@ -189,8 +189,10 @@ jobs:
                   "and improve pool water cleanliness/clarity while preserving scene geometry and all architecture."
               ),
               "01_fachada": (
-                  "EXCEPTION FOR THIS IMAGE ONLY: gently clean and even out driveway/paver appearance while keeping material realistic, "
-                  "and apply subtle vertical alignment correction."
+                  "EXCEPTION FOR THIS IMAGE ONLY: ultra-minor cleanup only. Remove small weeds/leaves/green residue on paver joints and sidewalk edges only. "
+                  "Preserve EXACT paver texture, grout lines, wall texture, door design/details, facade finishes, and all materials with zero redesign. "
+                  "Do NOT smooth, repaint, retexture, or re-model any surface. "
+                  "If perspective correction is used, keep it extremely subtle with minimal crop."
               ),
               "11_fachada_2": (
                   "EXCEPTION FOR THIS IMAGE ONLY: create a tasteful early-evening/night ambience while preserving exact structure and composition; "
