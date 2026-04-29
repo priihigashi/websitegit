@@ -354,15 +354,22 @@ def fetch_pixabay(query: str, work_dir: str, filename: str) -> str:
         return ""
 
 
-def fetch_real_photo(query: str, work_dir: str, filename: str) -> Tuple[str, str]:
-    """Try Wikimedia → Pexels → Pixabay. Returns (rel_path, provider) or ('', '')."""
+def fetch_real_photo(query: str, work_dir: str, filename: str,
+                     stock_query: Optional[str] = None) -> Tuple[str, str]:
+    """Try Wikimedia → Pexels → Pixabay. Returns (rel_path, provider) or ('', '').
+
+    stock_query: Haiku-generated short visual query for Pexels/Pixabay (2-4 words).
+                 When provided, Pexels/Pixabay get this instead of the full technical query.
+                 Wikimedia always gets the full query (needed for named entities).
+    """
     path = fetch_wikimedia(query, work_dir, filename)
     if path:
         return path, "wikimedia"
-    path = fetch_pexels(query, work_dir, filename)
+    sq = stock_query or query  # use Haiku stock query if available, else original
+    path = fetch_pexels(sq, work_dir, filename)
     if path:
         return path, "pexels"
-    path = fetch_pixabay(query, work_dir, filename)
+    path = fetch_pixabay(sq, work_dir, filename)
     if path:
         return path, "pixabay"
     return "", ""

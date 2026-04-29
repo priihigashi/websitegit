@@ -36,7 +36,7 @@ from image_providers import (
     fetch_real_photo, generate_ai_image, make_filename,
     PROVIDER_NB2, DEFAULT_AI_CASCADE,
 )
-from prompt_builder import build_image_prompt, extract_slide_texts as _extract_slide_texts
+from prompt_builder import build_image_prompt, build_stock_query as _build_stock_query, extract_slide_texts as _extract_slide_texts
 
 # ── Credentials ───────────────────────────────────────────────────────────────
 CREDENTIALS = os.environ.get(
@@ -350,7 +350,9 @@ def fix_version_folder(
         # Step 2: Real-photo tiers first
         prov_slug = provider or PROVIDER_NB2
         filename = make_filename(query or fresh_prompt[:40], prov_slug, slide_num)
-        img_path, used_provider = fetch_real_photo(query, str(local_dir), filename)
+        # Generate separate Pixabay/Pexels query — short visual terms, not technical product names
+        stock_q = _build_stock_query(slide_text, query, niche)
+        img_path, used_provider = fetch_real_photo(query, str(local_dir), filename, stock_query=stock_q)
         source_type = "cc" if used_provider == "wikimedia" else ("stock" if used_provider else "")
 
         # Duplicate guard: if same bytes as another slot in this carousel, reject and

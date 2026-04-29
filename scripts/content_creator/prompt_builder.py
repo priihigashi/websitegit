@@ -275,6 +275,58 @@ def extract_slide_texts(html: str) -> dict:
     return result
 
 
+def build_stock_query(slide_text: str, context_image_query: str, niche: str = "opc") -> str:
+    """Generate a 2-4 word Pixabay/Pexels search query — separate from the AI generation prompt.
+
+    Stock photo APIs match on common visual terms, not technical product names.
+    This must be SHORT and VISUAL — Pixabay fails on jargon like 'paver edge restraint'.
+
+    Examples:
+      'metal aluminum paver edge restraint strip residential' → 'paver edge outdoor'
+      'tiered raised bed garden vegetables wiki'             → 'raised garden bed'
+      'contractor chalk line measuring paver patio layout'  → 'paving construction outdoor'
+    """
+    _fallbacks = {
+        "opc": "construction outdoor",
+        "brazil": "government building outdoor",
+        "usa": "federal building outdoor",
+        "higashi": "apartment building residential",
+    }
+
+    if not ANTHROPIC_KEY:
+        clean = re.sub(
+            r'\b(wikimedia|commons|wiki|photo|image|residential|suburban|commercial|'
+            r'installation|installing|contractor|aluminum|galvanized|restraint|fascia|'
+            r'corten|oak\s+park|illinois)\b',
+            '', context_image_query, flags=re.IGNORECASE,
+        )
+        words = [w for w in clean.split() if len(w) > 2][:3]
+        return ' '.join(words) if words else _fallbacks.get(niche, "outdoor")
+
+    user_msg = (
+        f"Write a 2-4 word stock photo search query for Pixabay.\n"
+        f"Slide text: {slide_text[:150]}\n"
+        f"Topic: {context_image_query[:80]}\n\n"
+        f"Rules:\n"
+        f"- 2-4 words MAX\n"
+        f"- Only simple visual nouns Pixabay has (garden, concrete, wood, outdoor, paving)\n"
+        f"- NO: brand names, product codes, technical jargon (restraint, fascia, corten)\n"
+        f"- NO: proper nouns or places unless very common (backyard, rooftop)\n"
+        f"Output ONLY the search query. No quotes. No explanation."
+    )
+    result = _call_haiku(user_msg)
+    if not result or len(result.strip()) > 60 or "SKIP" in result:
+        clean = re.sub(
+            r'\b(wikimedia|commons|wiki|photo|image|residential|suburban|commercial|'
+            r'installation|installing|contractor|aluminum|galvanized|restraint|'
+            r'corten|oak\s+park|illinois)\b',
+            '', context_image_query, flags=re.IGNORECASE,
+        )
+        words = [w for w in clean.split() if len(w) > 2][:3]
+        return ' '.join(words) if words else _fallbacks.get(niche, "outdoor")
+    return result.strip().lower()
+
+
 def rebuild_prompts_from_html(html_path: str, niche: str, work_dir: str) -> dict:
     """Extract slide texts from a rendered carousel HTML and rebuild all prompts.
 

@@ -17,10 +17,15 @@ Usage:
   python carousel_reviewer.py --dry-run  ← print checks without emailing
 """
 
-import json, os, re, subprocess, sys
+import base64, io, json, os, re, subprocess, sys
 from pathlib import Path
 from datetime import datetime
 import urllib.request, urllib.parse
+
+ANTHROPIC_KEY = (
+    os.environ.get("CLAUDE_KEY_4_CONTENT", "")
+    or os.environ.get("ANTHROPIC_API_KEY", "")
+)
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 try:
@@ -431,6 +436,111 @@ def _check_provenance(prov: dict) -> list[str]:
     return issues
 
 
+def _vision_check_image(image_bytes: bytes, filename: str, query: str) -> str:
+    """Ask Claude Haiku Vision: does this image match the query? Returns 'YES ...' or 'NO ...'."""
+    if not ANTHROPIC_KEY or len(image_bytes) < 5000:
+        return "SKIP"
+    try:
+        mime = "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png"
+        b64 = base64.b64encode(image_bytes).decode()
+        payload = json.dumps({
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 80,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}},
+                    {"type": "text", "text": (
+                        f"Does this image visually represent: '{query}'?\n"
+                        f"YES if it clearly shows the correct subject, action, or setting.\n"
+                        f"NO if it shows something completely unrelated (wrong object, wrong scene).\n"
+                        f"Start your answer with YES or NO, then one sentence."
+                    )},
+                ],
+            }],
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "x-api-key": ANTHROPIC_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+        )
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        return resp["content"][0]["text"].strip()
+    except Exception as e:
+        print(f"  Vision check error (non-fatal): {e}")
+        return "SKIP"
+
+
+def _check_image_relevance_drive(prov: dict, images_folder_id: str, drive,
+                                 max_checks: int = 8) -> list[str]:
+    """Download each resource image and verify visual match via Claude Vision.
+
+    Checks ALL sourced images (stock + AI) — stock images are the main failure mode
+    (wrong Pixabay result) but AI images can also miss the intent.
+    Caps at max_checks images per carousel to control API cost.
+    """
+    if not ANTHROPIC_KEY:
+        return []
+
+    # Collect all slots that have a stored image path
+    slots = []
+    cover = prov.get("cover", {})
+    if isinstance(cover, dict) and cover.get("path"):
+        slots.append(("cover", cover.get("query", ""), cover["path"].split("/")[-1]))
+    for slide_key, slide_data in prov.get("slides", {}).items():
+        if isinstance(slide_data, dict) and slide_data.get("path"):
+            slots.append((f"slide_{slide_key}", slide_data.get("query", ""), slide_data["path"].split("/")[-1]))
+
+    if not slots:
+        return []
+
+    # List images/ folder
+    try:
+        res = drive.files().list(
+            q=f"'{images_folder_id}' in parents and trashed=false",
+            fields="files(id,name)", supportsAllDrives=True, includeItemsFromAllDrives=True,
+        ).execute()
+        img_map = {f["name"]: f["id"] for f in res.get("files", [])}
+    except Exception as e:
+        return [f"Vision check: could not list images folder ({e})"]
+
+    from googleapiclient.http import MediaIoBaseDownload
+
+    issues = []
+    checked = 0
+    for slot_label, query, filename in slots[:max_checks]:
+        if not query or filename not in img_map:
+            continue
+        try:
+            req = drive.files().get_media(fileId=img_map[filename], supportsAllDrives=True)
+            buf = io.BytesIO()
+            dl = MediaIoBaseDownload(buf, req)
+            done = False
+            while not done:
+                _, done = dl.next_chunk()
+            raw = buf.getvalue()
+        except Exception as e:
+            print(f"  Vision check: could not download {filename} ({e})")
+            continue
+
+        verdict = _vision_check_image(raw, filename, query)
+        checked += 1
+
+        if verdict.upper().startswith("NO"):
+            issues.append(
+                f"[fix_type=wrong-image] {slot_label}: '{filename}' does not match "
+                f"query '{query[:60]}'. Vision: {verdict[:120]}"
+            )
+
+    if checked:
+        print(f"  Vision relevance: checked {checked} image(s), {len(issues)} mismatch(es)")
+    return issues
+
+
 _NICHE_HINTS = {
     "opc": "opc", "oak": "opc", "tip-of-the-week": "opc",
     "brazil": "brazil", "verificamos": "brazil", "rachadinha": "brazil",
@@ -506,6 +616,10 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
             try:
                 prov = json.loads(_download_drive_text(drive, prov_file["id"]))
                 issues.extend(_check_provenance(prov))
+                # Vision check: verify each image actually matches its slide topic
+                images_fid = _find_folder_id(drive, resources_folder_id, "images")
+                if images_fid:
+                    issues.extend(_check_image_relevance_drive(prov, images_fid, drive))
             except Exception as e:
                 issues.append(f"media_provenance.json parse failed: {e}")
 
@@ -515,7 +629,7 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
     # the bad provider, re-fetches via cascade, replaces the source image, and
     # backs up png/ → png_pre_fix_<ts>/ first.
     autofix_summary = None
-    has_regen = any("[fix_type=regenerate]" in i for i in issues)
+    has_regen = any(("[fix_type=regenerate]" in i or "[fix_type=wrong-image]" in i) for i in issues)
     if FIX_MODE == "analyze_and_fix" and has_regen and not DRY_RUN:
         try:
             from auto_fixer import auto_fix_drive_folder  # lazy import
