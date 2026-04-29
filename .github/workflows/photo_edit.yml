@@ -2,8 +2,9 @@ name: Photo Edit — AI Enhancement
 
 # PRIMARY workflow — trigger from phone via GitHub Actions UI
 # Accepts a Drive file ID, direct image URL, or Drive folder ID (batch)
-# Runs all 4 AI tools (or one specific tool)
-# Results → Marketing > Image Creation > Enhanced Photos + email
+# Runs all 4 AI tools (or one specific tool) — NB2 FIRST
+# Results → flat in destination folder: {stem}_nb2.jpg / _openai.png / _gemini.jpg / _replicate.png
+# Re-run safe: existing files for same stem are moved to old/ before new ones are written
 
 on:
   workflow_dispatch:
@@ -25,10 +26,10 @@ on:
         type: choice
         options:
           - all
+          - nb2
           - openai
           - gemini
           - replicate
-          - nb2
       original_filename:
         description: 'Label for this run (e.g. kitchen-before, walnut-deck)'
         required: false
@@ -53,7 +54,7 @@ jobs:
       - name: Install dependencies
         run: pip install -q openai pillow google-auth google-auth-oauthlib google-api-python-client google-genai replicate inferencesh
 
-      # ── MAIN: download → enhance → upload → manifests ───────────────────────
+      # ── MAIN: download → enhance → upload flat → archive old ───────────────
       - name: Process all images
         id: process
         env:
@@ -100,17 +101,18 @@ jobs:
           run_ts     = datetime.now(timezone.utc).isoformat()
           run_date   = datetime.now().strftime("%Y-%m-%d")
 
+          # Tool order: NB2 first, then OpenAI, Gemini, Replicate
+          do_nb2       = tool in ("all", "nb2")
           do_openai    = tool in ("all", "openai")
           do_gemini    = tool in ("all", "gemini")
           do_replicate = tool in ("all", "replicate")
-          do_nb2       = tool in ("all", "nb2")
 
           # ── Build file list ──────────────────────────────────────────────────
           sources = []
           if folder_id:
               print("Batch mode: listing folder " + folder_id)
               resp = drive.files().list(
-                  q="'" + folder_id + "' in parents and trashed=false and (mimeType contains 'image/')",
+                  q="'" + folder_id + "' in parents and (mimeType contains 'image/')",
                   supportsAllDrives=True, includeItemsFromAllDrives=True,
                   fields="files(id,name)",
               ).execute()
@@ -130,48 +132,48 @@ jobs:
               print("ERROR: no images found")
               sys.exit(1)
 
-          # ── Create run folder in Drive ───────────────────────────────────────
-          run_folder_name = run_date + "_" + label
-          rf = drive.files().create(
-              body={
-                  "name": run_folder_name,
-                  "mimeType": "application/vnd.google-apps.folder",
-                  "parents": [dest],
-              },
-              supportsAllDrives=True,
-              fields="id,webViewLink",
+          # ── Get or create old/ folder in dest ───────────────────────────────
+          old_resp = drive.files().list(
+              q="'" + dest + "' in parents and name='old' and mimeType='application/vnd.google-apps.folder'",
+              supportsAllDrives=True, includeItemsFromAllDrives=True,
+              fields="files(id)"
           ).execute()
-          run_folder_id   = rf["id"]
-          run_folder_link = rf.get("webViewLink", "")
-          print("Run folder: " + run_folder_name + " (" + run_folder_id + ")")
+          old_folder_id = old_resp["files"][0]["id"] if old_resp.get("files") else None
 
-          # ── Prompts ─────────────────────────────────────────────────────────
+          # ── Prompts (4K ultra-realistic — updated 2026-04-29) ───────────────
           FULL_PROMPT = (
-              "Enhance this real construction/remodel photo to professional architectural "
-              "real-estate photography quality. Fix exposure and white balance, improve "
-              "contrast and color accuracy, recover highlights, gently lift shadows, "
-              "mild dehaze/clarity/noise cleanup, slight sharpening, straighten verticals. "
-              "Keep everything truthful to the real jobsite. "
-              "Do NOT add or remove objects, change geometry, layout, finishes, or make it look CGI or staged. "
-              "Natural light, realistic color, South Florida residential feel."
+              "SCENE CONSISTENCY IS MANDATORY. Preserve the exact same scene, composition, camera angle, "
+              "crop, geometry, object positions, textures, perspective lines, and mirror/window reflections. "
+              "Do not recreate, reimagine, or redesign any part of the photo. "
+              "Enhance existing pixels only with minor photographic adjustments. "
+              "Allowed adjustments only: exposure balancing, white balance correction, subtle contrast, "
+              "subtle color correction, highlight recovery, gentle shadow lift, mild dehaze, mild noise reduction, "
+              "and light natural sharpening. "
+              "Do not add/remove/move/replace anything: furniture, decor, plants, rugs, fixtures, doors, windows, "
+              "appliances, wall art, sky content, pool water features, or landscaping. "
+              "Do not alter materials, finishes, room dimensions, reflections, or architectural details. "
+              "Do not stage, declutter, hallucinate, beautify beyond reality, or apply CGI/plastic look. "
+              "Photorealistic high-resolution 4K output, natural light, contemporary high-end Brazilian residential feel. "
+              "Think Lightroom/Photoshop grade only, not image generation. "
+              "Output one enhanced image with maximum fidelity to the original photo."
           )
           REPLICATE_PROMPT = (
-              "professional real estate photography, architectural photography, "
-              "natural light, sharp details, correct white balance, South Florida residential"
+              "professional real estate photography, architectural photography, ultra-realistic 4K, "
+              "high resolution, natural light, sharp details, correct white balance, "
+              "contemporary high-end Brazilian residential"
           )
-          REPLICATE_NEG = "blur, noise, overexposed, fake, CGI, staged, hallucination, added objects"
+          REPLICATE_NEG = (
+              "blur, noise, overexposed, fake, CGI, staged, hallucination, added objects, "
+              "AI artifacts, painting, illustration, low quality, low resolution"
+          )
 
           # ── Helpers ──────────────────────────────────────────────────────────
           def download_drive_file(file_id, prefix):
-              meta = drive.files().get(
-                  fileId=file_id, fields="mimeType", supportsAllDrives=True
-              ).execute()
+              meta = drive.files().get(fileId=file_id, fields="mimeType", supportsAllDrives=True).execute()
               ext = ".png" if "png" in meta.get("mimeType", "") else ".jpg"
               path = prefix + ext
               buf = io.BytesIO()
-              dl = MediaIoBaseDownload(
-                  buf, drive.files().get_media(fileId=file_id, supportsAllDrives=True)
-              )
+              dl = MediaIoBaseDownload(buf, drive.files().get_media(fileId=file_id, supportsAllDrives=True))
               done = False
               while not done:
                   _, done = dl.next_chunk()
@@ -180,7 +182,7 @@ jobs:
 
           def upload_to_drive(local_path, name, parent_id):
               mime, _ = mimetypes.guess_type(local_path)
-              mime = mime or "image/png"
+              mime = mime or "image/jpeg"
               r = drive.files().create(
                   body={"name": name, "parents": [parent_id]},
                   media_body=MediaFileUpload(local_path, mimetype=mime),
@@ -189,27 +191,54 @@ jobs:
               ).execute()
               return r.get("webViewLink", "")
 
-          def to_rgb_png(src, dest):
+          def to_rgb_png(src, dst):
               from PIL import Image
-              Image.open(src).convert("RGB").save(dest, "PNG")
+              Image.open(src).convert("RGB").save(dst, "PNG")
+
+          def archive_old_results(safe_stem, dest_id, old_fid):
+              """Move any prior {stem}_{tool}.* files from dest to old/ before re-processing."""
+              suffixes = ["_nb2", "_openai", "_gemini", "_replicate"]
+              existing = []
+              for sfx in suffixes:
+                  q = "'" + dest_id + "' in parents and name contains '" + safe_stem + sfx + "'"
+                  found = drive.files().list(
+                      q=q, supportsAllDrives=True, includeItemsFromAllDrives=True,
+                      fields="files(id,name)"
+                  ).execute().get("files", [])
+                  existing.extend(found)
+              if not existing:
+                  return old_fid
+              if not old_fid:
+                  of = drive.files().create(
+                      body={"name": "old", "mimeType": "application/vnd.google-apps.folder", "parents": [dest_id]},
+                      supportsAllDrives=True, fields="id"
+                  ).execute()
+                  old_fid = of["id"]
+              for ef in existing:
+                  drive.files().update(
+                      fileId=ef["id"], addParents=old_fid, removeParents=dest_id,
+                      supportsAllDrives=True, fields="id"
+                  ).execute()
+                  print("  archived → old/: " + ef["name"])
+              return old_fid
 
           # ── Main loop ────────────────────────────────────────────────────────
           batch_results = []
           succeeded = 0
+          dest_link = "https://drive.google.com/drive/folders/" + dest
 
           for idx, (src_ref, stem) in enumerate(sources, start=1):
-              num      = str(idx).zfill(2)
-              subfname = num + "_" + stem
+              safe_stem = re.sub(r"[^a-zA-Z0-9_-]", "_", stem)[:40]
+              num = str(idx).zfill(2)
               print("\n--- [" + num + "/" + str(len(sources)) + "] " + stem + " ---")
               result = {
                   "index": idx, "source": src_ref, "stem": stem,
-                  "subfolder": subfname, "status": "failed",
-                  "error": "", "drive_folder_link": "", "tools": {},
+                  "safe_stem": safe_stem, "status": "failed", "error": "", "tools": {},
               }
 
               try:
                   # Download source
-                  tmp_pfx = "/tmp/img_" + num + "_" + stem
+                  tmp_pfx = "/tmp/img_" + num + "_" + safe_stem
                   if src_ref.startswith("http"):
                       src_path = tmp_pfx + ".jpg"
                       urllib.request.urlretrieve(src_ref, src_path)
@@ -217,23 +246,52 @@ jobs:
                       src_path = download_drive_file(src_ref, tmp_pfx)
                   print("  Source: " + src_path + " (" + str(os.path.getsize(src_path) // 1024) + "KB)")
 
-                  # Create per-image subfolder in Drive
-                  sf = drive.files().create(
-                      body={
-                          "name": subfname,
-                          "mimeType": "application/vnd.google-apps.folder",
-                          "parents": [run_folder_id],
-                      },
-                      supportsAllDrives=True,
-                      fields="id,webViewLink",
-                  ).execute()
-                  sf_id   = sf["id"]
-                  sf_link = sf.get("webViewLink", "")
-                  result["drive_folder_link"] = sf_link
+                  # Archive any previous results for this stem
+                  old_folder_id = archive_old_results(safe_stem, dest, old_folder_id)
 
                   tools_out = {}
 
-                  # ── OpenAI gpt-image-1 ───────────────────────────────────────
+                  # ── 1. NB2 — Gemini 3.1 Flash Image Preview (RUNS FIRST) ─────
+                  if do_nb2:
+                      try:
+                          key = os.environ.get("GEMINI_API_KEY", "")
+                          if not key:
+                              raise Exception("no key")
+                          from google import genai
+                          from google.genai import types as gtypes
+                          mime4, _ = mimetypes.guess_type(src_path)
+                          mime4 = mime4 or "image/jpeg"
+                          img4_bytes = open(src_path, "rb").read()
+                          gclient4 = genai.Client(api_key=key)
+                          print("  NB2: sending to gemini-3.1-flash-image-preview...")
+                          gresp4 = gclient4.models.generate_content(
+                              model="gemini-3.1-flash-image-preview",
+                              contents=[
+                                  gtypes.Part.from_bytes(data=img4_bytes, mime_type=mime4),
+                                  gtypes.Part.from_text(text="TASK: Photo enhancement only. Do NOT redesign.\n" + FULL_PROMPT),
+                              ],
+                              config=gtypes.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"]),
+                          )
+                          found4 = False
+                          for part4 in gresp4.candidates[0].content.parts:
+                              if hasattr(part4, "inline_data") and part4.inline_data:
+                                  raw4 = part4.inline_data.data
+                                  if isinstance(raw4, str):
+                                      raw4 = base64.b64decode(raw4)
+                                  out = tmp_pfx + "_nb2.jpg"
+                                  open(out, "wb").write(raw4)
+                                  link = upload_to_drive(out, safe_stem + "_nb2.jpg", dest)
+                                  tools_out["nb2"] = {"status": "ok", "file": safe_stem + "_nb2.jpg", "drive_link": link}
+                                  print("  NB2: ok -> " + link)
+                                  found4 = True
+                                  break
+                          if not found4:
+                              raise Exception("no image in response")
+                      except Exception as e:
+                          tools_out["nb2"] = {"status": "failed", "error": str(e)[:200]}
+                          print("  NB2 FAILED: " + str(e)[:200])
+
+                  # ── 2. OpenAI gpt-image-1 ────────────────────────────────────
                   if do_openai:
                       try:
                           key = os.environ.get("OPENAI_API_KEY", "")
@@ -245,19 +303,17 @@ jobs:
                           client = _openai.OpenAI(api_key=key)
                           print("  OpenAI: sending...")
                           with open(png_in, "rb") as fh:
-                              resp = client.images.edit(
-                                  model="gpt-image-1", image=fh, prompt=FULL_PROMPT, n=1, size="auto"
-                              )
-                          out = tmp_pfx + "_1_openai.png"
+                              resp = client.images.edit(model="gpt-image-1", image=fh, prompt=FULL_PROMPT, n=1, size="auto")
+                          out = tmp_pfx + "_openai.png"
                           open(out, "wb").write(base64.b64decode(resp.data[0].b64_json))
-                          link = upload_to_drive(out, "1_openai_gpt-image-1.png", sf_id)
-                          tools_out["openai"] = {"status": "ok", "file": "1_openai_gpt-image-1.png", "drive_link": link}
+                          link = upload_to_drive(out, safe_stem + "_openai.png", dest)
+                          tools_out["openai"] = {"status": "ok", "file": safe_stem + "_openai.png", "drive_link": link}
                           print("  OpenAI: ok -> " + link)
                       except Exception as e:
                           tools_out["openai"] = {"status": "failed", "error": str(e)[:200]}
                           print("  OpenAI FAILED: " + str(e)[:200])
 
-                  # ── Gemini 2.0 Flash ─────────────────────────────────────────
+                  # ── 3. Gemini 2.5 Flash Image ────────────────────────────────
                   if do_gemini:
                       try:
                           key = os.environ.get("GEMINI_API_KEY", "")
@@ -274,9 +330,7 @@ jobs:
                               model="gemini-2.5-flash-image",
                               contents=[
                                   types.Part.from_bytes(data=img_bytes, mime_type=mime2),
-                                  types.Part.from_text(
-                                      text="TASK: Photo enhancement only. Do NOT redesign.\n" + FULL_PROMPT
-                                  ),
+                                  types.Part.from_text(text="TASK: Photo enhancement only. Do NOT redesign.\n" + FULL_PROMPT),
                               ],
                               config=types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"]),
                           )
@@ -286,10 +340,10 @@ jobs:
                                   raw = part.inline_data.data
                                   if isinstance(raw, str):
                                       raw = base64.b64decode(raw)
-                                  out = tmp_pfx + "_2_gemini.jpg"
+                                  out = tmp_pfx + "_gemini.jpg"
                                   open(out, "wb").write(raw)
-                                  link = upload_to_drive(out, "2_gemini_20flash.jpg", sf_id)
-                                  tools_out["gemini"] = {"status": "ok", "file": "2_gemini_20flash.jpg", "drive_link": link}
+                                  link = upload_to_drive(out, safe_stem + "_gemini.jpg", dest)
+                                  tools_out["gemini"] = {"status": "ok", "file": safe_stem + "_gemini.jpg", "drive_link": link}
                                   print("  Gemini: ok -> " + link)
                                   found = True
                                   break
@@ -299,7 +353,7 @@ jobs:
                           tools_out["gemini"] = {"status": "failed", "error": str(e)[:200]}
                           print("  Gemini FAILED: " + str(e)[:200])
 
-                  # ── Replicate Clarity Upscaler ───────────────────────────────
+                  # ── 4. Replicate Clarity Upscaler ────────────────────────────
                   if do_replicate:
                       try:
                           import replicate as _replicate
@@ -320,72 +374,20 @@ jobs:
                               )
                           first = output[0] if isinstance(output, list) else output
                           url_r = getattr(first, "url", None) or str(first)
-                          out = tmp_pfx + "_3_replicate.png"
+                          out = tmp_pfx + "_replicate.png"
                           urllib.request.urlretrieve(url_r, out)
-                          link = upload_to_drive(out, "3_replicate_clarity2x.png", sf_id)
-                          tools_out["replicate"] = {"status": "ok", "file": "3_replicate_clarity2x.png", "drive_link": link}
+                          link = upload_to_drive(out, safe_stem + "_replicate.png", dest)
+                          tools_out["replicate"] = {"status": "ok", "file": safe_stem + "_replicate.png", "drive_link": link}
                           print("  Replicate: ok -> " + link)
                       except Exception as e:
                           tools_out["replicate"] = {"status": "failed", "error": str(e)[:200]}
                           print("  Replicate FAILED: " + str(e)[:200])
 
-                  # ── Nano Banana 2 — Gemini 3.1 Flash Image via Gemini API ────
-                  if do_nb2:
-                      try:
-                          key = os.environ.get("GEMINI_API_KEY", "")
-                          if not key:
-                              raise Exception("no key")
-                          from google import genai
-                          from google.genai import types as gtypes
-                          mime4, _ = mimetypes.guess_type(src_path)
-                          mime4 = mime4 or "image/jpeg"
-                          img4_bytes = open(src_path, "rb").read()
-                          gclient4 = genai.Client(api_key=key)
-                          print("  NB2: sending to gemini-3.1-flash-image-preview...")
-                          gresp4 = gclient4.models.generate_content(
-                              model="gemini-3.1-flash-image-preview",
-                              contents=[
-                                  gtypes.Part.from_bytes(data=img4_bytes, mime_type=mime4),
-                                  gtypes.Part.from_text(
-                                      text="TASK: Photo enhancement only. Do NOT redesign.\n" + FULL_PROMPT
-                                  ),
-                              ],
-                              config=gtypes.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"]),
-                          )
-                          found4 = False
-                          for part4 in gresp4.candidates[0].content.parts:
-                              if hasattr(part4, "inline_data") and part4.inline_data:
-                                  raw4 = part4.inline_data.data
-                                  if isinstance(raw4, str):
-                                      raw4 = base64.b64decode(raw4)
-                                  out = tmp_pfx + "_4_nb2.png"
-                                  open(out, "wb").write(raw4)
-                                  link = upload_to_drive(out, "4_nb2_gemini31flash.png", sf_id)
-                                  tools_out["nb2"] = {"status": "ok", "file": "4_nb2_gemini31flash.png", "drive_link": link}
-                                  print("  NB2: ok -> " + link)
-                                  found4 = True
-                                  break
-                          if not found4:
-                              raise Exception("no image in response")
-                      except Exception as e:
-                          tools_out["nb2"] = {"status": "failed", "error": str(e)[:200]}
-                          print("  NB2 FAILED: " + str(e)[:200])
-
-                  # Per-image manifest
-                  result["tools"]  = tools_out
+                  result["tools"] = tools_out
                   any_ok = any(v.get("status") == "ok" for v in tools_out.values())
                   result["status"] = "ok" if any_ok else "failed"
                   if any_ok:
                       succeeded += 1
-
-                  manifest_data = {
-                      "source": src_ref, "stem": stem, "index": idx,
-                      "output_subfolder": subfname, "drive_folder_link": sf_link,
-                      "timestamp": run_ts, "tools": tools_out,
-                  }
-                  mf_path = tmp_pfx + "_manifest.json"
-                  open(mf_path, "w").write(json.dumps(manifest_data, indent=2))
-                  upload_to_drive(mf_path, "manifest.json", sf_id)
 
               except Exception as e:
                   result["error"] = str(e)[:500]
@@ -393,12 +395,12 @@ jobs:
 
               batch_results.append(result)
 
-          # ── Batch manifest ───────────────────────────────────────────────────
+          # ── Batch manifest (flat in dest folder) ─────────────────────────────
           failed_count = sum(1 for r in batch_results if r["status"] == "failed")
           batch_manifest = {
               "run_date": run_date, "label": label, "tool": tool,
               "source_folder_id": folder_id or "",
-              "destination_link": run_folder_link,
+              "destination_folder_id": dest,
               "total": len(sources),
               "succeeded": succeeded,
               "failed": failed_count,
@@ -406,14 +408,13 @@ jobs:
           }
           bm_path = "/tmp/batch_manifest.json"
           open(bm_path, "w").write(json.dumps(batch_manifest, indent=2))
-          upload_to_drive(bm_path, "batch_manifest.json", run_folder_id)
+          upload_to_drive(bm_path, run_date + "_" + label + "_manifest.json", dest)
 
           print("\nDone: " + str(succeeded) + "/" + str(len(sources)) + " succeeded, " + str(failed_count) + " failed")
 
-          # ── Emit outputs ─────────────────────────────────────────────────────
           go = os.environ.get("GITHUB_OUTPUT", "/dev/null")
           with open(go, "a") as f:
-              f.write("run_folder_link=" + run_folder_link + "\n")
+              f.write("run_folder_link=" + dest_link + "\n")
               f.write("total=" + str(len(sources)) + "\n")
               f.write("succeeded=" + str(succeeded) + "\n")
               f.write("failed=" + str(failed_count) + "\n")
@@ -453,41 +454,43 @@ jobs:
 
           lines = [
               "Photo Edit — " + mode + " Complete: " + label,
-              "Tool: " + tool,
-              "Run folder: " + folder_link,
+              "Tool order: NB2 → OpenAI → Gemini → Replicate",
+              "Destination folder: " + folder_link,
               "",
               "Found: " + total + "  |  Succeeded: " + succeeded + "  |  Failed: " + failed,
+              "",
+              "Files are FLAT in the folder — named {stem}_{tool}.jpg",
+              "Previous versions moved to old/ subfolder automatically.",
               "",
           ]
 
           for img in images:
-              idx    = str(img.get("index", "?")).zfill(2)
-              stem   = img.get("stem", "?")
-              status = img.get("status", "?")
-              sflink = img.get("drive_folder_link", "")
-              err    = img.get("error", "")
-              tools  = img.get("tools", {})
+              idx      = str(img.get("index", "?")).zfill(2)
+              stem     = img.get("stem", "?")
+              safe     = img.get("safe_stem", stem)
+              status   = img.get("status", "?")
+              err      = img.get("error", "")
+              tools    = img.get("tools", {})
 
               if status == "failed" and not tools:
-                  lines.append(idx + "_" + stem + ": FAILED — " + err)
+                  lines.append(idx + " " + stem + ": FAILED — " + err)
                   lines.append("")
                   continue
 
-              parts = []
-              for t in ("openai", "gemini", "replicate", "nb2"):
+              lines.append(idx + " " + stem + ":")
+              # NB2 first in email
+              for t in ("nb2", "openai", "gemini", "replicate"):
                   info = tools.get(t)
                   if info is None:
                       continue
-                  mark = "ok" if info.get("status") == "ok" else "x"
-                  parts.append(t + " [" + mark + "]")
-
-              lines.append(idx + "_" + stem + ":  " + "  ".join(parts))
-              if sflink:
-                  lines.append("  " + sflink)
+                  if info.get("status") == "ok":
+                      lines.append("  " + t + ": " + info.get("drive_link", ""))
+                  else:
+                      lines.append("  " + t + ": FAILED — " + info.get("error", "")[:100])
               lines.append("")
 
           body = "\n".join(lines)
-          subject = "Photo Edit Done: " + label
+          subject = "Photo Edit Done: " + label + " (" + succeeded + "/" + total + ")"
 
           if not pwd:
               print("No Gmail password in secrets — cannot send email")
