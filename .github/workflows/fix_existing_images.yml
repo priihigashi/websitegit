@@ -48,7 +48,6 @@ jobs:
           pip install \
             google-auth \
             google-api-python-client \
-            inferencesh \
             requests
 
       - name: Write credentials file

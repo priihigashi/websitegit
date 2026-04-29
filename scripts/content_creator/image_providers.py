@@ -39,23 +39,34 @@ REPLICATE_KEY = os.environ.get("PRI_OP_REPLICATE_API_KEY", "")
 # ── Failure logger ────────────────────────────────────────────────────────────
 _GHA_RUN_ID = os.environ.get("GITHUB_RUN_ID", "")
 _FAILURES_SHEET_ID = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
+_oauth_cache: dict = {}  # {token, exp} — refreshed at most once per 55 minutes
+
+def _get_sheets_token() -> str:
+    """Return cached OAuth access token; refresh only when expired."""
+    if _oauth_cache.get("token") and time.time() < _oauth_cache.get("exp", 0):
+        return _oauth_cache["token"]
+    raw = os.environ.get("SHEETS_TOKEN", "")
+    if not raw:
+        return ""
+    td = json.loads(raw)
+    data = urllib.parse.urlencode({
+        "client_id": td["client_id"], "client_secret": td["client_secret"],
+        "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
+    }).encode()
+    resp = json.loads(urllib.request.urlopen(
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
+    ).read())
+    _oauth_cache["token"] = resp["access_token"]
+    _oauth_cache["exp"] = time.time() + resp.get("expires_in", 3600) - 60
+    return _oauth_cache["token"]
 
 def _log_failure(stage: str, error) -> None:
     """Append a row to '🚨 Pipeline Failures' tab. Never blocks the caller."""
     print(f"  ❌ IMAGE PROVIDER [{stage}]: {str(error)[:200]}")
-    raw_token = os.environ.get("SHEETS_TOKEN", "")
-    if not raw_token:
-        return
     try:
-        td = json.loads(raw_token)
-        data = urllib.parse.urlencode({
-            "client_id": td["client_id"], "client_secret": td["client_secret"],
-            "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
-        }).encode()
-        token_resp = json.loads(urllib.request.urlopen(
-            urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
-        ).read())
-        access = token_resp["access_token"]
+        access = _get_sheets_token()
+        if not access:
+            return
         run_url = (f"https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{_GHA_RUN_ID}"
                    if _GHA_RUN_ID else "")
         row = [datetime.utcnow().isoformat() + "Z", "content_creator.yml",
@@ -341,7 +352,12 @@ def _nb2(prompt: str, work_dir: str, filename: str) -> str:
     if _cached(dest):
         return _rel(filename)
     try:
-        headers = {"Authorization": f"Bearer {INFSH_KEY}", "Content-Type": "application/json"}
+        _ua = "carousel-builder/1.0"
+        headers = {
+            "Authorization": f"Bearer {INFSH_KEY}",
+            "Content-Type": "application/json",
+            "User-Agent": _ua,
+        }
         payload = json.dumps({
             "app": "google/gemini-3-1-flash-image-preview",
             "input": {"prompt": prompt[:1000]},
@@ -360,7 +376,7 @@ def _nb2(prompt: str, work_dir: str, filename: str) -> str:
             time.sleep(10)
             poll = urllib.request.Request(
                 f"https://api.inference.sh/tasks/{task_id}",
-                headers={"Authorization": f"Bearer {INFSH_KEY}"},
+                headers={"Authorization": f"Bearer {INFSH_KEY}", "User-Agent": _ua},
             )
             pdata = json.loads(urllib.request.urlopen(poll, timeout=30).read())
             pdata = pdata.get("data", pdata)
@@ -441,9 +457,9 @@ def _dalle3(prompt: str, work_dir: str, filename: str) -> str:
 
 def _seedream50(prompt: str, work_dir: str, filename: str) -> str:
     return _replicate_run(
-        "bytedance/seedream-5",
-        {"prompt": prompt[:1000], "aspect_ratio": "4:5"},
-        work_dir, filename, timeout=120, label="Seedream 5.0",
+        "bytedance/seedream-5-lite",
+        {"prompt": prompt[:1000], "aspect_ratio": "3:4"},
+        work_dir, filename, timeout=120, label="Seedream 5.0 Lite",
     )
 
 
