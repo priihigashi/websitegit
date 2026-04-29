@@ -306,7 +306,7 @@ Adapt the best hook into a 50-60 character SEO title that:
 
   const message = await client.messages.create({
     model: 'claude-opus-4-6',
-    max_tokens: 10000,
+    max_tokens: 8000,
     system: `You are the content writer for ${COMPANY.name}, a ${COMPANY.license.status} based in ${COMPANY.location.headquarters}, serving ${COMPANY.location.primaryMarket} and surrounding areas.
 
 COMPANY:
@@ -434,7 +434,24 @@ Return ONLY this exact JSON (no markdown fences, no extra text):
   let raw = message.content[0].text.trim();
   raw = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/, '').trim();
 
-  const post = JSON.parse(raw);
+  // Fix literal control chars inside JSON string values (unescaped newlines/tabs from model)
+  function fixJsonControlChars(str) {
+    let inStr = false, escaped = false, out = '';
+    for (const c of str) {
+      if (escaped) { out += c; escaped = false; continue; }
+      if (c === '\\') { escaped = true; out += c; continue; }
+      if (c === '"') { inStr = !inStr; out += c; continue; }
+      if (inStr) {
+        if (c === '\n') { out += '\\n'; continue; }
+        if (c === '\r') { out += '\\r'; continue; }
+        if (c === '\t') { out += '\\t'; continue; }
+      }
+      out += c;
+    }
+    return out;
+  }
+
+  const post = JSON.parse(fixJsonControlChars(raw));
   console.log(`Post generated: "${post.title}"`);
   console.log(`Meta description: ${post.meta_description.length} chars`);
   console.log(`Focus keyword: "${post.focus_keyword}"`);
