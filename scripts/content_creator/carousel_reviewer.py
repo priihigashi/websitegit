@@ -35,6 +35,11 @@ ALERT_EMAIL      = os.environ.get("ALERT_EMAIL", "priscila@oakpark-construction.
 RUN_RESULTS_JSON = os.environ.get("CONTENT_CREATOR_RUN", "[]")  # JSON array of result dicts
 REVIEW_DRIVE_FOLDERS = os.environ.get("REVIEW_DRIVE_FOLDERS", "").strip()  # CSV folder ids or links
 
+# FIX_MODE: "analyze_only" (default) = detect + email
+#          "analyze_and_fix"        = detect, auto-fix [fix_type=regenerate] issues,
+#                                     then email before/after change log
+FIX_MODE = os.environ.get("FIX_MODE", "analyze_only").strip().lower()
+
 DRY_RUN = "--dry-run" in sys.argv
 
 STOPWORDS = {
@@ -426,6 +431,24 @@ def _check_provenance(prov: dict) -> list[str]:
     return issues
 
 
+_NICHE_HINTS = {
+    "opc": "opc", "oak": "opc", "tip-of-the-week": "opc",
+    "brazil": "brazil", "verificamos": "brazil", "rachadinha": "brazil",
+    "quem-decidiu": "brazil", "conta-que-ninguem-pagou": "brazil", "arquivo-aberto": "brazil",
+    "usa": "usa", "the-chain": "usa", "history-they-left-out": "usa",
+    "higashi": "higashi", "hig-": "higashi",
+}
+
+
+def _infer_niche_from_folder(folder_name: str, parent_path: str = "") -> str:
+    """Best-effort niche inference from folder name + path. Defaults to 'opc'."""
+    blob = f"{folder_name} {parent_path}".lower()
+    for token, niche in _NICHE_HINTS.items():
+        if token in blob:
+            return niche
+    return "opc"
+
+
 def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
     issues = []
     original_id = folder_id
@@ -486,6 +509,33 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
             except Exception as e:
                 issues.append(f"media_provenance.json parse failed: {e}")
 
+    # ── Auto-fix loop (Goal 1A) ──────────────────────────────────────────────
+    # When FIX_MODE=analyze_and_fix and any [fix_type=regenerate] issue was
+    # flagged, run auto_fixer.auto_fix_drive_folder. It rewrites prompts, skips
+    # the bad provider, re-fetches via cascade, replaces the source image, and
+    # backs up png/ → png_pre_fix_<ts>/ first.
+    autofix_summary = None
+    has_regen = any("[fix_type=regenerate]" in i for i in issues)
+    if FIX_MODE == "analyze_and_fix" and has_regen and not DRY_RUN:
+        try:
+            from auto_fixer import auto_fix_drive_folder  # lazy import
+            niche_guess = _infer_niche_from_folder(folder_name, input_ref or "")
+            autofix_summary = auto_fix_drive_folder(
+                drive,
+                {"id": folder_id, "name": folder_name},
+                niche=niche_guess,
+                dry_run=False,
+            )
+            fixed_n = autofix_summary.get("fixed", 0)
+            if fixed_n:
+                issues.append(
+                    f"[auto-fix] regenerated {fixed_n} image(s) "
+                    f"(niche={niche_guess}, png backup: "
+                    f"{autofix_summary.get('png_backup_folder_id', 'none')})"
+                )
+        except Exception as e:
+            issues.append(f"[auto-fix] FAILED — {type(e).__name__}: {e}")
+
     return {
         "post_id": folder_id,
         "topic": folder_name[:60],
@@ -496,6 +546,7 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
         "input_ref": input_ref or original_id,
         "resolved_id": folder_id,
         "original_id": original_id,
+        "autofix_summary": autofix_summary,
     }
 
 
@@ -563,11 +614,20 @@ def send_review_email(failed_posts: list[dict], all_posts: list[dict]):
     n_fail = len(failed_posts)
     n_pass = total - n_fail
 
-    subject = f"[carousel-reviewer] {n_pass}/{total} passed — {n_fail} issue(s) found — {now}"
+    n_autofixed = sum(
+        (p.get("autofix_summary") or {}).get("fixed", 0) for p in all_posts
+    )
+    mode_tag = f" [{FIX_MODE}]" if FIX_MODE != "analyze_only" else ""
+    autofix_tag = f" — auto-fixed {n_autofixed}" if n_autofixed else ""
+    subject = (
+        f"[carousel-reviewer]{mode_tag} {n_pass}/{total} passed — "
+        f"{n_fail} issue(s){autofix_tag} — {now}"
+    )
 
     lines = [
         f"CAROUSEL REVIEW REPORT — {now}",
-        f"Total built: {total} | Passed: {n_pass} | Issues: {n_fail}",
+        f"Mode: {FIX_MODE} | Total: {total} | Passed: {n_pass} | "
+        f"Issues: {n_fail} | Auto-fixed: {n_autofixed}",
         "",
     ]
 
@@ -577,12 +637,36 @@ def send_review_email(failed_posts: list[dict], all_posts: list[dict]):
         lines.append(f"       Drive: {p['drive_link']}")
         for issue in p["issues"]:
             lines.append(f"       ⚠  {issue}")
+
+        # Append before/after change log if auto-fix ran on this post.
+        afs = p.get("autofix_summary")
+        if afs and afs.get("details"):
+            lines.append("       ── auto-fix change log ──")
+            for d in afs["details"]:
+                slot = d.get("slot", "?")
+                act = d.get("action", "")
+                if act == "fixed":
+                    lines.append(
+                        f"         · {slot}: {d.get('old_provider','—')} "
+                        f"→ {d.get('new_provider','')} "
+                        f"({d.get('new_source_type','')}) — {d.get('filename','')}"
+                    )
+                elif act == "would_fix":
+                    lines.append(f"         · {slot}: dry-run, would refetch")
+                else:
+                    lines.append(f"         · {slot}: {act}")
+            if afs.get("png_backup_folder_id"):
+                lines.append(
+                    f"       PNG backup: png_pre_fix_*/ id={afs['png_backup_folder_id']}"
+                )
         lines.append("")
 
     lines += [
         "─" * 60,
-        "To fix sticker placeholders: source real CC photos and re-run the pipeline.",
-        "The image_suggestions.txt in each post's resources/ folder lists exactly what's needed.",
+        f"FIX_MODE was '{FIX_MODE}'. Set FIX_MODE=analyze_and_fix to auto-repair "
+        f"[fix_type=regenerate] issues. Auto-fix backs up png/ before any change.",
+        "Reply to this email with feedback and the next run will re-process with "
+        "your notes (Goal 3B — pending).",
         "Workflow: https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/content_creator.yml",
     ]
 

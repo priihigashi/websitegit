@@ -423,10 +423,20 @@ def generate_ai_image(
     work_dir: str,
     filename: str,
     provider: Optional[str] = None,
+    skip_providers: Optional[list] = None,
 ) -> Tuple[str, str]:
     """Run the AI cascade (or a single pinned provider).
-    Returns (rel_path, provider_used) or ('', '')."""
-    cascade = [provider] if provider else DEFAULT_AI_CASCADE
+
+    Args:
+        provider:       Pin to one provider (overrides cascade).
+        skip_providers: List of provider slugs to omit from cascade
+                        (auto-fixer use case: skip the one already tried).
+    Returns: (rel_path, provider_used) or ('', '')."""
+    skip = {p.lower() for p in (skip_providers or [])}
+    if provider:
+        cascade = [provider] if provider.lower() not in skip else []
+    else:
+        cascade = [p for p in DEFAULT_AI_CASCADE if p.lower() not in skip]
     for prov in cascade:
         fn = _AI_PROVIDER_FN.get(prov)
         if not fn:

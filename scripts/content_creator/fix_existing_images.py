@@ -139,11 +139,40 @@ def fix_version_folder(
     dry_run: bool,
     provider: Optional[str],
     work_dir: Path,
+    skip_provider_per_slot: Optional[dict] = None,
+    backup_pngs: bool = False,
 ) -> dict:
-    """Repair AI images in one version folder. Returns summary dict."""
+    """Repair AI images in one version folder. Returns summary dict.
+
+    Optional params (auto_fixer use case):
+        skip_provider_per_slot: {slot_label: provider_to_skip} — when reviewer's
+            auto-fix retries a slot, skip the AI provider already used so the
+            cascade tries a different one.
+        backup_pngs: when True, copy png/ children to png_pre_fix_<ts>/ before
+            any image change so rendered carousels remain recoverable.
+    """
+    skip_provider_per_slot = skip_provider_per_slot or {}
     folder_id = version_folder["id"]
     folder_name = version_folder["name"]
     summary = {"folder": folder_name, "fixed": 0, "skipped": 0, "errors": 0, "details": []}
+
+    # PNG backup (Goal 2 hook — runs BEFORE any image work so we can always roll back)
+    if backup_pngs and not dry_run:
+        try:
+            png_folder = _find_file(drive, folder_id, "png")
+            if png_folder:
+                ts = time.strftime("%Y%m%d_%H%M%S")
+                backup_id = _find_or_create_folder(drive, folder_id, f"png_pre_fix_{ts}")
+                for f in _list_files(drive, png_folder["id"]):
+                    drive.files().copy(
+                        fileId=f["id"],
+                        body={"name": f["name"], "parents": [backup_id]},
+                        supportsAllDrives=True, fields="id",
+                    ).execute()
+                summary["png_backup_folder_id"] = backup_id
+                print(f"  PNG backup created → png_pre_fix_{ts}/")
+        except Exception as e:
+            print(f"  PNG backup failed (non-fatal): {e}")
 
     print(f"\n{'[DRY RUN] ' if dry_run else ''}Processing: {folder_name}")
 
@@ -224,6 +253,8 @@ def fix_version_folder(
                 "query": cover.get("query", ""),
                 "prompt": cover.get("prompt", ""),
                 "subject_type": subject_type,
+                "old_provider": cover.get("provider", ""),
+                "old_path": cover.get("path", ""),
             })
 
     for slide_key, slide_data in prov.get("slides", {}).items():
@@ -234,6 +265,8 @@ def fix_version_folder(
                 "query": slide_data.get("query", ""),
                 "prompt": slide_data.get("prompt", ""),
                 "subject_type": slide_data.get("subject_type", "place"),
+                "old_provider": slide_data.get("provider", ""),
+                "old_path": slide_data.get("path", ""),
             })
 
     if not ai_slots:
@@ -252,11 +285,22 @@ def fix_version_folder(
         query = slot["query"]
         subject_type = slot["subject_type"]
         slot_label = slot["slot"]
+        old_provider = slot.get("old_provider", "")
+        old_path = slot.get("old_path", "")
 
-        print(f"  → {slot_label}: query='{query[:60]}'")
+        # Auto-fixer: when the reviewer already knows which provider produced the
+        # bad image, skip it on the retry so the cascade picks something else.
+        skip_for_slot = skip_provider_per_slot.get(slot_label) or old_provider
+        skip_list = [skip_for_slot] if skip_for_slot else []
+
+        print(f"  → {slot_label}: query='{query[:60]}' (skip={skip_for_slot or 'none'})")
 
         if dry_run:
-            summary["details"].append({"slot": slot_label, "action": "would_fix"})
+            summary["details"].append({
+                "slot": slot_label, "action": "would_fix",
+                "old_provider": old_provider, "old_query": query,
+                "old_path": old_path,
+            })
             summary["fixed"] += 1
             continue
 
@@ -285,14 +329,19 @@ def fix_version_folder(
         # Step 3: AI cascade if real photos miss
         if not img_path and subject_type != "person":
             img_path, used_provider = generate_ai_image(
-                fresh_prompt, str(local_dir), filename, provider
+                fresh_prompt, str(local_dir), filename, provider,
+                skip_providers=skip_list,
             )
             source_type = "ai" if img_path else ""
 
         if not img_path:
             print(f"    All tiers failed for {slot_label}")
             summary["errors"] += 1
-            summary["details"].append({"slot": slot_label, "action": "failed"})
+            summary["details"].append({
+                "slot": slot_label, "action": "failed",
+                "old_provider": old_provider, "old_query": query,
+                "old_path": old_path,
+            })
             continue
 
         # Step 4: Upload to Drive images/ folder
@@ -319,7 +368,10 @@ def fix_version_folder(
         summary["fixed"] += 1
         summary["details"].append({
             "slot": slot_label, "action": "fixed",
-            "provider": used_provider, "filename": filename,
+            "old_provider": old_provider, "old_query": query, "old_path": old_path,
+            "new_provider": used_provider, "new_query": query,
+            "new_path": rel_path, "new_source_type": source_type,
+            "filename": filename, "fresh_prompt": fresh_prompt,
         })
 
     # Write updated provenance back to Drive

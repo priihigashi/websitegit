@@ -6,6 +6,14 @@ on:
       drive_folders:
         description: "Comma-separated Drive folder links or IDs (version folders to review)"
         required: true
+      fix_mode:
+        description: "analyze_only (detect + email) | analyze_and_fix (auto-repair regenerate issues)"
+        required: false
+        default: "analyze_only"
+        type: choice
+        options:
+          - analyze_only
+          - analyze_and_fix
       alert_email:
         description: "Email to receive review report"
         required: false
@@ -18,12 +26,20 @@ on:
 jobs:
   review-existing-carousels:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     env:
       SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
       ALERT_EMAIL: ${{ inputs.alert_email }}
       REVIEW_DRIVE_FOLDERS: ${{ inputs.drive_folders }}
+      FIX_MODE: ${{ inputs.fix_mode }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Image-provider keys — only consulted when FIX_MODE=analyze_and_fix
+      CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      PRI_OP_INFSH_API_KEY: ${{ secrets.PRI_OP_INFSH_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      REPLICATE_API_TOKEN: ${{ secrets.PRI_OP_REPLICATE_API_KEY }}
 
     steps:
       - name: Checkout
@@ -36,7 +52,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install google-auth google-api-python-client pillow
+          pip install \
+            google-auth \
+            google-api-python-client \
+            pillow \
+            requests \
+            inferencesh
 
       - name: Run reviewer
         run: |
