@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OPC — Google Ads Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0a; color: #f0ebe3; font-family: 'Inter', -apple-system, sans-serif; min-height: 100vh; }
+  .header { background: #0a0a0a; border-bottom: 1px solid #222; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .logo { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #cbcc10; }
+  .updated { font-size: 11px; color: #666; }
+  .container { max-width: 960px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  /* WARNINGS */
+  .warnings { margin-bottom: 24px; }
+  .warnings-title { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #ff4444; margin-bottom: 10px; }
+  .warning-card { background: #1a0a0a; border: 1px solid #ff4444; border-left: 4px solid #ff4444; border-radius: 6px; padding: 12px 16px; margin-bottom: 8px; display: flex; align-items: flex-start; gap: 10px; }
+  .warning-card.yellow { background: #1a1500; border-color: #f0a500; border-left-color: #f0a500; }
+  .warning-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .warning-text { font-size: 13px; line-height: 1.5; }
+  .warning-text strong { color: #fff; }
+  .warning-action { font-size: 11px; color: #888; margin-top: 3px; }
+
+  /* KPI GRID */
+  .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
+  @media(min-width: 600px) { .kpi-grid { grid-template-columns: repeat(4, 1fr); } }
+  .kpi-card { background: #141414; border: 1px solid #222; border-radius: 8px; padding: 16px; }
+  .kpi-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #666; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 700; color: #f0ebe3; letter-spacing: -0.5px; }
+  .kpi-value.green { color: #cbcc10; }
+  .kpi-value.red { color: #ff4444; }
+  .kpi-sub { font-size: 11px; color: #555; margin-top: 4px; }
+
+  /* SECTION */
+  .section { margin-bottom: 28px; }
+  .section-title { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #666; margin-bottom: 12px; border-bottom: 1px solid #1a1a1a; padding-bottom: 8px; }
+
+  /* AD GROUP BARS */
+  .ag-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .ag-name { font-size: 12px; color: #aaa; width: 160px; flex-shrink: 0; }
+  .ag-bar-wrap { flex: 1; background: #1a1a1a; border-radius: 3px; height: 20px; overflow: hidden; }
+  .ag-bar { height: 100%; background: #cbcc10; border-radius: 3px; transition: width 0.6s ease; display: flex; align-items: center; padding-left: 6px; }
+  .ag-bar.dim { background: #333; }
+  .ag-bar-label { font-size: 10px; color: #0a0a0a; font-weight: 700; white-space: nowrap; }
+  .ag-meta { font-size: 11px; color: #555; width: 100px; flex-shrink: 0; text-align: right; }
+
+  /* KEYWORD TABLE */
+  .kw-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .kw-table th { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #555; text-align: left; padding: 8px 10px; border-bottom: 1px solid #1a1a1a; }
+  .kw-table td { padding: 8px 10px; border-bottom: 1px solid #111; color: #bbb; vertical-align: middle; }
+  .kw-table tr:hover td { background: #141414; }
+  .kw-tag { display: inline-block; background: #1a1a1a; border-radius: 3px; padding: 2px 6px; font-size: 10px; color: #666; margin-right: 4px; }
+  .badge-red { background: #2a0a0a; color: #ff6666; border-radius: 3px; padding: 2px 6px; font-size: 10px; }
+  .badge-green { background: #0a1a0a; color: #66cc66; border-radius: 3px; padding: 2px 6px; font-size: 10px; }
+
+  /* CHART */
+  .chart-wrap { background: #141414; border: 1px solid #1a1a1a; border-radius: 8px; padding: 16px; }
+  canvas { max-height: 200px; }
+
+  /* FOOTER */
+  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #1a1a1a; font-size: 11px; color: #444; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">OPC — Google Ads</div>
+  <div class="updated">Updated: <span id="updated-date"><!-- AUTO --></span> &nbsp;|&nbsp; Last 30 days</div>
+</div>
+
+<div class="container">
+
+  <!-- WARNINGS -->
+  <div class="warnings">
+    <div class="warnings-title">⚠ Requires Attention</div>
+    <div id="warnings-list"></div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Total Spend</div>
+      <div class="kpi-value" id="kpi-spend">—</div>
+      <div class="kpi-sub">Last 30 days</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Clicks</div>
+      <div class="kpi-value green" id="kpi-clicks">—</div>
+      <div class="kpi-sub" id="kpi-ctr">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Calls / Conversions</div>
+      <div class="kpi-value" id="kpi-calls">—</div>
+      <div class="kpi-sub" id="kpi-cpl">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Avg CPC</div>
+      <div class="kpi-value" id="kpi-cpc">—</div>
+      <div class="kpi-sub">Per click</div>
+    </div>
+  </div>
+
+  <!-- AD GROUPS -->
+  <div class="section">
+    <div class="section-title">Spend by Ad Group</div>
+    <div id="ag-bars"></div>
+  </div>
+
+  <!-- SPEND CHART -->
+  <div class="section">
+    <div class="section-title">Top Keywords — Spend vs Conversions</div>
+    <div class="chart-wrap">
+      <canvas id="kwChart"></canvas>
+    </div>
+  </div>
+
+  <!-- KEYWORD TABLE -->
+  <div class="section">
+    <div class="section-title">Top Keywords by Spend</div>
+    <table class="kw-table">
+      <thead>
+        <tr>
+          <th>Keyword</th>
+          <th>Group</th>
+          <th>Spend</th>
+          <th>Clicks</th>
+          <th>CTR</th>
+          <th>Conv</th>
+        </tr>
+      </thead>
+      <tbody id="kw-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    Auto-refreshed every Monday 8 AM ET by GitHub Actions &nbsp;|&nbsp; priihigashi/oak-park-ai-hub
+  </div>
+</div>
+
+<script>
+// ── DATA (auto-replaced by ads_dashboard.py each refresh) ──
+const DATA = {
+  "updated": "2026-04-29",
+  "campaign": {
+    "clicks": 220,
+    "impressions": 4106,
+    "ctr": 5.36,
+    "spend": 892.03,
+    "conversions": 1.0,
+    "calls": 8,
+    "avg_cpc": 4.05
+  },
+  "adgroups": [
+    {"name": "NEW AND ADDITION",    "spend": 742.42, "clicks": 185, "conv": 1.0},
+    {"name": "CONCRETE FOUNDATION", "spend": 134.42, "clicks": 32,  "conv": 0.0},
+    {"name": "SHELL CONSTRUCTION",  "spend": 15.18,  "clicks": 3,   "conv": 0.0},
+    {"name": "STUCCO",              "spend": 0.0,    "clicks": 0,   "conv": 0.0}
+  ],
+  "keywords": [
+    {"text": "building construction company",    "ag": "NEW AND ADDITION",    "spend": 151.07, "clicks": 31, "ctr": 0, "conv": 0.0},
+    {"text": "new home construction",            "ag": "NEW AND ADDITION",    "spend": 144.39, "clicks": 37, "ctr": 0, "conv": 0.0},
+    {"text": "general contractor near me",       "ag": "NEW AND ADDITION",    "spend": 117.98, "clicks": 32, "ctr": 0, "conv": 0.0},
+    {"text": "concrete services",                "ag": "CONCRETE FOUNDATION", "spend": 117.46, "clicks": 24, "ctr": 0, "conv": 0.0},
+    {"text": "new construction homes",           "ag": "NEW AND ADDITION",    "spend": 89.54,  "clicks": 20, "ctr": 0, "conv": 0.0},
+    {"text": "home renovation contractor",       "ag": "NEW AND ADDITION",    "spend": 76.86,  "clicks": 15, "ctr": 0, "conv": 0.0},
+    {"text": "construction and renovation company","ag":"NEW AND ADDITION",   "spend": 70.75,  "clicks": 20, "ctr": 0, "conv": 1.0},
+    {"text": "builders to build a house",        "ag": "NEW AND ADDITION",    "spend": 25.58,  "clicks": 9,  "ctr": 0, "conv": 0.0},
+    {"text": "custom new build homes",           "ag": "NEW AND ADDITION",    "spend": 17.57,  "clicks": 3,  "ctr": 0, "conv": 0.0},
+    {"text": "home remodeling contractor",       "ag": "NEW AND ADDITION",    "spend": 15.99,  "clicks": 6,  "ctr": 0, "conv": 0.0}
+  ],
+  "warnings": [
+    {"level": "red",    "icon": "🔴", "text": "<strong>$892 spent → 1 conversion.</strong> Cost per lead = $892. Google needs conversion tracking fixed to optimise bids.", "action": "Fix: Set conversion value in Ads UI → Goals → Conversion actions → Calls from ads → set value"},
+    {"level": "red",    "icon": "🔴", "text": "<strong>Top 4 keywords burned $531 with 0 conversions:</strong> building construction company ($151), new home construction ($144), general contractor near me ($118), concrete services ($117).", "action": "Consider pausing or adding negative keywords to tighten these"},
+    {"level": "yellow", "icon": "🟡", "text": "<strong>STUCCO ad group: $0 spend, 0 clicks.</strong> Ads not showing at all — may be below minimum bid or Quality Score issue.", "action": "Check bid vs. first-page bid estimate in Google Ads UI"},
+    {"level": "yellow", "icon": "🟡", "text": "<strong>8 calls tracked but only 1 conversion logged.</strong> Conversion tracking is misconfigured — 7 real leads may be invisible to Google's algorithm.", "action": "Fix: Link GA4 to Google Ads + verify Call conversion action is set as Primary"}
+  ]
+};
+
+// ── RENDER ──
+document.getElementById("updated-date").textContent = DATA.updated;
+
+// KPIs
+const c = DATA.campaign;
+document.getElementById("kpi-spend").textContent  = "$" + c.spend.toFixed(0);
+document.getElementById("kpi-clicks").textContent = c.clicks;
+document.getElementById("kpi-ctr").textContent    = c.ctr + "% CTR";
+document.getElementById("kpi-calls").textContent  = c.calls + " / " + c.conversions;
+document.getElementById("kpi-cpl").textContent    = "CPL $" + (c.spend / Math.max(c.calls, 1)).toFixed(0);
+document.getElementById("kpi-cpc").textContent    = "$" + c.avg_cpc.toFixed(2);
+
+// Colour CPC red if > $5
+if (c.avg_cpc > 5) document.getElementById("kpi-cpc").classList.add("red");
+if (c.conversions < 3) document.getElementById("kpi-calls").classList.add("red");
+
+// Warnings
+const wList = document.getElementById("warnings-list");
+DATA.warnings.forEach(w => {
+  wList.innerHTML += `<div class="warning-card ${w.level === 'yellow' ? 'yellow' : ''}">
+    <div class="warning-icon">${w.icon}</div>
+    <div class="warning-text">${w.text}<div class="warning-action">${w.action}</div></div>
+  </div>`;
+});
+
+// Ad group bars
+const maxSpend = Math.max(...DATA.adgroups.map(a => a.spend));
+const agEl = document.getElementById("ag-bars");
+DATA.adgroups.forEach(ag => {
+  const pct = maxSpend > 0 ? (ag.spend / maxSpend * 100).toFixed(1) : 0;
+  agEl.innerHTML += `<div class="ag-row">
+    <div class="ag-name">${ag.name}</div>
+    <div class="ag-bar-wrap">
+      <div class="ag-bar ${ag.spend === 0 ? 'dim' : ''}" style="width:${pct}%">
+        ${ag.spend > 20 ? `<span class="ag-bar-label">$${ag.spend.toFixed(0)}</span>` : ''}
+      </div>
+    </div>
+    <div class="ag-meta">${ag.clicks} clicks · ${ag.conv} conv</div>
+  </div>`;
+});
+
+// Keyword table
+const tbody = document.getElementById("kw-tbody");
+DATA.keywords.forEach(kw => {
+  const convBadge = kw.conv > 0
+    ? `<span class="badge-green">${kw.conv}</span>`
+    : `<span class="badge-red">0</span>`;
+  tbody.innerHTML += `<tr>
+    <td>${kw.text}</td>
+    <td><span class="kw-tag">${kw.ag.split(' ')[0]}</span></td>
+    <td>$${kw.spend.toFixed(0)}</td>
+    <td>${kw.clicks}</td>
+    <td>${kw.ctr}%</td>
+    <td>${convBadge}</td>
+  </tr>`;
+});
+
+// Chart
+const top8 = DATA.keywords.slice(0, 8);
+new Chart(document.getElementById("kwChart"), {
+  type: "bar",
+  data: {
+    labels: top8.map(k => k.text.length > 22 ? k.text.slice(0,22)+"…" : k.text),
+    datasets: [
+      { label: "Spend ($)", data: top8.map(k => k.spend), backgroundColor: "#cbcc10", borderRadius: 3 },
+      { label: "Conversions", data: top8.map(k => k.conv * 50), backgroundColor: "#66cc66", borderRadius: 3 }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { labels: { color: "#666", font: { size: 11 } } } },
+    scales: {
+      x: { ticks: { color: "#555", font: { size: 10 } }, grid: { color: "#111" } },
+      y: { ticks: { color: "#555" }, grid: { color: "#111" } }
+    }
+  }
+});
+</script>
+</body>
+</html>
