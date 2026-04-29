@@ -1,8 +1,8 @@
-name: Check Duplicate Images — One Time
+name: Fix Duplicate Images — One Time
 on:
   workflow_dispatch:
 jobs:
-  check:
+  fix:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,3 +14,4 @@ jobs:
           WP_URL: ${{ secrets.WP_URL }}
           WP_USERNAME: ${{ secrets.WP_USERNAME }}
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
