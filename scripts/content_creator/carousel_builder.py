@@ -114,6 +114,18 @@ TEMPLATES = {
             "slides": 5,
             "structure": "cover → stat → list → tip → sources",
         },
+        "illustrated": {
+            "series": "Tip of the Week",
+            "tag": "Tip of the Week · Oak Park Construction",
+            "slides": 5,
+            "structure": "cover → stat → list → tip → sources (illustrated editorial)",
+        },
+        "cutout": {
+            "series": "Tip of the Week",
+            "tag": "Tip of the Week · Oak Park Construction",
+            "slides": 5,
+            "structure": "cover → stat → list → tip → sources (cutout sticker editorial)",
+        },
         "progress": {
             "series": "Progress",
             "tag": "Progress · Oak Park Construction",
@@ -876,6 +888,160 @@ def _replicate_run(version_or_slug, input_dict, work_dir, filename, timeout=120,
         return ""
 
 
+def _remove_background_with_inference_sh(local_abs_path, out_abs_path):
+    """Try bg removal via inference.sh image editing route.
+    Returns True on success."""
+    key = os.environ.get("PRI_OP_INFSH_API_KEY", "")
+    if not key:
+        return False
+    try:
+        raw = Path(local_abs_path).read_bytes()
+        payload = json.dumps({
+            "app": "google/gemini-3-1-flash-image-preview",
+            "input": {
+                "prompt": (
+                    "Remove only the background from this image and keep the main subject untouched. "
+                    "Return a transparent PNG with clean edges, no extra objects, no style changes."
+                ),
+                "image_base64": base64.b64encode(raw).decode(),
+            },
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.inference.sh/apps/run",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+                "User-Agent": "carousel-builder/1.0",
+            },
+        )
+        resp = json.loads(urllib.request.urlopen(req, timeout=120).read())
+        task_id = (resp.get("data") or resp).get("id", "")
+        if not task_id:
+            return False
+        image_url = ""
+        for _ in range(15):
+            time.sleep(6)
+            poll = urllib.request.Request(
+                f"https://api.inference.sh/tasks/{task_id}",
+                headers={"Authorization": f"Bearer {key}", "User-Agent": "carousel-builder/1.0"},
+            )
+            pdata = json.loads(urllib.request.urlopen(poll, timeout=30).read())
+            pdata = pdata.get("data", pdata)
+            status = pdata.get("status")
+            output = pdata.get("output")
+            if status == 10:
+                if isinstance(output, dict):
+                    imgs = output.get("images", output.get("image", []))
+                    if isinstance(imgs, list) and imgs:
+                        image_url = imgs[0].get("url", imgs[0]) if isinstance(imgs[0], dict) else imgs[0]
+                    elif isinstance(imgs, str):
+                        image_url = imgs
+                elif isinstance(output, list) and output:
+                    image_url = output[0].get("url", output[0]) if isinstance(output[0], dict) else output[0]
+                elif isinstance(output, str):
+                    image_url = output
+                break
+            if status in (11, 12):
+                break
+        if not image_url:
+            return False
+        raw_out = urllib.request.urlopen(str(image_url), timeout=40).read()
+        if len(raw_out) < 5000:
+            return False
+        Path(out_abs_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(out_abs_path).write_bytes(raw_out)
+        return True
+    except Exception:
+        return False
+
+
+def _remove_background_with_replicate(local_abs_path, out_abs_path):
+    """Try bg removal via Replicate model(s). Accepts data URI image input."""
+    key = os.environ.get("PRI_OP_REPLICATE_API_KEY", "")
+    if not key:
+        return False
+    try:
+        b64 = base64.b64encode(Path(local_abs_path).read_bytes()).decode()
+        data_uri = f"data:image/jpeg;base64,{b64}"
+    except Exception:
+        return False
+
+    model_candidates = [
+        ("fofr/remove-bg", {"image": data_uri}),
+        ("cjwbw/rembg", {"image": data_uri}),
+    ]
+    for model_slug, input_dict in model_candidates:
+        try:
+            req = urllib.request.Request(
+                f"https://api.replicate.com/v1/models/{model_slug}/predictions",
+                data=json.dumps({"input": input_dict}).encode(),
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                    "Prefer": "wait=60",
+                },
+            )
+            resp = json.loads(urllib.request.urlopen(req, timeout=120).read())
+            status = resp.get("status", "")
+            pid = resp.get("id", "")
+            started = time.time()
+            while status in ("starting", "processing") and (time.time() - started) < 180:
+                time.sleep(3)
+                poll = urllib.request.Request(
+                    f"https://api.replicate.com/v1/predictions/{pid}",
+                    headers={"Authorization": f"Bearer {key}"},
+                )
+                resp = json.loads(urllib.request.urlopen(poll, timeout=20).read())
+                status = resp.get("status", "")
+            if status != "succeeded":
+                continue
+            out = resp.get("output")
+            if isinstance(out, list):
+                out = out[0] if out else ""
+            if not out:
+                continue
+            raw_out = urllib.request.urlopen(str(out), timeout=40).read()
+            if len(raw_out) < 5000:
+                continue
+            Path(out_abs_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(out_abs_path).write_bytes(raw_out)
+            return True
+        except Exception:
+            continue
+    return False
+
+
+def _generate_cutouts_for_cutout_template(content, paths, work_dir):
+    """Auto-create no-background PNG cutouts for cutout template slides.
+    Non-blocking: if all providers fail, template still uses regular images."""
+    if (content or {}).get("_template_key") != "cutout":
+        return
+    cut_dir = Path(work_dir) / "resources" / "cutouts"
+    cut_dir.mkdir(parents=True, exist_ok=True)
+    candidates = [
+        (3, paths.get("slides", {}).get(3, "")),
+        (4, paths.get("slides", {}).get(4, "")),
+        (5, paths.get("slides", {}).get(5, "") or paths.get("cover", "")),
+    ]
+    for slide_idx, rel_path in candidates:
+        if not rel_path:
+            continue
+        src_abs = Path(work_dir) / rel_path
+        if not src_abs.exists():
+            continue
+        out_abs = cut_dir / f"slide_{slide_idx}.png"
+        if out_abs.exists() and out_abs.stat().st_size > 5000:
+            continue
+        ok = _remove_background_with_inference_sh(str(src_abs), str(out_abs))
+        if not ok:
+            ok = _remove_background_with_replicate(str(src_abs), str(out_abs))
+        if ok:
+            print(f"  Cutout generated: resources/cutouts/slide_{slide_idx}.png")
+        else:
+            print(f"  Cutout skipped for slide {slide_idx} (providers unavailable or failed)")
+
+
 def _generate_seedream_image(prompt, work_dir, filename):
     """Generate image via Seedream 4.5 on Replicate (photoreal, strong with people/places)."""
     if not REPLICATE_KEY or not prompt:
@@ -1129,6 +1295,7 @@ def fetch_all_media(content, niche, work_dir):
                 accepted = True
 
     fetched_total = (1 if paths["cover"] else 0) + len(paths["slides"])
+    _generate_cutouts_for_cutout_template(content, paths, work_dir)
     print(f"  Media fetch: {fetched_total} image(s) ready (cover={bool(paths['cover'])}, slides={list(paths['slides'].keys())})")
     return paths
 
@@ -1461,8 +1628,17 @@ def build_html(content, niche, topic_slug, work_dir, handle="@HANDLE_PLACEHOLDER
         template_key = content.get("_template_key", "tip")
         if template_key == "progress":
             return _build_opc_progress_html(content, topic_slug, work_dir, media_paths=media_paths)
+        if template_key == "illustrated":
+            return _build_opc_illustrated_html(content, topic_slug, work_dir, media_paths=media_paths)
+        if template_key == "cutout":
+            return _build_opc_cutout_html(content, topic_slug, work_dir, media_paths=media_paths)
         return _build_opc_html(content, topic_slug, work_dir, media_paths=media_paths)
     if niche in ("brazil", "usa"):
+        template_key = content.get("_template_key")
+        if template_key in ("illustrated", "cutout"):
+            return _build_news_shared_template_html(
+                content, topic_slug, work_dir, template_key, handle=handle, media_paths=media_paths, niche=niche
+            )
         return _build_brazil_html(content, topic_slug, work_dir, handle=handle, media_paths=media_paths)
     return None
 
@@ -1801,6 +1977,542 @@ def _build_opc_progress_html(content, slug, work_dir, media_paths=None):
 </html>"""
 
     html_path.write_text(full_html)
+    return str(html_path)
+
+
+def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
+    """Illustrated editorial variant:
+    keeps OPC typography/colors, adds topic-related image blocks with sketch/line treatment."""
+    hl = content["headline"]
+    accent = content.get("accent_word", hl.split()[-1] if hl else "")
+    hl_html = hl.replace(accent, f'<span class="accent">{accent}</span>') if accent else hl
+
+    s2_hl = content.get("slide2_headline", "THE NUMBERS")
+    s2_accent = s2_hl.split()[-1] if s2_hl else "NUMBERS"
+    s2_html = s2_hl.replace(s2_accent, f'<span class="accent">{s2_accent}</span>')
+
+    items_html = ""
+    for i, item in enumerate(content.get("slide3_items", []), 1):
+        items_html += f'''    <div class="list-item"><span class="list-num">{i:02d}</span><div><div class="list-text">{item["title"]}</div><div class="list-sub">{item["sub"]}</div></div></div>\n'''
+
+    sources_html = ""
+    for i, src in enumerate(content.get("sources", []), 1):
+        sources_html += f'    <div class="src-row"><span class="src-num">{i:02d}</span><span>{src}</span></div>\n'
+
+    cover_img = (media_paths or {}).get("cover", "")
+    slide3_img = ((media_paths or {}).get("slides", {}) or {}).get(3, "")
+    slide4_img = ((media_paths or {}).get("slides", {}) or {}).get(4, "")
+    source_img = (
+        ((media_paths or {}).get("slides", {}) or {}).get(5)
+        or ((media_paths or {}).get("slides", {}) or {}).get(2)
+        or cover_img
+    )
+
+    def img_panel(src, label):
+        if src:
+            return f'<div class="ill-panel"><img src="{src}" alt="{label}" class="ill-photo"></div>'
+        return f'<div class="ill-panel ill-empty"><span>{label}</span></div>'
+
+    s4_hl = content.get("slide4_headline", "THE PRO MOVE")
+    s4_accent = s4_hl.split()[-1] if s4_hl else "MOVE"
+    cta = content.get("cta", "SAVE THIS.")
+
+    def variant_block(v_class):
+        return f"""
+<div class="slide slide-cover {v_class} ill-shell">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="ill-bg" style="background-image:url('{cover_img}');"></div>
+  <div class="ill-grain"></div>
+  <div class="tag">Illustrated Tip · Oak Park Construction</div>
+  <div class="headline">{hl_html}</div>
+  <div class="body-text">{content.get("subhead","")}</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-stat {v_class} ill-shell">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">The Real Number</div>
+  <div class="headline">{s2_html}</div>
+  <div class="stat-big">{content.get("slide2_stat", "—")}</div>
+  <div class="stat-label">{content.get("slide2_label", "")}</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-list {v_class} ill-shell">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">What To Know</div>
+  {img_panel(slide3_img, "TOPIC IMAGE")}
+  <div class="list">
+{items_html}  </div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-tip {v_class} ill-shell">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Pro Tip</div>
+  <div class="tip-label"><span class="tip-arrow">&#9658;</span> The Pro Move</div>
+  <div class="tip-big">{s4_hl.replace(s4_accent, f'<span class="accent">{s4_accent}</span>')}</div>
+  {img_panel(slide4_img, "DETAIL IMAGE")}
+  <div class="tip-explain">{content.get("slide4_body", "")}</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-sources {v_class} ill-shell">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="ill-bg" style="background-image:url('{source_img}');"></div>
+  <div class="ill-grain"></div>
+  <div class="tag">Sources</div>
+  <div class="src-head">WHERE THIS<br>COMES <span class="accent">FROM.</span></div>
+  <div class="src-list">
+{sources_html}  </div>
+  <div class="save-cta">{cta}</div>
+  <div class="footer">
+    <span class="handle">@oakparkconstruction</span>
+    <span class="license">LIC · CBC1263425</span>
+  </div>
+</div>
+"""
+
+    v1 = variant_block("v1")
+    v2 = variant_block("v2")
+    v3 = variant_block("v3")
+
+    html_path = Path(work_dir) / "cover.html"
+    with open(Path(__file__).parent / "opc_tip_base.css") as f:
+        base_css = f.read()
+
+    illustrated_css = """
+.ill-shell { position:relative; overflow:hidden; }
+.ill-bg {
+  position:absolute; inset:0; background-size:cover; background-position:center;
+  filter: grayscale(0.15) contrast(1.2) brightness(0.9) saturate(0.9);
+  opacity:0.26; z-index:0;
+}
+.ill-grain {
+  position:absolute; inset:0; z-index:1; pointer-events:none;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px, transparent 1px, transparent 3px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 4px);
+  mix-blend-mode: soft-light;
+}
+.ill-shell > *:not(.ill-bg):not(.ill-grain) { position:relative; z-index:2; }
+/* Arrow, logo and corners must stay absolutely positioned — override the rule above */
+.ill-shell .arrow, .ill-shell .slide-logo, .ill-shell .corner { position:absolute !important; }
+.ill-panel {
+  width:100%; min-height:210px; max-height:300px; margin:16px 0 18px;
+  border:2px solid rgba(203,204,16,.55); border-radius:8px; overflow:hidden;
+  background:#141414;
+}
+.ill-photo {
+  width:100%; height:100%; object-fit:cover;
+  filter: contrast(1.35) saturate(1.1) brightness(1.02);
+}
+.ill-empty {
+  display:flex; align-items:center; justify-content:center;
+  border-style:dashed; color:rgba(203,204,16,.45);
+  font-family:'JetBrains Mono', monospace; letter-spacing:.15em; font-size:15px;
+}
+.v2 .ill-bg { opacity:.21; filter: grayscale(0.05) contrast(1.08) brightness(1.06) saturate(1.05); }
+.v2 .ill-grain { background-image:
+  repeating-linear-gradient(0deg, rgba(0,0,0,0.035) 0px, rgba(0,0,0,0.035) 1px, transparent 1px, transparent 3px),
+  repeating-linear-gradient(90deg, rgba(0,0,0,0.02) 0px, rgba(0,0,0,0.02) 1px, transparent 1px, transparent 4px); }
+.v2 .ill-panel { border-color: rgba(10,10,10,.45); background:#efe9dd; }
+.v2 .ill-photo { filter: grayscale(0.05) contrast(1.22) saturate(1.15); }
+.v2 .ill-empty { color:rgba(10,10,10,.35); border-color:rgba(10,10,10,.35); }
+"""
+
+    full_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OPC — Illustrated — {slug}</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+{base_css}
+{illustrated_css}
+</style>
+</head>
+<body>
+{v1}
+{v2}
+{v3}
+</body>
+</html>"""
+    html_path.write_text(full_html)
+    return str(html_path)
+
+
+def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
+    """Cutout sticker editorial variant:
+    designed for background-removed PNGs when available, with graceful fallback."""
+    hl = content["headline"]
+    accent = content.get("accent_word", hl.split()[-1] if hl else "")
+    hl_html = hl.replace(accent, f'<span class="accent">{accent}</span>') if accent else hl
+
+    s2_hl = content.get("slide2_headline", "THE NUMBERS")
+    s2_accent = s2_hl.split()[-1] if s2_hl else "NUMBERS"
+    s2_html = s2_hl.replace(s2_accent, f'<span class="accent">{s2_accent}</span>')
+
+    items_html = ""
+    for i, item in enumerate(content.get("slide3_items", []), 1):
+        items_html += f'''    <div class="list-item"><span class="list-num">{i:02d}</span><div><div class="list-text">{item["title"]}</div><div class="list-sub">{item["sub"]}</div></div></div>\n'''
+
+    sources_html = ""
+    for i, src in enumerate(content.get("sources", []), 1):
+        sources_html += f'    <div class="src-row"><span class="src-num">{i:02d}</span><span>{src}</span></div>\n'
+
+    cover_img = (media_paths or {}).get("cover", "")
+    slide3_img = ((media_paths or {}).get("slides", {}) or {}).get(3, "")
+    slide4_img = ((media_paths or {}).get("slides", {}) or {}).get(4, "")
+    source_img = (
+        ((media_paths or {}).get("slides", {}) or {}).get(5)
+        or ((media_paths or {}).get("slides", {}) or {}).get(2)
+        or cover_img
+    )
+
+    work = Path(work_dir)
+    cut3 = work / "resources" / "cutouts" / "slide_3.png"
+    cut4 = work / "resources" / "cutouts" / "slide_4.png"
+    cut5 = work / "resources" / "cutouts" / "slide_5.png"
+
+    def _sticker_tag(img_src, label, cutout_src=""):
+        src = cutout_src or img_src
+        if src:
+            return f'<div class="cutout-wrap"><img src="{src}" alt="{label}" class="cutout-img"></div>'
+        return f'<div class="cutout-wrap cutout-empty"><span>{label}</span></div>'
+
+    s4_hl = content.get("slide4_headline", "THE PRO MOVE")
+    s4_accent = s4_hl.split()[-1] if s4_hl else "MOVE"
+    cta = content.get("cta", "SAVE THIS.")
+
+    def variant_block(v_class):
+        cut3_src = "resources/cutouts/slide_3.png" if cut3.exists() else ""
+        cut4_src = "resources/cutouts/slide_4.png" if cut4.exists() else ""
+        cut5_src = "resources/cutouts/slide_5.png" if cut5.exists() else ""
+        return f"""
+<div class="slide slide-cover {v_class} cut-shell">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="cut-bg" style="background-image:url('{cover_img}');"></div>
+  <div class="tag">Cutout Tip · Oak Park Construction</div>
+  <div class="headline">{hl_html}</div>
+  <div class="body-text">{content.get("subhead","")}</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-stat {v_class} cut-shell">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">The Real Number</div>
+  <div class="headline">{s2_html}</div>
+  <div class="stat-big">{content.get("slide2_stat", "—")}</div>
+  <div class="stat-label">{content.get("slide2_label", "")}</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-list {v_class} cut-shell">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">What To Know</div>
+  {_sticker_tag(slide3_img, "CUTOUT IMAGE", cut3_src)}
+  <div class="list">
+{items_html}  </div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-tip {v_class} cut-shell">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Pro Tip</div>
+  <div class="tip-label"><span class="tip-arrow">&#9658;</span> The Pro Move</div>
+  <div class="tip-big">{s4_hl.replace(s4_accent, f'<span class="accent">{s4_accent}</span>')}</div>
+  {_sticker_tag(slide4_img, "CUTOUT DETAIL", cut4_src)}
+  <div class="tip-explain">{content.get("slide4_body", "")}</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-sources {v_class} cut-shell">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="cut-bg" style="background-image:url('{source_img}');"></div>
+  {_sticker_tag(source_img, "CUTOUT SOURCE", cut5_src)}
+  <div class="tag">Sources</div>
+  <div class="src-head">WHERE THIS<br>COMES <span class="accent">FROM.</span></div>
+  <div class="src-list">
+{sources_html}  </div>
+  <div class="save-cta">{cta}</div>
+  <div class="footer">
+    <span class="handle">@oakparkconstruction</span>
+    <span class="license">LIC · CBC1263425</span>
+  </div>
+</div>
+"""
+
+    v1 = variant_block("v1")
+    v2 = variant_block("v2")
+    v3 = variant_block("v3")
+
+    html_path = Path(work_dir) / "cover.html"
+    with open(Path(__file__).parent / "opc_tip_base.css") as f:
+        base_css = f.read()
+
+    cutout_css = """
+.cut-shell { position:relative; overflow:hidden; }
+.cut-bg {
+  position:absolute; inset:0; background-size:cover; background-position:center;
+  filter: grayscale(0.08) contrast(1.18) brightness(0.88);
+  opacity:0.22; z-index:0;
+}
+.cut-shell > *:not(.cut-bg) { position:relative; z-index:2; }
+/* Arrow, logo and corners must stay absolutely positioned — override the rule above */
+.cut-shell .arrow, .cut-shell .slide-logo, .cut-shell .corner { position:absolute !important; }
+.cutout-wrap {
+  width:100%; min-height:220px; max-height:330px; margin:14px 0 16px;
+  display:flex; align-items:flex-end; justify-content:center; overflow:hidden;
+}
+.cutout-img {
+  max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;
+  filter: drop-shadow(0 10px 24px rgba(0,0,0,.35)) contrast(1.15) saturate(1.1);
+}
+.cutout-empty {
+  border:2px dashed rgba(203,204,16,.45); border-radius:8px;
+  align-items:center; color:rgba(203,204,16,.5);
+  font-family:'JetBrains Mono', monospace; letter-spacing:.14em; font-size:14px;
+}
+.v2 .cut-bg { opacity:.18; filter: grayscale(0.03) contrast(1.05) brightness(1.02); }
+.v2 .cutout-img { filter: drop-shadow(0 8px 18px rgba(0,0,0,.22)) contrast(1.08) saturate(1.08); }
+.v2 .cutout-empty {
+  border-color:rgba(10,10,10,.38); color:rgba(10,10,10,.42);
+}
+"""
+
+    full_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OPC — Cutout — {slug}</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+{base_css}
+{cutout_css}
+</style>
+</head>
+<body>
+{v1}
+{v2}
+{v3}
+</body>
+</html>"""
+    html_path.write_text(full_html)
+    return str(html_path)
+
+
+def _build_news_shared_template_html(content, slug, work_dir, style, handle="@HANDLE_PLACEHOLDER", media_paths=None, niche="brazil"):
+    """Shared cross-niche renderer (Brazil/USA) with brand colors.
+    style: illustrated | cutout
+    Uses existing Brazil/USA generated structure, but with shared layout language."""
+
+    def esc(s):
+        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+    # Brand tokens per niche (shared layout, different colors)
+    if niche == "usa":
+        brand = {
+            "obsidian": "#0E0D0B",
+            "paper": "#F2ECE0",
+            "accent": "#C8A84B",
+            "muted": "#8E8478",
+            "tag": "The Chain",
+        }
+    else:
+        brand = {
+            "obsidian": "#0E0D0B",
+            "paper": "#F2ECE0",
+            "accent": "#F4C430",
+            "muted": "#7A7267",
+            "tag": "Quem decidiu isso?",
+        }
+
+    cover_pt = esc(content.get("cover_pt", "TÍTULO AQUI"))
+    cover_en = esc(content.get("cover_en", "TITLE HERE"))
+    cta_pt = esc(content.get("cta_pt", "Salva pra não esquecer."))
+    cta_en = esc(content.get("cta_en", "Save this."))
+    sources = content.get("sources", [])
+    cover_img = (media_paths or {}).get("cover", "")
+    slides = content.get("slides", [])
+
+    work = Path(work_dir)
+    cut3 = work / "resources" / "cutouts" / "slide_3.png"
+    cut4 = work / "resources" / "cutouts" / "slide_4.png"
+    cut5 = work / "resources" / "cutouts" / "slide_5.png"
+
+    def slot_img(slide_i, label, use_cutout=False):
+        img = (media_paths or {}).get("slides", {}).get(slide_i, "")
+        cut = ""
+        if use_cutout:
+            if slide_i == 3 and cut3.exists():
+                cut = str(cut3)
+            elif slide_i == 4 and cut4.exists():
+                cut = str(cut4)
+            elif slide_i == 5 and cut5.exists():
+                cut = str(cut5)
+        src = cut or img
+        if src:
+            cls = "cutout-img" if use_cutout else "ill-photo"
+            wrap = "cutout-wrap" if use_cutout else "ill-panel"
+            return f'<div class="{wrap}"><img src="{src}" alt="{label}" class="{cls}"></div>'
+        empty = "cutout-wrap cutout-empty" if use_cutout else "ill-panel ill-empty"
+        return f'<div class="{empty}"><span>{label}</span></div>'
+
+    html = []
+    html.append(f"""
+<div class="slide slide-cover shared-shell">
+  <div class="shared-bg" style="background-image:url('{cover_img}');"></div>
+  <div class="tag">{brand['tag']}</div>
+  <div class="cover-hl">{cover_pt}</div>
+  <div class="cover-en">{cover_en}</div>
+  <div class="swipe">SWIPE &#8594;</div>
+  <div class="footer-handle">{handle}</div>
+</div>
+""")
+
+    for i, s in enumerate(slides, start=2):
+        h_pt = esc(s.get("heading_pt", ""))
+        h_en = esc(s.get("heading_en", ""))
+        stype = s.get("type", "list")
+
+        if stype == "profile":
+            facts = "".join(f"<li>{esc(x)}</li>" for x in s.get("facts_pt", []))
+            visual_block = slot_img(i, "PROFILE", use_cutout=(style == "cutout"))
+            html.append(f"""
+<div class="slide shared-shell">
+  <div class="tag">Perfil</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  {visual_block}
+  <ul class="item-list">{facts}</ul>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+""")
+        elif stype == "data":
+            nums = "".join(
+                f"<div class='num-block'><div class='num-val'>{esc(n.get('value','—'))}</div><div class='num-label'>{esc(n.get('label_pt',''))}</div></div>"
+                for n in s.get("numbers", [])[:4]
+            )
+            visual_block = slot_img(i, "DATA VISUAL", use_cutout=(style == "cutout"))
+            html.append(f"""
+<div class="slide shared-shell">
+  <div class="tag">Números</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  {visual_block}
+  <div class="nums-grid">{nums}</div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+""")
+        elif stype == "quote":
+            quote = esc(s.get("quote", ""))
+            source = esc(s.get("source", ""))
+            visual_block = slot_img(i, "QUOTE VISUAL", use_cutout=(style == "cutout"))
+            html.append(f"""
+<div class="slide shared-shell">
+  <div class="tag">Contexto</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  {visual_block}
+  <div class="quote-block">
+    <div class="quote-text">"{quote}"</div>
+    <div class="quote-source">— {source}</div>
+  </div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+""")
+        else:
+            items = "".join(f"<li>{esc(x)}</li>" for x in s.get("items_pt", []))
+            visual_block = slot_img(i, "TOPIC VISUAL", use_cutout=(style == "cutout"))
+            html.append(f"""
+<div class="slide shared-shell">
+  <div class="tag">Segue o fio</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  {visual_block}
+  <ul class="item-list">{items}</ul>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+""")
+
+    src_rows = "".join(
+        f'<div class="src-row"><span class="src-num">{idx:02d}</span><span>{esc(src)}</span></div>'
+        for idx, src in enumerate(sources, 1)
+    )
+    html.append(f"""
+<div class="slide slide-sources shared-shell">
+  <div class="tag">Fontes</div>
+  <div class="src-head">A FONTE É <span class="accent">ESTA.</span></div>
+  {slot_img(5, "SOURCE VISUAL", use_cutout=(style == "cutout"))}
+  <div class="src-list">{src_rows}</div>
+  <div class="cta-pt">{cta_pt}</div>
+  <div class="cta-en">{cta_en}</div>
+  <div class="footer-handle">{handle}</div>
+</div>
+""")
+
+    shared_css = f"""
+*{{box-sizing:border-box;margin:0;padding:0}}
+:root{{--ob:{brand['obsidian']};--pa:{brand['paper']};--ac:{brand['accent']};--mu:{brand['muted']};--W:1080px;--H:1350px;--P:100px}}
+body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px;font-family:'Inter',sans-serif}}
+.slide{{width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);padding:var(--P);position:relative;overflow:hidden;display:flex;flex-direction:column}}
+.shared-shell{{position:relative}}
+.shared-bg{{position:absolute;inset:0;background-size:cover;background-position:center;opacity:.24;filter:grayscale(.08) contrast(1.14) brightness(.9)}}
+.shared-shell > *:not(.shared-bg){{position:relative;z-index:2}}
+.tag{{font-family:'JetBrains Mono',monospace;font-size:24px;color:var(--mu);margin-bottom:22px;text-transform:uppercase}}
+.accent{{color:var(--ac)}}
+.cover-hl{{font-family:'Fraunces',serif;font-size:96px;line-height:1.02;text-transform:uppercase;margin-bottom:18px}}
+.cover-en,.slide-en,.cta-en{{font-style:italic;color:var(--mu)}}
+.slide-hl{{font-family:'Fraunces',serif;font-size:64px;line-height:1.08;text-transform:uppercase;margin-bottom:8px}}
+.item-list{{list-style:none;flex:1}}
+.item-list li{{font-size:32px;line-height:1.3;padding:14px 0;border-bottom:1px solid rgba(242,236,224,.12)}}
+.item-list li::before{{content:"→ ";color:var(--ac)}}
+.nums-grid{{display:grid;grid-template-columns:1fr 1fr;gap:18px}}
+.num-block{{background:rgba(244,196,48,.08);border:1px solid rgba(244,196,48,.2);padding:18px;border-radius:8px}}
+.num-val{{font-family:'Fraunces',serif;font-size:58px;color:var(--ac)}}
+.num-label{{font-size:22px}}
+.quote-block{{background:rgba(0,0,0,.32);border-left:4px solid var(--ac);padding:24px 26px;margin-top:8px}}
+.quote-text{{font-size:34px;line-height:1.35}}
+.quote-source{{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--mu);margin-top:10px}}
+.ill-panel{{width:100%;min-height:220px;max-height:320px;margin:14px 0 16px;border:2px solid rgba(244,196,48,.45);border-radius:8px;overflow:hidden;background:#151515;display:flex;align-items:center;justify-content:center}}
+.ill-photo{{width:100%;height:100%;object-fit:cover;filter:contrast(1.2) saturate(1.08)}}
+.ill-empty{{border-style:dashed;color:rgba(244,196,48,.55);font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:.12em}}
+.cutout-wrap{{width:100%;min-height:220px;max-height:320px;margin:14px 0 16px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}}
+.cutout-img{{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 10px 26px rgba(0,0,0,.38)) contrast(1.1) saturate(1.05)}}
+.cutout-empty{{border:2px dashed rgba(244,196,48,.45);border-radius:8px;align-items:center;color:rgba(244,196,48,.52);font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:.12em}}
+.src-head{{font-family:'Fraunces',serif;font-size:68px;line-height:1.0;text-transform:uppercase;margin-bottom:22px}}
+.src-list{{flex:1;overflow:hidden}}
+.src-row{{display:flex;gap:14px;padding:8px 0;border-bottom:1px solid rgba(242,236,224,.09);font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--mu)}}
+.src-num{{color:var(--ac);width:32px;flex-shrink:0}}
+.cta-pt{{font-size:34px;font-weight:700;margin-top:18px}}
+.swipe{{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--mu);position:absolute;right:var(--P);bottom:var(--P)}}
+.footer-handle{{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--mu);position:absolute;left:var(--P);bottom:var(--P)}}
+"""
+
+    full = f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>News Shared Template — {style} — {slug}</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;1,9..144,700&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>{shared_css}</style>
+</head>
+<body>
+{''.join(html)}
+</body>
+</html>"""
+
+    html_path = Path(work_dir) / "cover.html"
+    html_path.write_text(full)
     return str(html_path)
 
 
