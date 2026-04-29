@@ -23,7 +23,7 @@ File naming convention:
   {content_word}_{provider_slug}_slide{N}.png
   e.g. driveway_nb2_slide2.png  |  kitchen_seedream45_slide3.png
 """
-import base64, json, os, re, time, urllib.request, urllib.parse
+import base64, json, os, random, re, time, urllib.request, urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
@@ -261,6 +261,29 @@ def fetch_wikimedia(query: str, work_dir: str, filename: str) -> str:
         return ""
 
 
+_STOCK_JUNK = re.compile(
+    r'\b(wikimedia|commons|pexels|pixabay|oak\s+park|illinois|'
+    r'residential|suburban|commercial|installation|installing|installed|installed|'
+    r'aluminum|galvanized|untreated|reinforced|grade|contractor|'
+    r'restraint|fascia|joist|truss|sill|corten|'
+    r'wiki|photo|image|picture)\b',
+    re.IGNORECASE,
+)
+
+
+def _simplify_stock_query(query: str, max_words: int = 4) -> str:
+    """Strip technical jargon so Pixabay/Pexels visual search returns relevant results.
+
+    Stock photo APIs match on common visual terms, not construction product names.
+    'metal aluminum paver edge restraint strip' → 'metal paver strip outdoor'
+    """
+    clean = _STOCK_JUNK.sub(' ', query)
+    clean = re.sub(r'\s+', ' ', clean).strip()
+    words = [w for w in clean.split() if len(w) > 2][:max_words]
+    result = ' '.join(words)
+    return result if len(result) > 3 else query.split()[0]  # last resort: first word
+
+
 def fetch_pexels(query: str, work_dir: str, filename: str) -> str:
     """Search Pexels for a royalty-free portrait photo. Returns rel path or ''."""
     if not PEXELS_KEY or not query:
@@ -269,23 +292,25 @@ def fetch_pexels(query: str, work_dir: str, filename: str) -> str:
     if _cached(dest):
         return _rel(filename)
     try:
-        q = urllib.parse.quote_plus(query[:100])
-        url = f"https://api.pexels.com/v1/search?query={q}&per_page=3&orientation=portrait"
+        stock_q = _simplify_stock_query(query)
+        q = urllib.parse.quote_plus(stock_q[:100])
+        url = f"https://api.pexels.com/v1/search?query={q}&per_page=5&orientation=portrait"
         req = urllib.request.Request(url, headers={
             "Authorization": PEXELS_KEY,
             "User-Agent": "carousel-builder/1.0",
         })
         data = json.loads(urllib.request.urlopen(req, timeout=10).read())
-        photos = data.get("photos", [])
+        photos = data.get("photos", [])[:3]
         if not photos:
             return ""
-        img_url = photos[0]["src"]["large"]
+        photo = random.choice(photos)
+        img_url = photo["src"]["large"]
         with urllib.request.urlopen(img_url, timeout=20) as r:
             raw = r.read()
         if len(raw) < 5000:
             return ""
         dest.write_bytes(raw)
-        print(f"  {filename} ← Pexels '{query[:50]}'")
+        print(f"  {filename} ← Pexels '{stock_q[:50]}'")
         return _rel(filename)
     except Exception as e:
         _log_failure(f"pexels/{query[:40]}", e)
@@ -300,18 +325,20 @@ def fetch_pixabay(query: str, work_dir: str, filename: str) -> str:
     if _cached(dest):
         return _rel(filename)
     try:
-        q = urllib.parse.quote_plus(query[:100])
+        stock_q = _simplify_stock_query(query)
+        q = urllib.parse.quote_plus(stock_q[:100])
         url = (
             f"https://pixabay.com/api/?key={PIXABAY_KEY}&q={q}"
-            f"&image_type=photo&orientation=vertical&per_page=3&safesearch=true"
+            f"&image_type=photo&orientation=vertical&per_page=5&safesearch=true"
         )
         search_req = urllib.request.Request(url, headers={"User-Agent": "carousel-builder/1.0"})
         with urllib.request.urlopen(search_req, timeout=15) as r:
             data = json.loads(r.read())
-        hits = data.get("hits", [])
+        hits = data.get("hits", [])[:3]
         if not hits:
             return ""
-        img_url = hits[0].get("largeImageURL") or hits[0].get("webformatURL", "")
+        hit = random.choice(hits)  # random from top-3 to avoid cross-query duplicates
+        img_url = hit.get("largeImageURL") or hit.get("webformatURL", "")
         if not img_url:
             return ""
         dl_req = urllib.request.Request(img_url, headers={"User-Agent": "carousel-builder/1.0"})
@@ -320,7 +347,7 @@ def fetch_pixabay(query: str, work_dir: str, filename: str) -> str:
         if len(raw) < 5000:
             return ""
         dest.write_bytes(raw)
-        print(f"  {filename} ← Pixabay '{query[:50]}'")
+        print(f"  {filename} ← Pixabay '{stock_q[:50]}'")
         return _rel(filename)
     except Exception as e:
         _log_failure(f"pixabay/{query[:40]}", e)
