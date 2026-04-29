@@ -26,7 +26,6 @@ RESURFACE_TIMERS = {
     "Label_10":                       14,   # 🏥 Health / Insurance
     "Label_4":                        14,   # 📊 Google Business
     "Label_6":                         7,   # 🤖 Automation
-    "Label_5":                         1,   # 🚨 Automation Errors
     "Label_3141389375098560388":        4,   # THUMBTACK
 }
 
@@ -39,7 +38,6 @@ LABEL_NAMES = {
     "Label_10":  "Health/Insurance",
     "Label_4":   "Google Business",
     "Label_6":   "Automation",
-    "Label_5":   "Automation Errors",
     "Label_3141389375098560388": "THUMBTACK",
 }
 

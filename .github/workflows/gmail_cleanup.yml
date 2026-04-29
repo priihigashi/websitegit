@@ -1,15 +1,14 @@
-name: Gmail Monthly Cleanup (trash 60+ day archived)
+name: Gmail Monthly Cleanup (trash archived by label policy)
 
-# Runs on the 1st of each month. Moves to Trash any archived (not in inbox)
-# messages under the listed labels that are older than 60 days.
-# Gmail auto-empties Trash after 30 more days, so effective total retention ≈ 90 days.
+# Runs on the 1st of each month. Moves to Trash archived (not in inbox)
+# messages by per-label age threshold.
 #
 # Labels cleaned:
-#   🤖 Automation/Captures
-#   🤖 Automation/Daily Digests
-#   🤖 Automation/Notifications
-#   📬 Promos & News
-#   google ads help
+#   🤖 Automation/Captures       → 180d
+#   🤖 Automation/Daily Digests  → 60d
+#   🤖 Automation/Notifications  → 60d
+#   📬 Promos & News             → 60d
+#   google ads help              → 60d
 
 on:
   schedule:
@@ -49,23 +48,23 @@ jobs:
           gmail = build("gmail", "v1", credentials=creds)
           labels = {l["name"]: l["id"] for l in gmail.users().labels().list(userId="me").execute().get("labels", [])}
 
-          LABELS_TO_CLEAN = [
-              "🤖 Automation/Captures",
-              "🤖 Automation/Daily Digests",
-              "🤖 Automation/Notifications",
-              "📬 Promos & News",
-              "google ads help",
-          ]
+          LABEL_RETENTION_DAYS = {
+              "🤖 Automation/Captures": 180,
+              "🤖 Automation/Daily Digests": 60,
+              "🤖 Automation/Notifications": 60,
+              "📬 Promos & News": 60,
+              "google ads help": 60,
+          }
 
           total_trashed = 0
 
-          for name in LABELS_TO_CLEAN:
+          for name, days in LABEL_RETENTION_DAYS.items():
               lid = labels.get(name)
               if not lid:
                   print(f"  skip: label '{name}' not found")
                   continue
-              # Archived (not in inbox) + label + older than 60 days
-              q = f"label:{lid} -in:inbox older_than:60d"
+              # Archived (not in inbox) + label + older than label-specific threshold
+              q = f"label:{lid} -in:inbox older_than:{days}d"
               trashed = 0
               page_token = None
               while True:
@@ -79,7 +78,7 @@ jobs:
                   page_token = resp.get("nextPageToken")
                   if not page_token:
                       break
-              print(f"  {name}: trashed {trashed}")
+              print(f"  {name}: trashed {trashed} (>{days}d)")
               total_trashed += trashed
 
           print(f"\nTotal trashed: {total_trashed}")

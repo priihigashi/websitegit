@@ -3,7 +3,7 @@
 Gmail filter + label setup for priscila@oakpark-construction.com.
 
 Creates nested automation sub-labels and Gmail filters that:
-  - Route automation self-emails to nested labels (keep in inbox, archived later by gmail_archive.yml)
+  - Route automation self-emails to nested labels (some skip inbox immediately)
   - Skip-inbox for sales/subscription junk (Google Ads reps, Tasty Lunchboxes, Freepik, Zapier)
   - Label ✅ 4AM Content Ready + star it
   - Label Google security alerts
@@ -28,6 +28,7 @@ SUB_LABELS_TO_CREATE = [
     "🤖 Automation/Captures",
     "🤖 Automation/Daily Digests",
     "🤖 Automation/Notifications",
+    "🤖 Automation/Pending Approval",
 ]
 
 
@@ -70,11 +71,22 @@ def criteria_match(a: dict, b: dict) -> bool:
     return {k: a.get(k) for k in keys} == {k: b.get(k) for k in keys}
 
 
+def action_match(a: dict, b: dict) -> bool:
+    return sorted(a.get("addLabelIds", [])) == sorted(b.get("addLabelIds", [])) and \
+        sorted(a.get("removeLabelIds", [])) == sorted(b.get("removeLabelIds", []))
+
+
 def ensure_filter(gmail, criteria: dict, action: dict, existing_filters: list, description: str):
     for f in existing_filters:
         if criteria_match(f.get("criteria", {}), criteria):
-            print(f"  skip (exists): {description}")
-            return
+            if action_match(f.get("action", {}), action):
+                print(f"  skip (exists): {description}")
+                return
+            # Criteria exists but action differs: replace stale filter in-place.
+            gmail.users().settings().filters().delete(userId="me", id=f["id"]).execute()
+            print(f"  replaced filter (action changed): {description} [{f['id']}]")
+            existing_filters.remove(f)
+            break
     body = {"criteria": criteria, "action": action}
     try:
         res = gmail.users().settings().filters().create(userId="me", body=body).execute()
@@ -100,6 +112,7 @@ def main():
     LID_CAPTURES = existing["🤖 Automation/Captures"]
     LID_DIGESTS = existing["🤖 Automation/Daily Digests"]
     LID_NOTIFS = existing["🤖 Automation/Notifications"]
+    LID_PENDING_APPROVAL = existing["🤖 Automation/Pending Approval"]
     LID_AUTO_ERRORS = existing.get("🚨 Automation Errors")
     LID_4AM = existing.get("Reports/4AM Agent")
     LID_GADS_HELP = existing.get("google ads help")
@@ -123,13 +136,13 @@ def main():
 
     print("\nCreating filters...")
 
-    # 1) Capture done — route to Captures
+    # 1) Capture done — route to Captures and skip inbox (high-volume noise)
     ensure_filter(
         gmail,
         {"from": "priscila@oakpark-construction.com", "subject": "Capture done"},
-        {"addLabelIds": [LID_CAPTURES]},
+        {"addLabelIds": [LID_CAPTURES], "removeLabelIds": ["INBOX"]},
         existing_filters,
-        "Capture done → 🤖 Automation/Captures",
+        "Capture done → 🤖 Automation/Captures, skip inbox",
     )
 
     # 2) CAPTURE FAILED — route to Automation Errors
@@ -157,6 +170,15 @@ def main():
         {"addLabelIds": [LID_DIGESTS]},
         existing_filters,
         "Calendar Optimized → 🤖 Automation/Daily Digests",
+    )
+
+    # 4b) Approval nudges — route to pending-approval label and skip inbox
+    ensure_filter(
+        gmail,
+        {"from": "priscila@oakpark-construction.com", "query": "subject:(waiting for your approval)"},
+        {"addLabelIds": [LID_PENDING_APPROVAL], "removeLabelIds": ["INBOX"]},
+        existing_filters,
+        "approval reminder → 🤖 Automation/Pending Approval, skip inbox",
     )
 
     # 5) 4AM Agent FAILED / ran OK — route to Notifications (not ✅ Content Ready emails)

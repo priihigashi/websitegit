@@ -1,14 +1,14 @@
-name: Gmail Inbox Auto-Archive (daily)
+name: Gmail Inbox Auto-Archive (every 2h)
 
-# Gmail filters can't archive on a timer — this runs daily at 5PM ET and
+# Gmail filters can't archive on a timer — this runs every 2 hours and
 # archives (removes INBOX label) messages labeled as automation output
 # whose age exceeds the per-label threshold.
 #
 # Labels drained:
-#   🤖 Automation/Captures       → archived after 6h
-#   🤖 Automation/Daily Digests  → archived after 24h (1d)
-#   🤖 Automation/Notifications  → archived after 24h (1d)
-#   google ads help              → archived after 24h (1d)
+#   🤖 Automation/Captures       → archived after 18h
+#   🤖 Automation/Daily Digests  → archived after 12h
+#   🤖 Automation/Notifications  → archived after 12h
+#   google ads help              → archived after 12h
 #   🔒 Security                  → archived after 7d
 #
 # Note: Gmail's search `older_than` supports d/m/y only — no hours. For 6h we
@@ -16,7 +16,7 @@ name: Gmail Inbox Auto-Archive (daily)
 
 on:
   schedule:
-    - cron: '0 21 * * *'   # 21:00 UTC = 5 PM ET (DST) / 4 PM ET (standard). Close enough.
+    - cron: '0 */2 * * *'
   workflow_dispatch:
 
 jobs:
@@ -56,10 +56,10 @@ jobs:
 
           # Each rule: (label name, min age in hours)
           RULES = [
-              ("🤖 Automation/Captures",      6),
-              ("🤖 Automation/Daily Digests", 24),
-              ("🤖 Automation/Notifications", 24),
-              ("google ads help",             24),
+              ("🤖 Automation/Captures",      18),
+              ("🤖 Automation/Daily Digests", 12),
+              ("🤖 Automation/Notifications", 12),
+              ("google ads help",             12),
               ("🔒 Security",                 24 * 7),
           ]
 

@@ -2,8 +2,7 @@ name: Approval Check — Daily Content Replies
 
 on:
   schedule:
-    - cron: '0 18 * * *'   # 2:00 PM ET (UTC-4) = 18:00 UTC
-    - cron: '0 0 * * *'    # 8:00 PM ET (UTC-4) = 00:00 UTC  ← catches evening replies
+    - cron: '30 * * * *'   # every hour at :30 UTC (continuous reply pickup)
   workflow_dispatch:        # manual trigger anytime from GitHub Actions UI
 
 jobs:
