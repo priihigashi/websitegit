@@ -35,6 +35,37 @@ except Exception as _ip_err:
         print(f"  ❌ [{stage}]: {error}")
     print(f"  Warning: image_providers/prompt_builder not loaded ({_ip_err}) — using legacy cascade")
 
+try:
+    from vision_validator import validate_image as _vision_validate
+    _VISION_AVAILABLE = True
+except Exception as _vv_err:
+    _VISION_AVAILABLE = False
+    def _vision_validate(_p, _q):
+        return True, "skipped (vision_validator not loaded)"
+    print(f"  Warning: vision_validator not loaded ({_vv_err})")
+
+
+def _vision_accept(local_path, query, label):
+    """Return True if Vision says image matches query. Logs the verdict.
+    Empty path or empty query short-circuits to True so we never block on
+    missing inputs."""
+    if not local_path or not query:
+        return True
+    try:
+        ok, reason = _vision_validate(local_path, query)
+        if ok:
+            print(f"  Vision OK ({label}): {reason[:120]}")
+        else:
+            print(f"  Vision REJECT ({label}): {reason[:120]}")
+            try:
+                __import__("os").unlink(local_path)
+            except Exception:
+                pass
+        return ok
+    except Exception as e:
+        print(f"  Vision check error ({label}, non-fatal): {e}")
+        return True
+
 
 def _claude_with_fallback(prompt, *, max_tokens, timeout=60, context=""):
     """Try the Claude→OpenAI→Gemini cascade; if the shared module is unavailable,
@@ -914,6 +945,7 @@ def fetch_all_media(content, niche, work_dir):
 
         # Step 1 — named persons go straight to real photo (Wiki REST + Wikimedia Commons).
         # Editorial rule: never AI-generate public figures' faces.
+        # Person matches skip Vision validation (Wiki REST already targets the named person by URL).
         if subject_type == "person" and search_q:
             c = _fetch_person_photo(search_q, work_dir, cover_fname)
             if c:
@@ -929,24 +961,24 @@ def fetch_all_media(content, niche, work_dir):
                 ) or ai_prompt
                 cover_fname = _make_img_filename(search_q, "ai", 1)
                 c, used_prov = _gen_ai_image(fresh_prompt, work_dir, cover_fname)
-                if c:
+                if c and _vision_accept(c, search_q, f"cover/{used_prov}"):
                     _set_cover(c, used_prov, "ai", query=search_q, prompt=fresh_prompt)
             elif ai_prompt:
                 # Legacy fallback when image_providers not available
                 c = _generate_gemini_image(ai_prompt, work_dir, cover_fname)
-                if c:
+                if c and _vision_accept(c, search_q, "cover/gemini"):
                     _set_cover(c, "gemini", "ai", query=search_q, prompt=ai_prompt)
                 if not paths["cover"]:
                     c = _generate_seedream_image(ai_prompt, work_dir, cover_fname)
-                    if c:
+                    if c and _vision_accept(c, search_q, "cover/seedream"):
                         _set_cover(c, "seedream", "ai", query=search_q, prompt=ai_prompt)
                 if not paths["cover"]:
                     c = _generate_ai_cover(ai_prompt, work_dir, cover_fname)
-                    if c:
+                    if c and _vision_accept(c, search_q, "cover/dall-e-3"):
                         _set_cover(c, "dall-e-3", "ai", query=search_q, prompt=ai_prompt)
                 if not paths["cover"]:
                     c = _generate_replicate_sdxl(ai_prompt, work_dir, cover_fname)
-                    if c:
+                    if c and _vision_accept(c, search_q, "cover/sdxl"):
                         _set_cover(c, "sdxl", "ai", query=search_q, prompt=ai_prompt)
 
         # Step 3 — real-photo fallback (Wiki CC → Pexels → Pixabay)
@@ -954,15 +986,16 @@ def fetch_all_media(content, niche, work_dir):
         # OR for persons whose Wikimedia REST lookup missed.
         if not paths["cover"] and search_q:
             c = _fetch_person_photo(search_q, work_dir, cover_fname)
-            if c:
+            # Wiki for non-persons gets Vision check; person path is exact-name match (skip)
+            if c and (subject_type == "person" or _vision_accept(c, search_q, "cover/wikimedia")):
                 _set_cover(c, "wikimedia", "cc", query=search_q)
             if not paths["cover"] and subject_type != "person":
                 c = _fetch_pexels_image(search_q, work_dir, cover_fname)
-                if c:
+                if c and _vision_accept(c, search_q, "cover/pexels"):
                     _set_cover(c, "pexels", "stock", query=search_q)
             if not paths["cover"] and subject_type != "person":
                 c = _fetch_pixabay_image(search_q, work_dir, cover_fname)
-                if c:
+                if c and _vision_accept(c, search_q, "cover/pixabay"):
                     _set_cover(c, "pixabay", "stock", query=search_q)
 
         # If cover is a person and all photo tiers missed, leave empty — the HTML
@@ -989,6 +1022,7 @@ def fetch_all_media(content, niche, work_dir):
         )
 
         img_path = ""
+        accepted = False
         # Tier 1: AI cascade — NB2 → Seedream 4.5 → Seedream 5.0 → Gemini → SDXL → DALL-E
         if _IMAGE_PROVIDERS_AVAILABLE:
             fresh_prompt = _build_img_prompt(
@@ -997,43 +1031,65 @@ def fetch_all_media(content, niche, work_dir):
             ) or ai_prompt
             fname = _make_img_filename(cq, "ai", i)
             img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname)
-            if img_path:
+            if img_path and _vision_accept(img_path, cq, f"slide{i}/{used_prov}"):
                 print(f"  Slide {i}: {used_prov} image for '{cq[:50]}'")
                 _set_slide(i, img_path, used_prov, "ai", query=cq, prompt=fresh_prompt)
+                accepted = True
+            else:
+                img_path = ""
         else:
             # Legacy fallback when image_providers not available
             img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
-            if img_path:
+            if img_path and _vision_accept(img_path, cq, f"slide{i}/gemini"):
                 _set_slide(i, img_path, "gemini", "ai", query=cq, prompt=ai_prompt)
-            if not img_path:
+                accepted = True
+            else:
+                img_path = ""
+            if not accepted:
                 img_path = _generate_seedream_image(ai_prompt, work_dir, fname)
-                if img_path:
+                if img_path and _vision_accept(img_path, cq, f"slide{i}/seedream"):
                     _set_slide(i, img_path, "seedream", "ai", query=cq, prompt=ai_prompt)
-            if not img_path:
+                    accepted = True
+                else:
+                    img_path = ""
+            if not accepted:
                 img_path = _generate_replicate_sdxl(ai_prompt, work_dir, fname)
-                if img_path:
+                if img_path and _vision_accept(img_path, cq, f"slide{i}/sdxl"):
                     _set_slide(i, img_path, "sdxl", "ai", query=cq, prompt=ai_prompt)
-            if not img_path:
+                    accepted = True
+                else:
+                    img_path = ""
+            if not accepted:
                 img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
-                if img_path:
+                if img_path and _vision_accept(img_path, cq, f"slide{i}/dall-e-3"):
                     _set_slide(i, img_path, "dall-e-3", "ai", query=cq, prompt=ai_prompt)
+                    accepted = True
+                else:
+                    img_path = ""
 
         # Tier 2: real-photo fallback (Wiki CC → Pexels → Pixabay) — only when AI exhausted
-        if not img_path:
+        if not accepted:
             img_path = _fetch_person_photo(cq, work_dir, fname)
-            if img_path:
+            if img_path and _vision_accept(img_path, cq, f"slide{i}/wikimedia"):
                 print(f"  Slide {i}: Wikimedia fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "wikimedia", "cc", query=cq, prompt=ai_prompt)
-        if not img_path:
+                accepted = True
+            else:
+                img_path = ""
+        if not accepted:
             img_path = _fetch_pexels_image(cq, work_dir, fname)
-            if img_path:
+            if img_path and _vision_accept(img_path, cq, f"slide{i}/pexels"):
                 print(f"  Slide {i}: Pexels fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "pexels", "stock", query=cq, prompt=ai_prompt)
-        if not img_path:
+                accepted = True
+            else:
+                img_path = ""
+        if not accepted:
             img_path = _fetch_pixabay_image(cq, work_dir, fname)
-            if img_path:
+            if img_path and _vision_accept(img_path, cq, f"slide{i}/pixabay"):
                 print(f"  Slide {i}: Pixabay fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "pixabay", "stock", query=cq, prompt=ai_prompt)
+                accepted = True
 
     fetched_total = (1 if paths["cover"] else 0) + len(paths["slides"])
     print(f"  Media fetch: {fetched_total} image(s) ready (cover={bool(paths['cover'])}, slides={list(paths['slides'].keys())})")

@@ -40,6 +40,7 @@ from image_providers import (
     PROVIDER_NB2, DEFAULT_AI_CASCADE,
 )
 from prompt_builder import build_image_prompt, build_stock_query as _build_stock_query, extract_slide_texts as _extract_slide_texts
+from vision_validator import validate_image as _vision_validate
 
 # ── Credentials ───────────────────────────────────────────────────────────────
 CREDENTIALS = os.environ.get(
@@ -356,6 +357,29 @@ def fix_version_folder(
         stock_q = _build_stock_query(slide_text, query, niche)
         img_path, used_provider, source_type = None, "", ""
 
+        # Vision-validation query — what we want the image to depict
+        vision_query = slide_text or query
+
+        def _accept_or_reject(candidate_path, source_label):
+            """Return (img_path, provider, source_type) if image passes dedup +
+            Vision check; else (None, '', '') so the cascade keeps trying."""
+            local_candidate = local_dir / "resources" / "images" / filename
+            if not local_candidate.exists():
+                return None, "", ""
+            img_hash = hashlib.md5(local_candidate.read_bytes()).hexdigest()
+            if img_hash in seen_hashes:
+                print(f"    {source_label} duplicate (md5 match) — rejecting")
+                local_candidate.unlink()
+                return None, "", ""
+            ok, reason = _vision_validate(str(local_candidate), vision_query)
+            if not ok:
+                print(f"    {source_label} Vision REJECT — {reason[:120]}")
+                local_candidate.unlink()
+                return None, "", ""
+            seen_hashes.add(img_hash)
+            print(f"    {source_label} accepted — {reason[:120]}")
+            return candidate_path, source_label, ""
+
         # Step 2: AI cascade FIRST — produces realistic, prompt-specific images
         # (Real-photo search returns generic stock that often doesn't match technical
         # construction prompts and frequently duplicates across slides.)
@@ -365,17 +389,10 @@ def fix_version_folder(
                 skip_providers=skip_list,
             )
             source_type = "ai" if img_path else ""
-            # Duplicate guard for AI results
             if img_path:
-                local_candidate = local_dir / "resources" / "images" / filename
-                if local_candidate.exists():
-                    img_hash = hashlib.md5(local_candidate.read_bytes()).hexdigest()
-                    if img_hash in seen_hashes:
-                        print(f"    AI result duplicate — falling through to real-photo fallback")
-                        local_candidate.unlink()
-                        img_path, used_provider, source_type = None, "", ""
-                    else:
-                        seen_hashes.add(img_hash)
+                accepted, _, _ = _accept_or_reject(img_path, used_provider or "ai")
+                if not accepted:
+                    img_path, used_provider, source_type = None, "", ""
 
         # Step 3: Real-photo fallback (Wikimedia → Pexels → Pixabay)
         # Used when AI cascade fails OR for named persons (subject_type=="person")
@@ -384,15 +401,9 @@ def fix_version_folder(
             img_path, used_provider = fetch_real_photo(query, str(local_dir), filename, stock_query=stock_q)
             source_type = "cc" if used_provider == "wikimedia" else ("stock" if used_provider else "")
             if img_path:
-                local_candidate = local_dir / "resources" / "images" / filename
-                if local_candidate.exists():
-                    img_hash = hashlib.md5(local_candidate.read_bytes()).hexdigest()
-                    if img_hash in seen_hashes:
-                        print(f"    Real-photo result duplicate — all tiers exhausted for {slot_label}")
-                        local_candidate.unlink()
-                        img_path, used_provider, source_type = None, "", ""
-                    else:
-                        seen_hashes.add(img_hash)
+                accepted, _, _ = _accept_or_reject(img_path, used_provider or "real-photo")
+                if not accepted:
+                    img_path, used_provider, source_type = None, "", ""
 
         if not img_path:
             print(f"    All tiers failed for {slot_label}")
@@ -492,15 +503,27 @@ def main():
 
     drive = _drive()
 
-    # List version folders one level down
-    top_folders = _list_folders(drive, args.folder)
-    version_folders = [f for f in top_folders if re.match(r"v\d+_", f["name"])]
+    # Detect input shape: is `--folder` itself a version folder, a series folder,
+    # or the top-level carousel parent?
+    folder_meta = drive.files().get(
+        fileId=args.folder, fields="id,name", supportsAllDrives=True,
+    ).execute()
+    input_name = folder_meta.get("name", "")
+    children = _list_folders(drive, args.folder)
+    has_resources = any(c["name"] == "resources" for c in children)
+    has_cover_html = bool(_find_file(drive, args.folder, "cover.html"))
 
-    # Also scan one level deeper (series subfolders → version folders inside)
-    for tf in top_folders:
-        if not re.match(r"v\d+_", tf["name"]):
-            sub = _list_folders(drive, tf["id"])
-            version_folders.extend([f for f in sub if re.match(r"v\d+_", f["name"])])
+    if has_resources or has_cover_html or re.match(r"v\d+_", input_name or ""):
+        # Input IS a version folder — process directly.
+        version_folders = [{"id": args.folder, "name": input_name or args.folder}]
+        print(f"  Input detected as version folder — processing directly.")
+    else:
+        # Input is a parent folder — find v\d+_ children one or two levels deep.
+        version_folders = [f for f in children if re.match(r"v\d+_", f["name"])]
+        for tf in children:
+            if not re.match(r"v\d+_", tf["name"]):
+                sub = _list_folders(drive, tf["id"])
+                version_folders.extend([f for f in sub if re.match(r"v\d+_", f["name"])])
 
     version_folders.sort(key=lambda f: f["name"])
     print(f"\nFound {len(version_folders)} version folder(s) to inspect.")
