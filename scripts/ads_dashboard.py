@@ -148,8 +148,10 @@ def get_config_data(ga, customer_id):
 
 
 def get_change_log(ga, customer_id):
-    """Pull last 30 days of change events for the campaign. API hard limit: 30 days."""
+    """Pull recent change events for the campaign. API hard limit: start date <30 days ago."""
     events = []
+    today = datetime.date.today()
+    start = today - datetime.timedelta(days=29)
     try:
         r = ga.search(customer_id=customer_id, query=f"""
             SELECT change_event.change_date_time,
@@ -161,7 +163,8 @@ def get_change_log(ga, customer_id):
                    change_event.campaign,
                    change_event.ad_group
             FROM change_event
-            WHERE change_event.change_date_time DURING LAST_30_DAYS
+            WHERE change_event.change_date_time >= '{start} 00:00:00'
+              AND change_event.change_date_time <= '{today} 23:59:59'
               AND change_event.campaign = 'customers/{customer_id}/campaigns/{CAMPAIGN_ID}'
             ORDER BY change_event.change_date_time DESC
             LIMIT 100
