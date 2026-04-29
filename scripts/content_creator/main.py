@@ -57,6 +57,13 @@ QUEUE_TAB   = "📋 Content Queue"
 CATALOG_TAB = "📸 Project Content Catalog"
 
 ALERT_EMAIL = os.environ.get("ALERT_EMAIL", "priscila@oakpark-construction.com")
+TEMPLATE_ROTATION_MODE = os.environ.get("TEMPLATE_ROTATION_MODE", "weekday").strip().lower()
+TEMPLATE_ROTATION_ENABLED = os.environ.get("TEMPLATE_ROTATION_ENABLED", "1").strip().lower() not in ("0", "false", "no")
+MANUAL_MODE = os.environ.get("MANUAL_MODE", "0").strip().lower() in ("1", "true", "yes")
+MANUAL_TOPIC = os.environ.get("MANUAL_TOPIC", "").strip()
+MANUAL_NICHE = os.environ.get("MANUAL_NICHE", "").strip().lower()
+MANUAL_TEMPLATE = os.environ.get("MANUAL_TEMPLATE", "auto").strip().lower()
+MANUAL_TEMPLATE_SET = os.environ.get("MANUAL_TEMPLATE_SET", "").strip().lower()
 
 
 def _send_alert(msg: str):
@@ -101,6 +108,80 @@ def _safe_float(val, default=0.0):
         return float(val)
     except (TypeError, ValueError):
         return default
+
+
+def _weekday_template(day_idx):
+    """Mon(0)→Sun(6) mapping for OPC template rotation.
+    Keeps current "tip" frequently, introduces "illustrated" on set days."""
+    weekday_map = {
+        0: "illustrated",  # Monday
+        1: "tip",          # Tuesday
+        2: "cutout",       # Wednesday
+        3: "tip",          # Thursday
+        4: "illustrated",  # Friday
+        5: "progress",     # Saturday
+        6: "tip",          # Sunday
+    }
+    return weekday_map.get(day_idx, "tip")
+
+
+def _resolve_opc_template(topic_entry, topic, run_date):
+    """Choose OPC template route with deterministic rotation.
+    Priority: explicit sheet override > rotation mode > default tip."""
+    explicit = (topic_entry.get("template_key") or "").strip().lower()
+    if explicit in ("tip", "progress", "illustrated", "cutout"):
+        return explicit
+
+    if not TEMPLATE_ROTATION_ENABLED:
+        return "tip"
+
+    mode = TEMPLATE_ROTATION_MODE
+    if mode == "alternate":
+        parity_seed = f"{run_date}|{topic or ''}"
+        return "illustrated" if (sum(ord(c) for c in parity_seed) % 2 == 0) else "cutout"
+    if mode == "weekday":
+        day_idx = datetime.now(ET).weekday()
+        return _weekday_template(day_idx)
+    return "tip"
+
+
+def _resolve_news_template(topic_entry, niche):
+    """Brazil/USA template routing.
+    Priority:
+    1) explicit template_key in sheet
+    2) default native motion-first style
+    3) every 3rd day, use shared template (illustrated/cutout alternating)
+    """
+    explicit = (topic_entry.get("template_key") or "").strip().lower()
+    if explicit in ("native", "illustrated", "cutout"):
+        return None if explicit == "native" else explicit
+    if not TEMPLATE_ROTATION_ENABLED:
+        return None
+    if TEMPLATE_ROTATION_MODE != "weekday":
+        return None
+    now = datetime.now(ET)
+    day_idx = now.weekday()
+    # Even/odd ISO week number alternates template assignments so both
+    # illustrated and cutout rotate through each weekday slot over 2 weeks.
+    week_parity = now.isocalendar()[1] % 2  # 0 = even week, 1 = odd week
+    # Brazil: native motion (Rachadinha-style) is the priority.
+    # Shared template fires on Wed + Sat only (2 consecutive native days before each).
+    # Even week: Wed=illustrated, Sat=cutout
+    # Odd  week: Wed=cutout,      Sat=illustrated
+    if niche == "brazil":
+        if day_idx == 2:   # Wednesday
+            return "illustrated" if week_parity == 0 else "cutout"
+        if day_idx == 5:   # Saturday
+            return "cutout" if week_parity == 0 else "illustrated"
+        return None
+    # USA: same alternating logic on Tue + Fri
+    if niche == "usa":
+        if day_idx == 1:   # Tuesday
+            return "illustrated" if week_parity == 0 else "cutout"
+        if day_idx == 4:   # Friday
+            return "cutout" if week_parity == 0 else "illustrated"
+        return None
+    return None
 
 
 def _normalize_niche(raw_niche, fmt=""):
@@ -742,14 +823,16 @@ def process_one_topic(topic_entry, run_date, drive):
     slug = topic[:40].lower().replace(" ", "-").replace("'", "").replace('"', '')
     slug = "".join(c for c in slug if c.isalnum() or c == "-")
     if niche == "opc":
-        _opc_type = topic_entry.get("template_key", "tip")
+        _opc_type = _resolve_opc_template(topic_entry, topic, run_date)
         post_id = f"opc-{_opc_type}-{run_date}-{slug[:20]}"
     elif niche == "usa":
-        post_id = f"usa-{run_date}-{slug[:20]}"
+        _tmpl = (topic_entry.get("template_key") or "native").lower()
+        post_id = f"usa-{_tmpl}-{run_date}-{slug[:20]}"
     elif series_override == "VERIFICAMOS":
         post_id = f"verificamos-{run_date}-{slug[:20]}"
     else:
-        post_id = f"brazil-{run_date}-{slug[:20]}"
+        _tmpl = (topic_entry.get("template_key") or "native").lower()
+        post_id = f"brazil-{_tmpl}-{run_date}-{slug[:20]}"
 
     print(f"\n{'='*60}")
     print(f"Processing: [{niche}] {topic}")
@@ -762,7 +845,9 @@ def process_one_topic(topic_entry, run_date, drive):
     if series_override == "VERIFICAMOS":
         template_key = "verificamos_clip" if fake_news_route == "A" else "verificamos"
     elif niche == "opc":
-        template_key = topic_entry.get("template_key", "tip")
+        template_key = _resolve_opc_template(topic_entry, topic, run_date)
+    elif niche in ("brazil", "usa"):
+        template_key = _resolve_news_template(topic_entry, niche)
     else:
         template_key = None
     content = generate_carousel_content(topic, niche, template_key, brief=brief)
@@ -1127,6 +1212,69 @@ def main():
     if WORK_DIR.exists():
         shutil.rmtree(WORK_DIR)
     WORK_DIR.mkdir(parents=True)
+
+    # Phase A: Manual build mode (workflow-dispatch controls) OR queue-driven build
+    if MANUAL_MODE and MANUAL_TOPIC and MANUAL_NICHE in ("opc", "brazil", "usa"):
+        print("\n--- Manual Mode: direct topic/template build ---")
+        print(f"  topic={MANUAL_TOPIC[:80]}")
+        print(f"  niche={MANUAL_NICHE}")
+        print(f"  template={MANUAL_TEMPLATE}")
+        print(f"  template_set={MANUAL_TEMPLATE_SET}")
+
+        if MANUAL_TEMPLATE_SET == "all":
+            if MANUAL_NICHE == "opc":
+                tkeys = ["tip", "illustrated", "cutout"]
+            else:
+                tkeys = ["native", "illustrated", "cutout"]
+        else:
+            tkeys = [MANUAL_TEMPLATE or "auto"]
+
+        manual_topics = []
+        for t in tkeys:
+            entry = {
+                "topic": MANUAL_TOPIC,
+                "niche": MANUAL_NICHE,
+                "brief": f"Manual run from workflow_dispatch. Template request: {t}",
+                "url": "",
+                "format": "",
+                "series_override": "",
+                "fake_news_route": "B",
+                "fake_news_confidence": 1.0,
+                "queue_row_idx": None,
+            }
+            if t not in ("", "auto"):
+                entry["template_key"] = t
+            manual_topics.append(entry)
+
+        drive = get_drive_service()
+        results = []
+        errors = []
+        for topic in manual_topics:
+            try:
+                result = process_one_topic(topic, run_date, drive)
+                if result:
+                    results.append(result)
+            except Exception as e:
+                err = f"manual '{topic['topic'][:40]}' ({topic.get('template_key','auto')}): {e}"
+                print(f"  ERROR processing {err}")
+                errors.append(err)
+
+        if not results:
+            _send_alert("Manual mode rendered zero carousels.\n" + ("\n".join(errors) if errors else "No errors captured."))
+            return
+
+        try:
+            send_preview(results, now_et.strftime("%Y-%m-%d"))
+        except Exception as e:
+            print(f"  Manual preview email send failed: {e}")
+
+        print(f"\n[content_creator] Manual mode done — {len(results)} posts")
+        results_file = WORK_DIR / "results.json"
+        try:
+            results_file.write_text(json.dumps(results, default=str))
+        except Exception as e:
+            print(f"  Could not write results.json: {e}")
+        return
 
     # Phase A: Promote fresh topics from Inspiration → Content Queue
     # Pre-approved Inspiration rows → CQ Status=Approved (auto-builds this run)
