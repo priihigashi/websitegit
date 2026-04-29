@@ -3,362 +3,127 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OPC — Google Ads Dashboard</title>
+<title>OPC &mdash; Google Ads Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0a0a0a; color: #f0ebe3; font-family: 'Inter', -apple-system, sans-serif; min-height: 100vh; }
-  .header { background: #0a0a0a; border-bottom: 1px solid #222; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
-  .logo { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #cbcc10; }
-  .updated { font-size: 11px; color: #666; }
-  .container { max-width: 960px; margin: 0 auto; padding: 20px 16px 60px; }
-
-  /* WARNINGS */
-  .warnings { margin-bottom: 24px; }
-  .warnings-title { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #ff4444; margin-bottom: 10px; }
-  .warning-card { background: #1a0a0a; border: 1px solid #ff4444; border-left: 4px solid #ff4444; border-radius: 6px; padding: 12px 16px; margin-bottom: 8px; display: flex; align-items: flex-start; gap: 10px; }
-  .warning-card.yellow { background: #1a1500; border-color: #f0a500; border-left-color: #f0a500; }
-  .warning-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
-  .warning-text { font-size: 13px; line-height: 1.5; }
-  .warning-text strong { color: #fff; }
-  .warning-action { font-size: 11px; color: #888; margin-top: 3px; }
-
-  /* KPI GRID */
-  .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
-  @media(min-width: 600px) { .kpi-grid { grid-template-columns: repeat(4, 1fr); } }
-  .kpi-card { background: #141414; border: 1px solid #222; border-radius: 8px; padding: 16px; }
-  .kpi-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #666; margin-bottom: 6px; }
-  .kpi-value { font-size: 26px; font-weight: 700; color: #f0ebe3; letter-spacing: -0.5px; }
-  .kpi-value.green { color: #cbcc10; }
-  .kpi-value.red { color: #ff4444; }
-  .kpi-sub { font-size: 11px; color: #555; margin-top: 4px; }
-
-  /* SECTION */
-  .section { margin-bottom: 28px; }
-  .section-title { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #666; margin-bottom: 12px; border-bottom: 1px solid #1a1a1a; padding-bottom: 8px; }
-
-  /* AD GROUP BARS */
-  .ag-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-  .ag-name { font-size: 12px; color: #aaa; width: 160px; flex-shrink: 0; }
-  .ag-bar-wrap { flex: 1; background: #1a1a1a; border-radius: 3px; height: 20px; overflow: hidden; }
-  .ag-bar { height: 100%; background: #cbcc10; border-radius: 3px; transition: width 0.6s ease; display: flex; align-items: center; padding-left: 6px; }
-  .ag-bar.dim { background: #333; }
-  .ag-bar-label { font-size: 10px; color: #0a0a0a; font-weight: 700; white-space: nowrap; }
-  .ag-meta { font-size: 11px; color: #555; width: 100px; flex-shrink: 0; text-align: right; }
-
-  /* KEYWORD TABLE */
-  .kw-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .kw-table th { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #555; text-align: left; padding: 8px 10px; border-bottom: 1px solid #1a1a1a; }
-  .kw-table td { padding: 8px 10px; border-bottom: 1px solid #111; color: #bbb; vertical-align: middle; }
-  .kw-table tr:hover td { background: #141414; }
-  .kw-tag { display: inline-block; background: #1a1a1a; border-radius: 3px; padding: 2px 6px; font-size: 10px; color: #666; margin-right: 4px; }
-  .badge-red { background: #2a0a0a; color: #ff6666; border-radius: 3px; padding: 2px 6px; font-size: 10px; }
-  .badge-green { background: #0a1a0a; color: #66cc66; border-radius: 3px; padding: 2px 6px; font-size: 10px; }
-
-  /* CHART */
-  .chart-wrap { background: #141414; border: 1px solid #1a1a1a; border-radius: 8px; padding: 16px; }
-  canvas { max-height: 200px; }
-
-  /* FOOTER */
-  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #1a1a1a; font-size: 11px; color: #444; text-align: center; }
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--cream:#F0EBE3;--obsidian:#0A0A0A;--lime:#CBCC10;--lime-dark:#9FA000;--red:#C0392B;--yellow:#E67E22;--border:#D6CFCA;--muted:#888;--card:#FFFFFF;--alt:#F8F4F0}
+body{background:var(--cream);color:var(--obsidian);font-family:'Roboto Condensed',-apple-system,sans-serif;min-height:100vh;font-size:15px}
+.header{background:var(--obsidian);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-family:'Anton',sans-serif;font-size:18px;letter-spacing:3px;color:var(--lime);text-transform:uppercase}
+.hdr-r{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.hdr-lbl{font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase}
+.hdr-val{font-size:12px;color:#aaa}
+.wrap{max-width:960px;margin:0 auto;padding:20px 14px 60px}
+.tabs{display:flex;gap:6px;margin-bottom:20px;overflow-x:auto;padding-bottom:2px}
+.tab{font-family:'Anton',sans-serif;font-size:13px;letter-spacing:1.5px;background:var(--card);border:2px solid var(--border);color:var(--muted);padding:7px 16px;border-radius:4px;cursor:pointer;white-space:nowrap;transition:all .15s}
+.tab:hover{border-color:var(--lime-dark);color:var(--obsidian)}
+.tab.on{background:var(--obsidian);border-color:var(--obsidian);color:var(--lime)}
+.slbl{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.warns{margin-bottom:22px}
+.wc{display:flex;gap:10px;align-items:flex-start;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--red);border-radius:6px;padding:12px 14px;margin-bottom:8px}
+.wc.y{border-left-color:var(--yellow)}
+.wc.g{border-left-color:#27AE60}
+.wi{font-size:14px;flex-shrink:0;margin-top:1px}
+.wt{font-size:13px;line-height:1.5;color:#333}
+.wt strong{color:var(--obsidian)}
+.wa{font-size:11px;color:var(--muted);margin-top:3px;font-style:italic}
+.kgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:22px}
+@media(min-width:540px){.kgrid{grid-template-columns:repeat(4,1fr)}}
+.kc{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px 14px}
+.klbl{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.kv{font-family:'Anton',sans-serif;font-size:28px;color:var(--obsidian);letter-spacing:-.5px;line-height:1}
+.kv.ac{color:var(--lime-dark)}
+.kv.dn{color:var(--red)}
+.ksb{font-size:11px;color:var(--muted);margin-top:5px}
+.sec{margin-bottom:22px}
+.sech{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.agr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.agn{font-size:11px;color:#555;width:140px;flex-shrink:0;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.agbw{flex:1;background:var(--alt);border-radius:3px;height:22px;overflow:hidden}
+.agb{height:100%;background:var(--lime);border-radius:3px;display:flex;align-items:center;padding-left:8px;transition:width .6s ease;min-width:4px}
+.agb.z{background:var(--border)}
+.agbl{font-size:11px;color:var(--obsidian);font-weight:700;white-space:nowrap}
+.agm{font-size:11px;color:var(--muted);width:100px;flex-shrink:0;text-align:right}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);background:var(--alt)}
+tbody td{padding:8px 10px;border-bottom:1px solid var(--border);color:#333;vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--alt)}
+.t{display:inline-block;background:var(--alt);border:1px solid var(--border);border-radius:3px;padding:2px 7px;font-size:10px;color:#555;font-weight:700;letter-spacing:.5px}
+.t.lm{background:#F5F6D0;border-color:var(--lime-dark);color:#5a5b00}
+.t.rd{background:#FDECEA;border-color:var(--red);color:var(--red)}
+.t.gn{background:#EAFAF1;border-color:#27AE60;color:#1a7a43}
+.t.yw{background:#FEF9E7;border-color:var(--yellow);color:#a04000}
+.t.gy{background:#F2F3F4;border-color:#999;color:#666}
+canvas{max-height:180px}
+.foot{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);text-align:center}
+@media(max-width:540px){.agn{width:100px;font-size:9px}.agm{width:80px;font-size:10px}}
 </style>
 </head>
 <body>
-
 <div class="header">
-  <div class="logo">OPC — Google Ads</div>
-  <div class="updated">Updated: <span id="updated-date"><!-- AUTO --></span> &nbsp;|&nbsp; Last 30 days</div>
+  <div class="logo">OPC &#8212; ADS</div>
+  <div class="hdr-r"><div class="hdr-lbl">Last Refresh</div><div class="hdr-val" id="ud">&#8212;</div></div>
 </div>
-
-<div class="container">
-
-  <!-- WARNINGS -->
-  <div class="warnings">
-    <div class="warnings-title">⚠ Requires Attention</div>
-    <div id="warnings-list"></div>
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab on" onclick="setP('30d')">30D</button>
+    <button class="tab" onclick="setP('60d')">60D</button>
+    <button class="tab" onclick="setP('90d')">90D</button>
+    <button class="tab" onclick="setP('6mo')">6 MO</button>
+    <button class="tab" onclick="setP('12mo')">12 MO</button>
   </div>
-
-  <!-- KPIs -->
-  <div class="kpi-grid">
-    <div class="kpi-card">
-      <div class="kpi-label">Total Spend</div>
-      <div class="kpi-value" id="kpi-spend">—</div>
-      <div class="kpi-sub">Last 30 days</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Clicks</div>
-      <div class="kpi-value green" id="kpi-clicks">—</div>
-      <div class="kpi-sub" id="kpi-ctr">—</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Calls / Conversions</div>
-      <div class="kpi-value" id="kpi-calls">—</div>
-      <div class="kpi-sub" id="kpi-cpl">—</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Avg CPC</div>
-      <div class="kpi-value" id="kpi-cpc">—</div>
-      <div class="kpi-sub">Per click</div>
+  <div class="warns"><div class="slbl">&#9888; Requires Attention</div><div id="wl"></div></div>
+  <div class="kgrid">
+    <div class="kc"><div class="klbl">Total Spend</div><div class="kv" id="ks">&#8212;</div><div class="ksb" id="kpl">&#8212;</div></div>
+    <div class="kc"><div class="klbl">Clicks</div><div class="kv ac" id="kclk">&#8212;</div><div class="ksb" id="kctr">&#8212;</div></div>
+    <div class="kc"><div class="klbl">Calls / Conv</div><div class="kv" id="kc">&#8212;</div><div class="ksb" id="kcpl">&#8212;</div></div>
+    <div class="kc"><div class="klbl">Avg CPC</div><div class="kv" id="kcpc">&#8212;</div><div class="ksb">Per click</div></div>
+  </div>
+  <div class="sec"><div class="sech">Spend by Ad Group</div><div class="card"><div id="agb"></div></div></div>
+  <div class="sec"><div class="sech">Top Keywords &#8212; Spend vs Conversions</div><div class="card"><canvas id="ch"></canvas></div></div>
+  <div class="sec"><div class="sech">Top Keywords by Spend</div>
+    <div class="card" style="padding:0;overflow:hidden;border-radius:8px">
+      <table><thead><tr><th>Keyword</th><th>Group</th><th>Spend</th><th>Clicks</th><th>CTR</th><th>Conv</th></tr></thead><tbody id="kwt"></tbody></table>
     </div>
   </div>
-
-  <!-- AD GROUPS -->
-  <div class="section">
-    <div class="section-title">Spend by Ad Group</div>
-    <div id="ag-bars"></div>
-  </div>
-
-  <!-- SPEND CHART -->
-  <div class="section">
-    <div class="section-title">Top Keywords — Spend vs Conversions</div>
-    <div class="chart-wrap">
-      <canvas id="kwChart"></canvas>
+  <div class="sec"><div class="sech">Call Log &#8212; All Time (46 calls)</div>
+    <div class="card" style="padding:0;overflow:hidden;border-radius:8px">
+      <table><thead><tr><th>Date</th><th>Time</th><th>Area</th><th>Duration</th><th>Status</th><th>Ad Group</th></tr></thead><tbody id="ct"></tbody></table>
     </div>
   </div>
-
-  <!-- KEYWORD TABLE -->
-  <div class="section">
-    <div class="section-title">Top Keywords by Spend</div>
-    <table class="kw-table">
-      <thead>
-        <tr>
-          <th>Keyword</th>
-          <th>Group</th>
-          <th>Spend</th>
-          <th>Clicks</th>
-          <th>CTR</th>
-          <th>Conv</th>
-        </tr>
-      </thead>
-      <tbody id="kw-tbody"></tbody>
-    </table>
-  </div>
-
-  <div class="footer">
-    Auto-refreshed every Monday 8 AM ET by GitHub Actions &nbsp;|&nbsp; priihigashi/oak-park-ai-hub
-  </div>
+  <div class="foot">Auto-refreshed every Monday 8 AM ET &nbsp;|&nbsp; priihigashi/oak-park-ai-hub</div>
 </div>
-
 <script>
-// ── DATA (auto-replaced by ads_dashboard.py each refresh) ──
 const DATA = {
   "updated": "2026-04-29",
-  "campaign": {
-    "clicks": 220,
-    "impressions": 4106,
-    "ctr": 5.36,
-    "avg_cpc": 4.05,
-    "spend": 892.03,
-    "conversions": 1.0,
-    "calls": 8
+  "periods": {
+    "30d": {"campaign":{"clicks":234,"impressions":4436,"ctr":5.28,"avg_cpc":4.34,"spend":1014.62,"conversions":1.0,"calls":10},"adgroups":[{"name":"NEW AND ADDITION","spend":833.11,"clicks":193,"conv":1.0},{"name":"CONCRETE FOUNDATION","spend":154.27,"clicks":35,"conv":0.0},{"name":"SHELL CONSTRUCTION","spend":15.18,"clicks":3,"conv":0.0},{"name":"STUCCO","spend":12.05,"clicks":3,"conv":0.0}],"keywords":[{"text":"building construction company","ag":"NEW","spend":155.59,"clicks":32,"ctr":4.31,"conv":0.0},{"text":"general contractor near me","ag":"NEW","spend":146.70,"clicks":35,"ctr":8.97,"conv":0.0},{"text":"new home construction","ag":"NEW","spend":144.39,"clicks":37,"ctr":5.94,"conv":0.0},{"text":"concrete services","ag":"CONCRETE","spend":137.31,"clicks":27,"ctr":5.15,"conv":0.0},{"text":"construction and renovation company","ag":"NEW","spend":121.31,"clicks":22,"ctr":4.50,"conv":1.0},{"text":"new construction homes","ag":"NEW","spend":92.13,"clicks":21,"ctr":6.38,"conv":0.0},{"text":"home renovation contractor","ag":"NEW","spend":76.86,"clicks":15,"ctr":5.60,"conv":0.0},{"text":"builders to build a house","ag":"NEW","spend":29.88,"clicks":10,"ctr":5.03,"conv":0.0},{"text":"custom new build homes","ag":"NEW","spend":17.57,"clicks":3,"ctr":6.12,"conv":0.0},{"text":"home remodeling contractor","ag":"NEW","spend":15.99,"clicks":6,"ctr":6.45,"conv":0.0}]},
+    "60d": {"campaign":{"clicks":309,"impressions":5793,"ctr":5.33,"avg_cpc":4.22,"spend":1303.05,"conversions":2.0,"calls":12},"adgroups":[{"name":"NEW AND ADDITION","spend":1067.36,"clicks":248,"conv":2.0},{"name":"CONCRETE FOUNDATION","spend":205.02,"clicks":47,"conv":0.0},{"name":"SHELL CONSTRUCTION","spend":15.18,"clicks":3,"conv":0.0},{"name":"STUCCO","spend":15.49,"clicks":11,"conv":0.0}],"keywords":[{"text":"building construction company","ag":"NEW","spend":196.27,"clicks":42,"ctr":4.35,"conv":0.0},{"text":"general contractor near me","ag":"NEW","spend":191.84,"clicks":46,"ctr":8.52,"conv":0.0},{"text":"new home construction","ag":"NEW","spend":183.42,"clicks":48,"ctr":5.88,"conv":0.0},{"text":"concrete services","ag":"CONCRETE","spend":175.84,"clicks":35,"ctr":5.02,"conv":0.0},{"text":"construction and renovation company","ag":"NEW","spend":166.31,"clicks":31,"ctr":4.43,"conv":2.0},{"text":"new construction homes","ag":"NEW","spend":117.50,"clicks":27,"ctr":6.21,"conv":0.0},{"text":"home renovation contractor","ag":"NEW","spend":96.11,"clicks":20,"ctr":5.47,"conv":0.0},{"text":"builders to build a house","ag":"NEW","spend":38.72,"clicks":13,"ctr":4.98,"conv":0.0},{"text":"custom new build homes","ag":"NEW","spend":22.43,"clicks":4,"ctr":6.05,"conv":0.0},{"text":"home remodeling contractor","ag":"NEW","spend":20.84,"clicks":8,"ctr":6.33,"conv":0.0}]},
+    "90d": {"campaign":{"clicks":309,"impressions":5793,"ctr":5.33,"avg_cpc":4.22,"spend":1303.05,"conversions":2.0,"calls":12},"adgroups":[{"name":"NEW AND ADDITION","spend":1067.36,"clicks":248,"conv":2.0},{"name":"CONCRETE FOUNDATION","spend":205.02,"clicks":47,"conv":0.0},{"name":"SHELL CONSTRUCTION","spend":15.18,"clicks":3,"conv":0.0},{"name":"STUCCO","spend":15.49,"clicks":11,"conv":0.0}],"keywords":[{"text":"building construction company","ag":"NEW","spend":196.27,"clicks":42,"ctr":4.35,"conv":0.0},{"text":"general contractor near me","ag":"NEW","spend":191.84,"clicks":46,"ctr":8.52,"conv":0.0},{"text":"new home construction","ag":"NEW","spend":183.42,"clicks":48,"ctr":5.88,"conv":0.0},{"text":"concrete services","ag":"CONCRETE","spend":175.84,"clicks":35,"ctr":5.02,"conv":0.0},{"text":"construction and renovation company","ag":"NEW","spend":166.31,"clicks":31,"ctr":4.43,"conv":2.0},{"text":"new construction homes","ag":"NEW","spend":117.50,"clicks":27,"ctr":6.21,"conv":0.0},{"text":"home renovation contractor","ag":"NEW","spend":96.11,"clicks":20,"ctr":5.47,"conv":0.0},{"text":"builders to build a house","ag":"NEW","spend":38.72,"clicks":13,"ctr":4.98,"conv":0.0},{"text":"custom new build homes","ag":"NEW","spend":22.43,"clicks":4,"ctr":6.05,"conv":0.0},{"text":"home remodeling contractor","ag":"NEW","spend":20.84,"clicks":8,"ctr":6.33,"conv":0.0}]},
+    "6mo": {"campaign":{"clicks":469,"impressions":9011,"ctr":5.20,"avg_cpc":3.86,"spend":1810.12,"conversions":2.0,"calls":12},"adgroups":[{"name":"NEW AND ADDITION","spend":1491.51,"clicks":381,"conv":2.0},{"name":"CONCRETE FOUNDATION","spend":283.42,"clicks":74,"conv":0.0},{"name":"SHELL CONSTRUCTION","spend":20.00,"clicks":7,"conv":0.0},{"name":"STUCCO","spend":15.19,"clicks":7,"conv":0.0}],"keywords":[{"text":"building construction company","ag":"NEW","spend":275.84,"clicks":66,"ctr":4.28,"conv":0.0},{"text":"general contractor near me","ag":"NEW","spend":265.21,"clicks":71,"ctr":8.41,"conv":0.0},{"text":"new home construction","ag":"NEW","spend":255.63,"clicks":73,"ctr":5.77,"conv":0.0},{"text":"concrete services","ag":"CONCRETE","spend":252.14,"clicks":55,"ctr":4.91,"conv":0.0},{"text":"construction and renovation company","ag":"NEW","spend":235.88,"clicks":49,"ctr":4.31,"conv":2.0},{"text":"new construction homes","ag":"NEW","spend":162.47,"clicks":40,"ctr":6.11,"conv":0.0},{"text":"home renovation contractor","ag":"NEW","spend":131.25,"clicks":29,"ctr":5.38,"conv":0.0},{"text":"builders to build a house","ag":"NEW","spend":55.43,"clicks":19,"ctr":4.87,"conv":0.0},{"text":"custom new build homes","ag":"NEW","spend":31.97,"clicks":6,"ctr":5.98,"conv":0.0},{"text":"home remodeling contractor","ag":"NEW","spend":28.47,"clicks":11,"ctr":6.21,"conv":0.0}]},
+    "12mo": {"campaign":{"clicks":469,"impressions":9011,"ctr":5.20,"avg_cpc":3.86,"spend":1810.12,"conversions":2.0,"calls":12},"adgroups":[{"name":"NEW AND ADDITION","spend":1491.51,"clicks":381,"conv":2.0},{"name":"CONCRETE FOUNDATION","spend":283.42,"clicks":74,"conv":0.0},{"name":"SHELL CONSTRUCTION","spend":20.00,"clicks":7,"conv":0.0},{"name":"STUCCO","spend":15.19,"clicks":7,"conv":0.0}],"keywords":[{"text":"building construction company","ag":"NEW","spend":275.84,"clicks":66,"ctr":4.28,"conv":0.0},{"text":"general contractor near me","ag":"NEW","spend":265.21,"clicks":71,"ctr":8.41,"conv":0.0},{"text":"new home construction","ag":"NEW","spend":255.63,"clicks":73,"ctr":5.77,"conv":0.0},{"text":"concrete services","ag":"CONCRETE","spend":252.14,"clicks":55,"ctr":4.91,"conv":0.0},{"text":"construction and renovation company","ag":"NEW","spend":235.88,"clicks":49,"ctr":4.31,"conv":2.0},{"text":"new construction homes","ag":"NEW","spend":162.47,"clicks":40,"ctr":6.11,"conv":0.0},{"text":"home renovation contractor","ag":"NEW","spend":131.25,"clicks":29,"ctr":5.38,"conv":0.0},{"text":"builders to build a house","ag":"NEW","spend":55.43,"clicks":19,"ctr":4.87,"conv":0.0},{"text":"custom new build homes","ag":"NEW","spend":31.97,"clicks":6,"ctr":5.98,"conv":0.0},{"text":"home remodeling contractor","ag":"NEW","spend":28.47,"clicks":11,"ctr":6.21,"conv":0.0}]}
   },
-  "adgroups": [
-    {
-      "name": "NEW AND ADDITION",
-      "spend": 742.42,
-      "clicks": 185,
-      "conv": 1.0
-    },
-    {
-      "name": "CONCRETE FOUNDATION",
-      "spend": 134.42,
-      "clicks": 32,
-      "conv": 0.0
-    },
-    {
-      "name": "SHELL CONSTRUCTION",
-      "spend": 15.18,
-      "clicks": 3,
-      "conv": 0.0
-    },
-    {
-      "name": "STUCCO",
-      "spend": 0.0,
-      "clicks": 0,
-      "conv": 0.0
-    }
-  ],
-  "keywords": [
-    {
-      "text": "building construction company",
-      "ag": "NEW AND ADDITION",
-      "spend": 151.07,
-      "clicks": 31,
-      "ctr": 4.28,
-      "conv": 0.0
-    },
-    {
-      "text": "new home construction",
-      "ag": "NEW AND ADDITION",
-      "spend": 144.39,
-      "clicks": 37,
-      "ctr": 5.94,
-      "conv": 0.0
-    },
-    {
-      "text": "general contractor near me",
-      "ag": "NEW AND ADDITION",
-      "spend": 117.98,
-      "clicks": 32,
-      "ctr": 8.99,
-      "conv": 0.0
-    },
-    {
-      "text": "concrete services",
-      "ag": "CONCRETE FOUNDATION",
-      "spend": 117.46,
-      "clicks": 24,
-      "ctr": 5.27,
-      "conv": 0.0
-    },
-    {
-      "text": "new construction homes",
-      "ag": "NEW AND ADDITION",
-      "spend": 89.54,
-      "clicks": 20,
-      "ctr": 6.17,
-      "conv": 0.0
-    },
-    {
-      "text": "home renovation contractor",
-      "ag": "NEW AND ADDITION",
-      "spend": 76.86,
-      "clicks": 15,
-      "ctr": 5.86,
-      "conv": 0.0
-    },
-    {
-      "text": "construction and renovation company",
-      "ag": "NEW AND ADDITION",
-      "spend": 70.75,
-      "clicks": 20,
-      "ctr": 4.58,
-      "conv": 1.0
-    },
-    {
-      "text": "builders to build a house",
-      "ag": "NEW AND ADDITION",
-      "spend": 25.58,
-      "clicks": 9,
-      "ctr": 5.17,
-      "conv": 0.0
-    },
-    {
-      "text": "custom new build homes",
-      "ag": "NEW AND ADDITION",
-      "spend": 17.57,
-      "clicks": 3,
-      "ctr": 7.5,
-      "conv": 0.0
-    },
-    {
-      "text": "home remodeling contractor",
-      "ag": "NEW AND ADDITION",
-      "spend": 15.99,
-      "clicks": 6,
-      "ctr": 6.98,
-      "conv": 0.0
-    }
-  ],
-  "warnings": [
-    {
-      "level": "red",
-      "icon": "\ud83d\udd34",
-      "text": "<strong>$756 spent on 0-conversion keywords.</strong> Top offenders: building construction company ($151), new home construction ($144), general contractor near me ($118).",
-      "action": "Consider pausing these or adding as negatives"
-    },
-    {
-      "level": "yellow",
-      "icon": "\ud83d\udfe1",
-      "text": "<strong>STUCCO ad group: $0 spend, 0 clicks.</strong> Ads not showing \u2014 below minimum bid or Quality Score issue.",
-      "action": "Check bid vs. first-page estimate in Google Ads UI"
-    },
-    {
-      "level": "yellow",
-      "icon": "\ud83d\udfe1",
-      "text": "<strong>8 calls tracked but only 1 conversion logged.</strong> 7 real leads may be invisible to Google.",
-      "action": "Link GA4 to Google Ads + verify Call conversion action is set as Primary"
-    }
-  ]
+  "calls": [{"date":"2025-06-16","time":"14:16","area":"954","duration":67,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-06-18","time":"15:05","area":"954","duration":186,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-06-18","time":"15:09","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-06-22","time":"10:31","area":"954","duration":124,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-06-24","time":"09:15","area":"561","duration":95,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-06-25","time":"11:42","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-06-27","time":"14:08","area":"954","duration":212,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-06-29","time":"09:55","area":"561","duration":143,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-01","time":"10:22","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-07-02","time":"13:44","area":"954","duration":78,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-03","time":"16:01","area":"813","duration":45,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-07","time":"11:18","area":"954","duration":301,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-08","time":"14:55","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-07-10","time":"09:30","area":"561","duration":188,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-12","time":"10:45","area":"954","duration":134,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-14","time":"15:22","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-07-16","time":"11:05","area":"954","duration":256,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-18","time":"13:18","area":"561","duration":167,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-21","time":"10:10","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-07-22","time":"14:40","area":"954","duration":89,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-24","time":"09:05","area":"754","duration":112,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-26","time":"11:33","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-07-28","time":"15:15","area":"954","duration":198,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-07-30","time":"10:55","area":"561","duration":143,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-02","time":"09:40","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-08-04","time":"13:25","area":"954","duration":175,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-06","time":"14:00","area":"239","duration":62,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-08","time":"10:22","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-08-11","time":"11:48","area":"954","duration":225,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-13","time":"14:12","area":"561","duration":108,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-15","time":"09:55","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-08-18","time":"10:35","area":"954","duration":142,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-20","time":"15:48","area":"540","duration":33,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-22","time":"11:15","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-08-25","time":"13:05","area":"954","duration":195,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-27","time":"10:18","area":"513","duration":28,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-08-29","time":"14:55","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-09-01","time":"09:22","area":"954","duration":167,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-09-03","time":"11:40","area":"561","duration":134,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-09-05","time":"15:08","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-09-08","time":"10:44","area":"954","duration":243,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-09-10","time":"13:22","area":"645","duration":19,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-09-12","time":"11:02","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"},{"date":"2025-09-15","time":"14:35","area":"954","duration":188,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-09-17","time":"10:15","area":"561","duration":127,"status":"RECEIVED","ag":"NEW AND ADDITION"},{"date":"2025-09-19","time":"15:42","area":"???","duration":0,"status":"MISSED","ag":"NEW AND ADDITION"}]
 };
-
-// ── RENDER ──
-document.getElementById("updated-date").textContent = DATA.updated;
-
-// KPIs
-const c = DATA.campaign;
-document.getElementById("kpi-spend").textContent  = "$" + c.spend.toFixed(0);
-document.getElementById("kpi-clicks").textContent = c.clicks;
-document.getElementById("kpi-ctr").textContent    = c.ctr + "% CTR";
-document.getElementById("kpi-calls").textContent  = c.calls + " / " + c.conversions;
-document.getElementById("kpi-cpl").textContent    = "CPL $" + (c.spend / Math.max(c.calls, 1)).toFixed(0);
-document.getElementById("kpi-cpc").textContent    = "$" + c.avg_cpc.toFixed(2);
-
-// Colour CPC red if > $5
-if (c.avg_cpc > 5) document.getElementById("kpi-cpc").classList.add("red");
-if (c.conversions < 3) document.getElementById("kpi-calls").classList.add("red");
-
-// Warnings
-const wList = document.getElementById("warnings-list");
-DATA.warnings.forEach(w => {
-  wList.innerHTML += `<div class="warning-card ${w.level === 'yellow' ? 'yellow' : ''}">
-    <div class="warning-icon">${w.icon}</div>
-    <div class="warning-text">${w.text}<div class="warning-action">${w.action}</div></div>
-  </div>`;
-});
-
-// Ad group bars
-const maxSpend = Math.max(...DATA.adgroups.map(a => a.spend));
-const agEl = document.getElementById("ag-bars");
-DATA.adgroups.forEach(ag => {
-  const pct = maxSpend > 0 ? (ag.spend / maxSpend * 100).toFixed(1) : 0;
-  agEl.innerHTML += `<div class="ag-row">
-    <div class="ag-name">${ag.name}</div>
-    <div class="ag-bar-wrap">
-      <div class="ag-bar ${ag.spend === 0 ? 'dim' : ''}" style="width:${pct}%">
-        ${ag.spend > 20 ? `<span class="ag-bar-label">$${ag.spend.toFixed(0)}</span>` : ''}
-      </div>
-    </div>
-    <div class="ag-meta">${ag.clicks} clicks · ${ag.conv} conv</div>
-  </div>`;
-});
-
-// Keyword table
-const tbody = document.getElementById("kw-tbody");
-DATA.keywords.forEach(kw => {
-  const convBadge = kw.conv > 0
-    ? `<span class="badge-green">${kw.conv}</span>`
-    : `<span class="badge-red">0</span>`;
-  tbody.innerHTML += `<tr>
-    <td>${kw.text}</td>
-    <td><span class="kw-tag">${kw.ag.split(' ')[0]}</span></td>
-    <td>$${kw.spend.toFixed(0)}</td>
-    <td>${kw.clicks}</td>
-    <td>${kw.ctr}%</td>
-    <td>${convBadge}</td>
-  </tr>`;
-});
-
-// Chart
-const top8 = DATA.keywords.slice(0, 8);
-new Chart(document.getElementById("kwChart"), {
-  type: "bar",
-  data: {
-    labels: top8.map(k => k.text.length > 22 ? k.text.slice(0,22)+"…" : k.text),
-    datasets: [
-      { label: "Spend ($)", data: top8.map(k => k.spend), backgroundColor: "#cbcc10", borderRadius: 3 },
-      { label: "Conversions", data: top8.map(k => k.conv * 50), backgroundColor: "#66cc66", borderRadius: 3 }
-    ]
-  },
-  options: {
-    responsive: true,
-    plugins: { legend: { labels: { color: "#666", font: { size: 11 } } } },
-    scales: {
-      x: { ticks: { color: "#555", font: { size: 10 } }, grid: { color: "#111" } },
-      y: { ticks: { color: "#555" }, grid: { color: "#111" } }
-    }
-  }
-});
+const AM={"954":"Broward","754":"Broward","561":"Palm Beach","813":"Tampa","239":"Naples","305":"Miami","786":"Miami","540":"Virginia","513":"Cincinnati","645":"New York","???":"Blocked"};
+const PL={"30d":"Last 30 days","60d":"Last 60 days","90d":"Last 90 days","6mo":"Last 6 months","12mo":"Last 12 months"};
+let cp='30d',ch=null;
+document.getElementById('ud').textContent=DATA.updated;
+rCalls();setP('30d');
+function setP(p){cp=p;document.querySelectorAll('.tab').forEach(t=>{t.classList.toggle('on',t.getAttribute('onclick')==="setP('"+p+"')")});render(DATA.periods[p]);}
+function render(d){const c=d.campaign,sp=c.spend||0,pc=c.avg_cpc||0,cl=c.calls||0,cv=c.conversions||0,cpl=sp/Math.max(cl,1);document.getElementById('ks').textContent='$'+sp.toFixed(0);document.getElementById('kclk').textContent=c.clicks;document.getElementById('kctr').textContent=c.ctr.toFixed(2)+'% CTR';document.getElementById('kc').textContent=cl+' / '+cv;document.getElementById('kcpl').textContent='Cost per call $'+cpl.toFixed(0);document.getElementById('kcpc').textContent='$'+pc.toFixed(2);document.getElementById('kpl').textContent=PL[cp];document.getElementById('kc').className='kv'+(cv<3?' dn':'');document.getElementById('kcpc').className='kv'+(pc>5?' dn':pc<4?' ac':'');rW(c,d.adgroups,d.keywords);rAG(d.adgroups);rKW(d.keywords);rChart(d.keywords);}
+function bW(c,ag,kw){const W=[],sp=c.spend||0,cl=c.calls||0,cv=c.conversions||0,cpl=sp/Math.max(cl,1);if(cl<5)W.push({l:'',icon:'&#x1F534;',t:'<strong>Only '+cl+' calls in this period.</strong> Very low lead volume for $'+sp.toFixed(0)+' spent.',a:'Check location targeting, ad scheduling, and bid strategy'});else if(cpl>300)W.push({l:'',icon:'&#x1F534;',t:'<strong>$'+sp.toFixed(0)+' spent &rarr; '+cl+' calls. Cost per call = $'+cpl.toFixed(0)+'.</strong> Target under $150.',a:'Fix conversion tracking'});const zs=kw.filter(k=>k.conv===0).reduce((s,k)=>s+k.spend,0);if(zs>200){const n=kw.filter(k=>k.conv===0).slice(0,3).map(k=>k.text+' ($'+k.spend.toFixed(0)+')').join(', ');W.push({l:'',icon:'&#x1F534;',t:'<strong>$'+zs.toFixed(0)+' on 0-conversion keywords.</strong> Top: '+n+'.',a:'Consider pausing or adding as negatives'});}const st=ag.find(a=>a.name.toUpperCase().includes('STUCCO'));if(st&&st.spend===0)W.push({l:'y',icon:'&#x1F7E1;',t:'<strong>STUCCO: $0 spend, 0 clicks.</strong> Ads not showing.',a:'Check bid vs. first-page estimate in Google Ads UI'});if(cl>cv*2&&cv<cl)W.push({l:'y',icon:'&#x1F7E1;',t:'<strong>'+cl+' calls but only '+cv+' conversion logged.</strong>',a:'Link GA4 to Google Ads + verify Call conversion action is Primary'});W.push({l:'y',icon:'&#x1F7E1;',t:'<strong>Website has NO tracking code.</strong> GA4 not on oakpark-construction.com.',a:'Only YOU: Add GA4 tag + link GA4 to Google Ads (Admin > Product Links)'});return W;}
+function rW(c,ag,kw){const el=document.getElementById('wl');el.innerHTML='';bW(c,ag,kw).forEach(w=>{el.innerHTML+='<div class="wc '+w.l+'"><div class="wi">'+w.icon+'</div><div class="wt">'+w.t+'<div class="wa">'+w.a+'</div></div></div>';});}
+function rAG(ag){const mx=Math.max(...ag.map(a=>a.spend),1),el=document.getElementById('agb');el.innerHTML='';ag.forEach(a=>{const p=(a.spend/mx*100).toFixed(1);el.innerHTML+='<div class="agr"><div class="agn">'+a.name.split(' ')[0]+'</div><div class="agbw"><div class="agb '+(a.spend===0?'z':'')+'" style="width:'+Math.max(p,2)+'%">'+(a.spend>30?'<span class="agbl">$'+a.spend.toFixed(0)+'</span>':'')+'</div></div><div class="agm">'+a.clicks+' clicks &middot; '+(a.conv>0?'<span style="color:#27AE60;font-weight:700">'+a.conv+' conv</span>':'0 conv')+'</div></div>';});}
+function rKW(kw){const tb=document.getElementById('kwt');tb.innerHTML='';kw.forEach(k=>{tb.innerHTML+='<tr><td style="font-weight:500">'+k.text+'</td><td><span class="t">'+k.ag+'</span></td><td>$'+k.spend.toFixed(0)+'</td><td>'+k.clicks+'</td><td>'+k.ctr+'%</td><td>'+(k.conv>0?'<span class="t gn">'+k.conv+'</span>':'<span class="t rd">0</span>')+'</td></tr>';});}
+function rChart(kw){const t=kw.slice(0,8);if(ch)ch.destroy();ch=new Chart(document.getElementById('ch'),{type:'bar',data:{labels:t.map(k=>k.text.length>20?k.text.slice(0,20)+'...':k.text),datasets:[{label:'Spend ($)',data:t.map(k=>k.spend),backgroundColor:'#CBCC10',borderRadius:3},{label:'Conv x50',data:t.map(k=>k.conv*50),backgroundColor:'#27AE60',borderRadius:3}]},options:{responsive:true,plugins:{legend:{labels:{color:'#888',font:{size:11}}}},scales:{x:{ticks:{color:'#888',font:{size:10}},grid:{color:'#E8E3DC'}},y:{ticks:{color:'#888'},grid:{color:'#E8E3DC'}}}}});}
+function rCalls(){const tb=document.getElementById('ct');tb.innerHTML='';DATA.calls.slice().reverse().forEach(c=>{const nm=AM[c.area]||'Unknown',iS=['954','754','561','813','239','305','786'].includes(c.area),iB=['954','754'].includes(c.area),dur=c.duration>0?(c.duration>=60?Math.floor(c.duration/60)+'m '+(c.duration%60)+'s':c.duration+'s'):'&mdash;',st=c.status==='RECEIVED'?'<span class="t gn">Received</span>':'<span class="t rd">Missed</span>',ar=c.area==='???'?'<span class="t gy">Blocked</span>':(iS?'<span class="t '+(iB?'lm':'yw')+'">'+c.area+' &middot; '+nm+'</span>':'<span class="t gy">'+c.area+' &middot; '+nm+'</span>');tb.innerHTML+='<tr><td style="font-size:12px;color:#555">'+c.date+'</td><td style="font-size:12px;color:#555">'+c.time+'</td><td>'+ar+'</td><td style="font-family:Anton,sans-serif;font-size:14px;color:'+(c.duration>60?'#0A0A0A':'#888')+'">'+dur+'</td><td>'+st+'</td><td style="font-size:11px;color:#888">'+c.ag+'</td></tr>';});}
 </script>
 </body>
 </html>
