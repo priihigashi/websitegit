@@ -4,14 +4,17 @@ fix_existing_images.py — Retroactive image quality repair for carousel Drive f
 
 Scans version folders in a Drive carousel folder, finds AI-generated images via
 media_provenance.json, regenerates prompts via prompt_builder, re-fetches with
-image_providers (real-photo tiers first, then AI cascade), re-uploads to Drive.
+image_providers (AI cascade first for realistic prompt-specific images, then
+real-photo fallback), re-uploads to Drive.
 
 Flow per slot:
   1. Read media_provenance.json → find source_type == "ai" slots
   2. Read cover.html (or slide HTML) → extract slide text for that slot
   3. Call prompt_builder.build_image_prompt() → fresh specific prompt
-  4. Call image_providers.fetch_image() → real photo first, then AI cascade
-  5. Upload fixed image to Drive, update media_provenance.json
+  4. Try AI cascade first (NB2 → Seedream4.5 → Seedream5.0 → Gemini → SDXL → DALL-E)
+  5. If AI fails or duplicates: real-photo fallback (Wikimedia → Pexels → Pixabay)
+  6. Persons (subject_type=="person") skip AI and go straight to Wikimedia
+  7. Upload fixed image to Drive, update media_provenance.json
 
 Usage:
   python fix_existing_images.py --dry-run
@@ -347,41 +350,45 @@ def fix_version_folder(
             summary["skipped"] += 1
             continue
 
-        # Step 2: Real-photo tiers first
         prov_slug = provider or PROVIDER_NB2
         filename = make_filename(query or fresh_prompt[:40], prov_slug, slide_num)
         # Generate separate Pixabay/Pexels query — short visual terms, not technical product names
         stock_q = _build_stock_query(slide_text, query, niche)
-        img_path, used_provider = fetch_real_photo(query, str(local_dir), filename, stock_query=stock_q)
-        source_type = "cc" if used_provider == "wikimedia" else ("stock" if used_provider else "")
+        img_path, used_provider, source_type = None, "", ""
 
-        # Duplicate guard: if same bytes as another slot in this carousel, reject and
-        # fall through to AI cascade (Pixabay returns the same top image for similar queries)
-        if img_path:
-            local_candidate = local_dir / "resources" / "images" / filename
-            if local_candidate.exists():
-                img_hash = hashlib.md5(local_candidate.read_bytes()).hexdigest()
-                if img_hash in seen_hashes:
-                    print(f"    Duplicate image detected (same as previous slot) → retrying with AI cascade")
-                    local_candidate.unlink()
-                    img_path, used_provider, source_type = None, "", ""
-                else:
-                    seen_hashes.add(img_hash)
-
-        # Step 3: AI cascade if real photos miss or produced a duplicate
-        if not img_path and subject_type != "person":
+        # Step 2: AI cascade FIRST — produces realistic, prompt-specific images
+        # (Real-photo search returns generic stock that often doesn't match technical
+        # construction prompts and frequently duplicates across slides.)
+        if subject_type != "person":
             img_path, used_provider = generate_ai_image(
                 fresh_prompt, str(local_dir), filename, provider,
                 skip_providers=skip_list,
             )
             source_type = "ai" if img_path else ""
-            # Duplicate guard for AI results too
+            # Duplicate guard for AI results
             if img_path:
                 local_candidate = local_dir / "resources" / "images" / filename
                 if local_candidate.exists():
                     img_hash = hashlib.md5(local_candidate.read_bytes()).hexdigest()
                     if img_hash in seen_hashes:
-                        print(f"    AI result is also a duplicate — all tiers exhausted for {slot_label}")
+                        print(f"    AI result duplicate — falling through to real-photo fallback")
+                        local_candidate.unlink()
+                        img_path, used_provider, source_type = None, "", ""
+                    else:
+                        seen_hashes.add(img_hash)
+
+        # Step 3: Real-photo fallback (Wikimedia → Pexels → Pixabay)
+        # Used when AI cascade fails OR for named persons (subject_type=="person")
+        # where AI hallucinates faces.
+        if not img_path:
+            img_path, used_provider = fetch_real_photo(query, str(local_dir), filename, stock_query=stock_q)
+            source_type = "cc" if used_provider == "wikimedia" else ("stock" if used_provider else "")
+            if img_path:
+                local_candidate = local_dir / "resources" / "images" / filename
+                if local_candidate.exists():
+                    img_hash = hashlib.md5(local_candidate.read_bytes()).hexdigest()
+                    if img_hash in seen_hashes:
+                        print(f"    Real-photo result duplicate — all tiers exhausted for {slot_label}")
                         local_candidate.unlink()
                         img_path, used_provider, source_type = None, "", ""
                     else:

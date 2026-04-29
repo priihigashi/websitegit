@@ -899,8 +899,10 @@ def fetch_all_media(content, niche, work_dir):
     # ── COVER IMAGE CASCADE ────────────────────────────────────────────────
     # Named-person covers: Wiki REST → Wikimedia Commons → bio-initials (NO AI).
     #   Editorial rule: never AI-generate a politician's/public figure's face.
-    # Non-person covers (place/event/concept): Wiki CC → Pexels → Pixabay
-    #   → Gemini Imagen → Seedream 4 → DALL-E 3 → Replicate SDXL.
+    # Non-person covers (place/event/concept): AI cascade FIRST (NB2 → Seedream4.5
+    #   → Seedream5.0 → Gemini → SDXL → DALL-E) for prompt-specific realistic
+    #   images, then real-photo fallback (Wiki CC → Pexels → Pixabay) if AI fails.
+    #   Real-photo search returns generic stock that often duplicates across slides.
     # Filename slugs the subject so resources/images/ is self-documenting.
     cv = content.get("cover_visual", {})
     if cv:
@@ -910,24 +912,14 @@ def fetch_all_media(content, niche, work_dir):
         cover_slug = re.sub(r"[^a-z0-9]+", "_", (search_q or "cover").lower()).strip("_")[:40] or "cover"
         cover_fname = f"slide1_{cover_slug}.jpg"
 
-        # Step 1 — real photo (Wiki REST + Wikimedia Commons)
-        if search_q:
+        # Step 1 — named persons go straight to real photo (Wiki REST + Wikimedia Commons).
+        # Editorial rule: never AI-generate public figures' faces.
+        if subject_type == "person" and search_q:
             c = _fetch_person_photo(search_q, work_dir, cover_fname)
             if c:
                 _set_cover(c, "wikimedia", "cc", query=search_q)
 
-        # Step 2 — stock photos (skip if cover is a named person; bio-initials is safer)
-        if not paths["cover"] and subject_type != "person":
-            if search_q:
-                c = _fetch_pexels_image(search_q, work_dir, cover_fname)
-                if c:
-                    _set_cover(c, "pexels", "stock", query=search_q)
-            if not paths["cover"] and search_q:
-                c = _fetch_pixabay_image(search_q, work_dir, cover_fname)
-                if c:
-                    _set_cover(c, "pixabay", "stock", query=search_q)
-
-        # Step 3 — AI cascade (skipped for named persons per editorial rule)
+        # Step 2 — non-person covers: AI cascade FIRST (prompt-specific, realistic)
         if not paths["cover"] and subject_type != "person":
             if _IMAGE_PROVIDERS_AVAILABLE:
                 fresh_prompt = _build_img_prompt(
@@ -957,12 +949,30 @@ def fetch_all_media(content, niche, work_dir):
                     if c:
                         _set_cover(c, "sdxl", "ai", query=search_q, prompt=ai_prompt)
 
+        # Step 3 — real-photo fallback (Wiki CC → Pexels → Pixabay)
+        # Triggered only when AI cascade exhausted for non-persons,
+        # OR for persons whose Wikimedia REST lookup missed.
+        if not paths["cover"] and search_q:
+            c = _fetch_person_photo(search_q, work_dir, cover_fname)
+            if c:
+                _set_cover(c, "wikimedia", "cc", query=search_q)
+            if not paths["cover"] and subject_type != "person":
+                c = _fetch_pexels_image(search_q, work_dir, cover_fname)
+                if c:
+                    _set_cover(c, "pexels", "stock", query=search_q)
+            if not paths["cover"] and subject_type != "person":
+                c = _fetch_pixabay_image(search_q, work_dir, cover_fname)
+                if c:
+                    _set_cover(c, "pixabay", "stock", query=search_q)
+
         # If cover is a person and all photo tiers missed, leave empty — the HTML
         # renderer falls back to .bio-initials card (see build_html step D).
 
     # ── MIDDLE SLIDES — CONTEXT IMAGES ────────────────────────────────────
-    # Cascade: Wiki CC photo → Pexels photo → Pixabay photo → Gemini Imagen
-    # → Seedream 4 → DALL-E 3 → Replicate SDXL.
+    # Cascade: AI cascade FIRST (NB2 → Seedream4.5 → Seedream5.0 → Gemini → SDXL
+    # → DALL-E) for prompt-specific realistic images. Real-photo fallback
+    # (Wiki CC → Pexels → Pixabay) only when AI exhausted — generic stock
+    # frequently duplicates across slides for similar construction queries.
     # Applies only to slides with visual_hint == "context-image"; bio-cards
     # are rendered separately from mentioned_people[*].image_hint.
     for i, slide in enumerate(content.get("slides", []), start=2):
@@ -978,50 +988,52 @@ def fetch_all_media(content, niche, work_dir):
             f"real lighting, no illustration, no 3D render, no cartoon, no plastic skin, no text."
         )
 
-        # Tier 1–3: real / royalty-free photos (never hallucinates)
-        img_path = _fetch_person_photo(cq, work_dir, fname)
-        if img_path:
-            print(f"  Slide {i}: Wikimedia photo for '{cq[:50]}'")
-            _set_slide(i, img_path, "wikimedia", "cc", query=cq, prompt=ai_prompt)
+        img_path = ""
+        # Tier 1: AI cascade — NB2 → Seedream 4.5 → Seedream 5.0 → Gemini → SDXL → DALL-E
+        if _IMAGE_PROVIDERS_AVAILABLE:
+            fresh_prompt = _build_img_prompt(
+                slide_text=cq, context_image_query=cq,
+                niche=niche, slide_num=i, work_dir=work_dir, save=True,
+            ) or ai_prompt
+            fname = _make_img_filename(cq, "ai", i)
+            img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname)
+            if img_path:
+                print(f"  Slide {i}: {used_prov} image for '{cq[:50]}'")
+                _set_slide(i, img_path, used_prov, "ai", query=cq, prompt=fresh_prompt)
+        else:
+            # Legacy fallback when image_providers not available
+            img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
+            if img_path:
+                _set_slide(i, img_path, "gemini", "ai", query=cq, prompt=ai_prompt)
+            if not img_path:
+                img_path = _generate_seedream_image(ai_prompt, work_dir, fname)
+                if img_path:
+                    _set_slide(i, img_path, "seedream", "ai", query=cq, prompt=ai_prompt)
+            if not img_path:
+                img_path = _generate_replicate_sdxl(ai_prompt, work_dir, fname)
+                if img_path:
+                    _set_slide(i, img_path, "sdxl", "ai", query=cq, prompt=ai_prompt)
+            if not img_path:
+                img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
+                if img_path:
+                    _set_slide(i, img_path, "dall-e-3", "ai", query=cq, prompt=ai_prompt)
+
+        # Tier 2: real-photo fallback (Wiki CC → Pexels → Pixabay) — only when AI exhausted
+        if not img_path:
+            img_path = _fetch_person_photo(cq, work_dir, fname)
+            if img_path:
+                print(f"  Slide {i}: Wikimedia fallback for '{cq[:50]}'")
+                _set_slide(i, img_path, "wikimedia", "cc", query=cq, prompt=ai_prompt)
         if not img_path:
             img_path = _fetch_pexels_image(cq, work_dir, fname)
             if img_path:
-                print(f"  Slide {i}: Pexels photo for '{cq[:50]}'")
+                print(f"  Slide {i}: Pexels fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "pexels", "stock", query=cq, prompt=ai_prompt)
         if not img_path:
             img_path = _fetch_pixabay_image(cq, work_dir, fname)
             if img_path:
-                print(f"  Slide {i}: Pixabay photo for '{cq[:50]}'")
+                print(f"  Slide {i}: Pixabay fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "pixabay", "stock", query=cq, prompt=ai_prompt)
-        # AI cascade — NB2 → Seedream 4.5 → DALL-E 3 → Seedream 5.0 → Gemini → SDXL
-        if not img_path:
-            if _IMAGE_PROVIDERS_AVAILABLE:
-                fresh_prompt = _build_img_prompt(
-                    slide_text=cq, context_image_query=cq,
-                    niche=niche, slide_num=i, work_dir=work_dir, save=True,
-                ) or ai_prompt
-                fname = _make_img_filename(cq, "ai", i)
-                img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname)
-                if img_path:
-                    print(f"  Slide {i}: {used_prov} image for '{cq[:50]}'")
-                    _set_slide(i, img_path, used_prov, "ai", query=cq, prompt=fresh_prompt)
-            else:
-                # Legacy fallback when image_providers not available
-                img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
-                if img_path:
-                    _set_slide(i, img_path, "gemini", "ai", query=cq, prompt=ai_prompt)
-                if not img_path:
-                    img_path = _generate_seedream_image(ai_prompt, work_dir, fname)
-                    if img_path:
-                        _set_slide(i, img_path, "seedream", "ai", query=cq, prompt=ai_prompt)
-                if not img_path:
-                    img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
-                    if img_path:
-                        _set_slide(i, img_path, "dall-e-3", "ai", query=cq, prompt=ai_prompt)
-                if not img_path:
-                    img_path = _generate_replicate_sdxl(ai_prompt, work_dir, fname)
-                    if img_path:
-                        _set_slide(i, img_path, "sdxl", "ai", query=cq, prompt=ai_prompt)
 
     fetched_total = (1 if paths["cover"] else 0) + len(paths["slides"])
     print(f"  Media fetch: {fetched_total} image(s) ready (cover={bool(paths['cover'])}, slides={list(paths['slides'].keys())})")
