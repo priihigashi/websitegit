@@ -882,6 +882,11 @@ def process_one_topic(topic_entry, run_date, drive):
     print("  Fetching video clips for motion...")
     clips = fetch_clips(content, str(work))
 
+    # Thread clips into media_paths so HTML builders can render first-frame stills
+    # on motion slides in the static cover.html (alternating clip-bg pattern).
+    if clips:
+        media_paths["clips"] = clips
+
     html_path = build_html(content, niche, slug, str(work), media_paths=media_paths)
     if not html_path:
         print("  FAILED: HTML build")

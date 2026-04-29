@@ -1066,6 +1066,30 @@ def _generate_replicate_sdxl(prompt, work_dir, filename):
     )
 
 
+def _download_drive_photo(drive_url, dest_path):
+    """Download a photo from a Drive viewer URL to dest_path. Returns dest_path or ''."""
+    try:
+        import re as _re
+        m = _re.search(r"/d/([A-Za-z0-9_-]+)", drive_url)
+        if not m:
+            m = _re.search(r"[?&]id=([A-Za-z0-9_-]+)", drive_url)
+        if not m:
+            return ""
+        file_id = m.group(1)
+        download_url = f"https://drive.google.com/uc?id={file_id}&export=download"
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        req = urllib.request.Request(download_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as r, open(dest_path, "wb") as f:
+            f.write(r.read())
+        if os.path.getsize(dest_path) < 2000:
+            os.remove(dest_path)
+            return ""
+        return dest_path
+    except Exception as e:
+        print(f"  _download_drive_photo: {e}")
+        return ""
+
+
 def fetch_all_media(content, niche, work_dir):
     """Download/generate all images needed by this carousel BEFORE build_html().
     Returns dict:
@@ -1082,6 +1106,32 @@ def fetch_all_media(content, niche, work_dir):
             "slides": {}
         }
     }
+
+    # ── TIER 0 — OPC Photo Catalog (real jobsite photos, highest priority) ──
+    # Checks the 159+ tagged photos before any stock/AI image is fetched.
+    # Sets cover + one mid-slide from the same service category.
+    if niche == "opc":
+        try:
+            from photo_matcher import match_opc_photo  # type: ignore
+        except ImportError:
+            match_opc_photo = None
+        if match_opc_photo:
+            topic_text = content.get("headline", "") or content.get("topic", "")
+            img_dir = Path(work_dir) / "resources" / "images"
+            img_dir.mkdir(parents=True, exist_ok=True)
+            match = match_opc_photo(topic_text)
+            if match and match.get("drive_url"):
+                dest = str(img_dir / "opc_catalog_cover.jpg")
+                dl = _download_drive_photo(match["drive_url"], dest)
+                if dl:
+                    paths["cover"] = dl
+                    paths["provenance"]["cover"] = {
+                        "path": dl, "provider": "opc_catalog",
+                        "source_type": "real_photo",
+                        "query": match.get("description", ""),
+                        "prompt": "",
+                    }
+                    print(f"  [photo_matcher] cover: {match.get('filename')} ({match.get('service_type')})")
 
     def _set_cover(rel_path, provider, source_type, query="", prompt=""):
         paths["cover"] = rel_path
@@ -2588,14 +2638,17 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
     else:
         cover_hl = cover_pt
 
+    clips = (media_paths or {}).get("clips", {})
     cover_img = (media_paths or {}).get("cover", "")
-    cover_bg_style = (
-        f'style="background-image:linear-gradient(rgba(14,13,11,.72),rgba(14,13,11,.72)),'
-        f'url(\'{cover_img}\');background-size:cover;background-position:center top;"'
-        if cover_img else ""
-    )
+    # Cover is always a motion slide — full-bleed photo/clip background
+    if cover_img:
+        cover_clip_el = f'<div class="clip-bg" style="background-image:url(\'{cover_img}\');"></div>'
+    else:
+        cover_clip_el = '<div class="clip-bg clip-placeholder"><div class="clip-placeholder-label">▶ CLIP — COVER</div></div>'
     slides_html = f"""
-<div class="slide slide-cover" {cover_bg_style}>
+<div class="slide slide-cover slide-motion">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  {cover_clip_el}
   <div class="tag">Quem decidiu isso?</div>
   <div class="cover-date">{cover_date}</div>
   <div class="cover-hl">{cover_hl}</div>
@@ -2609,6 +2662,18 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
         stype = slide.get("type", "list")
         h_pt  = esc(slide.get("heading_pt", ""))
         h_en  = esc(slide.get("heading_en", ""))
+        # Alternating motion pattern: odd slide_i (3, 5) = motion (clip bg), even (2, 4, 6) = static
+        is_motion_slide = (slide_i % 2 == 1)
+        motion_class = "slide-motion" if is_motion_slide else ""
+        clip_path = clips.get(slide_i, "") or (media_paths or {}).get("slides", {}).get(slide_i, "")
+        if is_motion_slide:
+            if clip_path:
+                clip_el = f'<div class="clip-bg" style="background-image:url(\'{clip_path}\');"></div>'
+            else:
+                clip_el = f'<div class="clip-bg clip-placeholder"><div class="clip-placeholder-label">▶ CLIP — SLIDE {slide_i}</div></div>'
+        else:
+            clip_el = ""
+        corners = '<div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>'
 
         if stype == "profile":
             party    = esc(slide.get("party_tag", ""))
@@ -2648,7 +2713,8 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
                 )
 
             slides_html += f"""
-<div class="slide slide-profile">
+<div class="slide slide-profile {motion_class}">
+  {corners}{clip_el}
   <div class="tag">Quem é</div>
   <div class="party-tag">{party}</div>
   <div class="slide-hl">{h_pt}</div>
@@ -2678,7 +2744,8 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
             else:
                 ctx_slot = ""
             slides_html += f"""
-<div class="slide slide-data">
+<div class="slide slide-data {motion_class}">
+  {corners}{clip_el}
   <div class="tag">Os Números</div>
   <div class="slide-hl">{h_pt}</div>
   <div class="slide-en">{h_en}</div>{ctx_slot}
@@ -2702,7 +2769,8 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
             else:
                 ctx_slot = ""
             slides_html += f"""
-<div class="slide slide-list">
+<div class="slide slide-list {motion_class}">
+  {corners}{clip_el}
   <div class="tag">Segue o fio</div>
   <div class="slide-hl">{h_pt}</div>
   <div class="slide-en">{h_en}</div>{ctx_slot}
@@ -2725,7 +2793,8 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
             else:
                 ctx_slot = ""
             slides_html += f"""
-<div class="slide slide-quote">
+<div class="slide slide-quote {motion_class}">
+  {corners}{clip_el}
   <div class="tag">Não é opinião</div>
   <div class="slide-hl">{h_pt}</div>
   <div class="slide-en">{h_en}</div>{ctx_slot}
@@ -2745,6 +2814,7 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
     )
     slides_html += f"""
 <div class="slide slide-sources">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">Fontes</div>
   <div class="src-head">A FONTE<br>É <span class="accent">ESTA.</span></div>
   <div class="src-list">{src_rows}</div>
@@ -2759,60 +2829,77 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
 <head>
 <meta charset="UTF-8">
 <title>Brazil News — {slug}</title>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;1,9..144,700&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
+/* ── Rachadinha v2 brand spec — canonical native Brazil template ── */
 *{{box-sizing:border-box;margin:0;padding:0}}
-:root{{--ob:#0E0D0B;--pa:#F2ECE0;--ca:#F4C430;--bl:#1F3A5F;--gr:#7A7267;--W:1080px;--H:1350px;--P:108px}}
-body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px;font-family:'Inter',sans-serif}}
+:root{{--ob:#0A0A0A;--pa:#F0EBE3;--ca:#CBCC10;--gr:rgba(240,235,227,0.45);--rule:rgba(240,235,227,0.12);--W:1080px;--H:1350px;--P:108px}}
+body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}}
 .slide{{width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);padding:var(--P);position:relative;overflow:hidden;flex-shrink:0;display:flex;flex-direction:column}}
-.tag{{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--gr);letter-spacing:.06em;text-transform:uppercase;margin-bottom:28px}}
+/* Corner brackets */
+.corner{{position:absolute;width:28px;height:28px;z-index:10}}
+.corner.tl{{top:40px;left:40px;border-top:2px solid rgba(203,204,16,.6);border-left:2px solid rgba(203,204,16,.6)}}
+.corner.tr{{top:40px;right:40px;border-top:2px solid rgba(203,204,16,.6);border-right:2px solid rgba(203,204,16,.6)}}
+.corner.bl{{bottom:40px;left:40px;border-bottom:2px solid rgba(203,204,16,.6);border-left:2px solid rgba(203,204,16,.6)}}
+.corner.br{{bottom:40px;right:40px;border-bottom:2px solid rgba(203,204,16,.6);border-right:2px solid rgba(203,204,16,.6)}}
+/* Clip/photo full-bleed background (motion slides) */
+.clip-bg{{position:absolute;inset:0;background-size:cover;background-position:center;z-index:1}}
+.clip-bg::after{{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,10,.28) 0%,rgba(10,10,10,.82) 100%)}}
+.slide-motion > *:not(.clip-bg):not(.corner){{position:relative;z-index:3}}
+.slide-motion .clip-bg[style*="background-image"]{{filter:grayscale(.15) contrast(1.1) brightness(.62)}}
+/* Clip placeholder shown when no clip fetched yet */
+.clip-placeholder{{position:absolute;inset:0;z-index:1;background:repeating-linear-gradient(45deg,rgba(203,204,16,.035),rgba(203,204,16,.035) 2px,transparent 2px,transparent 14px);border:none}}
+.clip-placeholder-label{{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:rgba(203,204,16,.35);white-space:nowrap}}
+/* Typography */
+.tag{{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--gr);margin-bottom:32px}}
 .accent{{color:var(--ca)}}
-.swipe{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);right:var(--P)}}
-.footer-handle{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);left:var(--P)}}
+.swipe{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);right:var(--P);z-index:10;letter-spacing:.08em}}
+.footer-handle{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);left:var(--P);z-index:10;letter-spacing:.06em}}
 /* COVER */
-.slide-cover .cover-date{{font-family:'JetBrains Mono',monospace;font-size:24px;color:var(--gr);margin-bottom:40px}}
-.slide-cover .cover-hl{{font-family:'Fraunces',serif;font-weight:700;font-size:104px;line-height:1.0;text-transform:uppercase;margin-bottom:28px}}
-.slide-cover .cover-en{{font-family:'Inter',sans-serif;font-style:italic;font-size:34px;color:var(--gr)}}
-/* HEADINGS */
-.slide-hl{{font-family:'Fraunces',serif;font-weight:700;font-size:68px;line-height:1.1;text-transform:uppercase;margin-bottom:12px}}
-.slide-en{{font-family:'Inter',sans-serif;font-style:italic;font-size:26px;color:var(--gr);margin-bottom:36px}}
+.slide-cover .cover-date{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);margin-bottom:44px;letter-spacing:.1em}}
+.slide-cover .cover-hl{{font-family:'Anton',sans-serif;font-size:112px;line-height:.95;text-transform:uppercase;letter-spacing:-.01em;margin-bottom:28px}}
+.slide-cover .cover-en{{font-family:'Roboto Condensed',sans-serif;font-size:32px;color:var(--gr);font-weight:400;line-height:1.35}}
+/* INNER SLIDE HEADINGS */
+.slide-hl{{font-family:'Anton',sans-serif;font-size:72px;line-height:.98;text-transform:uppercase;letter-spacing:-.01em;margin-bottom:12px}}
+.slide-en{{font-family:'Roboto Condensed',sans-serif;font-size:24px;color:var(--gr);font-weight:400;margin-bottom:32px;line-height:1.3}}
 /* PROFILE */
-.party-tag{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--ca);background:rgba(244,196,48,.1);padding:6px 14px;display:inline-block;margin-bottom:20px}}
-.profile-layout{{display:flex;gap:40px;align-items:flex-start;flex:1}}
-.sticker-slot{{width:260px;min-height:360px;border:2px dashed var(--gr);display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:4px}}
-.sticker-placeholder{{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--gr);text-align:center;padding:16px;word-break:break-all}}
-.sticker-initials{{flex-direction:column;background:rgba(244,196,48,.06);border-color:rgba(244,196,48,.4)}}
-.bio-initials{{font-family:'Fraunces',serif;font-weight:700;font-size:90px;color:var(--ca);letter-spacing:.05em;line-height:1}}
-.bio-init-name{{font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--gr);text-align:center;margin-top:14px;text-transform:uppercase;letter-spacing:.1em;padding:0 8px}}
+.party-tag{{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--ca);background:rgba(203,204,16,.08);padding:6px 14px;display:inline-block;margin-bottom:18px;letter-spacing:.12em;text-transform:uppercase}}
+.profile-layout{{display:flex;gap:36px;align-items:flex-start;flex:1}}
+.sticker-slot{{width:260px;min-height:340px;border:2px solid rgba(203,204,16,.35);display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:4px;overflow:hidden}}
+.sticker-photo{{background-size:cover;background-position:center top;border:none;border-radius:4px}}
+.sticker-initials{{flex-direction:column;background:rgba(203,204,16,.05)}}
+.bio-initials{{font-family:'Anton',sans-serif;font-size:90px;color:var(--ca);letter-spacing:.02em;line-height:1}}
+.bio-init-name{{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--gr);text-align:center;margin-top:12px;text-transform:uppercase;letter-spacing:.1em;padding:0 8px}}
 .fact-list{{list-style:none;flex:1}}
-.fact-list li{{font-size:34px;font-weight:500;padding:16px 0;border-bottom:1px solid rgba(242,236,224,.12);line-height:1.3}}
+.fact-list li{{font-family:'Roboto Condensed',sans-serif;font-size:34px;font-weight:400;padding:14px 0;border-bottom:1px solid var(--rule);line-height:1.3}}
 .fact-list li::before{{content:"▸ ";color:var(--ca)}}
 /* DATA */
-.nums-grid{{display:grid;grid-template-columns:1fr 1fr;gap:28px;flex:1}}
-.num-block{{background:rgba(244,196,48,.06);border:1px solid rgba(244,196,48,.2);padding:28px 20px;border-radius:4px}}
-.num-val{{font-family:'Fraunces',serif;font-weight:700;font-size:76px;color:var(--ca);line-height:1;margin-bottom:10px}}
-.num-label{{font-size:28px;font-weight:500;margin-bottom:6px}}
-.num-en{{font-style:italic;font-size:20px;color:var(--gr)}}
+.nums-grid{{display:grid;grid-template-columns:1fr 1fr;gap:24px;flex:1}}
+.num-block{{background:rgba(203,204,16,.05);border:1px solid rgba(203,204,16,.18);padding:24px 18px;border-radius:4px}}
+.num-val{{font-family:'Anton',sans-serif;font-size:76px;color:var(--ca);line-height:1;margin-bottom:8px}}
+.num-label{{font-family:'Roboto Condensed',sans-serif;font-size:28px;font-weight:700;margin-bottom:4px}}
+.num-en{{font-family:'Roboto Condensed',sans-serif;font-size:20px;color:var(--gr)}}
 /* LIST */
 .item-list{{list-style:none;flex:1}}
-.item-list li{{font-size:36px;font-weight:500;padding:18px 0;border-bottom:1px solid rgba(242,236,224,.1);line-height:1.3}}
+.item-list li{{font-family:'Roboto Condensed',sans-serif;font-size:36px;font-weight:400;padding:16px 0;border-bottom:1px solid var(--rule);line-height:1.3}}
 .item-list li::before{{content:"→ ";color:var(--ca)}}
 /* QUOTE */
-.quote-block{{background:rgba(31,58,95,.25);border-left:4px solid var(--bl);padding:28px 32px;margin-bottom:28px;flex:1}}
-.quote-mark{{font-family:'Fraunces',serif;font-size:90px;color:var(--ca);line-height:.7;margin-bottom:12px}}
-.quote-text{{font-size:36px;font-style:italic;line-height:1.4;margin-bottom:20px}}
-.quote-source{{font-family:'JetBrains Mono',monospace;font-size:24px;color:var(--bl)}}
-.quote-context{{font-size:28px;color:var(--gr);line-height:1.4}}
+.quote-block{{border-left:4px solid var(--ca);padding:24px 28px;margin-bottom:24px;flex:1;background:rgba(203,204,16,.04)}}
+.quote-mark{{font-family:'Anton',sans-serif;font-size:80px;color:var(--ca);line-height:.7;margin-bottom:10px}}
+.quote-text{{font-family:'Roboto Condensed',sans-serif;font-size:34px;line-height:1.4;margin-bottom:18px}}
+.quote-source{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--ca);letter-spacing:.08em}}
+.quote-context{{font-family:'Roboto Condensed',sans-serif;font-size:26px;color:var(--gr);line-height:1.4}}
 /* SOURCES */
-.src-head{{font-family:'Fraunces',serif;font-weight:700;font-size:76px;line-height:1.0;text-transform:uppercase;margin-bottom:36px}}
+.src-head{{font-family:'Anton',sans-serif;font-size:80px;line-height:.95;text-transform:uppercase;margin-bottom:32px}}
 .src-list{{flex:1}}
-.src-row{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);display:flex;gap:18px;padding:10px 0;border-bottom:1px solid rgba(242,236,224,.08);line-height:1.4}}
-.src-num{{color:var(--ca);flex-shrink:0;width:32px}}
-.cta-pt{{font-size:36px;font-weight:700;margin-top:28px}}
-.cta-en{{font-style:italic;font-size:26px;color:var(--gr);margin-top:6px}}
-/* CONTEXT IMAGE SLOT */
-.context-img-slot{{height:240px;border:2px dashed var(--gr);border-radius:4px;display:flex;align-items:center;justify-content:center;margin-bottom:20px;background:rgba(122,114,103,.06);flex-shrink:0}}
-.ctx-query{{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--ca);text-align:center;padding:16px;opacity:.75}}
+.src-row{{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--gr);display:flex;gap:16px;padding:10px 0;border-bottom:1px solid var(--rule);line-height:1.4}}
+.src-num{{color:var(--ca);flex-shrink:0;width:30px;font-weight:700}}
+.cta-pt{{font-family:'Anton',sans-serif;font-size:52px;line-height:1;color:var(--ca);text-transform:uppercase;margin-top:24px}}
+.cta-en{{font-family:'Roboto Condensed',sans-serif;font-size:24px;color:var(--gr);margin-top:6px}}
+/* CONTEXT IMAGE SLOT (static slides) */
+.context-img-slot{{min-height:280px;max-height:380px;border:2px solid rgba(203,204,16,.25);border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:18px;background:rgba(10,10,10,.3);flex-shrink:0}}
+.context-img-slot img{{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(.08) contrast(1.03)}}
+.ctx-query{{font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--ca);text-align:center;padding:16px;opacity:.7}}
 </style>
 </head>
 <body>
