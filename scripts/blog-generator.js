@@ -186,13 +186,13 @@ async function getApprovedTopicFromSheet() {
       const blogUrl = (row[COL.blogUrl] || '').trim();
       const rawIdea = (row[COL.rawIdea] || '').trim();
 
-      if (status === '🚀 Queued' && !blogUrl && rawIdea) {
-        console.log(`Sheet topic selected (row ${i + 2}) [QUEUED → will publish]: "${row[COL.topicDirection] || rawIdea}"`);
+      if ((status === '🚀 Queued' || status === '✅ Approved') && !blogUrl && rawIdea) {
+        console.log(`Sheet topic selected (row ${i + 2}) [${status} → will publish]: "${row[COL.topicDirection] || rawIdea}"`);
         return buildSheetData(row, i, token, '🚀 Queued');
       }
     }
 
-    // No manually-approved rows — try auto-approving safe Idea rows
+    // No approved/queued rows — try auto-approving safe Idea rows
     const autoApproved = await autoApproveIdeasInSheet(rows, token);
     if (autoApproved) return autoApproved;
 
