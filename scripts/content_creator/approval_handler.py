@@ -45,7 +45,7 @@ def search_gmail_replies(token, after_date=None):
     if not after_date:
         after_date = (datetime.now(ET) - timedelta(days=1)).strftime("%Y/%m/%d")
 
-    query = urllib.parse.quote(f'subject:"Re: DAILY CONTENT" after:{after_date}')
+    query = urllib.parse.quote(f'(subject:"Re: [REVIEW]" OR subject:"Re: DAILY CONTENT") after:{after_date}')
     url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages?q={query}&maxResults=20"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
 
@@ -136,6 +136,36 @@ def parse_approval(reply_text):
         return {"action": "approve", "variant": "black"}  # no color = default to black
 
     return {"action": "change", "feedback": reply_text, "keyword": "FEEDBACK"}
+
+
+def _extract_target_from_subject(subject: str) -> dict:
+    s = subject or ""
+    m_folder = re.search(r"FOLDER:([a-zA-Z0-9_-]{20,})", s)
+    m_post = re.search(r"\[REVIEW\]\s+[A-Z]+\s+—\s+([a-zA-Z0-9_-]+)\s+—", s)
+    return {
+        "folder_id": m_folder.group(1) if m_folder else "",
+        "post_id_hint": m_post.group(1) if m_post else "",
+    }
+
+
+def _pick_target_posts(reply: dict, pending: list[dict]) -> list[dict]:
+    tgt = _extract_target_from_subject(reply.get("subject", ""))
+    fid = tgt.get("folder_id", "")
+    if fid:
+        scoped = []
+        for p in pending:
+            m = re.search(r"/folders/([a-zA-Z0-9_-]+)", p.get("static_link", ""))
+            if m and m.group(1) == fid:
+                scoped.append(p)
+        if scoped:
+            return scoped
+    pid = (tgt.get("post_id_hint") or "").strip()
+    if pid:
+        scoped = [p for p in pending if (p.get("post_id", "") == pid)]
+        if scoped:
+            return scoped
+    # legacy fallback
+    return pending[:1]
 
 
 def _get_drive_service():
@@ -498,6 +528,13 @@ def re_render_post(post, feedback):
     ).execute()
     new_folder_id = new_folder["id"]
 
+    # Upload cover.html at version root
+    drive.files().create(
+        body={"name": "cover.html", "parents": [new_folder_id]},
+        media_body=MediaFileUpload(str(html_path), mimetype="text/html"),
+        supportsAllDrives=True, fields="id",
+    ).execute()
+
     # Create png/ subfolder inside version folder (matches carousel folder standard)
     png_drive_folder = drive.files().create(
         body={"name": "png", "mimeType": "application/vnd.google-apps.folder", "parents": [new_folder_id]},
@@ -511,6 +548,50 @@ def re_render_post(post, feedback):
                 media_body=MediaFileUpload(str(f), mimetype="image/png"),
                 supportsAllDrives=True, fields="id",
             ).execute()
+
+    # resources/ with media provenance including user feedback
+    resources_folder_id = drive.files().create(
+        body={"name": "resources", "mimeType": "application/vnd.google-apps.folder", "parents": [new_folder_id]},
+        supportsAllDrives=True, fields="id",
+    ).execute()["id"]
+    images_folder_id = drive.files().create(
+        body={"name": "images", "mimeType": "application/vnd.google-apps.folder", "parents": [resources_folder_id]},
+        supportsAllDrives=True, fields="id",
+    ).execute()["id"]
+    local_images = work / "resources" / "images"
+    if local_images.exists():
+        for f in sorted(local_images.iterdir()):
+            if f.is_file() and not f.name.startswith("."):
+                drive.files().create(
+                    body={"name": f.name, "parents": [images_folder_id]},
+                    media_body=MediaFileUpload(str(f)),
+                    supportsAllDrives=True, fields="id",
+                ).execute()
+
+    prov = media_paths.get("provenance", {}) if isinstance(media_paths, dict) else {}
+    if isinstance(prov, dict):
+        if isinstance(prov.get("cover"), dict):
+            prov["cover"]["user_feedback"] = feedback
+        for sv in (prov.get("slides", {}) or {}).values():
+            if isinstance(sv, dict):
+                sv["user_feedback"] = feedback
+    prov_payload = {
+        "post_id": post_id,
+        "topic": topic,
+        "niche": niche,
+        "version_folder_id": new_folder_id,
+        "generated_at": datetime.now(ET).isoformat(),
+        "user_feedback": feedback,
+        "cover": prov.get("cover", {}),
+        "slides": prov.get("slides", {}),
+    }
+    prov_path = work / "media_provenance.json"
+    prov_path.write_text(json.dumps(prov_payload, indent=2), encoding="utf-8")
+    drive.files().create(
+        body={"name": "media_provenance.json", "parents": [resources_folder_id]},
+        media_body=MediaFileUpload(str(prov_path), mimetype="application/json"),
+        supportsAllDrives=True, fields="id",
+    ).execute()
 
     new_static_link = f"https://drive.google.com/drive/folders/{new_folder_id}"
 
@@ -538,7 +619,7 @@ def re_render_post(post, feedback):
             break
 
     from email_preview import send_preview, make_cover_thumbnails_public
-    cover_urls = make_cover_thumbnails_public(new_folder_id, token)
+    cover_urls = make_cover_thumbnails_public(png_drive_folder, token)
     post_updated = dict(post)
     post_updated["static_link"] = new_static_link
     post_updated["static_folder_id"] = new_folder_id
@@ -699,11 +780,15 @@ def process_replies():
 
     for reply in replies:
         result = parse_approval(reply["reply_text"])
-        print(f"  Reply: '{reply['reply_text'][:60]}' → {result['action']}")
+        scoped_posts = _pick_target_posts(reply, pending)
+        print(
+            f"  Reply: '{reply['reply_text'][:60]}' → {result['action']} "
+            f"(targets={len(scoped_posts)})"
+        )
 
         if result["action"] == "approve":
             variant = result["variant"]
-            for post in pending:
+            for post in scoped_posts:
                 post_id = post["post_id"]
                 niche = post["niche"]
                 static_folder_id = re.search(r'/folders/([a-zA-Z0-9_-]+)', post["static_link"])
@@ -753,7 +838,7 @@ def process_replies():
             stats["approved"] += 1
 
         elif result["action"] == "skip":
-            for post in pending:
+            for post in scoped_posts:
                 update_catalog(post["post_id"], "skipped")
             stats["skipped"] += 1
 
@@ -761,7 +846,7 @@ def process_replies():
             feedback = result.get("feedback", "")
             stats["changes"] += 1
             print(f"  Change requested: {feedback[:80]}")
-            for post in pending:
+            for post in scoped_posts:
                 try:
                     if re_render_post(post, feedback):
                         print(f"  Re-render triggered: {post['post_id']}")

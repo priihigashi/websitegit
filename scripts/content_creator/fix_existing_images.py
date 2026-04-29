@@ -28,6 +28,7 @@ Defaults:
   --provider (none = full cascade)
 """
 import argparse, hashlib, json, os, re, sys, tempfile, time
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -601,6 +602,7 @@ def main():
         print(f"  Processing first {args.limit} only (--limit flag)")
 
     totals = {"fixed": 0, "skipped": 0, "errors": 0}
+    run_summaries = []
 
     with tempfile.TemporaryDirectory(prefix="fix_images_") as tmp:
         work_dir = Path(tmp)
@@ -615,11 +617,43 @@ def main():
             totals["fixed"] += summary["fixed"]
             totals["skipped"] += summary["skipped"]
             totals["errors"] += summary["errors"]
+            run_summaries.append(summary)
 
     print(f"\n{'[DRY RUN] ' if args.dry_run else ''}Done.")
     print(f"  Fixed  : {totals['fixed']}")
     print(f"  Skipped: {totals['skipped']}")
     print(f"  Errors : {totals['errors']}")
+
+    # HTML summary email for on-demand review
+    try:
+        rows = []
+        for s in run_summaries:
+            rows.append(
+                f"<tr><td style='padding:6px 8px;color:#ddd'>{s.get('folder','')}</td>"
+                f"<td style='padding:6px 8px;color:#CBCC10'>{s.get('fixed',0)}</td>"
+                f"<td style='padding:6px 8px;color:#aaa'>{s.get('skipped',0)}</td>"
+                f"<td style='padding:6px 8px;color:#f99'>{s.get('errors',0)}</td></tr>"
+            )
+        html = (
+            "<html><body style='background:#0a0a0a;padding:20px;font-family:Arial,sans-serif;'>"
+            "<h2 style='color:#CBCC10'>Fix Existing Images — Summary</h2>"
+            f"<p style='color:#ccc'>Folder: {args.folder} | Niche: {args.niche}</p>"
+            "<table style='border-collapse:collapse;width:100%;max-width:900px;'>"
+            "<tr><th style='text-align:left;color:#eee;padding:6px 8px'>Version Folder</th>"
+            "<th style='text-align:left;color:#eee;padding:6px 8px'>Fixed</th>"
+            "<th style='text-align:left;color:#eee;padding:6px 8px'>Skipped</th>"
+            "<th style='text-align:left;color:#eee;padding:6px 8px'>Errors</th></tr>"
+            + "".join(rows) + "</table></body></html>"
+        )
+        subprocess.run([
+            "gh", "workflow", "run", "send_email.yml",
+            "--repo", "priihigashi/oak-park-ai-hub",
+            "-f", "to=priscila@oakpark-construction.com",
+            "-f", f"subject=[REVIEW] fix_existing_images — fixed {totals['fixed']} — errors {totals['errors']}",
+            "-f", f"html_body={html}",
+        ], check=False, timeout=30)
+    except Exception as e:
+        print(f"  Summary email send failed (non-fatal): {e}")
 
 
 if __name__ == "__main__":

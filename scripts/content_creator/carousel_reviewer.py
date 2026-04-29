@@ -802,6 +802,30 @@ def send_review_email(failed_posts: list[dict], all_posts: list[dict]):
     ]
 
     body = "\n".join(lines)
+    html_rows = []
+    for p in all_posts:
+        status = "PASS" if p["passed"] else "ISSUES"
+        issues_html = "<br/>".join([f"• {i}" for i in p["issues"]]) or "None"
+        html_rows.append(
+            "<tr>"
+            f"<td style='padding:8px;color:#ddd'>{status}</td>"
+            f"<td style='padding:8px;color:#ddd'>{p['topic']}</td>"
+            f"<td style='padding:8px'><a style='color:#CBCC10' href='{p['drive_link']}'>open</a></td>"
+            f"<td style='padding:8px;color:#aaa;font-size:12px;line-height:1.4'>{issues_html}</td>"
+            "</tr>"
+        )
+    html_body = (
+        "<html><body style='background:#0a0a0a;padding:20px;font-family:Arial,sans-serif;'>"
+        f"<h2 style='color:#CBCC10'>Carousel Reviewer ({FIX_MODE})</h2>"
+        f"<p style='color:#ccc'>Total {total} | Passed {n_pass} | Issues {n_fail} | Auto-fixed {n_autofixed}</p>"
+        "<table style='border-collapse:collapse;width:100%;max-width:1200px;'>"
+        "<tr><th style='padding:8px;color:#eee;text-align:left'>Status</th>"
+        "<th style='padding:8px;color:#eee;text-align:left'>Carousel</th>"
+        "<th style='padding:8px;color:#eee;text-align:left'>Folder</th>"
+        "<th style='padding:8px;color:#eee;text-align:left'>Issues</th></tr>"
+        + "".join(html_rows) +
+        "</table></body></html>"
+    )
 
     if DRY_RUN:
         print("\n[DRY RUN] Would send email:")
@@ -817,6 +841,7 @@ def send_review_email(failed_posts: list[dict], all_posts: list[dict]):
                 "-f", f"to={ALERT_EMAIL}",
                 "-f", f"subject={subject}",
                 "-f", f"body={body}",
+                "-f", f"html_body={html_body}",
             ],
             check=False, timeout=30,
         )
