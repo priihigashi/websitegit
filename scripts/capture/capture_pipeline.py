@@ -1283,10 +1283,11 @@ def transcribe_audio(audio_path: str, url: str = "") -> str:
                         print(f"  Transcribed via managed transcript API [{managed_provider}] ({len(managed)} chars)")
                         return managed
                 if not fallback_audio:
-                    raise RuntimeError(
-                        f"All YouTube paths failed for {url}: transcript-api blocked + "
-                        f"yt-dlp + Apify + managed transcript APIs returned no transcript/audio"
-                    ) from e
+                    print(
+                        "  WARNING: All YouTube transcript/download paths failed. "
+                        "Continuing with placeholder transcript so capture is not lost."
+                    )
+                    return f"[TRANSCRIPT_UNAVAILABLE] Could not retrieve transcript/audio for {url}"
                 return _whisper_with_fallback(fallback_audio, fmt="text", url=url)
 
     return _whisper_with_fallback(audio_path, fmt="text", url=url)
@@ -1771,11 +1772,35 @@ Fake news / misinformation detection: Does this content contain or spread a spec
 
 Respond with JSON only:
 {{"niche": "Oak Park" or "Brazil" or "UGC" or "News", "content_type": "Talking Head/Expert" or "Project Progress/Before-After" or "Product Tips" or "Other", "classification": "READY" or "NEEDS_REVIEW" or "NOT_RELEVANT", "summary": "one sentence", "hook": "suggested hook for repost or inspiration", "notes": "why classified this way", "series_override": "Verificamos" or "Fact-Checked" or "", "fake_news_route": "A" or "B" or "", "fake_news_confidence": "high" or "medium" or "low" or "", "additional_niches": [] or ["Brazil"] or ["News"] or ["Brazil", "News"] — list of OTHER niches this content should ALSO be captured for. Rules: (1) if user notes say "both", "bilingual", "brazil and usa", "for both" → include the other niche; (2) if topic is international (foreign elections, global leaders, geopolitics affecting multiple language audiences) → add both "Brazil" and "News"; (3) Brazil-only domestic politics → empty list; (4) USA-only domestic → empty list; (5) construction/OPC → empty list}}"""
-    msg = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=500,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    text = msg.content[0].text
+    text = ""
+    last_err = None
+    for attempt in range(1, 4):
+        try:
+            msg = client.messages.create(
+                model="claude-sonnet-4-6", max_tokens=500,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            text = msg.content[0].text
+            break
+        except Exception as e:
+            last_err = e
+            print(f"  WARNING analyze_opc Claude call failed (attempt {attempt}/3): {type(e).__name__}: {e}")
+            if attempt < 3:
+                time.sleep(2 * attempt)
+    if not text:
+        print("  WARNING analyze_opc: using local fallback classification after repeated Claude/API failures.")
+        return {
+            "niche": "Oak Park",
+            "content_type": "Other",
+            "classification": "NEEDS_REVIEW",
+            "summary": transcript[:150],
+            "hook": "",
+            "notes": f"Claude unavailable: {type(last_err).__name__ if last_err else 'unknown'}",
+            "series_override": "",
+            "fake_news_route": "",
+            "fake_news_confidence": "",
+            "additional_niches": [],
+        }
     m = re.search(r'\{.*\}', text, re.DOTALL)
     if m:
         try:
