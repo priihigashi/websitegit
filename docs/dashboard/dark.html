@@ -350,8 +350,8 @@ function rInsightAG(ag,c){
   const zeros=ag.filter(a=>a.spend===0);
   const low=ag.filter(a=>a.spend>0&&a.spend<20);
   let txt='';
-  if(pct>80) txt+='<strong>'+dom.name.split(' ')[0]+'</strong> is using <strong>'+pct+'%</strong> of your entire budget. That is too concentrated &mdash; if that ad group is attracting the wrong searches, you have nowhere to shift budget. Consider splitting &ldquo;New &amp; Addition&rdquo; into two groups: <em>New Construction</em> and <em>Renovations/Additions</em> so you can control bids separately. ';
-  if(zeros.length>0) txt+='<strong>'+zeros.map(a=>a.name.split(' ')[0]).join(', ')+'</strong> had $0 spend this period. This usually means the bids are below the minimum to win any auction, or the ads have a low Quality Score. Before assuming they are broken &mdash; check the &ldquo;First page bid estimate&rdquo; in Google Ads UI. ';
+  if(pct>80) txt+='<strong>'+dom.name+'</strong> is using <strong>'+pct+'%</strong> of your entire budget. That is too concentrated &mdash; if that ad group is attracting the wrong searches, you have nowhere to shift budget. Consider splitting &ldquo;New &amp; Addition&rdquo; into two groups: <em>New Construction</em> and <em>Renovations/Additions</em> so you can control bids separately. ';
+  if(zeros.length>0) txt+='<strong>'+zeros.map(a=>a.name).join(', ')+'</strong> had $0 spend this period. This usually means the bids are below the minimum to win any auction, or the ads have a low Quality Score. Before assuming they are broken &mdash; check the &ldquo;First page bid estimate&rdquo; in Google Ads UI. ';
   if(!txt) txt='Budget distribution looks reasonable this period. Monitor that CONCRETE FOUNDATION maintains at least 10% of spend to generate enough data for bid optimization.';
   document.getElementById('ins-ag').innerHTML=txt;
 }
