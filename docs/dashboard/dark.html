@@ -313,7 +313,7 @@ canvas{max-height:180px}
       <div class="ins-steps-box" id="ins-ce-steps"></div>
     </div>
   </div>
-  <div class="foot">Auto-refreshed every Monday 8 AM ET &nbsp;|&nbsp; <a href="/oak-park-ai-hub/dashboard/">&#9675; Light version</a> &nbsp;|&nbsp; priihigashi/oak-park-ai-hub</div>
+  <div class="foot">Auto-refreshed every Monday 8 AM ET &nbsp;|&nbsp; <a href="/oak-park-ai-hub/dashboard/index.html">&#9728; Light version</a> &nbsp;|&nbsp; priihigashi/oak-park-ai-hub</div>
 </div>
 <script>
 // ── DATA (auto-replaced by ads_dashboard.py each refresh) ──
@@ -2933,6 +2933,51 @@ const STEPS = {
       'If your site is on WordPress: install the <strong>Site Kit by Google</strong> plugin &rarr; it adds the tag automatically',
       'After adding: go back to GA4 &rarr; Realtime report &rarr; visit your website &rarr; confirm you appear in realtime data'
     ]
+  },
+  is_low: {
+    title:'Raise Impression Share from below 20%',
+    steps:[
+      '<strong>Step 1 — check budget loss first:</strong> Go to <a href="https://ads.google.com" target="_blank">ads.google.com</a> &rarr; Campaigns &rarr; Columns &rarr; add &ldquo;Search lost IS (budget)&rdquo; and &ldquo;Search lost IS (rank)&rdquo;',
+      'If <em>budget loss &gt; 5%</em>: raise daily budget by 20&ndash;30%. At 13% IS, budget is almost certainly capping you.',
+      'If <em>rank loss &gt; 10%</em>: increase Max CPC on your top 5&ndash;10 keywords by 20% &rarr; monitor for 7 days',
+      '<strong>Step 2 — remove budget waste first:</strong> Add the 8 negative keyword groups (see Neg Keyword action card below) before raising budget &mdash; otherwise you pay for the same irrelevant clicks at higher volume',
+      'Re-check IS after 2 full weeks &mdash; Smart Bidding needs the signal to stabilize before IS improves'
+    ]
+  },
+  is_med: {
+    title:'Improve Impression Share (20–40% range)',
+    steps:[
+      'Go to Campaigns &rarr; add column &ldquo;Search lost IS (budget)&rdquo; — if &gt;5%, a small budget increase will lift IS without raising bids',
+      'Review keyword match types: if all keywords are Exact Match, add a few Phrase Match variants to capture related queries you are currently missing',
+      'Check Quality Score on top keywords &rarr; any QS under 6 is dragging down Ad Rank &rarr; improve ad relevance + landing page match',
+      'Consider adding ad extensions you are missing: call extension, location extension, sitelinks &mdash; these improve Ad Rank at no extra bid cost',
+      'Monitor for 2 weeks after any change before evaluating IS shift'
+    ]
+  },
+  daypart: {
+    title:'Pause ads on zero-call days (ad schedule)',
+    steps:[
+      'Go to <a href="https://ads.google.com" target="_blank">ads.google.com</a> &rarr; Campaigns &rarr; click your campaign &rarr; <strong>Ad schedule</strong> (left sidebar)',
+      'Click <strong>Edit</strong> &rarr; click &ldquo;+ Add&rdquo; to build a custom schedule',
+      'Add only the days that <em>do</em> produce calls. Leave the zero-call days (shown in this card) out of the schedule entirely.',
+      'Example: if Sunday and Friday show $0 calls &mdash; do not add them to the schedule. The campaign will simply not run those days.',
+      'Save &rarr; check back in 7 days to confirm spend stopped on those days. The saved budget will shift to your active days automatically.'
+    ]
+  },
+  neg_kw: {
+    title:'Add 8 negative keyword groups (~$200/mo recovered)',
+    steps:[
+      'Go to <a href="https://ads.google.com" target="_blank">ads.google.com</a> &rarr; Tools &rarr; <strong>Shared library</strong> &rarr; Negative keyword lists &rarr; <strong>+ New list</strong>',
+      '<strong>Group 1 — Painting:</strong> painting, painters, paint job, house painting, exterior paint',
+      '<strong>Group 2 — Home-buyers (tract builders):</strong> Lennar, Pulte, DR Horton, new construction home, model home',
+      '<strong>Group 3 — Competitors:</strong> Ryans, KD Construction &mdash; add their exact business names',
+      '<strong>Group 4 — Cost-shoppers / DIY:</strong> how much does, DIY, do it yourself, cheap, free estimate template, cost calculator',
+      '<strong>Group 5 — Out-of-area:</strong> Bradenton, Tampa, Orlando, Sarasota, Cape Coral — you only serve South FL',
+      '<strong>Group 6 — Small-job concrete:</strong> stepping stones, small slab, patio blocks, concrete resurfacing',
+      '<strong>Group 7 — Metal/prefab:</strong> metal building, prefab, modular, steel frame, container home',
+      '<strong>Group 8 — Developer project names:</strong> any large development community names in your area (check search terms report for recurring branded terms)',
+      'After adding all groups: link the list to your campaign &rarr; Campaigns &rarr; Keywords &rarr; Negative keywords &rarr; &ldquo;Use negative keyword list&rdquo;'
+    ]
   }
 };
 
@@ -2982,6 +3027,25 @@ function rWarnings(c,ag,kw){
   if(st&&st.spend===0) addW(el,'y','&#x1F7E1;','<strong>STUCCO: $0 spend, 0 clicks.</strong> Ads not showing — below minimum bid or Quality Score issue.','Click to see fix steps &#8595;','stucco',null);
   if(cl>cv*2&&cv<cl) addW(el,'y','&#x1F7E1;','<strong>'+cl+' calls tracked but only '+cv+' conversion logged.</strong> '+Math.round(cl-cv)+' real leads may be invisible to Google.','Click to see fix steps &#8595;','conv_mismatch',null);
   addW(el,'y','&#x1F7E1;','<strong>Website has NO tracking code.</strong> GA4 not installed on oakpark-construction.com — Google cannot optimise bids without it.','Click for step-by-step instructions &#8595;','ga4',null);
+
+  // ── Impression Share warning (from research Doc C: IS=13.2% = missing 87% of eligible auctions) ──
+  if(c.is_pct !== undefined && c.is_pct !== null){
+    if(c.is_pct < 20) addW(el,'','&#x1F534;','<strong>Impression Share: '+c.is_pct+'%</strong> — you are missing <strong>'+(100-c.is_pct).toFixed(0)+'%</strong> of eligible searches this period. For every 1 lead you get, '+Math.round((100-c.is_pct)/c.is_pct)+' more are going to competitors.','Raise daily budget or Max CPC to capture more of your eligible impressions','is_low',null);
+    else if(c.is_pct < 40) addW(el,'y','&#x1F7E1;','<strong>Impression Share: '+c.is_pct+'%</strong> — capturing less than half of eligible searches. Room to scale spend before hitting diminishing returns.','Click for steps to improve Impression Share &#8595;','is_med',null);
+  }
+
+  // ── Day-of-week warning (from research Doc C: Sunday $244/0 conv, Friday $182/0 conv) ──
+  const dow=DATA.dow||[];
+  if(dow.length>0){
+    const wasteDays=dow.filter(d=>(d.spend>100)&&d.calls===0);
+    if(wasteDays.length>0){
+      const dayStr=wasteDays.map(d=>d.day+' $'+d.spend.toFixed(0)).join(', ');
+      addW(el,'','&#x1F534;','<strong>Day-parting waste: '+dayStr+' — no calls, zero leads.</strong> This is recoverable budget.','Add an ad schedule to pause ads on these days (takes 2 min in the UI) &#8595;','daypart',null);
+    }
+  }
+
+  // ── Negative keyword action ready (Doc B: 8 groups, ~$200/mo recoverable) ──
+  addW(el,'g','&#x2705;','<strong>Neg keyword list ready — ~$200/mo recoverable.</strong> 8 groups identified from 30-day search-term audit: Painting, Home-buyers (Lennar/Pulte/DR Horton), Competitors (Ryans, KD Construction), Cost-shoppers (DIY/how-much), Out-of-area (Bradenton/Tampa), Small-job concrete, Metal/prefab, Developer project names.','Click to see the groups + how to add them &#8595;','neg_kw',null);
 }
 
 function addW(el,cls,icon,text,action,key,kwData){

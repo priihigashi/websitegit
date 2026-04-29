@@ -36,13 +36,17 @@ CAMPAIGN_ID = "23314409466"
 def get_period_data(ga, customer_id, date_filter):
     r1 = ga.search(customer_id=customer_id, query=f"""
         SELECT campaign.name, metrics.clicks, metrics.impressions, metrics.ctr,
-               metrics.average_cpc, metrics.cost_micros, metrics.conversions, metrics.phone_calls
+               metrics.average_cpc, metrics.cost_micros, metrics.conversions,
+               metrics.phone_calls, metrics.search_impression_share,
+               metrics.search_top_impression_percentage
         FROM campaign
         WHERE {date_filter} AND campaign.id = {CAMPAIGN_ID}
     """)
     campaign = {}
     for row in r1:
         m = row.metrics
+        is_pct = round(m.search_impression_share * 100, 1) if m.search_impression_share else None
+        top_pct = round(m.search_top_impression_percentage * 100, 1) if m.search_top_impression_percentage else None
         campaign = {
             "clicks":      m.clicks,
             "impressions": m.impressions,
@@ -51,6 +55,8 @@ def get_period_data(ga, customer_id, date_filter):
             "spend":       round(m.cost_micros / 1e6, 2),
             "conversions": m.conversions,
             "calls":       m.phone_calls,
+            "is_pct":      is_pct,
+            "top_is_pct":  top_pct,
         }
 
     r2 = ga.search(customer_id=customer_id, query=f"""
@@ -243,6 +249,36 @@ def get_call_log(ga, customer_id):
     return calls
 
 
+def get_dayofweek_data(ga, customer_id):
+    """Pull last-30d spend + calls broken out by day of week. Used for day-parting warnings."""
+    DAY_NAMES = {0:"Sunday",1:"Monday",2:"Tuesday",3:"Wednesday",4:"Thursday",5:"Friday",6:"Saturday"}
+    dow = {}
+    try:
+        r = ga.search(customer_id=customer_id, query=f"""
+            SELECT segments.day_of_week, metrics.cost_micros, metrics.phone_calls, metrics.clicks
+            FROM campaign
+            WHERE segments.date DURING LAST_30_DAYS AND campaign.id = {CAMPAIGN_ID}
+        """)
+        for row in r:
+            name = _enum_name(row.segments.day_of_week)
+            # Try to get integer index from enum
+            try:
+                idx = row.segments.day_of_week.value
+                name = DAY_NAMES.get(idx, name)
+            except Exception:
+                pass
+            if name not in dow:
+                dow[name] = {"spend": 0, "calls": 0, "clicks": 0}
+            dow[name]["spend"]  = round(dow[name]["spend"]  + row.metrics.cost_micros / 1e6, 2)
+            dow[name]["calls"]  += row.metrics.phone_calls
+            dow[name]["clicks"] += row.metrics.clicks
+    except Exception as e:
+        print(f"  dayofweek failed: {e}")
+    # Return ordered Sun-Sat
+    order = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
+    return [{"day": d, **dow.get(d, {"spend": 0, "calls": 0, "clicks": 0})} for d in order if d in dow or dow]
+
+
 def get_all_data(customer_id, config):
     from google.ads.googleads.client import GoogleAdsClient
     client = GoogleAdsClient.load_from_dict(config)
@@ -257,13 +293,16 @@ def get_all_data(customer_id, config):
     print("  Pulling call log...")
     calls = get_call_log(ga, customer_id)
 
+    print("  Pulling day-of-week breakdown...")
+    dow_data = get_dayofweek_data(ga, customer_id)
+
     print("  Pulling config (budget, bid strategy, max CPC)...")
     config_data = get_config_data(ga, customer_id)
 
     print("  Pulling change log (last 30d)...")
     change_log = get_change_log(ga, customer_id)
 
-    return periods_data, calls, config_data, change_log
+    return periods_data, calls, config_data, change_log, dow_data
 
 
 def inject_data(html_path, data):
@@ -361,7 +400,7 @@ def main():
     }
 
     print("Pulling Google Ads data (all periods)...")
-    periods_data, calls, config_data, change_log = get_all_data(customer_id, config)
+    periods_data, calls, config_data, change_log, dow_data = get_all_data(customer_id, config)
 
     today = datetime.date.today().isoformat()
     data  = {
@@ -370,6 +409,7 @@ def main():
         "calls":   calls,
         "config":  config_data,
         "changes": change_log,
+        "dow":     dow_data,
     }
 
     dashboard_dir = Path(__file__).parent.parent / "docs" / "dashboard"
