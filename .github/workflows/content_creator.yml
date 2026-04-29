@@ -14,6 +14,47 @@ on:
       count_usa:
         description: 'Number of USA topics (not wired yet — pending template)'
         default: '2'
+      manual_mode:
+        description: 'Manual mode: build direct topic/template (bypasses queue)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      manual_niche:
+        description: 'Manual niche'
+        required: false
+        default: 'opc'
+        type: choice
+        options:
+          - 'opc'
+          - 'brazil'
+          - 'usa'
+      manual_topic:
+        description: 'Manual topic text'
+        required: false
+        default: ''
+      manual_template:
+        description: 'Manual template (single)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - 'auto'
+          - 'native'
+          - 'tip'
+          - 'progress'
+          - 'illustrated'
+          - 'cutout'
+      manual_template_set:
+        description: 'Template batch mode'
+        required: false
+        default: 'single'
+        type: choice
+        options:
+          - 'single'
+          - 'all'
 
 jobs:
   create-content:
@@ -28,6 +69,7 @@ jobs:
       PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
       APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
       PRI_OP_REPLICATE_API_KEY: ${{ secrets.PRI_OP_REPLICATE_API_KEY }}
+      PRI_OP_INFSH_API_KEY: ${{ secrets.PRI_OP_INFSH_API_KEY }}
       PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
@@ -68,6 +110,11 @@ jobs:
         env:
           WORK_DIR: /tmp/content_creator_run
           EXPORT_SCRIPT: ${{ github.workspace }}/scripts/content_creator/export_variants.js
+          MANUAL_MODE: ${{ github.event.inputs.manual_mode || 'false' }}
+          MANUAL_NICHE: ${{ github.event.inputs.manual_niche || '' }}
+          MANUAL_TOPIC: ${{ github.event.inputs.manual_topic || '' }}
+          MANUAL_TEMPLATE: ${{ github.event.inputs.manual_template || 'auto' }}
+          MANUAL_TEMPLATE_SET: ${{ github.event.inputs.manual_template_set || 'single' }}
 
       - name: Run carousel reviewer (post-build quality check)
         if: always()
@@ -148,6 +195,7 @@ jobs:
       PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
       APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
       PRI_OP_REPLICATE_API_KEY: ${{ secrets.PRI_OP_REPLICATE_API_KEY }}
+      PRI_OP_INFSH_API_KEY: ${{ secrets.PRI_OP_INFSH_API_KEY }}
       PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
@@ -183,6 +231,11 @@ jobs:
         env:
           WORK_DIR: /tmp/content_creator_run
           EXPORT_SCRIPT: ${{ github.workspace }}/scripts/content_creator/export_variants.js
+          MANUAL_MODE: ${{ github.event.inputs.manual_mode || 'false' }}
+          MANUAL_NICHE: ${{ github.event.inputs.manual_niche || '' }}
+          MANUAL_TOPIC: ${{ github.event.inputs.manual_topic || '' }}
+          MANUAL_TEMPLATE: ${{ github.event.inputs.manual_template || 'auto' }}
+          MANUAL_TEMPLATE_SET: ${{ github.event.inputs.manual_template_set || 'single' }}
 
       - name: Run carousel reviewer (post-build quality check)
         if: always()
