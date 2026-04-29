@@ -24,6 +24,7 @@ File naming convention:
   e.g. driveway_nb2_slide2.png  |  kitchen_seedream45_slide3.png
 """
 import base64, json, os, re, time, urllib.request, urllib.parse
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -34,6 +35,44 @@ GEMINI_KEY    = os.environ.get("GEMINI_API_KEY", "")
 PEXELS_KEY    = os.environ.get("PEXELS_API_KEY", "")
 PIXABAY_KEY   = os.environ.get("PIXABAY_API_KEY", "")
 REPLICATE_KEY = os.environ.get("PRI_OP_REPLICATE_API_KEY", "")
+
+# ── Failure logger ────────────────────────────────────────────────────────────
+_GHA_RUN_ID = os.environ.get("GITHUB_RUN_ID", "")
+_FAILURES_SHEET_ID = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
+
+def _log_failure(stage: str, error) -> None:
+    """Append a row to '🚨 Pipeline Failures' tab. Never blocks the caller."""
+    print(f"  ❌ IMAGE PROVIDER [{stage}]: {str(error)[:200]}")
+    raw_token = os.environ.get("SHEETS_TOKEN", "")
+    if not raw_token:
+        return
+    try:
+        td = json.loads(raw_token)
+        data = urllib.parse.urlencode({
+            "client_id": td["client_id"], "client_secret": td["client_secret"],
+            "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
+        }).encode()
+        token_resp = json.loads(urllib.request.urlopen(
+            urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
+        ).read())
+        access = token_resp["access_token"]
+        run_url = (f"https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{_GHA_RUN_ID}"
+                   if _GHA_RUN_ID else "")
+        row = [datetime.utcnow().isoformat() + "Z", "content_creator.yml",
+               _GHA_RUN_ID, stage, str(error)[:500], run_url, "", ""]
+        body = json.dumps({"values": [row]}).encode()
+        tab = urllib.parse.quote("🚨 Pipeline Failures")
+        url = (f"https://sheets.googleapis.com/v4/spreadsheets/{_FAILURES_SHEET_ID}"
+               f"/values/{tab}!A:H:append?valueInputOption=USER_ENTERED")
+        req = urllib.request.Request(url, data=body,
+                                     headers={"Authorization": f"Bearer {access}",
+                                              "Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=15)
+    except Exception:
+        pass  # logger must never block the pipeline
+
+# Public alias so carousel_builder.py can import it
+log_failure = _log_failure
 
 # ── Provider name constants ───────────────────────────────────────────────────
 PROVIDER_NB2        = "nb2"
@@ -144,7 +183,7 @@ def _replicate_run(slug_or_version: str, input_dict: dict,
         print(f"  {filename} ({len(raw)//1024}KB) ← {label}")
         return _rel(filename)
     except Exception as e:
-        print(f"  Replicate {label} failed (non-fatal): {e}")
+        _log_failure(f"replicate/{label}", e)
         return ""
 
 
@@ -221,7 +260,10 @@ def fetch_pexels(query: str, work_dir: str, filename: str) -> str:
     try:
         q = urllib.parse.quote_plus(query[:100])
         url = f"https://api.pexels.com/v1/search?query={q}&per_page=3&orientation=portrait"
-        req = urllib.request.Request(url, headers={"Authorization": PEXELS_KEY})
+        req = urllib.request.Request(url, headers={
+            "Authorization": PEXELS_KEY,
+            "User-Agent": "carousel-builder/1.0",
+        })
         data = json.loads(urllib.request.urlopen(req, timeout=10).read())
         photos = data.get("photos", [])
         if not photos:
@@ -235,7 +277,7 @@ def fetch_pexels(query: str, work_dir: str, filename: str) -> str:
         print(f"  {filename} ← Pexels '{query[:50]}'")
         return _rel(filename)
     except Exception as e:
-        print(f"  Pexels fetch failed (non-fatal): {e}")
+        _log_failure(f"pexels/{query[:40]}", e)
         return ""
 
 
@@ -252,7 +294,8 @@ def fetch_pixabay(query: str, work_dir: str, filename: str) -> str:
             f"https://pixabay.com/api/?key={PIXABAY_KEY}&q={q}"
             f"&image_type=photo&orientation=vertical&per_page=3&safesearch=true"
         )
-        with urllib.request.urlopen(url, timeout=15) as r:
+        search_req = urllib.request.Request(url, headers={"User-Agent": "carousel-builder/1.0"})
+        with urllib.request.urlopen(search_req, timeout=15) as r:
             data = json.loads(r.read())
         hits = data.get("hits", [])
         if not hits:
@@ -260,7 +303,8 @@ def fetch_pixabay(query: str, work_dir: str, filename: str) -> str:
         img_url = hits[0].get("largeImageURL") or hits[0].get("webformatURL", "")
         if not img_url:
             return ""
-        with urllib.request.urlopen(img_url, timeout=20) as r:
+        dl_req = urllib.request.Request(img_url, headers={"User-Agent": "carousel-builder/1.0"})
+        with urllib.request.urlopen(dl_req, timeout=20) as r:
             raw = r.read()
         if len(raw) < 5000:
             return ""
@@ -268,7 +312,7 @@ def fetch_pixabay(query: str, work_dir: str, filename: str) -> str:
         print(f"  {filename} ← Pixabay '{query[:50]}'")
         return _rel(filename)
     except Exception as e:
-        print(f"  Pixabay fetch failed (non-fatal): {e}")
+        _log_failure(f"pixabay/{query[:40]}", e)
         return ""
 
 
@@ -289,25 +333,63 @@ def fetch_real_photo(query: str, work_dir: str, filename: str) -> Tuple[str, str
 # ── AI providers ──────────────────────────────────────────────────────────────
 
 def _nb2(prompt: str, work_dir: str, filename: str) -> str:
-    """NB2 via inference.sh — Gemini 3.1 Flash Image Preview."""
+    """NB2 via inference.sh REST API — Gemini 3.1 Flash Image Preview.
+    Uses direct HTTP (urllib) — no inferencesh SDK required."""
     if not INFSH_KEY or not prompt:
         return ""
     dest = _dest(work_dir, filename)
     if _cached(dest):
         return _rel(filename)
     try:
-        from inferencesh import Inferencesh
-        client = Inferencesh(api_key=INFSH_KEY)
-        result = client.run({
-            "app": "google/gemini-3-1-flash-image-preview@0c7ma1ex",
+        headers = {"Authorization": f"Bearer {INFSH_KEY}", "Content-Type": "application/json"}
+        payload = json.dumps({
+            "app": "google/gemini-3-1-flash-image-preview",
             "input": {"prompt": prompt[:1000]},
-        })
-        output = result.get("output") if isinstance(result, dict) else getattr(result, "output", None)
-        if isinstance(output, list):
-            output = output[0] if output else None
-        if not output:
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.inference.sh/apps/run", data=payload, headers=headers,
+        )
+        resp = json.loads(urllib.request.urlopen(req, timeout=120).read())
+        data = resp.get("data", resp)
+        task_id = data.get("id")
+        if not task_id:
             return ""
-        with urllib.request.urlopen(str(output), timeout=30) as r:
+        # Poll until completed (status 10) or failed (11/12)
+        image_url = None
+        for _ in range(12):  # max ~120s
+            time.sleep(10)
+            poll = urllib.request.Request(
+                f"https://api.inference.sh/tasks/{task_id}",
+                headers={"Authorization": f"Bearer {INFSH_KEY}"},
+            )
+            pdata = json.loads(urllib.request.urlopen(poll, timeout=30).read())
+            pdata = pdata.get("data", pdata)
+            status = pdata.get("status")
+            output = pdata.get("output")
+            if status == 10:  # COMPLETED
+                if isinstance(output, dict):
+                    imgs = output.get("images", output.get("image", []))
+                    if isinstance(imgs, list) and imgs:
+                        img = imgs[0]
+                        image_url = img.get("url", img) if isinstance(img, dict) else img
+                    elif isinstance(imgs, str):
+                        image_url = imgs
+                    if not image_url:
+                        for key in ("url", "image_url", "image"):
+                            if key in output:
+                                image_url = output[key]
+                                break
+                elif isinstance(output, list) and output:
+                    item = output[0]
+                    image_url = item.get("url", item) if isinstance(item, dict) else item
+                elif isinstance(output, str) and output.startswith("http"):
+                    image_url = output
+                break
+            elif status in (11, 12):  # FAILED / CANCELLED
+                break
+        if not image_url:
+            return ""
+        with urllib.request.urlopen(str(image_url), timeout=30) as r:
             raw = r.read()
         if len(raw) < 5000:
             return ""
@@ -315,14 +397,14 @@ def _nb2(prompt: str, work_dir: str, filename: str) -> str:
         print(f"  {filename} ({len(raw)//1024}KB) ← NB2/Gemini 3.1 Flash")
         return _rel(filename)
     except Exception as e:
-        print(f"  NB2 failed (non-fatal): {e}")
+        _log_failure("nb2/gemini-3.1-flash", e)
         return ""
 
 
 def _seedream45(prompt: str, work_dir: str, filename: str) -> str:
     return _replicate_run(
         "bytedance/seedream-4.5",
-        {"prompt": prompt[:1000], "aspect_ratio": "4:5"},
+        {"prompt": prompt[:1000], "aspect_ratio": "3:4"},
         work_dir, filename, timeout=120, label="Seedream 4.5",
     )
 

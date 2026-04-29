@@ -26,11 +26,13 @@ APIFY_KEY      = os.environ.get("APIFY_API_KEY", "")
 try:
     import sys as _sys
     _sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
-    from image_providers import generate_ai_image as _gen_ai_image, make_filename as _make_img_filename
+    from image_providers import generate_ai_image as _gen_ai_image, make_filename as _make_img_filename, log_failure as _log_failure
     from prompt_builder import build_image_prompt as _build_img_prompt
     _IMAGE_PROVIDERS_AVAILABLE = True
 except Exception as _ip_err:
     _IMAGE_PROVIDERS_AVAILABLE = False
+    def _log_failure(stage, error):
+        print(f"  ❌ [{stage}]: {error}")
     print(f"  Warning: image_providers/prompt_builder not loaded ({_ip_err}) — using legacy cascade")
 
 
@@ -717,7 +719,10 @@ def _fetch_pexels_image(query, work_dir, filename):
     try:
         q = urllib.parse.quote_plus(query[:100])
         search_url = f"https://api.pexels.com/v1/search?query={q}&per_page=3&orientation=portrait"
-        req = urllib.request.Request(search_url, headers={"Authorization": PEXELS_KEY})
+        req = urllib.request.Request(search_url, headers={
+            "Authorization": PEXELS_KEY,
+            "User-Agent": "carousel-builder/1.0",
+        })
         data = json.loads(urllib.request.urlopen(req, timeout=10).read())
         photos = data.get("photos", [])
         if not photos:
@@ -731,7 +736,7 @@ def _fetch_pexels_image(query, work_dir, filename):
         print(f"  Pexels image fetched: {filename} ({len(raw)//1024}KB) ← '{query[:40]}'")
         return f"resources/images/{filename}"
     except Exception as e:
-        print(f"  Pexels fetch failed (non-fatal): {e}")
+        _log_failure(f"pexels/{query[:40]}", e)
         return ""
 
 
@@ -750,7 +755,8 @@ def _fetch_pixabay_image(query, work_dir, filename):
             f"https://pixabay.com/api/?key={PIXABAY_KEY}&q={q}"
             f"&image_type=photo&orientation=vertical&per_page=3&safesearch=true"
         )
-        with urllib.request.urlopen(search_url, timeout=15) as r:
+        search_req = urllib.request.Request(search_url, headers={"User-Agent": "carousel-builder/1.0"})
+        with urllib.request.urlopen(search_req, timeout=15) as r:
             data = json.loads(r.read())
         hits = data.get("hits", [])
         if not hits:
@@ -758,7 +764,8 @@ def _fetch_pixabay_image(query, work_dir, filename):
         img_url = hits[0].get("largeImageURL") or hits[0].get("webformatURL", "")
         if not img_url:
             return ""
-        with urllib.request.urlopen(img_url, timeout=20) as r:
+        dl_req = urllib.request.Request(img_url, headers={"User-Agent": "carousel-builder/1.0"})
+        with urllib.request.urlopen(dl_req, timeout=20) as r:
             raw = r.read()
         if len(raw) < 5000:
             return ""
@@ -766,7 +773,7 @@ def _fetch_pixabay_image(query, work_dir, filename):
         print(f"  Pixabay image fetched: {filename} ({len(raw)//1024}KB) ← '{query[:40]}'")
         return f"resources/images/{filename}"
     except Exception as e:
-        print(f"  Pixabay fetch failed (non-fatal): {e}")
+        _log_failure(f"pixabay/{query[:40]}", e)
         return ""
 
 
@@ -829,13 +836,13 @@ def _replicate_run(version_or_slug, input_dict, work_dir, filename, timeout=120,
 
 
 def _generate_seedream_image(prompt, work_dir, filename):
-    """Generate image via Seedream 4 on Replicate (photoreal, strong with people/places)."""
+    """Generate image via Seedream 4.5 on Replicate (photoreal, strong with people/places)."""
     if not REPLICATE_KEY or not prompt:
         return ""
     return _replicate_run(
-        "bytedance/seedream-4",
-        {"prompt": prompt[:1000], "aspect_ratio": "4:5"},
-        work_dir, filename, timeout=120, model_label="Seedream 4",
+        "bytedance/seedream-4.5",
+        {"prompt": prompt[:1000], "aspect_ratio": "3:4"},
+        work_dir, filename, timeout=120, model_label="Seedream 4.5",
     )
 
 
