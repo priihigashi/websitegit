@@ -97,7 +97,7 @@ def build_warnings(campaign, adgroups, keywords):
 def inject_data(html_path, data):
     html = Path(html_path).read_text()
     new_block = "const DATA = " + json.dumps(data, indent=2) + ";"
-    html = re.sub(r"const DATA = \{.*?\};", new_block, html, flags=re.DOTALL)
+    html = re.sub(r"const DATA = \{.*?\};", lambda m: new_block, html, flags=re.DOTALL)
     Path(html_path).write_text(html)
 
 
