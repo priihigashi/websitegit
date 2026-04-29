@@ -28,6 +28,7 @@ ANTHROPIC_KEY = (
 )
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from image_library import search_library
 try:
     from PIL import Image, ImageStat  # type: ignore
 except Exception:
@@ -616,6 +617,22 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
             try:
                 prov = json.loads(_download_drive_text(drive, prov_file["id"]))
                 issues.extend(_check_provenance(prov))
+                try:
+                    # Library opportunity signal: if a slide is AI, suggest reuse candidate.
+                    for sk, sv in (prov.get("slides", {}) or {}).items():
+                        if not isinstance(sv, dict):
+                            continue
+                        q = (sv.get("query") or "").strip()
+                        if not q:
+                            continue
+                        hit = search_library(q, _infer_niche_from_folder(folder_name, input_ref or ""))
+                        if hit and sv.get("source_type") == "ai":
+                            issues.append(
+                                f"[library-candidate] Slide {sk}: matching library image available "
+                                f"({hit.get('drive_url','')})"
+                            )
+                except Exception:
+                    pass
                 # Vision check: verify each image actually matches its slide topic
                 images_fid = _find_folder_id(drive, resources_folder_id, "images")
                 if images_fid:

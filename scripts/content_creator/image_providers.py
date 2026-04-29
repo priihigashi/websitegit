@@ -102,6 +102,32 @@ DEFAULT_AI_CASCADE = [
     PROVIDER_DALLE3,   # last resort — cartoonish style, not realistic
 ]
 
+
+def build_scene_lock_prompt(user_text: str, subject_hint: str = "scene", is_opc: bool = False) -> str:
+    base = (
+        "Enhance this photo for professional quality.\n"
+        "SCENE LOCK — DO NOT CHANGE: exact composition, all object positions, room/site layout, "
+        "architectural elements, spatial relationships, perspective angle, and framing. "
+        "This is the same scene — do not redesign, reimagine, or reinterpret it.\n"
+        "ONLY IMPROVE: sharpness and fine detail clarity, natural lighting balance, white balance "
+        "and color temperature, shadow softening and highlight recovery, brightness and contrast.\n"
+        "Output must match the original composition exactly. No new objects. No removed objects. "
+        "No repositioned elements.\n"
+    )
+    opc = (
+        "SCENE LOCK: preserve exact building structure, materials, site layout, equipment positions, "
+        "all structural elements. Do not alter, add, or remove anything.\n"
+        "ONLY IMPROVE: exposure and brightness, shadow/highlight balance, sharpen structural lines "
+        "and textures, white balance for natural daylight, noise reduction.\n"
+        "Style: professional construction documentation, not artistic.\n"
+    ) if is_opc else ""
+    return (
+        f"This is a photo of {subject_hint}. Enhance it without changing the scene. "
+        f"Keep everything in place. Only adjust clarity, lighting, and realism.\n\n"
+        f"{base}{opc}"
+        f"User intent:\n{(user_text or '').strip()}"
+    )
+
 # Words too generic to use as the content word in a filename
 _SKIP_WORDS = {
     "a", "an", "the", "of", "in", "at", "for", "and", "or", "is", "are",
@@ -448,6 +474,75 @@ def _nb2(prompt: str, work_dir: str, filename: str) -> str:
         return _rel(filename)
     except Exception as e:
         _log_failure("nb2/gemini-3.1-flash", e)
+        return ""
+
+
+def regenerate_from_feedback(feedback_text: str, original_path: str, work_dir: str, filename: str) -> str:
+    """Scene-locked edit pass for an existing image via NB2/Gemini editor endpoint.
+    Returns relative path or ''."""
+    if not INFSH_KEY or not feedback_text or not original_path:
+        return ""
+    dest = _dest(work_dir, filename)
+    try:
+        raw = Path(original_path).read_bytes()
+        prompt = build_scene_lock_prompt(
+            feedback_text,
+            subject_hint="construction/real-estate scene",
+            is_opc=True,
+        )
+        headers = {
+            "Authorization": f"Bearer {INFSH_KEY}",
+            "Content-Type": "application/json",
+            "User-Agent": "carousel-builder/1.0",
+        }
+        payload = json.dumps({
+            "app": "google/gemini-3-1-flash-image-preview",
+            "input": {
+                "prompt": prompt[:2000],
+                "image_base64": base64.b64encode(raw).decode(),
+            },
+        }).encode()
+        req = urllib.request.Request("https://api.inference.sh/apps/run", data=payload, headers=headers)
+        resp = json.loads(urllib.request.urlopen(req, timeout=120).read())
+        data = resp.get("data", resp)
+        task_id = data.get("id")
+        if not task_id:
+            return ""
+        image_url = None
+        for _ in range(12):
+            time.sleep(8)
+            poll = urllib.request.Request(
+                f"https://api.inference.sh/tasks/{task_id}",
+                headers={"Authorization": f"Bearer {INFSH_KEY}", "User-Agent": "carousel-builder/1.0"},
+            )
+            pdata = json.loads(urllib.request.urlopen(poll, timeout=30).read())
+            pdata = pdata.get("data", pdata)
+            status = pdata.get("status")
+            output = pdata.get("output")
+            if status == 10:
+                if isinstance(output, dict):
+                    imgs = output.get("images", output.get("image", []))
+                    if isinstance(imgs, list) and imgs:
+                        image_url = imgs[0].get("url", imgs[0]) if isinstance(imgs[0], dict) else imgs[0]
+                    elif isinstance(imgs, str):
+                        image_url = imgs
+                elif isinstance(output, list) and output:
+                    image_url = output[0].get("url", output[0]) if isinstance(output[0], dict) else output[0]
+                elif isinstance(output, str):
+                    image_url = output
+                break
+            if status in (11, 12):
+                break
+        if not image_url:
+            return ""
+        with urllib.request.urlopen(str(image_url), timeout=30) as r:
+            edited = r.read()
+        if len(edited) < 5000:
+            return ""
+        dest.write_bytes(edited)
+        return _rel(filename)
+    except Exception as e:
+        _log_failure("regenerate_from_feedback", e)
         return ""
 
 

@@ -115,6 +115,12 @@ def _clean_reply(text):
 
 def parse_approval(reply_text):
     text = reply_text.lower().strip()
+    if text.startswith("not good"):
+        fb = reply_text[len("not good"):].strip(" -:\n\t")
+        return {"action": "change", "feedback": fb or reply_text, "keyword": "NOT GOOD"}
+    if text.startswith("reject"):
+        fb = reply_text[len("reject"):].strip(" -:\n\t")
+        return {"action": "change", "feedback": fb or reply_text, "keyword": "REJECT"}
 
     if text == "skip":
         return {"action": "skip"}
@@ -129,7 +135,7 @@ def parse_approval(reply_text):
                 return {"action": "approve", "variant": v}
         return {"action": "approve", "variant": "black"}  # no color = default to black
 
-    return {"action": "change", "feedback": reply_text}
+    return {"action": "change", "feedback": reply_text, "keyword": "FEEDBACK"}
 
 
 def _get_drive_service():

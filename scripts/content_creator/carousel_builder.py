@@ -36,6 +36,16 @@ except Exception as _ip_err:
     print(f"  Warning: image_providers/prompt_builder not loaded ({_ip_err}) — using legacy cascade")
 
 try:
+    from image_library import (
+        search_library as _search_library,
+        enhance_library_image as _enhance_library_image,
+        mark_used as _mark_library_used,
+    )
+    _IMAGE_LIBRARY_AVAILABLE = True
+except Exception:
+    _IMAGE_LIBRARY_AVAILABLE = False
+
+try:
     from vision_validator import validate_image as _vision_validate
     _VISION_AVAILABLE = True
 except Exception as _vv_err:
@@ -943,6 +953,19 @@ def fetch_all_media(content, niche, work_dir):
         cover_slug = re.sub(r"[^a-z0-9]+", "_", (search_q or "cover").lower()).strip("_")[:40] or "cover"
         cover_fname = f"slide1_{cover_slug}.jpg"
 
+        # Tier 0 — library-first reuse for cover
+        if not paths["cover"] and _IMAGE_LIBRARY_AVAILABLE and search_q:
+            try:
+                lib_hit = _search_library(search_q, niche)
+                if lib_hit:
+                    rel = _enhance_library_image(lib_hit.get("drive_url", ""), work_dir, cover_fname, search_q)
+                    if rel and _vision_accept(rel, search_q, "cover/library"):
+                        _set_cover(rel, "library", "library", query=search_q, prompt="scene-lock enhance from library")
+                        if _mark_library_used:
+                            _mark_library_used(lib_hit.get("row_idx", 0), f"{niche}:{search_q[:40]}")
+            except Exception as _e:
+                _log_failure("image_library/cover_lookup", _e)
+
         # Step 1 — named persons go straight to real photo (Wiki REST + Wikimedia Commons).
         # Editorial rule: never AI-generate public figures' faces.
         # Person matches skip Vision validation (Wiki REST already targets the named person by URL).
@@ -1023,8 +1046,22 @@ def fetch_all_media(content, niche, work_dir):
 
         img_path = ""
         accepted = False
+        # Tier 0 — library-first reuse + scene-preserving enhancement
+        if _IMAGE_LIBRARY_AVAILABLE:
+            try:
+                lib_hit = _search_library(cq, niche)
+                if lib_hit:
+                    rel = _enhance_library_image(lib_hit.get("drive_url", ""), work_dir, fname, cq)
+                    if rel and _vision_accept(rel, cq, f"slide{i}/library"):
+                        _set_slide(i, rel, "library", "library", query=cq, prompt="scene-lock enhance from library")
+                        accepted = True
+                        if _mark_library_used:
+                            _mark_library_used(lib_hit.get("row_idx", 0), f"{niche}:{cq[:40]}")
+            except Exception as _e:
+                _log_failure("image_library/slide_lookup", _e)
+
         # Tier 1: AI cascade — NB2 → Seedream 4.5 → Seedream 5.0 → Gemini → SDXL → DALL-E
-        if _IMAGE_PROVIDERS_AVAILABLE:
+        if not accepted and _IMAGE_PROVIDERS_AVAILABLE:
             fresh_prompt = _build_img_prompt(
                 slide_text=cq, context_image_query=cq,
                 niche=niche, slide_num=i, work_dir=work_dir, save=True,

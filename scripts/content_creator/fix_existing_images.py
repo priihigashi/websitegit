@@ -40,6 +40,7 @@ from image_providers import (
 )
 from prompt_builder import build_image_prompt, build_stock_query as _build_stock_query, extract_slide_texts as _extract_slide_texts
 from vision_validator import validate_image as _vision_validate
+from image_library import search_library, enhance_library_image, mark_used
 
 # ── Credentials ───────────────────────────────────────────────────────────────
 CREDENTIALS = os.environ.get(
@@ -422,7 +423,21 @@ def fix_version_folder(
         # Step 2: AI cascade FIRST — produces realistic, prompt-specific images
         # (Real-photo search returns generic stock that often doesn't match technical
         # construction prompts and frequently duplicates across slides.)
-        if subject_type != "person":
+        try:
+            lib_hit = search_library(query or slide_text, niche)
+            if lib_hit:
+                lib_rel = enhance_library_image(lib_hit.get("drive_url", ""), str(local_dir), filename, slide_text or query)
+                if lib_rel:
+                    accepted, source_label, _ = _accept_or_reject(lib_rel, "library")
+                    if accepted:
+                        img_path = accepted
+                        used_provider = "library"
+                        source_type = "library"
+                        mark_used(lib_hit.get("row_idx", 0), folder_name)
+        except Exception as e:
+            print(f"    library lookup failed (non-fatal): {e}")
+
+        if not img_path and subject_type != "person":
             img_path, used_provider = generate_ai_image(
                 fresh_prompt, str(local_dir), filename, provider,
                 skip_providers=skip_list,
