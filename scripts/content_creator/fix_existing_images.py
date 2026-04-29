@@ -130,6 +130,32 @@ def _find_or_create_folder(drive, parent_id: str, name: str) -> str:
     return res["id"]
 
 
+def _move_to_replaced(drive, images_folder_id: str, filename: str) -> None:
+    """Move an old image file to images/replaced/ subfolder. Non-fatal on failure."""
+    try:
+        q = (f"'{images_folder_id}' in parents and name='{filename}' "
+             f"and mimeType!='application/vnd.google-apps.folder' and trashed=false")
+        res = drive.files().list(
+            q=q, fields="files(id,name)",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+        ).execute()
+        files = res.get("files", [])
+        if not files:
+            return
+        file_id = files[0]["id"]
+        replaced_id = _find_or_create_folder(drive, images_folder_id, "replaced")
+        drive.files().update(
+            fileId=file_id,
+            addParents=replaced_id,
+            removeParents=images_folder_id,
+            supportsAllDrives=True,
+            fields="id,parents",
+        ).execute()
+        print(f"    Moved old image to replaced/ → {filename}")
+    except Exception as e:
+        print(f"    Could not move old image to replaced/ (non-fatal): {e}")
+
+
 # ── Core repair logic ─────────────────────────────────────────────────────────
 
 def fix_version_folder(
@@ -350,6 +376,13 @@ def fix_version_folder(
             images_id = _find_or_create_folder(drive, resources_id, "images")
         _upload_file(drive, local_img, images_id, filename)
         print(f"    ✅ Fixed via {used_provider} → {filename}")
+
+        # Move old image to images/replaced/ so the main folder stays clean
+        # (old DALL-E / legacy images won't be mistaken for current ones)
+        if old_path:
+            old_filename = old_path.split("/")[-1]
+            if old_filename and old_filename != filename:
+                _move_to_replaced(drive, images_id, old_filename)
 
         # Step 5: Update provenance in memory
         rel_path = f"resources/images/{filename}"

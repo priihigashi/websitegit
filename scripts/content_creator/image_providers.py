@@ -96,10 +96,10 @@ PROVIDER_SDXL       = "sdxl"
 DEFAULT_AI_CASCADE = [
     PROVIDER_NB2,
     PROVIDER_SEEDREAM45,
-    PROVIDER_DALLE3,
     PROVIDER_SEEDREAM50,
     PROVIDER_GEMINI,
     PROVIDER_SDXL,
+    PROVIDER_DALLE3,   # last resort — cartoonish style, not realistic
 ]
 
 # Words too generic to use as the content word in a filename
