@@ -503,12 +503,26 @@ def main():
 
     drive = _drive()
 
-    # Detect input shape: is `--folder` itself a version folder, a series folder,
-    # or the top-level carousel parent?
+    # Detect input shape: is `--folder` a child subfolder (images/resources/png/
+    # motion), a version folder, a series folder, or the top-level carousel parent?
     folder_meta = drive.files().get(
-        fileId=args.folder, fields="id,name", supportsAllDrives=True,
+        fileId=args.folder, fields="id,name,parents", supportsAllDrives=True,
     ).execute()
-    input_name = folder_meta.get("name", "")
+    input_name = (folder_meta.get("name") or "").strip()
+
+    # Auto-traverse up if user passed a child subfolder
+    SUBFOLDER_NAMES = {"images", "resources", "png", "motion", "clips", "replaced"}
+    while input_name.lower() in SUBFOLDER_NAMES:
+        parents = folder_meta.get("parents") or []
+        if not parents:
+            break
+        args.folder = parents[0]
+        folder_meta = drive.files().get(
+            fileId=args.folder, fields="id,name,parents", supportsAllDrives=True,
+        ).execute()
+        input_name = (folder_meta.get("name") or "").strip()
+        print(f"  Traversed up — now scanning: {input_name} ({args.folder})")
+
     children = _list_folders(drive, args.folder)
     has_resources = any(c["name"] == "resources" for c in children)
     has_cover_html = bool(_find_file(drive, args.folder, "cover.html"))
