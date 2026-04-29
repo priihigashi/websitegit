@@ -157,6 +157,31 @@ jobs:
               "Think Lightroom/Photoshop grade only, not image generation. "
               "Output one enhanced image with maximum fidelity to the original photo."
           )
+          STAGING_PROMPT_BY_STEM = {
+              # Urbanova: bare mattress room needs listing-ready bedding only.
+              "32_quarto_solteiro": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: keep the same bed frame in the exact same position and size, "
+                  "and add simple neutral fitted bedsheets plus 2-4 neutral pillows. "
+                  "Do not change any other object, camera angle, lighting direction, walls, floor, windows, or decor."
+              ),
+              # Pool touch-up exceptions: cleanliness/clarity improvements without geometry changes.
+              "09_piscina": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: improve pool water cleanliness and clarity only; "
+                  "no changes to pool shape, edges, deck, reflections, landscaping, or architecture."
+              ),
+              "15_piscina_noturna": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: improve pool water cleanliness and clarity only; "
+                  "no changes to pool shape, edges, deck, reflections, landscaping, or architecture."
+              ),
+              "05_video_8573": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: improve pool water cleanliness and clarity only; "
+                  "no changes to pool shape, edges, deck, reflections, landscaping, or architecture."
+              ),
+              "07_video_8576": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: improve pool water cleanliness and clarity only; "
+                  "no changes to pool shape, edges, deck, reflections, landscaping, or architecture."
+              ),
+          }
           REPLICATE_PROMPT = (
               "professional real estate photography, architectural photography, ultra-realistic 4K, "
               "high resolution, natural light, sharp details, correct white balance, "
@@ -248,6 +273,10 @@ jobs:
 
                   # Archive any previous results for this stem
                   old_folder_id = archive_old_results(safe_stem, dest, old_folder_id)
+                  per_image_prompt = FULL_PROMPT
+                  if safe_stem in STAGING_PROMPT_BY_STEM:
+                      per_image_prompt = FULL_PROMPT + " " + STAGING_PROMPT_BY_STEM[safe_stem]
+                      print("  Applying controlled exception prompt for stem: " + safe_stem)
 
                   tools_out = {}
 
@@ -268,7 +297,7 @@ jobs:
                               model="gemini-3.1-flash-image-preview",
                               contents=[
                                   gtypes.Part.from_bytes(data=img4_bytes, mime_type=mime4),
-                                  gtypes.Part.from_text(text="TASK: Photo enhancement only. Do NOT redesign.\n" + FULL_PROMPT),
+                                  gtypes.Part.from_text(text="TASK: Photo enhancement only. Do NOT redesign.\n" + per_image_prompt),
                               ],
                               config=gtypes.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"]),
                           )
@@ -303,7 +332,7 @@ jobs:
                           client = _openai.OpenAI(api_key=key)
                           print("  OpenAI: sending...")
                           with open(png_in, "rb") as fh:
-                              resp = client.images.edit(model="gpt-image-1", image=fh, prompt=FULL_PROMPT, n=1, size="auto")
+                              resp = client.images.edit(model="gpt-image-1", image=fh, prompt=per_image_prompt, n=1, size="auto")
                           out = tmp_pfx + "_openai.png"
                           open(out, "wb").write(base64.b64decode(resp.data[0].b64_json))
                           link = upload_to_drive(out, safe_stem + "_openai.png", dest)
@@ -330,7 +359,7 @@ jobs:
                               model="gemini-2.5-flash-image",
                               contents=[
                                   types.Part.from_bytes(data=img_bytes, mime_type=mime2),
-                                  types.Part.from_text(text="TASK: Photo enhancement only. Do NOT redesign.\n" + FULL_PROMPT),
+                                  types.Part.from_text(text="TASK: Photo enhancement only. Do NOT redesign.\n" + per_image_prompt),
                               ],
                               config=types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"]),
                           )
