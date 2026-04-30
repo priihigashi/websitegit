@@ -568,17 +568,19 @@ First choice for Brazilian institutions: Agência Brasil CC BY 3.0 search terms.
 CLIP SUGGESTIONS + MOTION PROMPTS RULE (non-negotiable):
 The motion pipeline runs an 8-tier source cascade per clip: YouTube (Apify) → Instagram (Apify) → Pexels → Pixabay → Archive.org → Wikimedia Commons → stock scrapers → Ken Burns zoom (last resort). You must write DIFFERENT phrasing per tier so each tier can succeed even if the others fail.
 
+QUERY QUALITY RULE: Every query must be specific enough that a researcher could find the RIGHT clip — not just any clip. A good youtube_query for a slide about "Flávio Bolsonaro CPI 2021" is "Flávio Bolsonaro CPI senado 2021 depoimento" not "Bolsonaro corruption". For a Congress scene: "Câmara dos Deputados votação sessão 2023" not just "congress". Include: full name (if person) + year + context keyword (hearing/speech/vote/signing). Generic queries produce unrelated clips that don't match the story.
+
 For every slide that would benefit from motion (cover + any slide naming a speech, law, institution, event, leader, or iconic moment):
-  - youtube_query   → proper names OK (best for speeches, press conferences, hearings)
-  - instagram_query → lowercase, hashtag-friendly, creator-reel phrasing
-  - pexels_query    → stock-safe: place/institution/event, NO proper names, NO party names
-  - pixabay_query   → different wording than pexels_query (avoid duplicate failure)
-  - archive_query   → public-domain / archival phrasing (vintage footage, historical film)
-  - wikimedia_query → CC-licensed historical or institutional footage
+  - youtube_query   → SPECIFIC: full name + year + event type. Best for speeches, press conferences, hearings. e.g. "Viktor Orbán concede derrota eleição Hungria 2026"
+  - instagram_query → lowercase, hashtag-friendly, creator-reel phrasing. e.g. "hungria eleicao 2026 orbán perdeu"
+  - pexels_query    → stock-safe: place/institution/event, NO proper names, NO party names. e.g. "parliament building Budapest exterior"
+  - pixabay_query   → different wording than pexels_query (avoid duplicate failure). e.g. "European parliament vote session"
+  - archive_query   → public-domain / archival phrasing (vintage footage, historical film). e.g. "Hungary Budapest 1990 democratic transition archival"
+  - wikimedia_query → CC-licensed historical or institutional footage. e.g. "Hungarian National Assembly Budapest"
   - motion_prompt   → 5-second directorial note: camera move + mood + framing (e.g. "slow push-in on Brasília facade, dusk, cinematic, 24mm", "archival grain, slight zoom on signing ceremony"). This drives Remotion animation + serves as AI-video prompt if we escalate to Runway/Kling.
   - photo_query     → Wikipedia/Wikimedia search term for a CC still photo used as slide background. For people: English full name. For places: landmark name. This is the PRIMARY source — always populate.
   - photo_bg_position → CSS background-position for the crop (default "center 20%"). Use "center top" for portraits, "50% 40%" for buildings.
-  - motion_renderer → always "kenburns" for Brazil native template (Ken Burns zoom on the CC photo). Never omit.
+  - motion_renderer → always "kenburns" for Brazil native template. "kenburns" = Playwright records CSS KB zoom animation on the `.kb-bg` background layer only (text stays static). NOT ffmpeg on the full PNG. Never omit.
   - visual_hint     → same values as slides.visual_hint. Determines whether stock tiers are allowed (stock skips for bio-card).
 
 If NO tier could plausibly succeed (hyper-local story, no public footage, no place to film) return an empty clip_suggestions array — do not invent false queries. Ken Burns floor will still animate the poster image, so every cover gets motion regardless.
@@ -1700,28 +1702,50 @@ def fetch_clips(content, work_dir):
 
 
 def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=None):
-    """Generate per-clip-slot motion HTML files for Playwright video recording.
-    Each file shows ONE slide at full 1080x1350 viewport with:
-      - Ken Burns CSS zoom animation on the background image
-      - <video> element playing the clip inside the newspaper/sticker frame slot
-    Returns list of (slide_idx, html_path) tuples — one per clip slot that has a clip.
-    Only implemented for brazil/usa. OPC returns [] (no motion clips for OPC yet).
-    Existing cover.html (static) is NOT modified.
+    """Generate per-slide motion HTML files for Playwright video recording.
+
+    Every-other-slide rule (cover + even-indexed middles, never sources):
+      - Cover always gets a motion file.
+      - Middle slides: every other one gets a motion file (slide 3, 5, ...).
+      - Sources slide: never gets motion.
+
+    Each motion HTML has:
+      - KB bg: CSS Ken Burns zoom on the background IMAGE layer only — text layer is z-index 2
+        and stays perfectly static. Ken Burns never touches text/logo/arrows.
+      - Clip sticker: looping <video> in the clip-frame/sticker-slot when a clip is available.
+        When no clip → clip-frame is omitted, only KB bg animates.
+
+    Works for all niches (brazil, usa, opc). Existing cover.html is NOT modified.
+    Returns list of (slide_idx, html_path) tuples.
     """
-    if niche == "opc" or not clips:
-        return []
 
     results = []
     slides = content.get("slides", [])
-    n_slides = len(slides)
+    n_slides = len(slides)   # middle slides only; cover=1, sources=n_slides+2
+    total_slides = n_slides + 2  # cover + middles + sources
+
     css = _brazil_motion_css()
 
     def esc(s):
         return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
-    for slide_idx, clip_path in clips.items():
-        rel_clip = os.path.relpath(clip_path, work_dir)
+    # Which slide indices get motion: cover(1) + every other middle (3,5,...) — never sources
+    motion_indices = [1] + [i for i in range(3, n_slides + 2, 2)]
+
+    for slide_idx in motion_indices:
+        clip_path = clips.get(slide_idx)
+        rel_clip = os.path.relpath(clip_path, work_dir) if clip_path else None
         html_body = ""
+
+        # Clip sticker block — only when a clip was fetched for this slide
+        clip_block = ""
+        if rel_clip:
+            clip_block = f"""
+    <div class="clip-frame{'  clip-frame-mid' if slide_idx != 1 else ''}">
+      <video class="clip-video" autoplay muted loop playsinline>
+        <source src="{rel_clip}" type="video/mp4">
+      </video>
+    </div>"""
 
         if slide_idx == 1:
             # Cover slide
@@ -1730,17 +1754,33 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
                 f'style="background-image:url(\'{cover_img}\');background-size:cover;'
                 f'background-position:center top;"' if cover_img else ""
             )
-            cover_pt = esc(content.get("cover_pt", "TÍTULO"))
-            cover_en = esc(content.get("cover_en", ""))
-            cover_accent = esc(content.get("cover_accent", ""))
-            raw_cover = content.get("cover_pt", "")
-            if cover_accent and cover_accent in raw_cover:
-                cover_hl = cover_pt.replace(cover_accent,
-                    f'<span class="accent">{cover_accent}</span>', 1)
+            if niche == "opc":
+                tag_text = esc(content.get("tag", "Oak Park Construction"))
+                headline = esc(content.get("headline", ""))
+                subhead  = esc(content.get("subhead", ""))
+                html_body = f"""
+<div class="slide slide-cover motion-slide opc-cover">
+  <div class="kb-bg" {bg_style}></div>
+  <div class="slide-content">
+    <div class="tag">{tag_text}</div>
+    <div class="cover-hl">{headline}</div>
+    <div class="cover-en">{subhead}</div>
+    {clip_block}
+    <div class="swipe">SWIPE &#8594;</div>
+  </div>
+</div>"""
             else:
-                cover_hl = cover_pt
-            cover_date = esc(content.get("cover_date", ""))
-            html_body = f"""
+                cover_pt = esc(content.get("cover_pt", "TÍTULO"))
+                cover_en = esc(content.get("cover_en", ""))
+                cover_accent = esc(content.get("cover_accent", ""))
+                raw_cover = content.get("cover_pt", "")
+                if cover_accent and cover_accent in raw_cover:
+                    cover_hl = cover_pt.replace(cover_accent,
+                        f'<span class="accent">{cover_accent}</span>', 1)
+                else:
+                    cover_hl = cover_pt
+                cover_date = esc(content.get("cover_date", ""))
+                html_body = f"""
 <div class="slide slide-cover motion-slide">
   <div class="kb-bg" {bg_style}></div>
   <div class="slide-content">
@@ -1748,24 +1788,21 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
     <div class="cover-date">{cover_date}</div>
     <div class="cover-hl">{cover_hl}</div>
     <div class="cover-en">{cover_en}</div>
-    <div class="clip-frame">
-      <div class="clip-stamp">ARQUIVADO · {cover_date or '2024'}</div>
-      <video class="clip-video" autoplay muted loop playsinline>
-        <source src="{rel_clip}" type="video/mp4">
-      </video>
-    </div>
+    {clip_block}
     <div class="swipe">SWIPE &#8594;</div>
   </div>
 </div>"""
         else:
-            # Middle slide — content["slides"] holds middle slides only (cover/sources are separate fields).
-            # Builder enumerates them with start=2, so slide_idx=2 → slides[0]. Clamp to avoid off-by-one silent empty.
+            # Middle slide — content["slides"] holds middle slides only (cover/sources are separate).
+            # slide_idx=2 → slides[0]. Clamp to avoid off-by-one silent empty.
             data_idx = max(0, min(slide_idx - 2, len(slides) - 1)) if slides else 0
-            if data_idx != slide_idx - 2:
-                print(f"  build_motion_html: slide_idx {slide_idx} clamped to slides[{data_idx}] (out of range)")
             slide_data = slides[data_idx] if slides else {}
-            h_pt = esc(slide_data.get("heading_pt", ""))
-            h_en = esc(slide_data.get("heading_en", ""))
+            if niche == "opc":
+                h_pt = esc(slide_data.get("heading", slide_data.get("heading_pt", "")))
+                h_en = ""
+            else:
+                h_pt = esc(slide_data.get("heading_pt", ""))
+                h_en = esc(slide_data.get("heading_en", ""))
             slide_img = (media_paths or {}).get("slides", {}).get(slide_idx, "")
             bg_style = (
                 f'style="background-image:url(\'{slide_img}\');background-size:cover;'
@@ -1776,12 +1813,8 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
   <div class="kb-bg" {bg_style}></div>
   <div class="slide-content">
     <div class="slide-hl">{h_pt}</div>
-    <div class="slide-en">{h_en}</div>
-    <div class="clip-frame clip-frame-mid">
-      <video class="clip-video" autoplay muted loop playsinline>
-        <source src="{rel_clip}" type="video/mp4">
-      </video>
-    </div>
+    {'<div class="slide-en">' + h_en + '</div>' if h_en else ''}
+    {clip_block}
     <div class="swipe">SWIPE &#8594;</div>
   </div>
 </div>"""
@@ -1800,11 +1833,12 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
 </body>
 </html>"""
 
-        fname = f"clip_slide_{slide_idx}.html"
+        fname = f"motion_slide_{slide_idx}.html"
         out_path = Path(work_dir) / fname
         out_path.write_text(html, encoding="utf-8")
         results.append((slide_idx, str(out_path)))
-        print(f"  Motion HTML: {fname} (clip: {os.path.basename(clip_path)})")
+        clip_info = f"clip: {os.path.basename(clip_path)}" if clip_path else "no clip — KB bg only"
+        print(f"  Motion HTML: {fname} ({clip_info})")
 
     return results
 

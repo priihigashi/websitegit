@@ -941,21 +941,6 @@ def process_one_topic(topic_entry, run_date, drive):
             recorded_indices |= {idx for idx, _ in recorded_mp4s}
             print(f"  Playwright recorded: {len(recorded_mp4s)} MP4(s) (slides {sorted({idx for idx,_ in recorded_mp4s})})")
 
-    # Ken Burns fallback — runs ONLY for slides NOT already recorded by Playwright.
-    # This prevents overwriting Playwright MP4 (real clip + Ken Burns bg) with a plain ffmpeg Ken Burns.
-    # PNG filenames are formatted: <variant>_<NN>_<name>_html.png — NN is slide_idx.
-    import re as _re_nn
-    for variant in ["black", "cream", "lime"]:
-        for png in sorted(png_dir.glob(f"{variant}_*_html.png")):
-            m = _re_nn.match(rf"^{variant}_(\d{{2}})_", png.name)
-            if not m:
-                continue
-            png_idx = int(m.group(1))
-            # Skip only black variant when Playwright already recorded — cream/lime still get Ken Burns for variety
-            if variant == "black" and png_idx in recorded_indices:
-                continue
-            render_motion_cover(str(png), str(motion_dir), variant)
-
     # 4b. Kling I2V animation for primary (black) cover via Replicate kwai-kolors/kling-video.
     # Produces {variant}_01_cover_kling.mp4 alongside the Ken Burns version.
     # Falls back silently — Ken Burns is always the safety net.
@@ -970,7 +955,7 @@ def process_one_topic(topic_entry, run_date, drive):
     # Motion completeness guard — never email preview with empty motion folder
     motion_mp4s = list(motion_dir.glob("*.mp4")) if motion_dir.exists() else []
     if not motion_mp4s:
-        _send_alert(f"Motion folder empty for '{topic[:40]}' — skipping preview. Check ffmpeg + render_motion_cover logs.")
+        _send_alert(f"Motion folder empty for '{topic[:40]}' — skipping preview. Check Playwright + record_motion_slides logs.")
         return None
 
     # Media presence check (non-blocking) — alert if images/clips are missing
@@ -1236,11 +1221,18 @@ def process_one_topic(topic_entry, run_date, drive):
 
 
 def run_motion_only(slug, niche, drive):
-    """Re-run Ken Burns motion on existing PNGs in Drive without rebuilding the full carousel.
+    """Re-render motion for an existing carousel version without full rebuild.
 
     Use: MANUAL_TEMPLATE=motion, MANUAL_TOPIC=<slug>, MANUAL_NICHE=<niche>.
-    Finds the latest v<N>_<slug> version folder, downloads PNGs from png/, renders
-    Ken Burns MP4 + GIF for each, uploads back to motion/ subfolder.
+    Finds the latest v<N>_<slug> version folder, downloads PNGs from png/,
+    applies CSS Ken Burns zoom via ffmpeg on each PNG, uploads to motion_remotion/
+    subfolder alongside the existing motion/ (Playwright) folder for comparison.
+
+    NOTE: This is a comparison/test path. The primary motion/ folder (built by
+    process_one_topic via build_motion_html + record_motion_slides) uses CSS KB
+    on the background layer only with optional clip sticker — text stays static.
+    This path applies ffmpeg zoompan to the full PNG (text moves too) and is
+    labelled motion_remotion/ so it never overwrites the proper motion output.
     """
     import io, re as _re
     from googleapiclient.http import MediaIoBaseDownload
@@ -1277,14 +1269,14 @@ def run_motion_only(slug, niche, drive):
         supportsAllDrives=True, includeItemsFromAllDrives=True, corpora="allDrives",
     ).execute().get("files", [])
     png_sub_id    = next((f["id"] for f in children if f["name"] == "png"),    None)
-    motion_sub_id = next((f["id"] for f in children if f["name"] == "motion"), None)
+    motion_sub_id = next((f["id"] for f in children if f["name"] == "motion_remotion"), None)
 
     if not png_sub_id:
         print(f"[motion-only] No png/ subfolder in {version_name} — nothing to animate")
         return None
     if not motion_sub_id:
-        motion_sub_id = create_subfolder(version_folder_id, "motion", drive)
-        print(f"[motion-only] Created motion/ subfolder")
+        motion_sub_id = create_subfolder(version_folder_id, "motion_remotion", drive)
+        print(f"[motion-only] Created motion_remotion/ subfolder (KB ffmpeg comparison)")
 
     # Download all PNGs from png/ → /tmp
     png_files = drive.files().list(
@@ -1311,16 +1303,16 @@ def run_motion_only(slug, niche, drive):
             _, done = dl.next_chunk()
         print(f"  downloaded {pf['name']}")
 
-    # Ken Burns every PNG
+    # Apply ffmpeg KB zoom to each PNG → comparison MP4 (text moves — intentional for comparison)
     for png in sorted(local_png_dir.glob("*.png")):
         variant = png.name.split("_")[0]  # black / cream / lime
         render_motion_cover(str(png), str(local_motion_dir), variant)
-        print(f"  Ken Burns: {png.name}")
+        print(f"  KB ffmpeg comparison: {png.name}")
 
-    # Upload motion files back to Drive motion/ subfolder
+    # Upload to motion_remotion/ — comparison only, does NOT replace primary motion/ output
     upload_dir_contents(local_motion_dir, motion_sub_id, drive)
     motion_link = f"https://drive.google.com/drive/folders/{motion_sub_id}"
-    print(f"[motion-only] Done — {motion_link}")
+    print(f"[motion-only] Comparison done — motion_remotion/ folder: {motion_link}")
     return {"slug": slug, "niche": niche, "version": version_name,
             "motion_folder_id": motion_sub_id, "motion_link": motion_link}
 

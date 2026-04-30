@@ -46,12 +46,14 @@ Every carousel lands at: `<Series>/_TEMPLATE_CAROUSEL/v<N>_<slug>/` with `png/` 
 - Static and motion are SIBLINGS inside `_TEMPLATE_CAROUSEL`, never nested
 Source: CLAUDE.md — CAROUSEL FOLDER STANDARD
 
-**MOTION RENDERER CASCADE (added 2026-04-20)**
-Motion rendering tries renderers in this order, falling through on failure. Ken Burns is the floor, never the default.
-1. Remotion (`scripts/remotion/src/CarouselMotion.tsx`, composition id `CarouselMotion`) — React-source deterministic animation, used when `cover_renderer_pref == "remotion"` or the design is template-driven.
-2. Playwright `record_motion.js` — HTML-source captures for slides whose motion comes from the HTML itself.
-3. ffmpeg Ken Burns zoompan — last-resort animation of the poster PNG. Always succeeds. Guarantees every cover gets motion even if every external source fails.
-Never skip tiers silently. Never substitute an AI video tool (Kling / Runway / Pika) unless Priscila explicitly approves per post.
+**MOTION RENDERER CASCADE (added 2026-04-20, updated 2026-04-29)**
+Main pipeline renders in this order:
+1. Remotion (`scripts/remotion/src/CarouselMotion.tsx`, composition id `CarouselMotion`) — used when `cover_renderer_pref == "remotion"`.
+2. Playwright `record_motion.js` — records per-slide motion HTMLs built by `build_motion_html()`. Each HTML has CSS Ken Burns on `.kb-bg` (background layer only — text is z-index 2, stays static) + optional clip sticker (looping `<video>` in `.clip-frame`). This is the PRIMARY motion renderer for all HTML-source templates.
+3. Alert — if motion/ folder is empty after Remotion + Playwright, pipeline alerts and skips the post. Motion is never silently absent.
+
+ffmpeg Ken Burns zoompan on full PNG is ONLY used by `run_motion_only()` (manual_template=motion) and writes to `motion_remotion/` subfolder for comparison — it is NOT part of the automatic new-build flow.
+Never substitute an AI video tool (Kling / Runway / Pika) unless Priscila explicitly approves per post.
 Source: CLAUDE.md — MOTION RENDERER CASCADE + scripts/content_creator/MOTION_SOURCES_RESEARCH.md
 
 **VIDEO SOURCE CASCADE — 8 TIERS (added 2026-04-20)**
@@ -68,7 +70,7 @@ Every Brazil native carousel uses the Rachadinha v1 visual system. Applies to al
 - Cover slide: full-bleed CC photo as `.bg-photo` with `filter:grayscale(1) contrast(1.1) brightness(.55)` + `.halftone` dot overlay + `.sticker-slot` portrait (absolute right 7% top 18%, same photo, `filter:grayscale(1) contrast(1.15) brightness(.95)`). Cover text constrained to max-width 54% to avoid collision.
 - Middle slides: ODD indices (3, 5, 7…) = motion slide with `.bg-photo` + `.halftone`. EVEN indices (2, 4, 6…) = static, no background.
 - Photo source: `photo_query` field in `clip_suggestions` → Wikipedia REST → Wikimedia Commons → Pexels fallback. Haiku MUST emit `photo_query` + `photo_bg_position` for every motion slide.
-- `motion_renderer` must be `"kenburns"` for Brazil native — Ken Burns zoom applied to the rendered slide PNG.
+- `motion_renderer` must be `"kenburns"` for Brazil native — Playwright records the CSS Ken Burns animation on the `.kb-bg` background layer only (text/logo stay perfectly static via z-index). This is CSS `@keyframes kb-zoom` on the div behind the text, NOT ffmpeg zoompan on the full rendered PNG. ffmpeg on a full PNG moves text too — that is wrong.
 - NO placeholder divs ever. If no photo fetched → slide renders as clean dark text, no dashed box.
 Source: v1_rachadinha/cover.html (Drive 1TgH7nDM2BDFznL9jS9jmzCdt9XNT3y0y) + carousel_builder.py::_build_brazil_html
 
