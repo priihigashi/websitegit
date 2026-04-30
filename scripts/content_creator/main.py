@@ -1094,6 +1094,33 @@ def process_one_topic(topic_entry, run_date, drive):
         except Exception as e:
             print(f"  resources/clips/ upload failed (non-fatal): {e}")
 
+    # Alternate template renders: cutout/ + illustrated/ alongside png/ + motion/
+    # Runs when OPC and the primary template is "tip" (default) — adds the other styles
+    # to the same version folder so all three variants live in one place.
+    primary_tkey = content.get("_template_key", "tip")
+    if niche == "opc" and primary_tkey in ("tip", "native", "auto", ""):
+        for alt_key in ("cutout", "illustrated"):
+            try:
+                import copy
+                alt_content = copy.deepcopy(content)
+                alt_content["_template_key"] = alt_key
+                alt_work = work / f"_{alt_key}"
+                alt_work.mkdir(parents=True, exist_ok=True)
+                alt_html = build_html(alt_content, niche, slug, str(alt_work), media_paths=media_paths)
+                if not alt_html:
+                    print(f"  {alt_key}/ HTML build failed — skipping subfolder")
+                    continue
+                alt_png_dir = alt_work / "png"
+                if render_pngs(alt_html, str(alt_png_dir)):
+                    alt_sub = create_subfolder(version_folder_id, alt_key, drive)
+                    upload_dir_contents(alt_png_dir, alt_sub, drive)
+                    n_pngs = sum(1 for _ in alt_png_dir.glob("*.png"))
+                    print(f"  {alt_key}/ subfolder: {n_pngs} PNGs → Drive")
+                else:
+                    print(f"  {alt_key}/ PNG render failed — skipping subfolder")
+            except Exception as e:
+                print(f"  {alt_key}/ render failed (non-fatal): {e}")
+
     folder_link = f"https://drive.google.com/drive/folders/{version_folder_id}"
     motion_link = f"https://drive.google.com/drive/folders/{motion_sub}"
     print(f"  Version: {folder_link}")
