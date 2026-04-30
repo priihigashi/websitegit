@@ -1819,11 +1819,11 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
                 html_body = f"""
 <div class="slide slide-cover motion-slide opc-cover">
   <div class="kb-bg" {bg_style}></div>
+  {clip_block}
   <div class="slide-content">
     <div class="tag">{tag_text}</div>
     <div class="cover-hl">{headline}</div>
     <div class="cover-en">{subhead}</div>
-    {clip_block}
     <div class="swipe">SWIPE &#8594;</div>
   </div>
 </div>"""
@@ -1841,12 +1841,12 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
                 html_body = f"""
 <div class="slide slide-cover motion-slide">
   <div class="kb-bg" {bg_style}></div>
+  {clip_block}
   <div class="slide-content">
     <div class="tag">Quem decidiu isso?</div>
     <div class="cover-date">{cover_date}</div>
     <div class="cover-hl">{cover_hl}</div>
     <div class="cover-en">{cover_en}</div>
-    {clip_block}
     <div class="swipe">SWIPE &#8594;</div>
   </div>
 </div>"""
@@ -1920,9 +1920,9 @@ body{background:var(--ob);overflow:hidden}
 .slide-hl{font-family:'Fraunces',serif;font-weight:700;font-size:68px;line-height:1.1;text-transform:uppercase;margin-bottom:12px;text-shadow:0 2px 20px rgba(0,0,0,.8);}
 .slide-en{font-family:'Inter',sans-serif;font-style:italic;font-size:26px;color:var(--gr);margin-bottom:28px}
 .swipe{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);right:var(--P)}
-/* CLIP FRAME — newspaper/polaroid style matching rachadinha */
+/* CLIP FRAME — z-index:1 so it sits BEHIND .slide-content (z-index:2). Text always wins. */
 .clip-frame{position:absolute;top:120px;right:var(--P);width:340px;height:420px;
-            border:3px solid var(--ca);background:#000;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.7);}
+            z-index:1;border:3px solid var(--ca);background:#000;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.7);}
 .clip-frame-mid{top:auto;bottom:200px;}
 .clip-stamp{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--ca);
             background:var(--ob);padding:6px 12px;position:absolute;top:-1px;right:-1px;

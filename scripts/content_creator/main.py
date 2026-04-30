@@ -1118,14 +1118,20 @@ def process_one_topic(topic_entry, run_date, drive):
     print(f"  Story: {story_link}")
 
     # Flow tracking: Content Queue → Built + Drive path
-    # Verificamos gets "Pending Approval" — approval email gate prevents auto-schedule
-    queue_status = "Pending Approval" if series_override == "VERIFICAMOS" else "Built"
+    # Verificamos + Dados ou Agenda get "Pending Approval" — approval email gate prevents auto-schedule
+    queue_status = "Pending Approval" if series_override in ("VERIFICAMOS", "DADOS OU AGENDA") else "Built"
     if queue_row:
         write_queue_status(queue_row, status=queue_status, drive_folder_path=folder_link)
 
     # 6. Add catalog row (OPC project tracker) — motion column deep-links to /motion subfolder
-    # series_override supports Verificamos (Brazil) / Fact-Checked (USA) verification series
-    series = topic_entry.get("series_override") or (
+    # series_override supports: Verificamos, Fact-Checked, DADOS OU AGENDA, etc.
+    # Map override codes to display names before falling back to niche defaults.
+    _series_display_map = {
+        "VERIFICAMOS": "Verificamos",
+        "DADOS OU AGENDA": "Dados ou Agenda?",
+        "FACT-CHECKED": "Fact-Checked",
+    }
+    series = _series_display_map.get(series_override, series_override) or (
         "Tip of the Week" if niche == "opc" else ("The Chain" if niche == "usa" else "Quem Decidiu Isso?")
     )
     add_catalog_row(post_id, niche, series, topic, folder_link, motion_link, get_oauth_token())
@@ -1136,6 +1142,8 @@ def process_one_topic(topic_entry, run_date, drive):
         _post_type = "General Tip"  # all auto-built OPC posts are tips; Before & After / Project Showcase set manually
     elif series_override == "VERIFICAMOS" or "verificamos" in _series_lower:
         _post_type = "Fake News"
+    elif series_override == "DADOS OU AGENDA" or "dados" in _series_lower or "agenda" in _series_lower:
+        _post_type = "Bias Check"
     elif "quem" in _series_lower or "decidiu" in _series_lower:
         _post_type = "Who Decided"
     elif "conta" in _series_lower or "money" in _series_lower:
@@ -1200,7 +1208,7 @@ def process_one_topic(topic_entry, run_date, drive):
         "niche": niche,
         "series_override": series_override,
         "fake_news_route": fake_news_route,
-        "requires_approval": series_override == "VERIFICAMOS",
+        "requires_approval": series_override in ("VERIFICAMOS", "DADOS OU AGENDA"),
         "queue_row_idx": queue_row,
         "version": version,
         "version_folder_id": version_folder_id,

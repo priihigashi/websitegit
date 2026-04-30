@@ -2529,6 +2529,122 @@ def run_book(args, transcript):
     except Exception: pass
 
 
+def run_bias(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = "", screenshots: list = None, debug_info: str = ""):
+    """FORMAT-019 — Dados ou Agenda? Influencer/public figure bias check.
+    Generates 9-slide carousel brief with credibility score + 3-way motivation verdict.
+    Routes to Brazil News Captures folder (News shared drive).
+    """
+    print("\n[BIAS CHECK — FORMAT-019] Running Dados ou Agenda? analysis...")
+    metadata = metadata or {}
+    creator_name = metadata.get("creator_name", "") or metadata.get("creator_handle", "")
+
+    _date = datetime.now().strftime("%Y-%m-%d")
+    # Use Brazil captures folder (bias check is always Brazil News niche)
+    _bias_capture_folder = get_capture_folder("brazil")
+
+    # Create story subfolder
+    _m = re.search(r'/reel/([^/?]+)|/p/([^/?]+)', args.url)
+    _src = (_m.group(1) or _m.group(2)) if _m else args.story_id
+    _plat = "IG" if "instagram.com" in args.url else ("YT" if "youtu" in args.url else "WEB")
+    _folder_name = f"{_date}_BIAS_{_plat}-{_src}"
+    _story_folder_id = _bias_capture_folder
+    _story_folder_url = ""
+    _drive_svc = get_drive_service()
+    if _drive_svc:
+        try:
+            _sf = _drive_svc.files().create(
+                body={"name": _folder_name, "mimeType": "application/vnd.google-apps.folder",
+                      "parents": [_bias_capture_folder]},
+                supportsAllDrives=True, fields="id,webViewLink"
+            ).execute()
+            _story_folder_id = _sf["id"]
+            _story_folder_url = _sf.get("webViewLink", f"https://drive.google.com/drive/folders/{_story_folder_id}")
+            print(f"  Bias story folder: {_story_folder_url}")
+        except Exception as _e:
+            print(f"  WARNING: bias story subfolder creation failed, writing flat: {_e}")
+
+    # Run FORMAT-019 analysis
+    analysis = analyze_bias(transcript, args.url, args.story_id, args.notes or "", creator_name=creator_name)
+    path = TRANSCRIPTS_DIR / f"{args.story_id}_bias.txt"
+    path.write_text(analysis, encoding="utf-8")
+
+    # Save analysis doc to Drive
+    doc_title = f"{args.story_id} — DADOS OU AGENDA? — {_date}"
+    doc_url = create_drive_doc(doc_title, analysis, _story_folder_id)
+
+    # Upload screenshots (carousel slides from vision path)
+    if screenshots and _drive_svc and _story_folder_id != _bias_capture_folder:
+        try:
+            from googleapiclient.http import MediaFileUpload as _MFU_B
+            ss_folder_b = _drive_svc.files().create(
+                body={"name": "screenshots", "mimeType": "application/vnd.google-apps.folder",
+                      "parents": [_story_folder_id]},
+                supportsAllDrives=True, fields="id"
+            ).execute()
+            ss_folder_b_id = ss_folder_b["id"]
+            _up_b = 0
+            for ss in screenshots:
+                try:
+                    if not os.path.exists(ss):
+                        continue
+                    _drive_svc.files().create(
+                        body={"name": os.path.basename(ss), "parents": [ss_folder_b_id]},
+                        media_body=_MFU_B(ss, mimetype="image/jpeg"),
+                        supportsAllDrives=True, fields="id"
+                    ).execute()
+                    _up_b += 1
+                except Exception as _se:
+                    print(f"  WARNING: bias screenshot upload failed ({os.path.basename(ss)}): {_se}")
+            print(f"  Bias screenshots: {_up_b}/{len(screenshots)} uploaded")
+        except Exception as _sse:
+            print(f"  WARNING: bias screenshots/ creation failed: {_sse}")
+
+    # Log to Inspiration Library with series_override and credibility
+    bias_cl = {
+        "niche": "News",
+        "content_type": "FORMAT-019 — Dados ou Agenda?",
+        "summary": f"Bias check: {creator_name or args.story_id}",
+        "hook": "",
+        "series_override": "DADOS OU AGENDA",
+        "fake_news_route": "",
+        "fake_news_confidence": "",
+        "credibility": "MÉDIA",  # default; full score is in the analysis doc
+        "status": "Pending Approval",
+    }
+    update_inspiration_library(args.url, transcript, bias_cl,
+                               hub_url=_story_folder_url or "", doc_url=doc_url,
+                               metadata=metadata, user_notes=args.notes or "",
+                               brief_doc_url=doc_url)
+
+    create_calendar_task(args.story_id, "bias", args.url, doc_url or "", transcript[:400], args.notes or "")
+
+    print(f"\n{'='*50}\nBIAS CHECK DONE — FORMAT-019\nStory ID: {args.story_id}\nSubject: {creator_name or 'unknown'}\nDoc: {doc_url or 'check artifacts'}\nFolder: {_story_folder_url or 'check Drive'}\n{'='*50}")
+
+    send_notification_email(
+        subject=f"Dados ou Agenda? — {creator_name or args.story_id}",
+        body=(
+            f"FORMAT-019 bias check complete.\n\n"
+            f"Subject: {creator_name or 'identify from doc'}\n"
+            f"Story ID: {args.story_id}\n"
+            f"Source: {args.url}\n\n"
+            f"Analysis doc (9-slide brief + credibility score): {doc_url or 'check Drive'}\n"
+            f"Drive folder: {_story_folder_url or 'check Brazil Captures'}\n\n"
+            f"Next step: review brief, then trigger carousel builder with series_override=DADOS OU AGENDA.\n"
+            f"Episode slug: dados-ou-agenda_{(creator_name or 'subject').lower().replace(' ','_').replace('@','')}\n\n"
+            f"Transcript preview:\n{transcript[:400]}"
+        ),
+    )
+
+    _mark_queue_processed(args.url)
+    try:
+        import sys; sys.path.insert(0, str(Path(__file__).parent.parent))
+        from content_tracker import log_run
+        log_run(pipeline="capture_pipeline", trigger="manual", url=args.url,
+                niche="news", project="bias", status="success",
+                drive_path=_story_folder_url or doc_url or "", notes=f"FORMAT-019: {creator_name or args.story_id}")
+    except Exception: pass
+
+
 def run_news(args, transcript, video_path: str = "", srt_content: str = "", creator_name: str = "", screenshots: list = None, debug_info: str = ""):
     print("\n[NEWS] Running format analysis...")
     analysis = analyze_news(transcript, args.url, args.story_id, args.notes or "", creator_name=creator_name)
@@ -4115,6 +4231,9 @@ def main():
                          screenshots=_screenshot_paths, debug_info=_debug_info)
         elif args.project == "book":
             run_book(args, transcript)
+        elif args.project == "bias":
+            run_bias(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
+                     screenshots=_screenshot_paths, debug_info=_debug_info)
         elif args.project in ("brazil", "usa"):
             # Both niches share the News pipeline flow but land in separate Drive folders
             # (routing.py::capture_folder returns the correct Brazil or USA folder).
