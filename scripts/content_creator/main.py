@@ -24,7 +24,7 @@ ET = pytz.timezone("America/New_York")
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))  # for routing.py
-from topic_picker import pick_topics
+from topic_picker import pick_topics, get_clip_count_for_topic
 from carousel_builder import generate_carousel_content, build_html, render_pngs, generate_image_suggestions, visual_audit, fetch_all_media, fetch_clips, build_motion_html
 from routing import get_route
 import urllib.request, urllib.parse
@@ -85,6 +85,33 @@ def _send_alert(msg: str):
         )
     except Exception as e:
         print(f"  (alert send itself failed: {e})")
+
+
+CLIP_THRESHOLD = 8  # Clip Collections count required before building a clips_needed topic
+
+
+def _trigger_video_research(topic: str, niche: str):
+    """Dispatch video-research.yml for a topic that needs clips before building."""
+    try:
+        # Build niche-appropriate search queries
+        if niche in ("brazil", "brasil"):
+            queries = f"{topic} brasil,{topic} congresso nacional,{topic} política brasileira"
+        elif niche == "usa":
+            queries = f"{topic} congress,{topic} united states,{topic} breaking news"
+        else:
+            queries = f"{topic},Oak Park Construction {topic}"
+        subprocess.run(
+            ["gh", "workflow", "run", "video-research.yml",
+             "--repo", "priihigashi/oak-park-ai-hub",
+             "-f", f"topic={topic[:80]}",
+             "-f", f"queries={queries[:300]}",
+             "-f", "max_per_query=5",
+             "-f", f"niche={niche}"],
+            check=False, timeout=30,
+        )
+        print(f"  video-research.yml triggered for clips_needed topic: {topic[:50]}")
+    except Exception as e:
+        print(f"  _trigger_video_research failed (non-fatal): {e}")
 
 
 _token_cache = {}
@@ -840,6 +867,21 @@ def process_one_topic(topic_entry, run_date, drive):
     print(f"Processing: [{niche}] {topic}")
     print(f"Post ID: {post_id} | Queue row: {queue_row}")
 
+    # Pre-build clip gate — if clips_needed flag set in Inspiration Library
+    # and Clip Collections count < threshold, defer build and trigger research.
+    clips_needed = str(topic_entry.get("clips_needed", "")).strip().lower() in ("true", "yes", "1", "x")
+    if clips_needed:
+        clip_count = get_clip_count_for_topic(topic)
+        print(f"  Clip gate: clips_needed=True, current count={clip_count}/{CLIP_THRESHOLD}")
+        if clip_count < CLIP_THRESHOLD:
+            _trigger_video_research(topic, niche)
+            _send_alert(
+                f"Clip gate: '{topic[:60]}' needs {CLIP_THRESHOLD} clips, has {clip_count}. "
+                f"video-research.yml triggered. Build skipped — will retry when clips ready."
+            )
+            return None
+        print(f"  Clip gate: {clip_count} clips ready — proceeding with build.")
+
     # 1. Generate content
     print("  Generating content via Claude Haiku...")
     brief = topic_entry.get("brief", "")
@@ -941,16 +983,22 @@ def process_one_topic(topic_entry, run_date, drive):
             recorded_indices |= {idx for idx, _ in recorded_mp4s}
             print(f"  Playwright recorded: {len(recorded_mp4s)} MP4(s) (slides {sorted({idx for idx,_ in recorded_mp4s})})")
 
-    # 4b. Kling I2V animation for primary (black) cover via Replicate kwai-kolors/kling-video.
-    # Produces {variant}_01_cover_kling.mp4 alongside the Ken Burns version.
-    # Falls back silently — Ken Burns is always the safety net.
+    # 4b. Kling gate — only fires when no real clip was found for the cover AND
+    # KLING_APPROVE env var is set (requires per-post human approval).
+    # Default: Ken Burns is the cover floor. Kling never auto-fires.
+    # To activate: set KLING_APPROVE=1 + KLING_TOPIC matching the post slug in workflow_dispatch.
+    kling_approved = os.environ.get("KLING_APPROVE", "").strip().lower() in ("1", "true", "yes")
+    cover_has_real_clip = bool(clips.get(1))
     black_covers = sorted(png_dir.glob("black_01_*_html.png"))
-    if black_covers:
+    if black_covers and kling_approved and not cover_has_real_clip:
         anim_prompt = (
             content.get("cover_visual", {}).get("option_b", {}).get("prompt", "")
             or "Subtle cinematic camera movement, documentary editorial style"
         )
         _animate_cover_kling(str(black_covers[0]), anim_prompt, str(motion_dir), "black")
+    elif black_covers and not cover_has_real_clip and not kling_approved:
+        print(f"  Kling gate: no real cover clip — Ken Burns floor used. "
+              f"To activate Kling, re-run with KLING_APPROVE=1.")
 
     # Motion completeness guard — never email preview with empty motion folder
     motion_mp4s = list(motion_dir.glob("*.mp4")) if motion_dir.exists() else []

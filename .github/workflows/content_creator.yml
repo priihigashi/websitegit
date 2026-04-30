@@ -60,6 +60,10 @@ on:
         description: 'Override Drive folder ID for all uploads (test runs)'
         required: false
         default: ''
+      kling_approve:
+        description: 'Activate Kling AI animation for cover slides missing real clips (1=yes, leave blank=no)'
+        required: false
+        default: ''
 
 jobs:
   create-content:
@@ -121,6 +125,7 @@ jobs:
           MANUAL_TEMPLATE: ${{ github.event.inputs.manual_template || 'auto' }}
           MANUAL_TEMPLATE_SET: ${{ github.event.inputs.manual_template_set || 'single' }}
           TEST_OUTPUT_FOLDER: ${{ github.event.inputs.test_output_folder || '' }}
+          KLING_APPROVE: ${{ github.event.inputs.kling_approve || '' }}
 
       - name: Run carousel reviewer (post-build quality check)
         if: always()

@@ -520,6 +520,100 @@ def tier_stock_scrapers(slide_cfg: dict, dest_path: Path) -> bool:
     return False
 
 
+# ─── Whisper + ffmpeg trim ────────────────────────────────────────────────────
+
+def _trim_to_relevant_window(clip_path: Path, slide_cfg: dict,
+                             target_duration: float = 4.0) -> Path:
+    """Trim a fetched clip to target_duration seconds around the most relevant keyword.
+
+    Flow:
+      1. ffprobe: skip if clip already ≤ target+1 s
+      2. Whisper (tiny model): locate keyword timestamp in audio
+      3. ffmpeg: seek to start_time, copy target_duration seconds
+    Non-fatal at every step — always returns a usable path.
+    """
+    if not shutil.which("ffmpeg"):
+        return clip_path
+    try:
+        # 1. Probe duration
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "json", str(clip_path)],
+            capture_output=True, text=True, timeout=10
+        )
+        if probe.returncode != 0:
+            return clip_path
+        duration = float(json.loads(probe.stdout).get("format", {}).get("duration", 0))
+        if duration <= target_duration + 1:
+            return clip_path  # already short enough — skip trim
+
+        # 2. Derive keyword from query
+        query = slide_cfg.get("youtube_query") or slide_cfg.get("query") or ""
+        stopwords = {"from", "with", "that", "this", "have", "what", "when",
+                     "where", "about", "brasil", "brazil", "united", "states"}
+        words = [w for w in query.lower().split() if len(w) > 3 and w not in stopwords]
+        keyword = words[0] if words else ""
+
+        start_time = 0.0  # default: start of clip
+
+        # 3. Whisper keyword detection
+        if keyword and shutil.which("whisper"):
+            import tempfile
+            audio_tmp = Path(tempfile.mktemp(suffix=".wav"))
+            try:
+                subprocess.run(
+                    ["ffmpeg", "-y", "-i", str(clip_path),
+                     "-ar", "16000", "-ac", "1", "-vn", str(audio_tmp)],
+                    capture_output=True, timeout=60
+                )
+                if audio_tmp.exists() and audio_tmp.stat().st_size > 0:
+                    subprocess.run(
+                        ["whisper", str(audio_tmp),
+                         "--output_format", "json",
+                         "--word_timestamps", "True",
+                         "--output_dir", str(audio_tmp.parent),
+                         "--model", "tiny"],
+                        capture_output=True, timeout=120
+                    )
+                    json_out = audio_tmp.with_suffix(".json")
+                    if json_out.exists():
+                        wdata = json.loads(json_out.read_text())
+                        for seg in wdata.get("segments", []):
+                            for word_info in seg.get("words", []):
+                                w = word_info.get("word", "").lower().strip(" ,.'\"")
+                                if keyword in w or w in keyword:
+                                    start_time = max(0.0, word_info.get("start", 0) - 0.5)
+                                    break
+                            else:
+                                continue
+                            break
+            except Exception as w_err:
+                print(f"  trim: Whisper detection skipped ({w_err})")
+            finally:
+                for f in [audio_tmp, audio_tmp.with_suffix(".json")]:
+                    try:
+                        f.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+
+        # 4. ffmpeg trim
+        trimmed = clip_path.with_stem(clip_path.stem + "_trimmed")
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-ss", str(start_time), "-i", str(clip_path),
+             "-t", str(target_duration),
+             "-c:v", "libx264", "-c:a", "aac", "-movflags", "+faststart",
+             str(trimmed)],
+            capture_output=True, timeout=60
+        )
+        if result.returncode == 0 and trimmed.exists() and trimmed.stat().st_size > MIN_CLIP_BYTES:
+            clip_path.unlink(missing_ok=True)
+            trimmed.rename(clip_path)
+            print(f"  trim: {target_duration}s window @ t={start_time:.1f}s → {clip_path.name}")
+    except Exception as e:
+        print(f"  trim: failed (non-fatal): {e}")
+    return clip_path
+
+
 # ─── Chain orchestrator ───────────────────────────────────────────────────────
 
 TierFn = Callable[[dict, Path], bool]
@@ -564,6 +658,8 @@ def fetch_clip_with_fallback(slide_cfg: dict, work_dir: str, filename: str,
             continue
         try:
             if tier_fn(slide_cfg, dest_path):
+                # Trim to a relevant 3-5s window — Whisper locates keyword, ffmpeg cuts
+                _trim_to_relevant_window(dest_path, slide_cfg, target_duration=4.0)
                 return str(dest_path)
         except Exception as e:
             print(f"  motion_sources: {tier_name} unexpected error: {e}")

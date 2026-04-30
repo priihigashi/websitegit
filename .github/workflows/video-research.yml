@@ -15,6 +15,10 @@ on:
         description: 'Max videos per query (default 5)'
         required: false
         default: '5'
+      niche:
+        description: 'Niche for Clip Collections routing (brazil / usa / opc — leave blank for general research)'
+        required: false
+        default: ''
 
 jobs:
   research:
@@ -43,7 +47,8 @@ jobs:
           python scripts/youtube_research.py \
             --topic "${{ github.event.inputs.topic }}" \
             --queries "${{ github.event.inputs.queries }}" \
-            --max ${{ github.event.inputs.max_per_query }}
+            --max ${{ github.event.inputs.max_per_query }} \
+            --niche "${{ github.event.inputs.niche }}"
 
       - name: Upload findings as artifact
         if: always()

@@ -63,6 +63,7 @@ _apify_limit_hit  = False
 SHEET_ID          = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 DRIVE_FOLDER_ID   = "1-QRf4xToJf_7cnS5UW7BiDUjd6lXot6o"  # Resources/Video Creation Flow
 INSP_TAB          = "📥 Inspiration Library"
+CLIP_COLLECTIONS_TAB = "Clip Collections"
 TARGET_VIDEOS     = 15
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -491,6 +492,38 @@ def save_to_sheet(sheet, video: dict, analysis: dict, topic: str):
     except Exception as e:
         print(f"  Sheet save error: {e}")
 
+def update_clip_collections(sheet, topic: str, video_url: str, video_title: str, niche: str):
+    """Write a high-relevance video to the Clip Collections tab so motion_sources.py
+    can find real clips for carousel builds. Reads headers by name — safe to reorder."""
+    if not sheet:
+        return
+    try:
+        ws = sheet.worksheet(CLIP_COLLECTIONS_TAB)
+        headers = ws.row_values(1)
+        col_pos = {h.strip().lower(): i for i, h in enumerate(headers)}
+        width = (max(col_pos.values()) + 1) if col_pos else 10
+        row = [""] * width
+
+        def put(col_name, val):
+            i = col_pos.get(col_name.lower())
+            if i is not None and i < width:
+                row[i] = "" if val is None else str(val)
+
+        put("topic",        topic)
+        put("topic / title", topic)
+        put("title",        video_title)
+        put("url",          video_url)
+        put("niche",        niche)
+        put("source",       "youtube_research")
+        put("status",       "ready")
+        put("date added",   datetime.now().strftime("%Y-%m-%d"))
+
+        ws.append_row(row, value_input_option="USER_ENTERED")
+        print(f"  Clip Collections: added [{niche}] {video_title[:50]}")
+    except Exception as e:
+        print(f"  update_clip_collections error (non-fatal): {e}")
+
+
 # ── DRIVE UPLOAD ──────────────────────────────────────────────────────────────
 def upload_to_drive(content: str, filename: str, folder_id: str, token: str = None):
     """Upload a text file to Drive. Refreshes SHEETS_TOKEN to get a fresh access_token."""
@@ -670,7 +703,7 @@ def run_claude_web_fallback(topic: str, queries: list[str], sheet, all_results: 
 
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
-def run(topic: str, queries: list[str], max_per_query: int = 5):
+def run(topic: str, queries: list[str], max_per_query: int = 5, niche: str = ""):
     print(f"\n=== VIDEO RESEARCH: {topic} ===")
     print(f"Initial queries: {queries}")
     print(f"Target: {TARGET_VIDEOS} transcribed videos across 3 rounds\n")
@@ -687,14 +720,14 @@ def run(topic: str, queries: list[str], max_per_query: int = 5):
                 break
             print(f"\n  [Round {round_num}] Searching: {query}")
             videos = search_youtube(query, max_per_query)
-            
+
             for video in videos:
                 if len(all_results) >= TARGET_VIDEOS:
                     break
                 if video["id"] in seen_ids:
                     continue
                 seen_ids.add(video["id"])
-                
+
                 print(f"  [{video['id']}] {video['title'][:60]}")
                 time.sleep(2)  # avoid YouTube 429 rate limiting between transcript calls
                 transcript = get_transcript(video["id"])
@@ -703,13 +736,17 @@ def run(topic: str, queries: list[str], max_per_query: int = 5):
                 mode = "with transcript" if has_transcript else "metadata only"
                 print(f"    Analyzing ({mode})...")
                 analysis = analyze_with_claude(video, transcript, topic)
-                
+
                 result = {**video, "analysis": analysis, "transcript_excerpt": transcript[:500]}
                 all_results.append(result)
                 new_count += 1
-                
+
                 if sheet:
                     save_to_sheet(sheet, video, analysis, topic)
+                    # High-relevance clips (score ≥ 7) also land in Clip Collections
+                    # so motion_sources.py can find them for carousel build.
+                    if analysis.get("relevance_score", 0) >= 7 and video.get("url"):
+                        update_clip_collections(sheet, topic, video["url"], video.get("title", ""), niche)
         return new_count
 
     # Round 1 — initial queries
@@ -905,10 +942,11 @@ if __name__ == "__main__":
     parser.add_argument("--topic", required=True, help="Research topic label (e.g. 'kling ai talking head')")
     parser.add_argument("--queries", required=True, help="Comma-separated search queries")
     parser.add_argument("--max", type=int, default=5, help="Max results per query")
+    parser.add_argument("--niche", default="", help="Niche label written to Clip Collections (brazil/usa/opc)")
     args = parser.parse_args()
-    
+
     queries = [q.strip() for q in args.queries.split(",")]
-    run(args.topic, queries, args.max)
+    run(args.topic, queries, args.max, args.niche)
 
     # Fail loud: any silent failure → non-zero exit so GitHub marks run ❌
     if PIPELINE_FAILURES:

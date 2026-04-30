@@ -1869,10 +1869,10 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
             html_body = f"""
 <div class="slide motion-slide">
   <div class="kb-bg" {bg_style}></div>
+  {clip_block}
   <div class="slide-content">
     <div class="slide-hl">{h_pt}</div>
     {'<div class="slide-en">' + h_en + '</div>' if h_en else ''}
-    {clip_block}
     <div class="swipe">SWIPE &#8594;</div>
   </div>
 </div>"""

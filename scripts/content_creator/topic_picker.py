@@ -174,6 +174,31 @@ def insert_queue_row(topic_entry, inspo_status):
         return None
 
 
+CLIP_COLLECTIONS_TAB = "Clip Collections"
+
+def get_clip_count_for_topic(topic: str) -> int:
+    """Return how many clip rows exist in Clip Collections tab for this topic.
+    Reads the tab header to find the TOPIC column by name. Returns 0 on any error.
+    """
+    try:
+        rows = sheet_get(f"'{CLIP_COLLECTIONS_TAB}'")
+        if len(rows) < 2:
+            return 0
+        header = [h.strip().lower() for h in rows[0]]
+        topic_col = next((i for i, h in enumerate(header)
+                          if h in ("topic", "topic / title", "title", "subject")), 0)
+        topic_lower = topic.strip().lower()
+        count = 0
+        for row in rows[1:]:
+            cell = row[topic_col].strip().lower() if topic_col < len(row) else ""
+            if cell and (cell in topic_lower or topic_lower in cell):
+                count += 1
+        return count
+    except Exception as e:
+        print(f"  get_clip_count_for_topic error: {e}")
+        return 0
+
+
 def score_topic(row, header_map, used_topics, queued_topics):
     def v(name):
         idx = header_map.get(name.lower())
@@ -269,6 +294,8 @@ def pick_topics(count_opc=2, count_brazil=1, count_usa=1):
             brief = fetch_drive_doc_content(brief_raw) or brief_raw
         else:
             brief = brief_raw
+        clips_needed_idx = header_map.get("clips_needed") or header_map.get("clips needed")
+        clips_needed_val = row[clips_needed_idx].strip() if clips_needed_idx is not None and clips_needed_idx < len(row) else ""
         entry = {
             "row_idx": idx,
             "score": score,
@@ -277,6 +304,7 @@ def pick_topics(count_opc=2, count_brazil=1, count_usa=1):
             "brief": brief,
             "inspo_status": inspo_status,
             "url": row[header_map.get("url", 0)] if header_map.get("url") is not None and header_map["url"] < len(row) else "",
+            "clips_needed": clips_needed_val,
         }
         if niche == "opc":
             opc_candidates.append(entry)
