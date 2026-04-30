@@ -318,42 +318,38 @@ jobs:
 
                   tools_out = {}
 
-                  # ── 1. NB2 — Gemini 3.1 Flash Image Preview (RUNS FIRST) ─────
+                  # ── 1. NB2 — inference.sh → google/gemini-3-1-flash-image-preview ──
                   if do_nb2:
                       try:
-                          key = os.environ.get("GEMINI_API_KEY", "")
+                          key = os.environ.get("INFSH_KEY", "")
                           if not key:
-                              raise Exception("no key")
-                          from google import genai
-                          from google.genai import types as gtypes
-                          mime4, _ = mimetypes.guess_type(src_path)
-                          mime4 = mime4 or "image/jpeg"
+                              raise Exception("no INFSH_KEY")
                           img4_bytes = open(src_path, "rb").read()
-                          gclient4 = genai.Client(api_key=key)
-                          print("  NB2: sending to gemini-3.1-flash-image-preview...")
-                          gresp4 = gclient4.models.generate_content(
-                              model="gemini-3.1-flash-image-preview",
-                              contents=[
-                                  gtypes.Part.from_bytes(data=img4_bytes, mime_type=mime4),
-                                  gtypes.Part.from_text(text="TASK: Photo enhancement only. Do NOT redesign.\n" + per_image_prompt),
-                              ],
-                              config=gtypes.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"]),
+                          ext4 = "jpeg" if src_path.lower().endswith(".jpg") else "png"
+                          data_uri4 = "data:image/" + ext4 + ";base64," + base64.b64encode(img4_bytes).decode()
+                          from inferencesh import InferenceClient
+                          client4 = InferenceClient(api_key=key)
+                          print("  NB2: sending to inference.sh → google/gemini-3-1-flash-image-preview...")
+                          result4 = client4.run(
+                              "google/gemini-3-1-flash-image-preview",
+                              input={"prompt": "TASK: Photo enhancement only. Do NOT redesign.\n" + per_image_prompt,
+                                     "images": [data_uri4], "resolution": "2K"},
                           )
-                          found4 = False
-                          for part4 in gresp4.candidates[0].content.parts:
-                              if hasattr(part4, "inline_data") and part4.inline_data:
-                                  raw4 = part4.inline_data.data
-                                  if isinstance(raw4, str):
-                                      raw4 = base64.b64decode(raw4)
-                                  out = tmp_pfx + "_nb2.jpg"
-                                  open(out, "wb").write(raw4)
-                                  link = upload_to_drive(out, safe_stem + "_nb2.jpg", dest)
-                                  tools_out["nb2"] = {"status": "ok", "file": safe_stem + "_nb2.jpg", "drive_link": link}
-                                  print("  NB2: ok -> " + link)
-                                  found4 = True
-                                  break
-                          if not found4:
+                          images4 = result4.get("images") or result4.get("output", {}).get("images", [])
+                          if not images4:
                               raise Exception("no image in response")
+                          img_data4 = images4[0]
+                          out = tmp_pfx + "_nb2.jpg"
+                          if isinstance(img_data4, str) and img_data4.startswith("http"):
+                              import urllib.request as _ur
+                              _ur.urlretrieve(img_data4, out)
+                          elif isinstance(img_data4, str) and "base64," in img_data4:
+                              open(out, "wb").write(base64.b64decode(img_data4.split("base64,", 1)[1]))
+                          else:
+                              open(out, "wb").write(base64.b64decode(img_data4) if isinstance(img_data4, str) else img_data4)
+                          link = upload_to_drive(out, safe_stem + "_nb2.jpg", dest)
+                          tools_out["nb2"] = {"status": "ok", "file": safe_stem + "_nb2.jpg", "drive_link": link}
+                          print("  NB2: ok -> " + link)
                       except Exception as e:
                           tools_out["nb2"] = {"status": "failed", "error": str(e)[:200]}
                           print("  NB2 FAILED: " + str(e)[:200])
