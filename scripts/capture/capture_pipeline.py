@@ -1721,56 +1721,58 @@ def _try_vision_fallback(audio: str, tmp_dir: str, metadata: dict) -> str:
     caption = metadata.get("caption", "")
 
     if audio == "__ig_carousel__":
-        # Tier 1: Apify instagram-scraper (already fetched in main — slide_image_urls from images[])
-        slide_urls = metadata.get("slide_image_urls", [])
-        if slide_urls:
-            print(f"  Vision fallback: {len(slide_urls)} carousel slide(s) via Apify → Claude Haiku Vision")
-            return _describe_with_claude_vision(slide_urls, context=caption)
-
         source_url = metadata.get("source_url", "")
-        # Tier 1b: Apify instagram-post-scraper — specifically designed for /p/ carousel posts.
-        # Returns childPosts[*].displayUrl which is more reliable than images[] on the reel scraper.
-        print("  Vision fallback: Apify instagram-scraper empty — trying apify~instagram-post-scraper (tier-1b)")
-        slide_urls_1b = _fetch_carousel_slides_apify_post(source_url)
-        if slide_urls_1b:
-            print(f"  Vision fallback: {len(slide_urls_1b)} slide(s) via apify~instagram-post-scraper → Claude Haiku Vision")
-            return _describe_with_claude_vision(slide_urls_1b, context=caption)
 
-        # Tier 2: instaloader anonymous GraphQL (no credentials, public posts)
-        print("  Vision fallback: Apify post-scraper empty — trying instaloader (tier-2)")
-        local_slides = _try_instaloader_slides(source_url, tmp_dir)
-        if local_slides:
-            print(f"  Vision fallback: {len(local_slides)} slide(s) via instaloader → Claude Haiku Vision")
-            return _describe_with_claude_vision(local_slides, context=caption)
-
-        # Tier 3: Instagram embed HTML scrape — public endpoint, no auth, works from any IP.
-        # Uses bot user agent on instagram.com/p/{shortcode}/embed/ which is designed for
-        # external web embeds and responds without login from any IP.
-        print("  Vision fallback: instaloader empty — trying Instagram embed scrape (tier-3)")
+        # Tier 1 (FREE, instant, any IP): Instagram embed HTML scrape.
+        # instagram.com/p/{shortcode}/embed/ is a public endpoint designed for web embeds —
+        # responds to bot user agents from any IP without auth. Fastest path, no budget used.
+        print("  Vision: trying Instagram embed scrape (tier-1, free, any IP)...")
         embed_slides = _try_embed_scrape(source_url, tmp_dir)
         if embed_slides:
-            print(f"  Vision fallback: {len(embed_slides)} image(s) via embed scrape → Claude Haiku Vision")
+            print(f"  Vision: {len(embed_slides)} image(s) via embed scrape → Claude Haiku Vision")
             return _describe_with_claude_vision(embed_slides, context=caption)
 
-        # Tier 4: yt-dlp + PRI_OP_IG_COOKIES
-        print("  Vision fallback: embed scrape empty — trying yt-dlp + IG cookies (tier-4)")
-        local_slides = _try_yt_dlp_slides(source_url, tmp_dir)
-        if local_slides:
-            print(f"  Vision fallback: {len(local_slides)} slide(s) via yt-dlp+cookies → Claude Haiku Vision")
-            return _describe_with_claude_vision(local_slides, context=caption)
-
-        # Tier 5 (floor): Instagram oEmbed API — official public endpoint, always returns
-        # cover thumbnail for any public post. Works from any IP, no auth needed.
-        # Gives at least 1 image so Vision can detect niche + generate a basic brief.
-        print("  Vision fallback: yt-dlp empty — trying oEmbed thumbnail floor (tier-5)")
+        # Tier 2 (FREE, instant, any IP): Instagram oEmbed API — official public endpoint.
+        # Always returns cover thumbnail for any public post. 1 image, but enough for niche
+        # detection and brief generation. Guaranteed floor when all other tiers fail.
+        print("  Vision: embed scrape empty — trying oEmbed thumbnail (tier-2, free, any IP)...")
         oembed_slides = _try_oembed_thumbnail(source_url)
         if oembed_slides:
-            print(f"  Vision fallback: {len(oembed_slides)} image(s) via oEmbed floor → Claude Haiku Vision")
+            print(f"  Vision: {len(oembed_slides)} image(s) via oEmbed → Claude Haiku Vision")
             return _describe_with_claude_vision(oembed_slides, context=caption)
 
-        print("  Vision fallback: all 5 tiers empty — skipping carousel vision")
-        print("  [CAROUSEL DEBUG] Tiers tried: apify-scraper, apify-post-scraper, instaloader, embed-scrape, yt-dlp+cookies, oembed")
-        print("  [CAROUSEL DEBUG] If post is public, check Apify budget or refresh PRI_OP_IG_COOKIES")
+        # Tier 3 (PAID): Apify instagram-scraper — slide_image_urls already fetched in main().
+        slide_urls = metadata.get("slide_image_urls", [])
+        if slide_urls:
+            print(f"  Vision: {len(slide_urls)} carousel slide(s) via Apify → Claude Haiku Vision")
+            return _describe_with_claude_vision(slide_urls, context=caption)
+
+        # Tier 3b (PAID): Apify instagram-post-scraper — childPosts[*].displayUrl, more
+        # reliable than images[] on the reel scraper for /p/ carousel posts.
+        print("  Vision: Apify instagram-scraper empty — trying apify~instagram-post-scraper (tier-3b)...")
+        slide_urls_3b = _fetch_carousel_slides_apify_post(source_url)
+        if slide_urls_3b:
+            print(f"  Vision: {len(slide_urls_3b)} slide(s) via apify~instagram-post-scraper → Claude Haiku Vision")
+            return _describe_with_claude_vision(slide_urls_3b, context=caption)
+
+        # Tier 4 (FREE, blocked on cloud IPs): instaloader anonymous GraphQL.
+        # Works locally but GitHub Actions runner IPs are blocked by Instagram.
+        print("  Vision: Apify empty — trying instaloader (tier-4, may be blocked on cloud IPs)...")
+        local_slides = _try_instaloader_slides(source_url, tmp_dir)
+        if local_slides:
+            print(f"  Vision: {len(local_slides)} slide(s) via instaloader → Claude Haiku Vision")
+            return _describe_with_claude_vision(local_slides, context=caption)
+
+        # Tier 5 (FREE, needs fresh cookies): yt-dlp + PRI_OP_IG_COOKIES.
+        print("  Vision: instaloader empty — trying yt-dlp + IG cookies (tier-5, needs fresh cookies)...")
+        local_slides = _try_yt_dlp_slides(source_url, tmp_dir)
+        if local_slides:
+            print(f"  Vision: {len(local_slides)} slide(s) via yt-dlp+cookies → Claude Haiku Vision")
+            return _describe_with_claude_vision(local_slides, context=caption)
+
+        print("  Vision: all tiers empty — skipping carousel vision")
+        print("  [DEBUG] embed-scrape + oEmbed failed → post may be private or deleted")
+        print("  [DEBUG] To get full carousel: refresh PRI_OP_IG_COOKIES or add Apify budget")
         return ""
     else:
         # Scale keyframes by video duration so longer videos aren't under-sampled.
