@@ -827,14 +827,34 @@ def _remove_background(img_rel_path, work_dir):
     if out_path.exists() and out_path.stat().st_size > 2000:
         return out_rel
     try:
-        # Upload image to Replicate as base64 data URI
-        import base64
+        # Step 1: upload file to Replicate Files API → get a URL the model can access
+        import email.mime.multipart, email.mime.base, email.encoders
         mime = "image/jpeg" if src.suffix.lower() in (".jpg", ".jpeg") else "image/png"
-        b64 = base64.b64encode(src.read_bytes()).decode()
-        data_uri = f"data:{mime};base64,{b64}"
+        boundary = "rembgboundary"
+        img_bytes = src.read_bytes()
+        body = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="content"; filename="{src.name}"\r\n'
+            f"Content-Type: {mime}\r\n\r\n"
+        ).encode() + img_bytes + f"\r\n--{boundary}--\r\n".encode()
+        upload_req = urllib.request.Request(
+            "https://api.replicate.com/v1/files",
+            data=body,
+            headers={
+                "Authorization": f"Token {REPLICATE_KEY}",
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+            },
+        )
+        upload_resp = json.loads(urllib.request.urlopen(upload_req, timeout=30).read())
+        image_url = upload_resp.get("urls", {}).get("get", "")
+        if not image_url:
+            print(f"  rembg: file upload returned no URL — using original")
+            return img_rel_path
+
+        # Step 2: run rembg prediction with the uploaded file URL
         pred_body = json.dumps({
             "version": "fb8af171cfa1616ddcf1242c093f9c46bcada9ad046cf69ea84be475ec44de75",
-            "input": {"image": data_uri}
+            "input": {"image": image_url}
         }).encode()
         req = urllib.request.Request(
             "https://api.replicate.com/v1/predictions",
