@@ -219,7 +219,7 @@ def update_clip_collections(scripts_with_broll):
     svc    = _service()
     result = svc.spreadsheets().values().get(
         spreadsheetId=SPREADSHEET_ID,
-        range="Clip Collections!A:G",
+        range="📋 Clip Collections!A:G",
     ).execute()
     rows = result.get("values", [])
     existing_topics = {(row[0].lower() if row else ""): idx+2 for idx, row in enumerate(rows[1:])}
@@ -250,7 +250,7 @@ def update_clip_collections(scripts_with_broll):
             combined = [l for l in existing_links.split(" | ") if l] + all_links
             svc.spreadsheets().values().update(
                 spreadsheetId=SPREADSHEET_ID,
-                range=f"Clip Collections!D{matched_row}:E{matched_row}",
+                range=f"📋 Clip Collections!D{matched_row}:E{matched_row}",
                 valueInputOption="USER_ENTERED",
                 body={"values": [[str(current_count + len(all_links)), " | ".join(combined)]]},
             ).execute()
@@ -259,7 +259,7 @@ def update_clip_collections(scripts_with_broll):
             link_str = " | ".join(all_links)
             svc.spreadsheets().values().append(
                 spreadsheetId=SPREADSHEET_ID,
-                range="Clip Collections!A:G",
+                range="📋 Clip Collections!A:G",
                 valueInputOption="USER_ENTERED",
                 insertDataOption="INSERT_ROWS",
                 body={"values": [[

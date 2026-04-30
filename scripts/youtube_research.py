@@ -63,7 +63,7 @@ _apify_limit_hit  = False
 SHEET_ID          = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 DRIVE_FOLDER_ID   = "1-QRf4xToJf_7cnS5UW7BiDUjd6lXot6o"  # Resources/Video Creation Flow
 INSP_TAB          = "📥 Inspiration Library"
-CLIP_COLLECTIONS_TAB = "Clip Collections"
+CLIP_COLLECTIONS_TAB = "📋 Clip Collections"
 TARGET_VIDEOS     = 15
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",

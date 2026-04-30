@@ -174,7 +174,7 @@ def insert_queue_row(topic_entry, inspo_status):
         return None
 
 
-CLIP_COLLECTIONS_TAB = "Clip Collections"
+CLIP_COLLECTIONS_TAB = "📋 Clip Collections"
 
 def get_clip_count_for_topic(topic: str) -> int:
     """Return how many clip rows exist in Clip Collections tab for this topic.
