@@ -340,10 +340,10 @@ def tier_apify_youtube(slide_cfg: dict, dest_path: Path) -> bool:
                 return True
 
         # Fallback: Apify downloader actor for the found URL
+        # streamers~youtube-video-downloader uses startUrls[] (same pattern as other Apify scrapers)
         dl_items = _apify_run(
             "streamers~youtube-video-downloader",
-            {"videoUrls": [{"url": video_url}], "url": video_url,
-             "format": "mp4", "quality": "360p", "resolution": "360p"},
+            {"startUrls": [{"url": video_url}]},
             wait=180
         )
         download_url = ""
