@@ -28,7 +28,6 @@ name: Capture Pipeline v2
 #   → Saves to Inspiration Library (Google Sheets)
 #   → Creates a task in Google Calendar with content brief
 # ───────────────────────────────────────────────────────────────────────────
-
 on:
   workflow_dispatch:
     inputs:
@@ -66,3 +65,114 @@ on:
         required: false
         type: boolean
         default: false
+
+jobs:
+  capture:
+    name: "${{ inputs.project }} — ${{ inputs.story_id || 'auto-id' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout oak-park-ai-hub
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install ffmpeg (required by yt-dlp)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          pip install \
+            yt-dlp \
+            openai \
+            anthropic \
+            google-generativeai \
+            faster-whisper \
+            gspread \
+            google-auth \
+            google-api-python-client \
+            python-dotenv \
+            requests \
+            youtube-transcript-api \
+            instaloader \
+            pytubefix
+
+      - name: Run capture pipeline
+        env:
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
+          SHEETS_TOKEN:      ${{ secrets.SHEETS_TOKEN }}
+          GITHUB_TOKEN:     ${{ github.token }}
+          APIFY_API_KEY:    ${{ secrets.APIFY_API_KEY }}
+          SERP_API_KEY:     ${{ secrets.SERP_API_KEY }}
+          SUPADATA_API_KEY: ${{ secrets.PRI_OP_SUPADATA_API_KEY || secrets.SUPADATA_API_KEY }}
+          YOUTUBE_API_KEY:  ${{ secrets.YOUTUBE_API_KEY }}
+          GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
+          PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          PRI_OP_YT_COOKIES: ${{ secrets.PRI_OP_YT_COOKIES }}
+          PRI_OP_IG_COOKIES: ${{ secrets.PRI_OP_IG_COOKIES }}
+        run: |
+          CMD="python scripts/capture/capture_pipeline.py \"${{ inputs.url }}\" --project ${{ inputs.project }}"
+
+          if [ -n "${{ inputs.story_id }}" ]; then
+            CMD="$CMD --story-id \"${{ inputs.story_id }}\""
+          fi
+
+          if [ -n "${{ inputs.notes }}" ]; then
+            CMD="$CMD --notes \"${{ inputs.notes }}\""
+          fi
+
+          if [ "${{ inputs.credits }}" = "true" ]; then
+            CMD="$CMD --credits"
+          fi
+
+          echo "Running: $CMD"
+          eval $CMD
+
+      - name: Upload transcripts and analysis
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: "capture-${{ inputs.story_id || github.run_id }}-${{ inputs.project }}"
+          path: transcripts/
+          retention-days: 30
+
+      - name: Send failure notification (realtime, compact thread)
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: priscila@oakpark-construction.com
+          password: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          to: priscila@oakpark-construction.com
+          from: Oak Park AI <priscila@oakpark-construction.com>
+          subject: "CAPTURE FAILED — Realtime Alert"
+          body: |
+            A capture run failed.
+
+            URL: ${{ inputs.url }}
+            Project: ${{ inputs.project }}
+            Story ID: ${{ inputs.story_id || 'auto' }}
+            Run number: ${{ github.run_number }}
+
+            Check the run logs:
+            https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow capture_pipeline.yml \
+            --status "${{ job.status }}"
