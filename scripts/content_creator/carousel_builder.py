@@ -1336,20 +1336,8 @@ def fetch_all_media(content, niche, work_dir):
             if c:
                 _set_cover(c, "wikimedia", "cc", query=search_q)
 
-        # Step 2 — non-person covers.
-        # OPC: stock-first (Pexels → Pixabay), NO AI. AI hallucinates wrong
-        # construction materials (e.g. ceramic shingles instead of asphalt).
-        # Other niches: AI cascade first for prompt-specific realistic images.
-        if not paths["cover"] and subject_type != "person" and niche == "opc" and search_q:
-            c = _fetch_pexels_image(search_q, work_dir, cover_fname)
-            if c and _vision_accept(c, search_q, "cover/pexels"):
-                _set_cover(c, "pexels", "stock", query=search_q)
-            if not paths["cover"]:
-                c = _fetch_pixabay_image(search_q, work_dir, cover_fname)
-                if c and _vision_accept(c, search_q, "cover/pixabay"):
-                    _set_cover(c, "pixabay", "stock", query=search_q)
-
-        if not paths["cover"] and subject_type != "person" and niche != "opc":
+        # Step 2 — non-person covers: AI cascade FIRST (prompt-specific, realistic)
+        if not paths["cover"] and subject_type != "person":
             if _IMAGE_PROVIDERS_AVAILABLE:
                 fresh_prompt = _build_img_prompt(
                     slide_text=search_q, context_image_query=search_q,
@@ -1426,12 +1414,10 @@ def fetch_all_media(content, niche, work_dir):
                     print(f"  cover last-resort → Pixabay (no vision): {search_q[:50]}")
 
     # ── MIDDLE SLIDES — CONTEXT IMAGES ────────────────────────────────────
-    # OPC niche: stock-first (Pexels → Pixabay → Wikimedia). NO AI generation.
-    # AI image generators hallucinate wrong construction materials (e.g. ceramic
-    # shingles instead of asphalt, impossible nail placements). Real stock photos
-    # show accurate materials and real job-site conditions.
-    # News/other niches: AI cascade first (NB2 → Seedream → Gemini → SDXL → DALL-E),
-    # then stock fallback — still useful when visual_hint is a building/event/scene.
+    # Cascade: AI cascade FIRST (NB2 → Seedream4.5 → Seedream5.0 → Gemini → SDXL
+    # → DALL-E) for prompt-specific realistic images. Real-photo fallback
+    # (Wiki CC → Pexels → Pixabay) only when AI exhausted — generic stock
+    # frequently duplicates across slides for similar construction queries.
     # Applies only to slides with visual_hint == "context-image"; bio-cards
     # are rendered separately from mentioned_people[*].image_hint.
     for i, slide in enumerate(content.get("slides", []), start=2):
@@ -1449,110 +1435,87 @@ def fetch_all_media(content, niche, work_dir):
 
         img_path = ""
         accepted = False
+        # Tier 0 — library-first reuse + scene-preserving enhancement
+        if _IMAGE_LIBRARY_AVAILABLE:
+            try:
+                lib_hit = _search_library(cq, niche)
+                if lib_hit:
+                    rel = _enhance_library_image(lib_hit.get("drive_url", ""), work_dir, fname, cq)
+                    if rel and _vision_accept(rel, cq, f"slide{i}/library"):
+                        _set_slide(i, rel, "library", "library", query=cq, prompt="scene-lock enhance from library")
+                        accepted = True
+                        if _mark_library_used:
+                            _mark_library_used(lib_hit.get("row_idx", 0), f"{niche}:{cq[:40]}")
+            except Exception as _e:
+                _log_failure("image_library/slide_lookup", _e)
 
-        # ── OPC: stock-first, no AI ───────────────────────────────────────────
-        if niche == "opc":
+        # Tier 1: AI cascade — NB2 → Seedream 4.5 → Seedream 5.0 → Gemini → SDXL → DALL-E
+        if not accepted and _IMAGE_PROVIDERS_AVAILABLE:
+            fresh_prompt = _build_img_prompt(
+                slide_text=cq, context_image_query=cq,
+                niche=niche, slide_num=i, work_dir=work_dir, save=True,
+            ) or ai_prompt
+            fname = _make_img_filename(cq, "ai", i)
+            img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname)
+            if img_path and _vision_accept(img_path, cq, f"slide{i}/{used_prov}"):
+                print(f"  Slide {i}: {used_prov} image for '{cq[:50]}'")
+                _set_slide(i, img_path, used_prov, "ai", query=cq, prompt=fresh_prompt)
+                accepted = True
+            else:
+                img_path = ""
+        else:
+            # Legacy fallback when image_providers not available
+            img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
+            if img_path and _vision_accept(img_path, cq, f"slide{i}/gemini"):
+                _set_slide(i, img_path, "gemini", "ai", query=cq, prompt=ai_prompt)
+                accepted = True
+            else:
+                img_path = ""
+            if not accepted:
+                img_path = _generate_seedream_image(ai_prompt, work_dir, fname)
+                if img_path and _vision_accept(img_path, cq, f"slide{i}/seedream"):
+                    _set_slide(i, img_path, "seedream", "ai", query=cq, prompt=ai_prompt)
+                    accepted = True
+                else:
+                    img_path = ""
+            if not accepted:
+                img_path = _generate_replicate_sdxl(ai_prompt, work_dir, fname)
+                if img_path and _vision_accept(img_path, cq, f"slide{i}/sdxl"):
+                    _set_slide(i, img_path, "sdxl", "ai", query=cq, prompt=ai_prompt)
+                    accepted = True
+                else:
+                    img_path = ""
+            if not accepted:
+                img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
+                if img_path and _vision_accept(img_path, cq, f"slide{i}/dall-e-3"):
+                    _set_slide(i, img_path, "dall-e-3", "ai", query=cq, prompt=ai_prompt)
+                    accepted = True
+                else:
+                    img_path = ""
+
+        # Tier 2: real-photo fallback (Wiki CC → Pexels → Pixabay) — only when AI exhausted
+        if not accepted:
+            img_path = _fetch_person_photo(cq, work_dir, fname)
+            if img_path and _vision_accept(img_path, cq, f"slide{i}/wikimedia"):
+                print(f"  Slide {i}: Wikimedia fallback for '{cq[:50]}'")
+                _set_slide(i, img_path, "wikimedia", "cc", query=cq, prompt=ai_prompt)
+                accepted = True
+            else:
+                img_path = ""
+        if not accepted:
             img_path = _fetch_pexels_image(cq, work_dir, fname)
             if img_path and _vision_accept(img_path, cq, f"slide{i}/pexels"):
-                print(f"  Slide {i}: Pexels stock for '{cq[:50]}'")
-                _set_slide(i, img_path, "pexels", "stock", query=cq, prompt="")
+                print(f"  Slide {i}: Pexels fallback for '{cq[:50]}'")
+                _set_slide(i, img_path, "pexels", "stock", query=cq, prompt=ai_prompt)
                 accepted = True
-            if not accepted:
-                img_path = _fetch_pixabay_image(cq, work_dir, fname)
-                if img_path and _vision_accept(img_path, cq, f"slide{i}/pixabay"):
-                    print(f"  Slide {i}: Pixabay stock for '{cq[:50]}'")
-                    _set_slide(i, img_path, "pixabay", "stock", query=cq, prompt="")
-                    accepted = True
-            if not accepted:
-                img_path = _fetch_person_photo(cq, work_dir, fname)
-                if img_path and _vision_accept(img_path, cq, f"slide{i}/wikimedia"):
-                    print(f"  Slide {i}: Wikimedia CC for '{cq[:50]}'")
-                    _set_slide(i, img_path, "wikimedia", "cc", query=cq, prompt="")
-                    accepted = True
-            # No AI fallback for OPC — leave slot empty rather than hallucinate
-        else:
-            # ── Non-OPC: library → AI cascade → stock fallback ────────────────
-            # Tier 0 — library-first reuse + scene-preserving enhancement
-            if _IMAGE_LIBRARY_AVAILABLE:
-                try:
-                    lib_hit = _search_library(cq, niche)
-                    if lib_hit:
-                        rel = _enhance_library_image(lib_hit.get("drive_url", ""), work_dir, fname, cq)
-                        if rel and _vision_accept(rel, cq, f"slide{i}/library"):
-                            _set_slide(i, rel, "library", "library", query=cq, prompt="scene-lock enhance from library")
-                            accepted = True
-                            if _mark_library_used:
-                                _mark_library_used(lib_hit.get("row_idx", 0), f"{niche}:{cq[:40]}")
-                except Exception as _e:
-                    _log_failure("image_library/slide_lookup", _e)
-
-            # Tier 1: AI cascade — NB2 → Seedream 4.5 → Seedream 5.0 → Gemini → SDXL → DALL-E
-            if not accepted and _IMAGE_PROVIDERS_AVAILABLE:
-                fresh_prompt = _build_img_prompt(
-                    slide_text=cq, context_image_query=cq,
-                    niche=niche, slide_num=i, work_dir=work_dir, save=True,
-                ) or ai_prompt
-                fname = _make_img_filename(cq, "ai", i)
-                img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname)
-                if img_path and _vision_accept(img_path, cq, f"slide{i}/{used_prov}"):
-                    print(f"  Slide {i}: {used_prov} image for '{cq[:50]}'")
-                    _set_slide(i, img_path, used_prov, "ai", query=cq, prompt=fresh_prompt)
-                    accepted = True
-                else:
-                    img_path = ""
-            elif not accepted:
-                # Legacy fallback when image_providers not available
-                img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
-                if img_path and _vision_accept(img_path, cq, f"slide{i}/gemini"):
-                    _set_slide(i, img_path, "gemini", "ai", query=cq, prompt=ai_prompt)
-                    accepted = True
-                else:
-                    img_path = ""
-                if not accepted:
-                    img_path = _generate_seedream_image(ai_prompt, work_dir, fname)
-                    if img_path and _vision_accept(img_path, cq, f"slide{i}/seedream"):
-                        _set_slide(i, img_path, "seedream", "ai", query=cq, prompt=ai_prompt)
-                        accepted = True
-                    else:
-                        img_path = ""
-                if not accepted:
-                    img_path = _generate_replicate_sdxl(ai_prompt, work_dir, fname)
-                    if img_path and _vision_accept(img_path, cq, f"slide{i}/sdxl"):
-                        _set_slide(i, img_path, "sdxl", "ai", query=cq, prompt=ai_prompt)
-                        accepted = True
-                    else:
-                        img_path = ""
-                if not accepted:
-                    img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
-                    if img_path and _vision_accept(img_path, cq, f"slide{i}/dall-e-3"):
-                        _set_slide(i, img_path, "dall-e-3", "ai", query=cq, prompt=ai_prompt)
-                        accepted = True
-                    else:
-                        img_path = ""
-
-            # Tier 2: real-photo fallback (Wiki CC → Pexels → Pixabay) — only when AI exhausted
-            if not accepted:
-                img_path = _fetch_person_photo(cq, work_dir, fname)
-                if img_path and _vision_accept(img_path, cq, f"slide{i}/wikimedia"):
-                    print(f"  Slide {i}: Wikimedia fallback for '{cq[:50]}'")
-                    _set_slide(i, img_path, "wikimedia", "cc", query=cq, prompt=ai_prompt)
-                    accepted = True
-                else:
-                    img_path = ""
-            if not accepted:
-                img_path = _fetch_pexels_image(cq, work_dir, fname)
-                if img_path and _vision_accept(img_path, cq, f"slide{i}/pexels"):
-                    print(f"  Slide {i}: Pexels fallback for '{cq[:50]}'")
-                    _set_slide(i, img_path, "pexels", "stock", query=cq, prompt=ai_prompt)
-                    accepted = True
-                else:
-                    img_path = ""
-            if not accepted:
-                img_path = _fetch_pixabay_image(cq, work_dir, fname)
-                if img_path and _vision_accept(img_path, cq, f"slide{i}/pixabay"):
-                    print(f"  Slide {i}: Pixabay fallback for '{cq[:50]}'")
-                    _set_slide(i, img_path, "pixabay", "stock", query=cq, prompt=ai_prompt)
-                    accepted = True
+            else:
+                img_path = ""
+        if not accepted:
+            img_path = _fetch_pixabay_image(cq, work_dir, fname)
+            if img_path and _vision_accept(img_path, cq, f"slide{i}/pixabay"):
+                print(f"  Slide {i}: Pixabay fallback for '{cq[:50]}'")
+                _set_slide(i, img_path, "pixabay", "stock", query=cq, prompt=ai_prompt)
+                accepted = True
 
     # ── BRAZIL NATIVE SLIDE PHOTOS (motion alternating slides) ────────────────
     # Fetches per-slide CC photos for odd slides (3, 5, 7…) in the Brazil native
