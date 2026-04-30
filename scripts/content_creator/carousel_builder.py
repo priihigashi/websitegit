@@ -813,6 +813,57 @@ def _generate_gemini_image(prompt, work_dir, filename):
         return ""
 
 
+def _remove_background(img_rel_path, work_dir):
+    """Run Replicate cjwbw/rembg on a local image. Returns path to PNG with transparent bg,
+    or original path if rembg fails. Saves to resources/images/ with _nobg suffix."""
+    if not REPLICATE_KEY or not img_rel_path:
+        return img_rel_path
+    src = Path(work_dir) / img_rel_path
+    if not src.exists():
+        return img_rel_path
+    out_name = src.stem + "_nobg.png"
+    out_path = src.parent / out_name
+    out_rel = f"resources/images/{out_name}"
+    if out_path.exists() and out_path.stat().st_size > 2000:
+        return out_rel
+    try:
+        # Upload image to Replicate as base64 data URI
+        import base64
+        mime = "image/jpeg" if src.suffix.lower() in (".jpg", ".jpeg") else "image/png"
+        b64 = base64.b64encode(src.read_bytes()).decode()
+        data_uri = f"data:{mime};base64,{b64}"
+        pred_body = json.dumps({
+            "version": "fb8af171cfa1616ddcf1242c093f9c46bcada9ad046cf69ea84be475ec44de75",
+            "input": {"image": data_uri}
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.replicate.com/v1/predictions",
+            data=pred_body,
+            headers={"Authorization": f"Token {REPLICATE_KEY}", "Content-Type": "application/json"},
+        )
+        pred = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        poll_url = pred.get("urls", {}).get("get", "")
+        for _ in range(30):
+            time.sleep(3)
+            result = json.loads(urllib.request.urlopen(
+                urllib.request.Request(poll_url, headers={"Authorization": f"Token {REPLICATE_KEY}"})
+            ).read())
+            if result.get("status") == "succeeded":
+                out_url = result.get("output")
+                if out_url:
+                    png_bytes = urllib.request.urlopen(out_url, timeout=20).read()
+                    out_path.write_bytes(png_bytes)
+                    print(f"  rembg ✅ → {out_name} ({len(png_bytes)//1024}KB)")
+                    return out_rel
+                break
+            if result.get("status") in ("failed", "canceled"):
+                break
+        print(f"  rembg: prediction did not succeed, using original")
+    except Exception as e:
+        print(f"  rembg failed (non-fatal): {e}")
+    return img_rel_path
+
+
 def _fetch_pexels_image(query, work_dir, filename):
     """Search Pexels for a royalty-free stock photo. Last-resort fallback for context images.
     Returns relative path or empty string."""
@@ -2312,14 +2363,18 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
     for i, src in enumerate(content.get("sources", []), 1):
         sources_html += f'    <div class="src-row"><span class="src-num">{i:02d}</span><span>{src}</span></div>\n'
 
-    cover_img = (media_paths or {}).get("cover", "")
-    slide3_img = ((media_paths or {}).get("slides", {}) or {}).get(3, "")
-    slide4_img = ((media_paths or {}).get("slides", {}) or {}).get(4, "")
+    cover_img_raw = (media_paths or {}).get("cover", "")
+    slide3_img_raw = ((media_paths or {}).get("slides", {}) or {}).get(3, "")
+    slide4_img_raw = ((media_paths or {}).get("slides", {}) or {}).get(4, "")
     source_img = (
         ((media_paths or {}).get("slides", {}) or {}).get(5)
         or ((media_paths or {}).get("slides", {}) or {}).get(2)
-        or cover_img
+        or cover_img_raw
     )
+    # Cutout style: remove bg from product images so they float on brand background
+    cover_img  = _remove_background(cover_img_raw, work_dir) if cover_img_raw else ""
+    slide3_img = _remove_background(slide3_img_raw, work_dir) if slide3_img_raw else ""
+    slide4_img = _remove_background(slide4_img_raw, work_dir) if slide4_img_raw else ""
 
     work = Path(work_dir)
     cut3 = work / "resources" / "cutouts" / "slide_3.png"
@@ -2363,13 +2418,19 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
             slide4_inner = (f'<div class="tip-big">{s4_hl_html}</div>'
                             f'<div class="tip-explain">{content.get("slide4_body", "")}</div>')
 
+        cover_float = (
+            f'<img class="cut-cover-float" src="{cover_img}" alt="product">'
+            if cover_img else ""
+        )
         return f"""
-<div class="slide slide-cover {v_class} cut-shell">
+<div class="slide slide-cover {v_class} cut-shell {'has-cover-float' if cover_img else ''}">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-  <div class="cut-bg" style="background-image:url('{cover_img}');"></div>
-  <div class="tag">Cutout Tip · Oak Park Construction</div>
-  <div class="headline">{hl_html}</div>
-  <div class="body-text">{content.get("subhead","")}</div>
+  {cover_float}
+  <div class="cut-cover-text">
+    <div class="tag">Cutout Tip · Oak Park Construction</div>
+    <div class="headline">{hl_html}</div>
+    <div class="body-text">{content.get("subhead","")}</div>
+  </div>
   <div class="arrow">SWIPE &#8594;</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
@@ -2466,6 +2527,21 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
   max-height:300px; max-width:100%; object-fit:contain;
   filter: drop-shadow(0 10px 26px rgba(0,0,0,.40)) contrast(1.08);
 }
+/* Cover slide — floating bg-removed product image */
+.cut-cover-text {
+  display:flex; flex-direction:column; justify-content:center;
+  flex:1; position:relative; z-index:2;
+  max-width:580px;
+}
+.cut-cover-float {
+  position:absolute; right:-30px; top:50%; transform:translateY(-50%);
+  width:440px; height:auto; object-fit:contain;
+  filter: drop-shadow(0 24px 56px rgba(0,0,0,.55)) contrast(1.08) saturate(1.04);
+  z-index:1; pointer-events:none;
+}
+.has-cover-float .cut-cover-text { max-width:560px; }
+.v2 .cut-cover-float { filter: drop-shadow(0 18px 40px rgba(0,0,0,.28)) contrast(1.06) saturate(1.04); }
+/* v2 variant overrides */
 .v2 .cut-bg { opacity:.12; filter: grayscale(0.04) contrast(1.06) brightness(1.04); }
 .v2 .cut-artifact-img { filter: drop-shadow(0 14px 34px rgba(0,0,0,.22)) contrast(1.08) saturate(1.04); }
 .v2 .cut-artifact-label { color:rgba(10,10,10,.38); }

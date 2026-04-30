@@ -2,8 +2,8 @@
 """
 auto_fixer.py — Proactive auto-edit layer for carousel_reviewer.
 
-When the reviewer flags an issue with a slot, this module attempts to fix it
-WITHOUT a human in the loop. It currently handles:
+When the reviewer flags an issue, this module fixes it WITHOUT a human in the
+loop. Three repair paths run in sequence inside `auto_fix_drive_folder`:
 
   Goal 1A — Image mismatch:
       Read media_provenance.json → for each AI-sourced slot, rebuild the prompt
@@ -11,27 +11,57 @@ WITHOUT a human in the loop. It currently handles:
       that originally produced the bad image. The cascade will land on the
       next-best source automatically.
 
-  Goal 2 — PNG backup:
-      Before any image change, copy the current png/ children to
-      png_pre_fix_<timestamp>/ so static carousels remain recoverable.
+  Goal 1B — Text fact-check:
+      Download cover.html → text_reviewer.review_carousel_html (Claude) →
+      apply_edits_to_html (minimal substring replace) → re-upload cover.html →
+      re-render PNGs via carousel_builder.render_pngs → upload PNGs back to
+      Drive, replacing originals.
 
-The reviewer calls `auto_fix_drive_folder(drive, folder_id, niche, work_dir,
+  Goal 1C — Visual issues (cropped face, low contrast, text overflow, ...):
+      Download every PNG → visual_reviewer.review_png_folder (Claude vision) →
+      route each issue:
+        * fix_via=image_refetch → already covered by Goal 1A skip-provider loop
+        * fix_via=css_adjust    → annotate cover.html with a remediation comment
+                                  (CSS auto-tweak is per-template; flagged for
+                                  next iteration so we don't ship broken edits)
+        * fix_via=manual        → flag in email; reviewer leaves it alone.
+
+  Goal 2 — PNG backup:
+      Before any change, copy the current png/ children to png_pre_fix_<ts>/
+      so static carousels remain recoverable. Already wired into
+      fix_version_folder (backup_pngs=True).
+
+The reviewer calls `auto_fix_drive_folder(drive, folder, niche, work_dir,
 dry_run=False)` and gets back a structured change_log it can render into the
 review email.
-
-Goal 1B (fact-check rewrite) and Goal 1C (additional issue types) plug in as
-new entry points in this module — see TODOs at the bottom.
 """
 from __future__ import annotations
 
+import json
+import os
+import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 
 # Reuse the heavy lifting from fix_existing_images
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fix_existing_images import fix_version_folder  # noqa: E402
+from fix_existing_images import (  # noqa: E402
+    fix_version_folder,
+    _drive,  # not used directly here but available
+    _find_file,
+    _list_files,
+    _download_bytes,
+    _upload_file,
+    _find_or_create_folder,
+)
+from text_reviewer import (  # noqa: E402
+    review_carousel_html,
+    apply_edits_to_html,
+)
+from visual_reviewer import review_png_folder  # noqa: E402
 
 
 def auto_fix_drive_folder(
