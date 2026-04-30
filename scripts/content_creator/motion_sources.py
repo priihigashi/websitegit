@@ -323,10 +323,10 @@ def tier_apify_youtube(slide_cfg: dict, dest_path: Path) -> bool:
             print(f"  motion_sources: Apify YouTube search miss for '{query[:40]}'")
             return False
 
-        # Try yt-dlp on the specific URL (better than GHA search — direct URL often bypasses block)
+        # Path A: yt-dlp on direct URL (sometimes bypasses GHA block on specific URLs)
         if shutil.which("yt-dlp"):
             tmp_out = dest_path.parent / (dest_path.stem + ".apyt.%(ext)s")
-            r = subprocess.run(
+            subprocess.run(
                 ["yt-dlp", "--no-warnings", "--no-playlist",
                  "--format", "mp4[height<=720]/best[height<=720]/best",
                  "--max-downloads", "1", "--output", str(tmp_out), video_url],
@@ -342,32 +342,28 @@ def tier_apify_youtube(slide_cfg: dict, dest_path: Path) -> bool:
                 print(f"  motion_sources: Apify+yt-dlp → {dest_path.name} ({dest_path.stat().st_size//1024}KB)")
                 return True
 
-        # Fallback: Apify downloader actor for the found URL
-        # streamers~youtube-video-downloader uses startUrls[] (same pattern as other Apify scrapers)
-        dl_items = _apify_run(
-            "streamers~youtube-video-downloader",
-            {"startUrls": [{"url": video_url}]},
-            wait=180
-        )
-        download_url = ""
-        for item in dl_items:
-            download_url = (item.get("downloadUrl") or item.get("url")
-                            or item.get("videoUrl") or item.get("link") or "")
-            if download_url:
-                break
-        if not download_url:
-            print(f"  motion_sources: Apify downloader miss for '{video_url[:60]}'")
-            return False
+        # Path B: pytubefix — extracts direct CDN stream URL, CDN often not IP-restricted
+        try:
+            from pytubefix import YouTube as _YT
+            yt = _YT(video_url, use_oauth=False)
+            stream = yt.streams.filter(file_extension="mp4", progressive=True).order_by("resolution").last()
+            if not stream:
+                stream = yt.streams.filter(file_extension="mp4").order_by("resolution").first()
+            if stream and stream.url:
+                raw = _http_get_bytes(stream.url, timeout=120)
+                if len(raw) > MIN_CLIP_BYTES:
+                    dest_path.write_bytes(raw)
+                    _write_sidecar(dest_path, "apify_youtube", video_url,
+                                   license_str="YouTube ToS (fair use editorial)",
+                                   attribution=f"via YouTube — {video_url}", query=query)
+                    print(f"  motion_sources: Apify+pytubefix → {dest_path.name} ({len(raw)//1024}KB)")
+                    return True
+                print(f"  motion_sources: pytubefix CDN returned {len(raw)}B for '{video_url[:50]}'")
+        except Exception as _pte:
+            print(f"  motion_sources: pytubefix error ({video_url[:50]}): {_pte}")
 
-        raw = _http_get_bytes(download_url, timeout=120)
-        if len(raw) < MIN_CLIP_BYTES:
-            return False
-        dest_path.write_bytes(raw)
-        _write_sidecar(dest_path, "apify_youtube", video_url,
-                       license_str="YouTube ToS (fair use editorial)",
-                       attribution=f"via YouTube — {video_url}", query=query)
-        print(f"  motion_sources: Apify YouTube → {dest_path.name} ({len(raw)//1024}KB)")
-        return True
+        print(f"  motion_sources: Apify YouTube found URL but download failed: '{video_url[:60]}'")
+        return False
     except Exception as e:
         print(f"  motion_sources: Apify YouTube error ({query[:40]}): {e}")
         return False
