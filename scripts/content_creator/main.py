@@ -878,7 +878,7 @@ def process_one_topic(topic_entry, run_date, drive):
     # 1c. Fetch media (CC context images + AI cover) before building HTML so
     # _build_brazil_html() can inject real <img> tags instead of placeholder text.
     print("  Fetching context images + cover...")
-    media_paths = fetch_all_media(content, niche, str(work))
+    media_paths = fetch_all_media(content, niche, str(work), brief=brief)
 
     # 1d. Fetch video clips for motion version (Apify YouTube → Pexels → skip)
     print("  Fetching video clips for motion...")

@@ -43,6 +43,31 @@ def sheet_get(range_str):
     return json.loads(urllib.request.urlopen(req).read()).get("values", [])
 
 
+def fetch_drive_doc_content(doc_url_or_id: str) -> str:
+    """Fetch full text content of a Google Doc given its URL or file ID.
+    Used to load the brief doc into the pipeline before carousel generation."""
+    import re
+    doc_id = doc_url_or_id
+    m = re.search(r"/d/([a-zA-Z0-9_-]+)", doc_url_or_id)
+    if m:
+        doc_id = m.group(1)
+    try:
+        token = get_token()
+        url = f"https://docs.googleapis.com/v1/documents/{doc_id}"
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        doc = json.loads(urllib.request.urlopen(req).read())
+        text_parts = []
+        for block in doc.get("body", {}).get("content", []):
+            for el in block.get("paragraph", {}).get("elements", []):
+                t = el.get("textRun", {}).get("content", "")
+                if t:
+                    text_parts.append(t)
+        return "".join(text_parts).strip()
+    except Exception as e:
+        print(f"  fetch_drive_doc_content failed ({doc_id[:20]}): {e}")
+        return ""
+
+
 def sheet_update(range_str, values):
     token = get_token()
     enc = urllib.parse.quote(range_str, safe="!:'")
@@ -238,7 +263,12 @@ def pick_topics(count_opc=2, count_brazil=1, count_usa=1):
         if score < 0:
             continue
         brief_idx = header_map.get("brief / angle") or header_map.get("comments") or header_map.get("angle") or header_map.get("brief")
-        brief = row[brief_idx].strip() if brief_idx is not None and brief_idx < len(row) else ""
+        brief_raw = row[brief_idx].strip() if brief_idx is not None and brief_idx < len(row) else ""
+        # If the brief field contains a Google Docs URL, fetch the full doc content
+        if "docs.google.com/document" in brief_raw or (brief_raw.startswith("https://") and "/d/" in brief_raw):
+            brief = fetch_drive_doc_content(brief_raw) or brief_raw
+        else:
+            brief = brief_raw
         entry = {
             "row_idx": idx,
             "score": score,

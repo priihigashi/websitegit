@@ -151,6 +151,7 @@ def build_image_prompt(
     subject_type: str = "place",
     work_dir: Optional[str] = None,
     save: bool = False,
+    brief: str = "",
 ) -> str:
     """Generate a specific, photorealistic AI image prompt for one slide.
 
@@ -171,7 +172,8 @@ def build_image_prompt(
         return ""
 
     niche_ctx = _NICHE_CONTEXT.get(niche, "")
-    user_msg = f"""{niche_ctx}
+    brief_section = f"\n\nPost brief (use for story context — do not invent facts not in here):\n{brief.strip()[:800]}" if brief else ""
+    user_msg = f"""{niche_ctx}{brief_section}
 
 Slide {slide_num} content:
 \"\"\"{slide_text.strip()[:600]}\"\"\"

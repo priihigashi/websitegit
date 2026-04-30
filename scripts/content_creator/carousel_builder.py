@@ -538,6 +538,31 @@ Return ONLY a valid JSON object with this exact structure:
       "mentioned_people": [],
       "visual_hint": "bio-card|context-image|none",
       "context_image_query": "search term if context-image (e.g. speaker's institution building), else empty string"
+    }},
+    {{
+      "type": "comparison",
+      "heading_pt": "Na prática — lado a lado",
+      "heading_en": "Side by side",
+      "left_label": "Brasil",
+      "right_label": "Outros países",
+      "items": [
+        {{"aspect": "Aspecto analisado", "left": "dado Brasil PT", "right": "dado outros PT"}}
+      ],
+      "mentioned_people": [],
+      "visual_hint": "context-image|none",
+      "context_image_query": "specific institution, document, or building related to the comparison"
+    }},
+    {{
+      "type": "verdict",
+      "heading_pt": "O que é real?",
+      "heading_en": "What is real?",
+      "verdicts": [
+        {{"label": "A afirmação", "result": "ENGANOSO", "detail_pt": "Por que essa afirmação engana em 1-2 frases simples"}},
+        {{"label": "O número real", "result": "PARCIALMENTE CORRETO", "detail_pt": "O que está correto e o que falta de contexto"}}
+      ],
+      "mentioned_people": [],
+      "visual_hint": "none",
+      "context_image_query": ""
     }}
   ],
   "clip_suggestions": [
@@ -567,7 +592,10 @@ Rules:
 - Party affiliation in every politician mention
 - Simple Portuguese — not academic
 - Numbers must match the brief exactly if provided
-- Body text and bullet items (items_pt, facts_pt, context_pt) must be in PORTUGUESE ONLY. Never mix English words into PT sentences. heading_en is a small subtitle only — it is NOT body copy.
+- Body text and bullet items (items_pt, facts_pt, context_pt, items[*].left/right, verdicts[*].detail_pt) must be in PORTUGUESE ONLY. Never mix English words into PT sentences. heading_en is a small subtitle only — it is NOT body copy.
+- Generate 5-9 slides based on the brief's complexity. More data and named people = more slides.
+- Use `comparison` type when the brief contains side-by-side data (Brazil vs others, before vs after a law, two methodologies). One comparison row per key dimension. Max 4 rows per slide.
+- Use `verdict` type at the end of a fact-check carousel to rate each specific claim (VERDADEIRO / ENGANOSO / PARCIALMENTE CORRETO / FALSO). One verdict per bullet point claim. Only use when the carousel is explicitly debunking claims.
 
 COVER VISUAL RULES (apply before filling cover_visual):
 subject_type guide:
@@ -1236,7 +1264,7 @@ def _download_drive_photo(drive_url, dest_path):
         return ""
 
 
-def fetch_all_media(content, niche, work_dir):
+def fetch_all_media(content, niche, work_dir, brief=""):
     """Download/generate all images needed by this carousel BEFORE build_html().
     Returns dict:
       {"cover": rel_path_or_empty, "slides": {slide_idx: rel_path_or_empty}}
@@ -1342,7 +1370,7 @@ def fetch_all_media(content, niche, work_dir):
                 fresh_prompt = _build_img_prompt(
                     slide_text=search_q, context_image_query=search_q,
                     niche=niche, slide_num=1, subject_type=subject_type,
-                    work_dir=work_dir, save=True,
+                    work_dir=work_dir, save=True, brief=brief,
                 ) or ai_prompt
                 cover_fname = _make_img_filename(search_q, "ai", 1)
                 c, used_prov = _gen_ai_image(fresh_prompt, work_dir, cover_fname)
@@ -1453,7 +1481,7 @@ def fetch_all_media(content, niche, work_dir):
         if not accepted and _IMAGE_PROVIDERS_AVAILABLE:
             fresh_prompt = _build_img_prompt(
                 slide_text=cq, context_image_query=cq,
-                niche=niche, slide_num=i, work_dir=work_dir, save=True,
+                niche=niche, slide_num=i, work_dir=work_dir, save=True, brief=brief,
             ) or ai_prompt
             fname = _make_img_filename(cq, "ai", i)
             img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname)
@@ -3057,6 +3085,57 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
   <div class="swipe">SWIPE &#8594;</div>
 </div>
 """
+        elif stype == "comparison":
+            left_label = esc(slide.get("left_label", "Brasil"))
+            right_label = esc(slide.get("right_label", "Outros países"))
+            rows_html = ""
+            for it in slide.get("items", []):
+                rows_html += (
+                    f'<div class="comp-row">'
+                    f'<div class="comp-aspect">{esc(it.get("aspect",""))}</div>'
+                    f'<div class="comp-cell comp-left">{esc(it.get("left",""))}</div>'
+                    f'<div class="comp-cell comp-right">{esc(it.get("right",""))}</div>'
+                    f'</div>'
+                )
+            slides_html += f"""
+<div class="slide slide-list {motion_class}">
+  {corners}{clip_el}
+  <div class="tag">Na prática</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  <div class="comp-header">
+    <div class="comp-aspect-hdr"></div>
+    <div class="comp-col-hdr comp-col-hdr-left">{left_label}</div>
+    <div class="comp-col-hdr comp-col-hdr-right">{right_label}</div>
+  </div>
+  <div class="comp-grid">{rows_html}</div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+"""
+        elif stype == "verdict":
+            verdicts_html = ""
+            for v in slide.get("verdicts", []):
+                result_raw = v.get("result", "")
+                result_class = "verdict-true" if "VERDADEIRO" in result_raw.upper() else (
+                    "verdict-false" if "FALSO" in result_raw.upper() else "verdict-partial"
+                )
+                verdicts_html += (
+                    f'<div class="verdict-row">'
+                    f'<div class="verdict-label">{esc(v.get("label",""))}</div>'
+                    f'<div class="verdict-badge {result_class}">{esc(result_raw)}</div>'
+                    f'<div class="verdict-detail">{esc(v.get("detail_pt",""))}</div>'
+                    f'</div>'
+                )
+            slides_html += f"""
+<div class="slide slide-quote {motion_class}">
+  {corners}{clip_el}
+  <div class="tag">Veredicto</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  <div class="verdict-grid">{verdicts_html}</div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+"""
 
     src_rows = "".join(
         f'<div class="src-row"><span class="src-num">{i:02d}</span><span>{esc(s)}</span></div>\n'
@@ -3155,6 +3234,27 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}}
 .context-img-slot{{min-height:280px;max-height:380px;border:2px solid rgba(203,204,16,.25);border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:18px;background:rgba(10,10,10,.3);flex-shrink:0}}
 .context-img-slot img{{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(.08) contrast(1.03)}}
 .ctx-query{{font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--ca);text-align:center;padding:16px;opacity:.7}}
+/* COMPARISON slide */
+.comp-header{{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}}
+.comp-col-hdr{{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-align:center;padding:8px 0}}
+.comp-col-hdr-left{{color:var(--ca)}}
+.comp-col-hdr-right{{color:var(--gr)}}
+.comp-aspect-hdr{{font-size:18px;color:transparent}}
+.comp-grid{{flex:1;display:flex;flex-direction:column;gap:0}}
+.comp-row{{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;border-bottom:1px solid var(--rule);padding:14px 0}}
+.comp-aspect{{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--gr);display:flex;align-items:center;letter-spacing:.04em}}
+.comp-cell{{font-family:'Roboto Condensed',sans-serif;font-size:28px;font-weight:700;text-align:center;display:flex;align-items:center;justify-content:center;line-height:1.2}}
+.comp-left{{color:var(--ca)}}
+.comp-right{{color:var(--pa)}}
+/* VERDICT slide */
+.verdict-grid{{flex:1;display:flex;flex-direction:column;gap:24px;justify-content:center}}
+.verdict-row{{border-left:4px solid var(--ca);padding:16px 20px;background:rgba(203,204,16,.04)}}
+.verdict-label{{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--gr);letter-spacing:.06em;margin-bottom:8px}}
+.verdict-badge{{font-family:'Anton',sans-serif;font-size:32px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:8px}}
+.verdict-true{{color:#4ade80}}
+.verdict-partial{{color:var(--ca)}}
+.verdict-false{{color:#f87171}}
+.verdict-detail{{font-family:'Roboto Condensed',sans-serif;font-size:28px;color:var(--pa);line-height:1.35}}
 </style>
 </head>
 <body>

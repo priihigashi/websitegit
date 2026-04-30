@@ -1971,6 +1971,146 @@ CONTENT READY: YES / NO / NEEDS REFINEMENT"""
     return msg.content[0].text
 
 
+def analyze_bias(transcript: str, url: str, story_id: str, notes: str, creator_name: str = "") -> str:
+    """FORMAT-019 — Dados ou Agenda? (Influencer Bias Check).
+    Produces 9-slide carousel brief: credibility score + 3-way motivation verdict
+    (BASEADO EM DADOS / VIÉS IDEOLÓGICO / VIÉS DE INTERESSE) + slide copy in PT-BR + EN.
+    Audience: non-expert (8th grade level). Always fair and specific.
+    """
+    if not CLAUDE_KEY_4_CONTENT:
+        return f"[PENDING — CLAUDE_KEY_4_CONTENT required]\n\n{transcript}"
+    import anthropic
+    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
+    print("  Claude (claude-opus-4-6) Bias Check analysis — FORMAT-019...")
+    prompt = f"""Você é um jornalista bilíngue (PT-BR + EN) especializado em análise de mídia e verificação de influenciadores.
+Analise o conteúdo abaixo para produzir um BRIEF FORMATO-019 — "Dados ou Agenda?".
+
+Story ID: {story_id}
+URL: {url}
+Creator/Influencer: {creator_name or "IDENTIFY FROM TRANSCRIPT"}
+Notes from analyst: {notes or "None"}
+
+TRANSCRIPT:
+{transcript}
+
+─────────────────────────────────────────
+REGRAS ABSOLUTAS (sempre seguir):
+1. NÃO é uma matéria de ataque. É uma análise justa e honesta.
+2. Fale em PT-BR no nível do 8º ano. Sem jargão.
+3. Autopromoção + dados corretos = OK. Autopromoção + medo exagerado + contexto incompleto = marcar.
+4. SEMPRE diga o que é verdade ANTES de apontar o que está incompleto ou exagerado.
+5. Os 3 vereditos possíveis (pode ser mistura):
+   📊 BASEADO EM DADOS — dado correto, promoção transparente.
+   🏛️ VIÉS IDEOLÓGICO — narrativa serve uma visão de mundo, dados filtrados seletivamente.
+   💰 VIÉS DE INTERESSE — dado enquadrado para vender algo, combinado com exagero ou medo.
+─────────────────────────────────────────
+
+Produza o BRIEF abaixo (sem tabelas markdown, texto simples):
+
+FORMAT-019 BRIEF
+Story ID: {story_id}
+Date: {datetime.now().strftime("%Y-%m-%d")}
+Source: {url}
+Series: Dados ou Agenda?
+Status: DRAFT
+
+SUBJECT ANALYSIS:
+  Name/Handle: [name — identify from transcript]
+  Platform: [Instagram / YouTube / TikTok]
+  Estimated followers: [if known from notes/transcript, else "unknown"]
+  Main claim in this content: [1 sentence]
+  Credibility score: ALTA / MÉDIA / BAIXA
+  Red flags: [vague? no sources? fear framing? conflict of interest?]
+
+MOTIVATION SCORE (estimate % of each — must total 100):
+  % Dados (factual, backed by verifiable sources): [N]%
+  % Viés Ideológico (worldview filtering): [N]%
+  % Viés de Interesse (financial/product angle): [N]%
+  FINAL VERDICT: BASEADO EM DADOS / VIÉS IDEOLÓGICO / VIÉS DE INTERESSE / MIX
+
+─── 9-SLIDE BRIEF ───────────────────────────────────
+
+SLIDE 1 — COVER (hook + credibility badge)
+  Hook stat PT-BR: [their strongest number, reframed as a question — e.g. "60 milhões de imóveis vazios — ele está te informando ou te vendendo algo?"]
+  Hook stat EN: [same in English]
+  Credibility badge: CREDIBILITY SCORE: [ALTA / MÉDIA / BAIXA]
+  Visual: person photo left + topic image right
+
+SLIDE 2 — O que ele disse / What they said
+  PT-BR: [their main claim in 1-2 sentences — no judgment yet]
+  EN: [same]
+  Visual: bio-card with photo + verified claim quote
+
+SLIDE 3 — O que é verdade ✅ (fact 1)
+  PT-BR: [confirmed fact + source name — "Isso é verdade. Segundo [fonte]..."]
+  EN: [same]
+  Source: [outlet or data source to verify]
+
+SLIDE 4 — O que é verdade ✅ (fact 2 — if exists, else merge with slide 3)
+  PT-BR: [second confirmed fact + source]
+  EN: [same]
+  Source: [outlet]
+
+SLIDE 5 — O que ele deixou de fora ⚠️ / What was missing
+  PT-BR: [what context is incomplete — NOT "he lied", just "the picture is incomplete" — e.g. "Ele não mencionou que..."]
+  EN: [same]
+  Visual: contrast visual or institution image
+
+SLIDE 6 — Exagerou? / Did they exaggerate?
+  [If YES]: PT-BR: [specific overstatement + correct figure] | EN: [same]
+  [If NO]: PT-BR: "Os dados que ele usou são precisos." | EN: "The data they used is accurate."
+  Source: [correction source if applicable]
+
+SLIDE 7 — Por que ele disse isso? 🎯 THE KEY SLIDE
+  Verdict PT-BR: [BASEADO EM DADOS / VIÉS IDEOLÓGICO / VIÉS DE INTERESSE] + 1-sentence plain explanation
+  Example framing: "Os dados são reais. Mas ele usou o medo de uma crise para te levar a contratar a consultoria dele. Isso não é errado — mas você precisa saber."
+  EN: [same verdict in English]
+
+SLIDE 8 — Nosso Veredito / Our Verdict
+  PT-BR line 1 (what's true): [one thing that is correct]
+  PT-BR line 2 (what's missing/biased): [one thing missing or framed]
+  PT-BR line 3 (what to remember): [one takeaway]
+  EN: [same 3 lines]
+
+SLIDE 9 — CTA
+  PT-BR: "Salva esse post. Da próxima vez que um influencer te der um dado, pergunta: ele está te informando ou te vendendo algo?"
+  EN: "Save this post. Next time an influencer gives you a statistic, ask: are they informing you, or selling you something?"
+
+─────────────────────────────────────────
+
+CAPTION (locked structure):
+  Line 1 PT-BR: [hook stat — the number that stops the scroll]
+  Line 2 PT-BR: "Fizemos a análise. Os dados são reais — mas o contexto importa."
+  Line 3 PT-BR: "Vai nos slides →"
+  Line 4: [blank]
+  Line 5 PT-BR: "Comenta aqui: quem você quer que a gente analise a seguir? 👇"
+  Line 6: [blank]
+  Line 7: hashtags — #dadosvs{creator_name.lower().replace(' ','') if creator_name else 'subject'} #financas #educacaofinanceira
+
+CAPTION EN:
+  [English equivalent of caption above]
+
+SOURCES TO VERIFY (minimum 3):
+  1. [claim + source name + URL if available]
+  2.
+  3.
+
+PRODUCTION NOTES:
+  Episode slug: dados-ou-agenda_{(creator_name or 'subject').lower().replace(' ','_').replace('@','')}
+  Drive series: News Drive → Brazil → Dados ou Agenda? → _TEMPLATE_CAROUSEL
+  Requires approval: YES (bias check series)
+  Motion: YES (cover MP4 + GIF)
+  Visual per slide: bio-card (cover), split screen (key slides), context images (institutions/data)
+
+STATUS: DRAFT — research needed before slides render"""
+
+    msg = client.messages.create(
+        model="claude-opus-4-6", max_tokens=4000,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return msg.content[0].text
+
+
 def analyze_opc(transcript: str, url: str, notes: str) -> dict:
     if not CLAUDE_KEY_4_CONTENT:
         return {"niche": "Oak Park", "classification": "NEEDS_REVIEW", "summary": transcript[:150]}
@@ -1985,7 +2125,7 @@ TRANSCRIPT: {transcript}
 Fake news / misinformation detection: Does this content contain or spread a specific false or misleading claim (viral myth, fabricated statistic, doctored quote, out-of-context clip)? If yes, set fake_news_route to "A" if the source clip of the spreader is available, or "B" if an expert/outlet has already debunked it. If the niche is Brazil or bilingual, use series_override "Verificamos". If the niche is USA, use series_override "Fact-Checked".
 
 Respond with JSON only:
-{{"niche": "Oak Park" or "Brazil" or "UGC" or "News", "content_type": "Talking Head/Expert" or "Project Progress/Before-After" or "Product Tips" or "Other", "classification": "READY" or "NEEDS_REVIEW" or "NOT_RELEVANT", "summary": "one sentence", "hook": "suggested hook for repost or inspiration", "notes": "why classified this way", "series_override": "Verificamos" or "Fact-Checked" or "", "fake_news_route": "A" or "B" or "", "fake_news_confidence": "high" or "medium" or "low" or "", "additional_niches": [] or ["Brazil"] or ["News"] or ["Brazil", "News"] — list of OTHER niches this content should ALSO be captured for. Rules: (1) if user notes say "both", "bilingual", "brazil and usa", "for both" → include the other niche; (2) if topic is international (foreign elections, global leaders, geopolitics affecting multiple language audiences) → add both "Brazil" and "News"; (3) Brazil-only domestic politics → empty list; (4) USA-only domestic → empty list; (5) construction/OPC → empty list}}"""
+{{"niche": "Oak Park" or "Brazil" or "UGC" or "News", "content_type": "Talking Head/Expert" or "Project Progress/Before-After" or "Product Tips" or "Other", "classification": "READY" or "NEEDS_REVIEW" or "NOT_RELEVANT", "summary": "one sentence", "hook": "suggested hook for repost or inspiration", "notes": "why classified this way", "credibility": "HIGH" or "MEDIUM" or "LOW" or "UNVERIFIED", "series_override": "Verificamos" or "Fact-Checked" or "", "fake_news_route": "A" or "B" or "", "fake_news_confidence": "high" or "medium" or "low" or "", "additional_niches": [] or ["Brazil"] or ["News"] or ["Brazil", "News"] — list of OTHER niches this content should ALSO be captured for. Rules: (1) if user notes say "both", "bilingual", "brazil and usa", "for both" → include the other niche; (2) if topic is international (foreign elections, global leaders, geopolitics affecting multiple language audiences) → add both "Brazil" and "News"; (3) Brazil-only domestic politics → empty list; (4) USA-only domestic → empty list; (5) construction/OPC → empty list}}"""
     text = ""
     last_err = None
     for attempt in range(1, 4):
@@ -2010,6 +2150,7 @@ Respond with JSON only:
             "summary": transcript[:150],
             "hook": "",
             "notes": f"Claude unavailable: {type(last_err).__name__ if last_err else 'unknown'}",
+            "credibility": "UNVERIFIED",
             "series_override": "",
             "fake_news_route": "",
             "fake_news_confidence": "",
@@ -2119,7 +2260,7 @@ def _detect_source_format(url: str) -> str:
     return "Other"
 
 
-def update_inspiration_library(url, transcript, classification, hub_url="", doc_url="", metadata=None, user_notes=""):
+def update_inspiration_library(url, transcript, classification, hub_url="", doc_url="", metadata=None, user_notes="", brief_doc_url=""):
     """
     Additive-only. Writes a NEW row. Never updates/overwrites existing rows.
     All columns resolved by header-name lookup — resilient to any future reorder.
@@ -2169,11 +2310,15 @@ def update_inspiration_library(url, transcript, classification, hub_url="", doc_
         _set_col(base_row, "series_override",   classification.get("series_override", ""))
         _set_col(base_row, "fake_news_route",   classification.get("fake_news_route", ""))
         _set_col(base_row, "fake_news_confidence", classification.get("fake_news_confidence", ""))
+        if classification.get("credibility"):
+            _set_col(base_row, "credibility",   classification.get("credibility", ""))
         _set_col(base_row, "status",            classification.get("status", ""))
         _set_col(base_row, "niche",             classification.get("niche", ""))
         _set_col(base_row, "drive folder path", hub_url or doc_url)
         if user_notes:
             _set_col(base_row, "my raw notes",  user_notes)
+        if brief_doc_url:
+            _set_col(base_row, "brief / angle", brief_doc_url)
 
         lib.append_row(base_row, value_input_option="USER_ENTERED")
         print(f"  Inspiration Library updated (user_notes={'yes' if user_notes else 'no'})")
@@ -2195,6 +2340,7 @@ def create_calendar_task(story_id, project, url, doc_url, preview, notes, hub_ur
         "ugc": "UGC CAPTURE",
         "stocks": "STOCKS CAPTURE",
         "higashi": "HIGASHI CAPTURE",
+        "bias": "DADOS OU AGENDA — BIAS CHECK",
     }
     label = labels.get(project, "CAPTURE")
     tomorrow = (datetime.now() + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
@@ -2546,13 +2692,15 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
                "hook": "", "series_override": "", "fake_news_route": "", "fake_news_confidence": ""}
     update_inspiration_library(args.url, transcript, news_cl,
                                hub_url=doc_url or "", doc_url=brief_doc_url,
-                               metadata={}, user_notes=args.notes or "")
+                               metadata={}, user_notes=args.notes or "",
+                               brief_doc_url=brief_doc_url)
     for _extra_niche in news_cl.get("additional_niches", []):
         if _extra_niche and _extra_niche.lower() != news_cl.get("niche", "").lower():
             _extra_cl = dict(news_cl); _extra_cl["niche"] = _extra_niche
             _extra_notes = f"[CROSS-NICHE — also for {_extra_niche}] " + (args.notes or "")
             update_inspiration_library(args.url, transcript, _extra_cl, hub_url=doc_url or "",
-                                       doc_url=brief_doc_url, metadata={}, user_notes=_extra_notes.strip())
+                                       doc_url=brief_doc_url, metadata={}, user_notes=_extra_notes.strip(),
+                                       brief_doc_url=brief_doc_url)
 
     # Trigger topic cluster scraper (ported from run_opc — applies to political/Brazil news)
     if os.getenv("APIFY_API_KEY"):
@@ -3483,7 +3631,7 @@ def run_higashi(args, transcript, video_path: str = "", metadata: dict = None, s
 
 # ─── PROJECT AUTO-DETECTION ──────────────────────────────────────────────────
 
-VALID_PROJECTS = {"book", "brazil", "usa", "opc", "ugc", "stocks", "higashi"}
+VALID_PROJECTS = {"book", "brazil", "usa", "opc", "ugc", "stocks", "higashi", "bias"}
 
 # Deterministic notes-keyword overrides — checked FIRST, skip Claude entirely if hit.
 # Order matters: more specific keywords first.
@@ -3498,6 +3646,9 @@ _NOTES_KEYWORD_MAP = [
       "civil rights", "racial profiling", "philadelphia"), "usa"),
     (("for the book", "receipts book", "sovereign book", "fact-check book",
       "presidential pardon", "pardoned by trump", "pardoned by biden"), "book"),
+    (("bias check", "dado vs", "dados ou", "dado ou", "format-019", "formato-019",
+      "dados ou agenda", "data or agenda", "credibility check", "influencer bias",
+      "viés de interesse", "vies de interesse", "bias series"), "bias"),
 ]
 
 
