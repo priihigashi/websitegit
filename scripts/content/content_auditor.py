@@ -70,11 +70,53 @@ OVERALL SCORE: [1-10]
 VERDICT: [PASS/FAIL]
 NOTES: [1-2 sentences max]"""
 
-AGENTS = [
+_BASE_AGENTS = [
     {"name": "Fact Checker",          "system": FACT_CHECKER_PROMPT},
     {"name": "Brand & Tone Reviewer", "system": BRAND_TONE_PROMPT},
     {"name": "Structure & Format",    "system": STRUCTURE_FORMAT_PROMPT},
 ]
+
+# Compact niche copy rules injected into each agent's system prompt so they
+# know what standard to apply rather than inventing a generic rubric.
+_NICHE_CONTEXT = {
+    "opc": (
+        "NICHE RULES (Oak Park Construction — OPC):\n"
+        "- Language: English. Tone: direct, educational, no hype.\n"
+        "- NEVER promise what OPC does for clients. Use ranges for stats, not exact averages.\n"
+        "- Every stat needs a qualified source (Houzz, NAHB, Remodeling Magazine).\n"
+        "- No exclamation marks in slides. Caption max 3 sentences before hashtags.\n"
+        "- PASS threshold: factual, sourced, educational, no service promises.\n"
+    ),
+    "brazil": (
+        "NICHE RULES (Brazil News — PT-BR):\n"
+        "- Language: Brazilian Portuguese (informal, not slangy).\n"
+        "- Political content must be FACTUAL — no opinion, no accusation.\n"
+        "- Always include party affiliation: 'Fulano (PT-RJ)'.\n"
+        "- Every factual claim needs 2+ sources from different outlets.\n"
+        "- Hook slide = big claim/number only. Skepticism lives in middle slides, not the hook.\n"
+        "- Caption hashtags: NO party names (#PT, #PL, #Bolsonaro). Topic hashtags only.\n"
+        "- PASS threshold: factual, bilingual, sourced, no party hashtags, hook before skepticism.\n"
+    ),
+    "usa": (
+        "NICHE RULES (USA News — English):\n"
+        "- Language: English. Journalistic tone: factual, no editorial.\n"
+        "- Every factual claim needs 2+ sources (AP, Reuters, NYT, official records).\n"
+        "- No partisan framing. Present both sides when relevant.\n"
+        "- Hook slide = big claim/number only.\n"
+        "- PASS threshold: factual, sourced, neutral, hook-first structure.\n"
+    ),
+}
+
+
+def _agents_for_niche(niche: str) -> list:
+    """Return AGENTS list with niche-specific context prepended to each system prompt."""
+    ctx = _NICHE_CONTEXT.get((niche or "").lower(), "")
+    if not ctx:
+        return _BASE_AGENTS
+    return [
+        {"name": a["name"], "system": ctx + "\n" + a["system"]}
+        for a in _BASE_AGENTS
+    ]
 
 
 # ─── HTML text extraction ─────────────────────────────────────────────────────
@@ -94,32 +136,37 @@ def _strip_tags(text: str) -> str:
 
 def _extract_slides_from_html(html: str) -> list[str]:
     """Extract text content from each .slide element.
-    Returns list of stripped text strings, one per slide found.
+
+    Uses a split-by-opening-tag approach instead of balanced-tag regex so nested
+    divs inside each slide are fully captured rather than truncated at the first
+    inner closing tag.
     """
-    # Match <div|section|article class="...slide..."> ... </div|section|article>
-    # Use non-greedy with DOTALL; cap nesting by looking for first closing tag at same depth.
-    # Simple approach: find all elements whose class contains 'slide'.
-    slide_blocks = re.findall(
-        r'<(?:div|section|article)[^>]*class=["\'][^"\']*\bslide\b[^"\']*["\'][^>]*>'
-        r'(.*?)'
-        r'</(?:div|section|article)>',
-        html,
-        flags=re.DOTALL | re.IGNORECASE,
+    # Find positions of all slide-class opening tags
+    slide_open_re = re.compile(
+        r'<(?:div|section|article)[^>]*class=["\'][^"\']*\bslide\b[^"\']*["\'][^>]*>',
+        flags=re.IGNORECASE,
     )
+    positions = [m.start() for m in slide_open_re.finditer(html)]
 
-    if not slide_blocks:
-        # Fallback: look for data-slide or id matching slide-N patterns
-        slide_blocks = re.findall(
-            r'<(?:div|section)[^>]*(?:data-slide|id=["\']slide)[^>]*>(.*?)</(?:div|section)>',
-            html,
-            flags=re.DOTALL | re.IGNORECASE,
+    if not positions:
+        # Fallback: segment by data-slide or id=slide-N
+        fallback_re = re.compile(
+            r'<(?:div|section)[^>]*(?:data-slide|id=["\']slide)[^>]*>',
+            flags=re.IGNORECASE,
         )
+        positions = [m.start() for m in fallback_re.finditer(html)]
 
+    if not positions:
+        return []
+
+    # Segment HTML between consecutive slide openings — captures full nested content
+    positions.append(len(html))
     texts = []
-    for block in slide_blocks[:10]:  # cap at 10 slides to keep brief compact
+    for i in range(min(len(positions) - 1, 10)):  # cap at 10 slides
+        block = html[positions[i]:positions[i + 1]]
         t = _strip_tags(block).strip()
-        if len(t) > 20:  # skip near-empty blocks
-            texts.append(t[:400])
+        if len(t) > 20:
+            texts.append(t[:500])
     return texts
 
 
@@ -253,7 +300,7 @@ def audit_post(result: dict) -> dict:
     brief = extract_content_brief(result)
 
     agent_results = []
-    for agent in AGENTS:
+    for agent in _agents_for_niche(niche):
         print(f"    → {agent['name']}...", end="", flush=True)
         r = call_haiku(agent["system"], brief, agent["name"])
         agent_results.append(r)

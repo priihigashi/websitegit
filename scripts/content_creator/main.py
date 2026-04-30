@@ -1387,6 +1387,12 @@ def main():
     if WORK_DIR.exists():
         shutil.rmtree(WORK_DIR)
     WORK_DIR.mkdir(parents=True)
+    # Seed empty results.json immediately so reviewer/auditor always have a valid file
+    # even when the run exits early (no approved rows, all topics fail, etc.)
+    try:
+        (WORK_DIR / "results.json").write_text("[]")
+    except Exception:
+        pass
 
     # Phase A: Manual build mode (workflow-dispatch controls) OR queue-driven build
 

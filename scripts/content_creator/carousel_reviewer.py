@@ -931,4 +931,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        print(f"[carousel-reviewer] Uncaught exception: {e}")
+        print(traceback.format_exc())
+        sys.exit(0)  # Always exit 0 — reviewer is informational, not blocking

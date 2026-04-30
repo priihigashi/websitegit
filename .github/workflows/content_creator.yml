@@ -252,6 +252,7 @@ jobs:
           MANUAL_TEMPLATE: ${{ github.event.inputs.manual_template || 'auto' }}
           MANUAL_TEMPLATE_SET: ${{ github.event.inputs.manual_template_set || 'single' }}
           TEST_OUTPUT_FOLDER: ${{ github.event.inputs.test_output_folder || '' }}
+          KLING_APPROVE: ${{ github.event.inputs.kling_approve || '' }}
 
       - name: Run carousel reviewer (post-build quality check)
         if: always()

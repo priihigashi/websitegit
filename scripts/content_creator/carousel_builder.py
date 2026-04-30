@@ -240,6 +240,11 @@ CAROUSEL STRUCTURE RULES (Brazil/News fact-check):
     This kills the "this is partisan" rebuttal before it starts.
 11. Caption is written AFTER the carousel slides are finalized — never before.
     Caption complements the slides, it does not summarize them.
+12. CAPTION HASHTAG RULES (shadow-ban prevention):
+    - NEVER use party abbreviations as hashtags: no #PT, #PL, #PSDB, #MDB, #Bolsonaro, #Lula.
+    - NEVER @-tag or hashtag politicians by name.
+    - Use ONLY topic hashtags: #politicabrasileira, #senadofederal, #fiscalizacao, #direitoshumanos.
+    - Reason: party hashtags trigger shadow-ban on Instagram. Attribution-without-traffic rule.
 """
 
 
@@ -438,7 +443,7 @@ Rules:
 
         try:
             text = _claude_with_fallback(
-                _prompt, max_tokens=1500, timeout=30,
+                _prompt, max_tokens=2500, timeout=30,
                 context=f"carousel_builder.opc(attempt {attempt+1})",
             )
         except Exception as e:

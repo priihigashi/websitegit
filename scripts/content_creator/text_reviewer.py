@@ -179,7 +179,7 @@ def review_slide_texts(
     niche: str,
     post_id: str = "",
     *,
-    max_tokens: int = 2000,
+    max_tokens: int = 3000,
 ) -> dict:
     """Send slide_texts to Claude and parse the structured review back.
 
