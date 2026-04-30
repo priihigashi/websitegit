@@ -925,7 +925,10 @@ def process_one_topic(topic_entry, run_date, drive):
     print("  Fetching context images + cover...")
     media_paths = fetch_all_media(content, niche, str(work), brief=brief)
 
-    # 1d. Fetch video clips for motion version (Apify YouTube → Pexels → skip)
+    # 1d. Fetch video clips for motion version (Clip Collections → Apify → Pexels → ...)
+    # Inject topic into each suggestion so tier_clip_collections can match by topic name.
+    for sugg in content.get("clip_suggestions", []):
+        sugg.setdefault("topic", topic)
     print("  Fetching video clips for motion...")
     clips = fetch_clips(content, str(work))
 
@@ -986,22 +989,19 @@ def process_one_topic(topic_entry, run_date, drive):
             recorded_indices |= {idx for idx, _ in recorded_mp4s}
             print(f"  Playwright recorded: {len(recorded_mp4s)} MP4(s) (slides {sorted({idx for idx,_ in recorded_mp4s})})")
 
-    # 4b. Kling gate — only fires when no real clip was found for the cover AND
-    # KLING_APPROVE env var is set (requires per-post human approval).
-    # Default: Ken Burns is the cover floor. Kling never auto-fires.
-    # To activate: set KLING_APPROVE=1 + KLING_TOPIC matching the post slug in workflow_dispatch.
-    kling_approved = os.environ.get("KLING_APPROVE", "").strip().lower() in ("1", "true", "yes")
+    # 4c. Kling — fires automatically when Remotion didn't produce an mp4 and no
+    # real clip exists for the cover. Cascade: Remotion → Kling → Ken Burns.
+    # KLING_APPROVE=0 can explicitly disable Kling for a specific run if needed.
+    kling_disabled = os.environ.get("KLING_APPROVE", "").strip().lower() == "0"
     cover_has_real_clip = bool(clips.get(1))
     black_covers = sorted(png_dir.glob("black_01_*_html.png"))
-    if black_covers and kling_approved and not cover_has_real_clip:
+    if black_covers and not remotion_cover_done and not cover_has_real_clip and not kling_disabled:
         anim_prompt = (
             content.get("cover_visual", {}).get("option_b", {}).get("prompt", "")
             or "Subtle cinematic camera movement, documentary editorial style"
         )
+        print(f"  Kling: Remotion missed + no real clip — animating cover PNG...")
         _animate_cover_kling(str(black_covers[0]), anim_prompt, str(motion_dir), "black")
-    elif black_covers and not cover_has_real_clip and not kling_approved:
-        print(f"  Kling gate: no real cover clip — Ken Burns floor used. "
-              f"To activate Kling, re-run with KLING_APPROVE=1.")
 
     # Motion completeness guard — never email preview with empty motion folder
     motion_mp4s = list(motion_dir.glob("*.mp4")) if motion_dir.exists() else []

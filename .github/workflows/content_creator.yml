@@ -104,6 +104,7 @@ jobs:
           pip install google-auth google-api-python-client pytz requests yt-dlp pytubefix pillow anthropic openai google-generativeai
           npm install playwright
           npx playwright install chromium --with-deps
+          cd scripts/remotion && npm install
 
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
@@ -127,6 +128,7 @@ jobs:
           MANUAL_TEMPLATE_SET: ${{ github.event.inputs.manual_template_set || 'single' }}
           TEST_OUTPUT_FOLDER: ${{ github.event.inputs.test_output_folder || '' }}
           KLING_APPROVE: ${{ github.event.inputs.kling_approve || '' }}
+          KLING_API_KEY: ${{ secrets.KLING_API_KEY }}
 
       - name: Run carousel reviewer (post-build quality check)
         if: always()
@@ -233,6 +235,7 @@ jobs:
           pip install google-auth google-api-python-client pytz requests yt-dlp pytubefix pillow anthropic openai google-generativeai
           npm install playwright
           npx playwright install chromium --with-deps
+          cd scripts/remotion && npm install
 
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg

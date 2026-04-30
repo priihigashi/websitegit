@@ -37,6 +37,8 @@ from typing import Callable, List, Optional
 APIFY_KEY = os.environ.get("APIFY_API_KEY", "")
 PEXELS_KEY = os.environ.get("PEXELS_API_KEY", "")
 PIXABAY_KEY = os.environ.get("PIXABAY_API_KEY", "")  # optional — tier skips if unset
+SHEETS_TOKEN_RAW = os.environ.get("SHEETS_TOKEN", "")
+CLIP_COLLECTIONS_SHEET_ID = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
 
 MIN_CLIP_BYTES = 10_000          # reject anything smaller as a broken stub
 MAX_CLIP_BYTES = 50 * 1024 * 1024  # 50MB hard cap — don't pull full-length films
@@ -74,6 +76,97 @@ def _http_get_bytes(url: str, timeout: int = 60, max_bytes: int = MAX_CLIP_BYTES
             return raw
     except Exception:
         return b""
+
+
+# ─── TIER 0 — Pre-loaded Clip Collections (video-research URLs) ──────────────
+
+def _get_oauth_token() -> str:
+    """Refresh SHEETS_TOKEN to get a short-lived access token."""
+    if not SHEETS_TOKEN_RAW:
+        return ""
+    try:
+        import urllib.parse as _up
+        td = json.loads(SHEETS_TOKEN_RAW)
+        data = _up.urlencode({
+            "client_id": td["client_id"], "client_secret": td["client_secret"],
+            "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
+        }).encode()
+        resp = json.loads(urllib.request.urlopen(
+            urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+        return resp.get("access_token", "")
+    except Exception:
+        return ""
+
+
+def tier_clip_collections(slide_cfg: dict, dest_path: Path) -> bool:
+    """Tier 0 — Read pre-loaded clip URLs from Clip Collections tab (written by video-research.yml).
+    Tries to download each URL via yt-dlp (Apify residential proxy bypass) or direct HTTP.
+    Highest priority: these clips were already validated as high-relevance by Claude analysis."""
+    topic = slide_cfg.get("topic") or slide_cfg.get("youtube_query") or ""
+    if not topic or not SHEETS_TOKEN_RAW:
+        return False
+    try:
+        token = _get_oauth_token()
+        if not token:
+            return False
+        tab = urllib.parse.quote("Clip Collections", safe="")
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{CLIP_COLLECTIONS_SHEET_ID}/values/{tab}"
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        rows = json.loads(urllib.request.urlopen(req, timeout=15).read()).get("values", [])
+        if len(rows) < 2:
+            return False
+        header = [h.strip().lower() for h in rows[0]]
+        topic_col = next((i for i, h in enumerate(header) if h in ("topic", "topic / title", "title")), None)
+        url_col = next((i for i, h in enumerate(header) if h == "url"), None)
+        if topic_col is None or url_col is None:
+            return False
+        topic_lower = topic.strip().lower()
+        candidates = []
+        for row in rows[1:]:
+            cell = row[topic_col].strip().lower() if topic_col < len(row) else ""
+            clip_url = row[url_col].strip() if url_col < len(row) else ""
+            if cell and clip_url and (cell in topic_lower or topic_lower in cell):
+                candidates.append(clip_url)
+        if not candidates:
+            return False
+        for clip_url in candidates[:3]:
+            if not clip_url:
+                continue
+            # Try yt-dlp download of the specific URL (works for YouTube when Apify is active)
+            if "youtube.com" in clip_url or "youtu.be" in clip_url:
+                if shutil.which("yt-dlp"):
+                    tmp_out = dest_path.parent / (dest_path.stem + ".cc.%(ext)s")
+                    r = subprocess.run(
+                        ["yt-dlp", "--no-warnings", "--no-playlist",
+                         "--format", "mp4[height<=720]/best[height<=720]/best",
+                         "--max-downloads", "1", "--output", str(tmp_out), clip_url],
+                        capture_output=True, timeout=90
+                    )
+                    produced = sorted(dest_path.parent.glob(dest_path.stem + ".cc.*"))
+                    if produced and produced[0].stat().st_size > MIN_CLIP_BYTES:
+                        dest_path.write_bytes(produced[0].read_bytes())
+                        produced[0].unlink(missing_ok=True)
+                        _write_sidecar(dest_path, "clip_collections", clip_url,
+                                       license_str="YouTube ToS (fair use editorial)",
+                                       attribution=f"Pre-loaded via video-research — {clip_url}",
+                                       query=topic)
+                        print(f"  motion_sources: Clip Collections → {dest_path.name} ({dest_path.stat().st_size//1024}KB)")
+                        return True
+            else:
+                # Direct download (Pexels/Pixabay/Archive direct MP4 links)
+                raw = _http_get_bytes(clip_url, timeout=60)
+                if len(raw) > MIN_CLIP_BYTES:
+                    dest_path.write_bytes(raw)
+                    _write_sidecar(dest_path, "clip_collections", clip_url,
+                                   license_str="See source",
+                                   attribution=f"Pre-loaded via video-research — {clip_url}",
+                                   query=topic)
+                    print(f"  motion_sources: Clip Collections (direct) → {dest_path.name} ({len(raw)//1024}KB)")
+                    return True
+        return False
+    except Exception as e:
+        print(f"  motion_sources: Clip Collections tier error (non-fatal): {e}")
+        return False
 
 
 # ─── FREE YouTube downloader fallbacks (no extra API key) ────────────────────
@@ -619,13 +712,14 @@ def _trim_to_relevant_window(clip_path: Path, slide_cfg: dict,
 TierFn = Callable[[dict, Path], bool]
 
 SOURCE_CHAIN: List[tuple] = [
-    ("ytdlp_search",     tier_ytdlp_search,     ("any",)),            # free fallback before Apify
-    ("apify_youtube",    tier_apify_youtube,    ("any",)),            # people + places
-    ("ytdlp_ios",        tier_ytdlp_ios,        ("any",)),            # free fallback after Apify
-    ("apify_instagram",  tier_apify_instagram,  ("any",)),            # creator reels
+    ("clip_collections", tier_clip_collections, ("any",)),            # pre-loaded by video-research.yml
+    ("ytdlp_search",     tier_ytdlp_search,     ("any",)),            # free yt-dlp search
+    ("apify_youtube",    tier_apify_youtube,    ("any",)),            # residential proxy — YouTube
+    ("ytdlp_ios",        tier_ytdlp_ios,        ("any",)),            # yt-dlp iOS client
+    ("apify_instagram",  tier_apify_instagram,  ("any",)),            # residential proxy — Instagram
     ("pexels",           tier_pexels,           ("context-image", "place", "event", "product-photo")),
     ("pixabay",          tier_pixabay,          ("context-image", "place", "event", "product-photo")),
-    ("archive_org",      tier_archive_org,      ("any",)),            # historical
+    ("archive_org",      tier_archive_org,      ("any",)),            # public domain
     ("wikimedia",        tier_wikimedia,        ("any",)),            # CC archival
     ("stock_scrapers",   tier_stock_scrapers,   ("context-image", "place", "event")),
 ]
