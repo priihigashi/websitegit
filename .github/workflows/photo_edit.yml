@@ -158,11 +158,13 @@ jobs:
               "Allowed adjustments only: exposure balancing, white balance correction, subtle contrast, "
               "subtle color correction, highlight recovery, gentle shadow lift, mild dehaze, mild noise reduction, "
               "light natural sharpening, lens glare cleanup, and mild perspective/vertical alignment correction. "
-              "Remove lens grease glare/starburst halos and ghost reflections around lights while keeping fixture positions unchanged. "
+              "GLARE REMOVAL — MANDATORY: aggressively remove all ceiling light starburst spikes, halo rings, "
+              "and glare bloom around every light fixture (recessed ceiling lights, pendants, spots, sconces). "
+              "Each light source must render as a clean, contained point with no radiating spikes or halos. Keep all fixture positions unchanged. "
+              "LENS DISTORTION CORRECTION — MANDATORY: correct barrel/curvilinear distortion from ultra-wide lenses. "
+              "Every wall, door frame, closet panel, cabinet edge, and floor/ceiling line must appear straight and true vertical or horizontal. "
+              "Lines that appear curved inward or tilted at corners must be corrected. Minimal crop is acceptable to achieve straight lines. "
               "Use clean window-driven lighting balance, neutral color rendering (not yellow), cozy warm-morning feel. "
-              "If perspective correction is needed, keep it subtle and preserve field of view with minimal crop. "
-              "Correct barrel distortion from ultra-wide (0.5x) lenses if present: straighten curved walls, floors, "
-              "ceilings, and architectural lines back to true vertical/horizontal without cropping room content. "
               "Do not add/remove/move/replace anything: furniture, decor, plants, rugs, fixtures, doors, windows, "
               "appliances, wall art, sky content, pool water features, or landscaping. "
               "Do not alter materials, finishes, room dimensions, reflections, or architectural details. "
@@ -229,6 +231,35 @@ jobs:
               ),
               "28_banheiro_master_passagem": (
                   "EXCEPTION FOR THIS IMAGE ONLY: improve highlight control around lights and mirrors while preserving exact reflections and geometry."
+              ),
+              # Bedroom staging — beds appear bare in originals, need listing-ready bedding
+              "14_quarto": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: the bed appears bare with no bedding. "
+                  "Add a fully made luxury bed — neatly folded duvet and 2-4 decorative pillows "
+                  "in neutral warm tones (white, ivory, or sand) — so the room is listing-ready. "
+                  "Keep the bed frame, headboard, walls, floor, windows, and all other furniture "
+                  "in the exact same position, scale, and lighting. Do not alter anything else."
+              ),
+              "20_quarto_2": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: the bed appears bare with no bedding. "
+                  "Add a fully made luxury bed — neatly folded duvet and 2-4 decorative pillows "
+                  "in neutral warm tones (white, ivory, or sand) — so the room is listing-ready. "
+                  "Keep the bed frame, headboard, walls, floor, windows, and all other furniture "
+                  "in the exact same position, scale, and lighting. Do not alter anything else."
+              ),
+              "21_quarto_3": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: the bed appears bare with no bedding. "
+                  "Add a fully made luxury bed — neatly folded duvet and 2-4 decorative pillows "
+                  "in neutral warm tones (white, ivory, or sand) — so the room is listing-ready. "
+                  "Keep the bed frame, headboard, walls, floor, windows, and all other furniture "
+                  "in the exact same position, scale, and lighting. Do not alter anything else."
+              ),
+              "31_quarto_kids": (
+                  "EXCEPTION FOR THIS IMAGE ONLY: the child's bed appears bare with no bedding. "
+                  "Add a fully made child's bed with a duvet and 2-3 pillows in soft, bright, or neutral tones "
+                  "appropriate for a high-end children's room. "
+                  "Keep the bed frame, walls, floor, and all furniture in the exact same position. "
+                  "Do not alter anything else."
               ),
           }
           REPLICATE_PROMPT = (
