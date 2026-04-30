@@ -47,6 +47,7 @@ on:
           - 'progress'
           - 'illustrated'
           - 'cutout'
+          - 'dados-ou-agenda'
           - 'motion'
       manual_template_set:
         description: 'Template batch mode'

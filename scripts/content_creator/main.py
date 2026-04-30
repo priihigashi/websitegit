@@ -886,8 +886,11 @@ def process_one_topic(topic_entry, run_date, drive):
     print("  Generating content via Claude Haiku...")
     brief = topic_entry.get("brief", "")
     # Verificamos: Route A = clip overlay (verificamos_clip), Route B = debunk carousel (verificamos)
+    # Dados ou Agenda: always uses the dados-ou-agenda template (9-slide bias check)
     if series_override == "VERIFICAMOS":
         template_key = "verificamos_clip" if fake_news_route == "A" else "verificamos"
+    elif series_override == "DADOS OU AGENDA":
+        template_key = "dados-ou-agenda"
     elif niche == "opc":
         template_key = _resolve_opc_template(topic_entry, topic, run_date)
     elif niche in ("brazil", "usa"):
@@ -1430,7 +1433,7 @@ def main():
                 "brief": f"Manual run from workflow_dispatch. Template request: {t}",
                 "url": "",
                 "format": "",
-                "series_override": "",
+                "series_override": "DADOS OU AGENDA" if t == "dados-ou-agenda" else "",
                 "fake_news_route": "B",
                 "fake_news_confidence": 1.0,
                 "queue_row_idx": None,
