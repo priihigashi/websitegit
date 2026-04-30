@@ -1208,6 +1208,96 @@ def process_one_topic(topic_entry, run_date, drive):
     }
 
 
+def run_motion_only(slug, niche, drive):
+    """Re-run Ken Burns motion on existing PNGs in Drive without rebuilding the full carousel.
+
+    Use: MANUAL_TEMPLATE=motion, MANUAL_TOPIC=<slug>, MANUAL_NICHE=<niche>.
+    Finds the latest v<N>_<slug> version folder, downloads PNGs from png/, renders
+    Ken Burns MP4 + GIF for each, uploads back to motion/ subfolder.
+    """
+    import io, re as _re
+    from googleapiclient.http import MediaIoBaseDownload
+
+    parent = TEST_OUTPUT_FOLDER or get_route(niche).get("carousel_folder_id", "")
+    if not parent:
+        print(f"[motion-only] No carousel_folder_id for niche='{niche}' — aborting")
+        return None
+
+    # Find latest v<N>_<slug> version folder
+    resp = drive.files().list(
+        q=f"'{parent}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
+        fields="files(id,name)",
+        supportsAllDrives=True, includeItemsFromAllDrives=True, corpora="allDrives",
+    ).execute()
+    pattern = _re.compile(rf"^v(\d+)_{_re.escape(slug)}$")
+    best, best_n = None, 0
+    for f in resp.get("files", []):
+        m = pattern.match(f["name"])
+        if m and int(m.group(1)) > best_n:
+            best_n, best = int(m.group(1)), f
+    if not best:
+        print(f"[motion-only] No version folder for slug='{slug}' under parent '{parent}'")
+        return None
+
+    version_folder_id = best["id"]
+    version_name = best["name"]
+    print(f"[motion-only] Found: {version_name} (id={version_folder_id})")
+
+    # Find png/ + motion/ subfolders
+    children = drive.files().list(
+        q=f"'{version_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
+        fields="files(id,name)",
+        supportsAllDrives=True, includeItemsFromAllDrives=True, corpora="allDrives",
+    ).execute().get("files", [])
+    png_sub_id    = next((f["id"] for f in children if f["name"] == "png"),    None)
+    motion_sub_id = next((f["id"] for f in children if f["name"] == "motion"), None)
+
+    if not png_sub_id:
+        print(f"[motion-only] No png/ subfolder in {version_name} — nothing to animate")
+        return None
+    if not motion_sub_id:
+        motion_sub_id = create_subfolder(version_folder_id, "motion", drive)
+        print(f"[motion-only] Created motion/ subfolder")
+
+    # Download all PNGs from png/ → /tmp
+    png_files = drive.files().list(
+        q=f"'{png_sub_id}' in parents and mimeType='image/png' and trashed=false",
+        fields="files(id,name)",
+        supportsAllDrives=True, includeItemsFromAllDrives=True, corpora="allDrives",
+    ).execute().get("files", [])
+    if not png_files:
+        print(f"[motion-only] No PNGs in png/ subfolder")
+        return None
+
+    local_png_dir    = WORK_DIR / "png"
+    local_motion_dir = WORK_DIR / "motion"
+    local_png_dir.mkdir(parents=True, exist_ok=True)
+    local_motion_dir.mkdir(parents=True, exist_ok=True)
+
+    for pf in png_files:
+        local_path = local_png_dir / pf["name"]
+        request = drive.files().get_media(fileId=pf["id"])
+        fh = io.FileIO(str(local_path), "wb")
+        dl = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            _, done = dl.next_chunk()
+        print(f"  downloaded {pf['name']}")
+
+    # Ken Burns every PNG
+    for png in sorted(local_png_dir.glob("*.png")):
+        variant = png.name.split("_")[0]  # black / cream / lime
+        render_motion_cover(str(png), str(local_motion_dir), variant)
+        print(f"  Ken Burns: {png.name}")
+
+    # Upload motion files back to Drive motion/ subfolder
+    upload_dir_contents(local_motion_dir, motion_sub_id, drive)
+    motion_link = f"https://drive.google.com/drive/folders/{motion_sub_id}"
+    print(f"[motion-only] Done — {motion_link}")
+    return {"slug": slug, "niche": niche, "version": version_name,
+            "motion_folder_id": motion_sub_id, "motion_link": motion_link}
+
+
 def main():
     start = time.time()
     now_et = datetime.now(ET)
@@ -1221,6 +1311,27 @@ def main():
     WORK_DIR.mkdir(parents=True)
 
     # Phase A: Manual build mode (workflow-dispatch controls) OR queue-driven build
+
+    # Motion-only shortcut: re-run Ken Burns on existing PNGs without rebuilding carousel.
+    # Use: MANUAL_TEMPLATE=motion, MANUAL_TOPIC=<slug>, MANUAL_NICHE=<niche>
+    if MANUAL_MODE and MANUAL_TEMPLATE == "motion" and MANUAL_TOPIC and MANUAL_NICHE in ("opc", "brazil", "usa"):
+        import re as _re_slug
+        slug = _re_slug.sub(r"[^a-z0-9-]", "-", MANUAL_TOPIC.strip().lower())[:50].strip("-")
+        print(f"\n--- Motion-only mode: re-render Ken Burns for '{slug}' ({MANUAL_NICHE}) ---")
+        drive = get_drive_service()
+        res = run_motion_only(slug, MANUAL_NICHE, drive)
+        if res:
+            print(f"  Motion folder: {res['motion_link']}")
+            results_file = WORK_DIR / "results.json"
+            try:
+                results_file.write_text(json.dumps([res], ensure_ascii=False, indent=2))
+            except Exception as e:
+                print(f"  Could not write results.json: {e}")
+        else:
+            print("  Motion-only run produced no output — check slug + niche")
+            sys.exit(1)
+        return
+
     if MANUAL_MODE and MANUAL_TOPIC and MANUAL_NICHE in ("opc", "brazil", "usa"):
         print("\n--- Manual Mode: direct topic/template build ---")
         print(f"  topic={MANUAL_TOPIC[:80]}")

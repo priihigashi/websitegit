@@ -36,7 +36,7 @@ on:
         required: false
         default: ''
       manual_template:
-        description: 'Manual template (single)'
+        description: 'Manual template (single). Use "motion" to re-render Ken Burns on existing PNGs without rebuilding carousel.'
         required: false
         default: 'auto'
         type: choice
@@ -47,6 +47,7 @@ on:
           - 'progress'
           - 'illustrated'
           - 'cutout'
+          - 'motion'
       manual_template_set:
         description: 'Template batch mode'
         required: false
