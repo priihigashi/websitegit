@@ -1047,13 +1047,17 @@ def download_audio(url: str, tmp_dir: str, metadata: dict = None) -> str:
         if audio:
             return audio
 
-    # Return sentinel for /p/ posts so _try_vision_fallback() can use Apify slide images.
-    # If Apify returned no slide_image_urls, vision returns "" and detect_project falls
-    # back to caption-only, routing to unrouted — no crash.
-    if re.search(r'instagram\.com/p/', url):
-        print("  Instagram /p/ post: no video found — attempting carousel/image vision fallback")
+    # All video/audio download tiers exhausted for this non-YouTube URL.
+    # Fall through to the image/carousel Vision path regardless of URL format.
+    # Handles: Instagram /p/ carousels, aesthetic image posts, TikTok photo posts,
+    # and any static content where yt-dlp + instaloader find no audio track.
+    # Vision path will try: Apify slide_image_urls → instaloader → yt-dlp+cookies.
+    if not is_yt:
+        print(f"  [VISION FLOOR] No audio extracted from {url}")
+        print("  All video/audio tiers exhausted. Switching to image/carousel Vision path.")
+        print("  Expected for: static posts, carousels, aesthetic posts, image-only content.")
         return "__ig_carousel__"
-    raise RuntimeError("all download methods failed")
+    raise RuntimeError("all download methods failed — YouTube audio/transcript unavailable")
 
 
 # ─── STEP 1b: VIDEO DOWNLOAD ────────────────────────────────────────────────
@@ -2169,7 +2173,7 @@ def run_book(args, transcript):
     except Exception: pass
 
 
-def run_news(args, transcript, video_path: str = "", srt_content: str = "", creator_name: str = ""):
+def run_news(args, transcript, video_path: str = "", srt_content: str = "", creator_name: str = "", screenshots: list = None, debug_info: str = ""):
     print("\n[NEWS] Running format analysis...")
     analysis = analyze_news(transcript, args.url, args.story_id, args.notes or "", creator_name=creator_name)
     path = TRANSCRIPTS_DIR / f"{args.story_id}_news.txt"
@@ -2253,6 +2257,45 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
                 print(f"  SRT uploaded to Captures folder")
         except Exception as e:
             print(f"  WARNING: video upload failed (non-fatal): {e}")
+
+    # Upload screenshots to story folder (keyframes + carousel slides)
+    if screenshots and _drive_svc and _story_folder_id != _news_capture_folder:
+        try:
+            from googleapiclient.http import MediaFileUpload as _MFU3
+            ss_folder3 = _drive_svc.files().create(
+                body={"name": "screenshots", "mimeType": "application/vnd.google-apps.folder",
+                      "parents": [_story_folder_id]},
+                supportsAllDrives=True, fields="id"
+            ).execute()
+            ss_folder3_id = ss_folder3["id"]
+            uploaded_ss3 = 0
+            for ss_path in screenshots:
+                try:
+                    if not os.path.exists(ss_path):
+                        continue
+                    _drive_svc.files().create(
+                        body={"name": os.path.basename(ss_path), "parents": [ss_folder3_id]},
+                        media_body=_MFU3(ss_path, mimetype="image/jpeg"),
+                        supportsAllDrives=True, fields="id"
+                    ).execute()
+                    uploaded_ss3 += 1
+                except Exception as _se3:
+                    print(f"  WARNING: screenshot upload failed ({os.path.basename(ss_path)}): {_se3}")
+            print(f"  Screenshots: {uploaded_ss3}/{len(screenshots)} uploaded to story/screenshots/")
+        except Exception as _sse3:
+            print(f"  WARNING: screenshots/ subfolder creation failed (run_news): {_sse3}")
+
+    # Save capture_debug.txt to story folder
+    if debug_info and _drive_svc and _story_folder_id != _news_capture_folder:
+        try:
+            from googleapiclient.http import MediaInMemoryUpload as _MIMU3
+            _drive_svc.files().create(
+                body={"name": "capture_debug.txt", "parents": [_story_folder_id]},
+                media_body=_MIMU3(debug_info.encode("utf-8"), mimetype="text/plain"),
+                supportsAllDrives=True, fields="id"
+            ).execute()
+        except Exception as _de3:
+            print(f"  WARNING: capture_debug.txt upload failed (run_news): {_de3}")
 
     # Research notes before writing the brief — facts land IN the doc, not lost
     print("  Researching user notes before brief generation...")
@@ -2651,7 +2694,7 @@ def translate_to_pt(text: str) -> str:
         return text
 
 
-def save_to_content_hub(story_id: str, url: str, transcript: str, classification: dict, video_path: str = "", notes: str = "", project: str = "opc") -> str:
+def save_to_content_hub(story_id: str, url: str, transcript: str, classification: dict, video_path: str = "", notes: str = "", project: str = "opc", screenshots: list = None, debug_info: str = "") -> str:
     """Save transcript + resources + video (+ optional user notes) to Content Hub story folder. Returns folder URL."""
     drive = get_drive_service()
     if not drive:
@@ -2707,6 +2750,44 @@ def save_to_content_hub(story_id: str, url: str, transcript: str, classification
                 body={"name": "user_notes.txt", "parents": [folder_id]},
                 media_body=media3, supportsAllDrives=True, fields="id"
             ).execute()
+        # Upload screenshots subfolder (keyframes + carousel slides)
+        if screenshots:
+            try:
+                from googleapiclient.http import MediaFileUpload as _MFU
+                ss_folder = drive.files().create(
+                    body={"name": "screenshots", "mimeType": "application/vnd.google-apps.folder",
+                          "parents": [folder_id]},
+                    supportsAllDrives=True, fields="id"
+                ).execute()
+                ss_folder_id = ss_folder["id"]
+                uploaded_ss = 0
+                for ss_path in screenshots:
+                    try:
+                        if not os.path.exists(ss_path):
+                            continue
+                        drive.files().create(
+                            body={"name": os.path.basename(ss_path), "parents": [ss_folder_id]},
+                            media_body=_MFU(ss_path, mimetype="image/jpeg"),
+                            supportsAllDrives=True, fields="id"
+                        ).execute()
+                        uploaded_ss += 1
+                    except Exception as _se:
+                        print(f"  WARNING: screenshot upload failed ({os.path.basename(ss_path)}): {_se}")
+                print(f"  Screenshots: {uploaded_ss}/{len(screenshots)} uploaded to screenshots/")
+            except Exception as _sse:
+                print(f"  WARNING: screenshots/ subfolder creation failed: {_sse}")
+
+        # Save capture_debug.txt — Vision path result + failure diagnostics
+        if debug_info:
+            try:
+                media_dbg = MediaInMemoryUpload(debug_info.encode("utf-8"), mimetype="text/plain")
+                drive.files().create(
+                    body={"name": "capture_debug.txt", "parents": [folder_id]},
+                    media_body=media_dbg, supportsAllDrives=True, fields="id"
+                ).execute()
+            except Exception as _de:
+                print(f"  WARNING: capture_debug.txt upload failed: {_de}")
+
         # Upload video file if available
         if video_path and os.path.exists(video_path):
             from googleapiclient.http import MediaFileUpload
@@ -2735,7 +2816,7 @@ def save_to_content_hub(story_id: str, url: str, transcript: str, classification
 
 def save_to_news_folder(story_id: str, url: str, transcript: str, classification: dict,
                          video_path: str = "", notes: str = "", research: dict = None,
-                         project: str = "brazil") -> tuple:
+                         project: str = "brazil", screenshots: list = None, debug_info: str = "") -> tuple:
     """News niche routing — saves to Big Crazy Ideas > News with shared/english/portuguese structure.
 
     Structure created:
@@ -2828,6 +2909,44 @@ def save_to_news_folder(story_id: str, url: str, transcript: str, classification
                 if status:
                     print(f"  Upload progress: {int(status.progress() * 100)}%")
             print(f"  Video uploaded to News _shared")
+
+        # Upload screenshots to _shared/screenshots/ subfolder (keyframes + carousel slides)
+        if screenshots:
+            try:
+                from googleapiclient.http import MediaFileUpload as _MFU2
+                ss_folder2 = drive.files().create(
+                    body={"name": "screenshots", "mimeType": "application/vnd.google-apps.folder",
+                          "parents": [shared_id]},
+                    supportsAllDrives=True, fields="id"
+                ).execute()
+                ss_folder2_id = ss_folder2["id"]
+                uploaded_ss2 = 0
+                for ss_path in screenshots:
+                    try:
+                        if not os.path.exists(ss_path):
+                            continue
+                        drive.files().create(
+                            body={"name": os.path.basename(ss_path), "parents": [ss_folder2_id]},
+                            media_body=_MFU2(ss_path, mimetype="image/jpeg"),
+                            supportsAllDrives=True, fields="id"
+                        ).execute()
+                        uploaded_ss2 += 1
+                    except Exception as _se2:
+                        print(f"  WARNING: screenshot upload failed ({os.path.basename(ss_path)}): {_se2}")
+                print(f"  Screenshots: {uploaded_ss2}/{len(screenshots)} uploaded to _shared/screenshots/")
+            except Exception as _sse2:
+                print(f"  WARNING: screenshots/ subfolder creation failed: {_sse2}")
+
+        # Save capture_debug.txt to _shared
+        if debug_info:
+            try:
+                drive.files().create(
+                    body={"name": "capture_debug.txt", "parents": [shared_id]},
+                    media_body=MediaInMemoryUpload(debug_info.encode("utf-8"), mimetype="text/plain"),
+                    supportsAllDrives=True, fields="id"
+                ).execute()
+            except Exception as _de2:
+                print(f"  WARNING: capture_debug.txt upload failed: {_de2}")
 
         # 5. Create content brief doc in english subfolder
         brief = generate_content_brief(transcript, url, classification, notes, research=research)
@@ -3021,7 +3140,7 @@ def create_content_workspace(story_id: str, title: str, transcript: str,
     return folder_url, doc_url
 
 
-def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = ""):
+def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = "", screenshots: list = None, debug_info: str = ""):
     print("\n[OPC] Running classification...")
     cl = analyze_opc(transcript, args.url, args.notes or "")
     sid = args.story_id or f"CNT-{datetime.now().strftime('%Y%m%d%H%M')}"
@@ -3037,11 +3156,12 @@ def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_c
     if cl.get("niche", "").lower() == "news":
         hub_url, doc_url = save_to_news_folder(sid, args.url, transcript, cl,
                                                  video_path=video_path, notes=args.notes or "",
-                                                 research=opc_research, project=args.project)
+                                                 research=opc_research, project=args.project,
+                                                 screenshots=screenshots, debug_info=debug_info)
         folder_url = hub_url  # Same folder contains both archive (_shared) and production (english/portuguese)
     else:
         # Save raw transcript + resources + video to Content Hub (permanent home)
-        hub_url = save_to_content_hub(sid, args.url, transcript, cl, video_path=video_path, notes=args.notes or "", project=args.project)
+        hub_url = save_to_content_hub(sid, args.url, transcript, cl, video_path=video_path, notes=args.notes or "", project=args.project, screenshots=screenshots, debug_info=debug_info)
         # Create Drive workspace: folder + Art/Caption/Reel subfolders + content brief doc + Ideas Queue row
         title = (cl.get("summary") or sid)[:60].strip()
         folder_url, doc_url = create_content_workspace(sid, title, transcript, cl, args.url, args.notes or "",
@@ -3136,19 +3256,19 @@ def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_c
 # HIGASHI_FOLDER_ID) — falls back to CONTENT_HUB_FOLDER_ID until those GitHub
 # secrets are added.
 
-def run_ugc(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = ""):
+def run_ugc(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = "", screenshots: list = None, debug_info: str = ""):
     args.project = "ugc"
-    run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
+    run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content, screenshots=screenshots, debug_info=debug_info)
 
 
-def run_stocks(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = ""):
+def run_stocks(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = "", screenshots: list = None, debug_info: str = ""):
     args.project = "stocks"
-    run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
+    run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content, screenshots=screenshots, debug_info=debug_info)
 
 
-def run_higashi(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = ""):
+def run_higashi(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = "", screenshots: list = None, debug_info: str = ""):
     args.project = "higashi"
-    run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
+    run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content, screenshots=screenshots, debug_info=debug_info)
 
 
 # ─── PROJECT AUTO-DETECTION ──────────────────────────────────────────────────
@@ -3256,7 +3376,7 @@ def detect_project(transcript: str, caption: str, notes: str) -> tuple:
 
 
 def run_unrouted(args, transcript: str, video_path: str = "", metadata: dict = None,
-                 srt_content: str = "", detect_reason: str = ""):
+                 srt_content: str = "", detect_reason: str = "", screenshots: list = None, debug_info: str = ""):
     """Save unidentified captures to Marketing/Captures - Unrouted folder.
     Does NOT trigger niche-specific pipelines. Logs to Inspiration Library with
     status='Not Identified' so the weekly digest picks it up."""
@@ -3316,6 +3436,48 @@ def run_unrouted(args, transcript: str, video_path: str = "", metadata: dict = N
                 ).execute()
             except Exception as e:
                 print(f"  WARNING: video upload skipped: {e}")
+
+        # Upload screenshots (keyframes + carousel slides) to unrouted folder
+        if screenshots:
+            try:
+                from googleapiclient.http import MediaFileUpload as _MFU4
+                ss_folder4 = drive.files().create(
+                    body={"name": "screenshots", "mimeType": "application/vnd.google-apps.folder",
+                          "parents": [sub_id]},
+                    supportsAllDrives=True, fields="id"
+                ).execute()
+                ss_folder4_id = ss_folder4["id"]
+                uploaded_ss4 = 0
+                for ss_path in screenshots:
+                    try:
+                        if not os.path.exists(ss_path):
+                            continue
+                        drive.files().create(
+                            body={"name": os.path.basename(ss_path), "parents": [ss_folder4_id]},
+                            media_body=_MFU4(ss_path, mimetype="image/jpeg"),
+                            supportsAllDrives=True, fields="id"
+                        ).execute()
+                        uploaded_ss4 += 1
+                    except Exception as _se4:
+                        print(f"  WARNING: screenshot upload failed ({os.path.basename(ss_path)}): {_se4}")
+                print(f"  Screenshots: {uploaded_ss4}/{len(screenshots)} uploaded to unrouted/screenshots/")
+            except Exception as _sse4:
+                print(f"  WARNING: screenshots/ subfolder creation failed (unrouted): {_sse4}")
+
+        # Save capture_debug.txt — Vision path result and failure reasons
+        _dbg_content = debug_info if debug_info else (
+            f"CAPTURE DEBUG — {datetime.now().isoformat()}\n"
+            f"URL: {args.url}\n"
+            f"Auto-detect failed: {detect_reason}\n"
+        )
+        try:
+            drive.files().create(
+                body={"name": "capture_debug.txt", "parents": [sub_id]},
+                media_body=MediaInMemoryUpload(_dbg_content.encode("utf-8"), mimetype="text/plain"),
+                supportsAllDrives=True, fields="id"
+            ).execute()
+        except Exception as _de4:
+            print(f"  WARNING: capture_debug.txt upload failed (unrouted): {_de4}")
 
         print(f"  ✅ Unrouted folder: {sub_url}")
 
@@ -3512,6 +3674,52 @@ def main():
                     transcript = _visual_desc
                     print(f"  Visual description used as transcript ({len(transcript)} chars — no audio)")
 
+        # ── Collect screenshots for Drive upload ─────────────────────────────
+        # After vision runs, any keyframe JPGs (frame_*.jpg) and carousel slide
+        # images written to tmp are collected here and passed to the save functions,
+        # which upload them to a screenshots/ subfolder in the story Drive folder.
+        _screenshot_paths = []
+        for _ss_root, _ss_dirs, _ss_files in os.walk(tmp):
+            for _ss_f in sorted(_ss_files):
+                if _ss_f.endswith('.jpg') and (
+                    _ss_f.startswith('frame_')                  # video keyframes (ffmpeg)
+                    or 'slide' in _ss_f.lower()                 # carousel slide images
+                    or os.path.basename(_ss_root) == 'ytdlp_slides'  # yt-dlp slides dir
+                ):
+                    _screenshot_paths.append(os.path.join(_ss_root, _ss_f))
+        _screenshot_paths.sort()
+        if _screenshot_paths:
+            print(f"  Screenshots ready: {len(_screenshot_paths)} file(s) will be uploaded to Drive")
+
+        # ── Build capture_debug.txt content (Vision path result for diagnostics) ─
+        _debug_lines = [
+            f"CAPTURE DEBUG — {datetime.now().isoformat()}",
+            f"URL: {args.url}",
+            f"Audio path: {audio}",
+            "",
+        ]
+        if _vision_input:
+            _debug_lines.append(f"VISION PATH: {'image/carousel (no audio)' if _vision_input == '__ig_carousel__' else 'video keyframes'}")
+            if _visual_desc:
+                _debug_lines.append(f"VISION RESULT: SUCCESS — {len(_visual_desc)} chars extracted")
+                _debug_lines.append(f"Screenshots collected: {len(_screenshot_paths)}")
+            else:
+                _debug_lines.append("VISION RESULT: FAILED — all tiers returned empty")
+                _debug_lines.append("")
+                _debug_lines.append("WHY THIS FAILS (check each):")
+                _debug_lines.append("  1. Apify slide_image_urls empty → rate limit, post is private, or not a carousel")
+                _debug_lines.append("  2. instaloader blocked → post is private or IG rate-limited anonymous GraphQL")
+                _debug_lines.append("  3. yt-dlp + IG cookies failed → PRI_OP_IG_COOKIES secret missing or stale")
+                _debug_lines.append("  4. Video keyframe extraction → ffmpeg found no video stream in the file")
+                _debug_lines.append("")
+                _debug_lines.append("HOW TO FIX:")
+                _debug_lines.append("  - Refresh PRI_OP_IG_COOKIES in GitHub Secrets (export fresh from browser)")
+                _debug_lines.append("  - For private posts: make sure Apify account has access to this content")
+                _debug_lines.append("  - Check GitHub Actions log for the specific tier that failed")
+        else:
+            _debug_lines.append("VISION PATH: skipped (YouTube-only run, no video file downloaded)")
+        _debug_info = "\n".join(_debug_lines)
+
         # Auto-detect project AFTER transcription+vision if not explicit.
         # Detection uses notes (highest priority) → Claude Haiku on transcript+caption+notes.
         # Confidence < 0.70 OR Claude failure → 'unrouted' (NEVER falls back to book or opc).
@@ -3538,22 +3746,29 @@ def main():
         srt_content = get_caption_srt(audio) if _has_audio_file and not _is_youtube(args.url) else ""
         if args.project == "unrouted":
             run_unrouted(args, transcript, video_path=video_path or "", metadata=metadata,
-                         srt_content=srt_content, detect_reason=_detect_reason)
+                         srt_content=srt_content, detect_reason=_detect_reason,
+                         screenshots=_screenshot_paths, debug_info=_debug_info)
         elif args.project == "book":
             run_book(args, transcript)
         elif args.project in ("brazil", "usa"):
             # Both niches share the News pipeline flow but land in separate Drive folders
             # (routing.py::capture_folder returns the correct Brazil or USA folder).
             srt_content = get_caption_srt(audio) if _has_audio_file else ""
-            run_news(args, transcript, video_path=video_path or "", srt_content=srt_content, creator_name=metadata.get("creator_name", ""))
+            run_news(args, transcript, video_path=video_path or "", srt_content=srt_content,
+                     creator_name=metadata.get("creator_name", ""),
+                     screenshots=_screenshot_paths, debug_info=_debug_info)
         elif args.project == "ugc":
-            run_ugc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
+            run_ugc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
+                    screenshots=_screenshot_paths, debug_info=_debug_info)
         elif args.project == "stocks":
-            run_stocks(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
+            run_stocks(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
+                       screenshots=_screenshot_paths, debug_info=_debug_info)
         elif args.project == "higashi":
-            run_higashi(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
+            run_higashi(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
+                        screenshots=_screenshot_paths, debug_info=_debug_info)
         else:  # opc (default)
-            run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content)
+            run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
+                    screenshots=_screenshot_paths, debug_info=_debug_info)
 
     # Print credits summary if available
     if metadata:
