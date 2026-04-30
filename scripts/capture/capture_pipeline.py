@@ -3861,13 +3861,13 @@ def main():
             run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
                     screenshots=_screenshot_paths, debug_info=_debug_info)
 
-    # Print credits summary if available
-    if metadata:
+    # Print credits summary if available (only when full creator info was fetched)
+    if metadata and metadata.get("creator_handle"):
         print(f"\n{'='*50}")
         print("CREDITS FOR CAPTION:")
-        print(f"  Creator: @{metadata['creator_handle']}")
-        print(f"  Name: {metadata['creator_name']}")
-        print(f"  Source: {metadata['source_url']}")
+        print(f"  Creator: @{metadata.get('creator_handle', '')}")
+        print(f"  Name: {metadata.get('creator_name', '')}")
+        print(f"  Source: {metadata.get('source_url', '')}")
         print(f"{'='*50}")
 
 
