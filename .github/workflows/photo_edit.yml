@@ -60,7 +60,7 @@ jobs:
     steps:
       # ── INSTALL DEPS ────────────────────────────────────────────────────────
       - name: Install dependencies
-        run: pip install -q openai pillow google-auth google-auth-oauthlib google-api-python-client google-genai replicate inferencesh
+        run: pip install -q openai pillow google-auth google-auth-oauthlib google-api-python-client google-genai replicate
 
       # ── MAIN: download → enhance → upload flat → archive old ───────────────
       - name: Process all images
@@ -366,32 +366,57 @@ jobs:
                   # ── 1. NB2 — inference.sh → google/gemini-3-1-flash-image-preview ──
                   if do_nb2:
                       try:
+                          import requests as _req, time as _time
                           key = os.environ.get("INFSH_KEY", "")
                           if not key:
                               raise Exception("no INFSH_KEY")
                           img4_bytes = open(src_path, "rb").read()
                           ext4 = "jpeg" if src_path.lower().endswith(".jpg") else "png"
                           data_uri4 = "data:image/" + ext4 + ";base64," + base64.b64encode(img4_bytes).decode()
-                          from inferencesh import InferenceClient
-                          client4 = InferenceClient(api_key=key)
-                          print("  NB2: sending to inference.sh → google/gemini-3-1-flash-image-preview...")
-                          result4 = client4.run(
-                              "google/gemini-3-1-flash-image-preview",
-                              input={"prompt": "TASK: Photo enhancement only. Do NOT redesign.\n" + per_image_prompt,
-                                     "images": [data_uri4], "resolution": "2K"},
-                          )
-                          images4 = result4.get("images") or result4.get("output", {}).get("images", [])
-                          if not images4:
-                              raise Exception("no image in response")
-                          img_data4 = images4[0]
+                          nb2_headers = {"Authorization": "Bearer " + key, "Content-Type": "application/json"}
+                          nb2_payload = {
+                              "app": "google/gemini-3-1-flash-image-preview",
+                              "input": {
+                                  "prompt": "TASK: Photo enhancement only. Do NOT redesign.\n" + per_image_prompt,
+                                  "images": [data_uri4],
+                                  "resolution": "2K",
+                              }
+                          }
+                          print("  NB2: submitting to inference.sh...")
+                          r4 = _req.post("https://api.inference.sh/apps/run",
+                                         json=nb2_payload, headers=nb2_headers, timeout=120)
+                          r4.raise_for_status()
+                          task4 = r4.json().get("data", r4.json())
+                          task_id4 = task4.get("id")
+                          if not task_id4:
+                              raise Exception("no task id — " + str(r4.json())[:200])
+                          print("  NB2: task " + task_id4 + " queued, polling...")
+                          image_url4 = None
+                          for poll_i in range(40):
+                              _time.sleep(8)
+                              pr4 = _req.get("https://api.inference.sh/tasks/" + task_id4,
+                                             headers=nb2_headers, timeout=30)
+                              pd4 = pr4.json().get("data", pr4.json())
+                              s4 = pd4.get("status")
+                              if poll_i % 4 == 0:
+                                  print("  NB2 poll " + str(poll_i+1) + ": status=" + str(s4))
+                              if s4 == 10:  # COMPLETED
+                                  out4 = pd4.get("output", {})
+                                  imgs4 = out4.get("images", out4.get("image", []))
+                                  if isinstance(imgs4, list) and imgs4:
+                                      item4 = imgs4[0]
+                                      image_url4 = item4.get("url", item4) if isinstance(item4, dict) else item4
+                                  elif isinstance(imgs4, str) and imgs4.startswith("http"):
+                                      image_url4 = imgs4
+                                  elif isinstance(out4, str) and out4.startswith("http"):
+                                      image_url4 = out4
+                                  break
+                              elif s4 in (11, 12):
+                                  raise Exception("NB2 task failed/cancelled — status " + str(s4))
+                          if not image_url4:
+                              raise Exception("NB2 timed out or no image URL after 40 polls")
                           out = tmp_pfx + "_nb2.jpg"
-                          if isinstance(img_data4, str) and img_data4.startswith("http"):
-                              import urllib.request as _ur
-                              _ur.urlretrieve(img_data4, out)
-                          elif isinstance(img_data4, str) and "base64," in img_data4:
-                              open(out, "wb").write(base64.b64decode(img_data4.split("base64,", 1)[1]))
-                          else:
-                              open(out, "wb").write(base64.b64decode(img_data4) if isinstance(img_data4, str) else img_data4)
+                          urllib.request.urlretrieve(image_url4, out)
                           link = upload_to_drive(out, safe_stem + "_nb2.jpg", dest)
                           tools_out["nb2"] = {"status": "ok", "file": safe_stem + "_nb2.jpg", "drive_link": link}
                           print("  NB2: ok -> " + link)
