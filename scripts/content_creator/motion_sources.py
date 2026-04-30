@@ -283,25 +283,58 @@ def _apify_run(actor_id: str, input_body: dict, wait: int = 120) -> list:
         return []
 
 
+def _apify_yt_search(query: str) -> str:
+    """Try official then community YouTube scraper actors. Returns watch URL or ''."""
+    # apify~youtube-scraper is the official Apify actor — most maintained.
+    # Fall back to bernardo~youtube-scraper if it returns nothing.
+    for actor, input_body in [
+        ("apify~youtube-scraper",    {"searchTerms": [query], "maxResults": 3}),
+        ("bernardo~youtube-scraper", {"searchTerms": [query], "maxResults": 3}),
+    ]:
+        items = _apify_run(actor, input_body, wait=120)
+        if not items:
+            continue
+        for item in items:
+            url = (item.get("url") or item.get("videoUrl")
+                   or item.get("id") and f"https://www.youtube.com/watch?v={item['id']}" or "")
+            if url and "youtube" in url:
+                return url
+    return ""
+
+
 def tier_apify_youtube(slide_cfg: dict, dest_path: Path) -> bool:
-    """Priority #1 — Apify YouTube scraper + downloader. People + institutions."""
+    """Priority #1 — Apify YouTube scraper + yt-dlp download (residential proxy bypass)."""
     if not APIFY_KEY:
         return False
     query = slide_cfg.get("youtube_query") or slide_cfg.get("query") or ""
     if not query:
         return False
     try:
-        search_items = _apify_run(
-            "streamers~youtube-scraper",
-            {"searchTerms": [query], "maxResults": 1, "saveVideos": False}
-        )
-        if not search_items:
+        video_url = _apify_yt_search(query)
+        if not video_url:
             print(f"  motion_sources: Apify YouTube search miss for '{query[:40]}'")
             return False
-        video_url = search_items[0].get("url") or search_items[0].get("videoUrl") or ""
-        if not video_url or "youtube" not in video_url:
-            return False
 
+        # Try yt-dlp on the specific URL (better than GHA search — direct URL often bypasses block)
+        if shutil.which("yt-dlp"):
+            tmp_out = dest_path.parent / (dest_path.stem + ".apyt.%(ext)s")
+            r = subprocess.run(
+                ["yt-dlp", "--no-warnings", "--no-playlist",
+                 "--format", "mp4[height<=720]/best[height<=720]/best",
+                 "--max-downloads", "1", "--output", str(tmp_out), video_url],
+                capture_output=True, timeout=90
+            )
+            produced = sorted(dest_path.parent.glob(dest_path.stem + ".apyt.*"))
+            if produced and produced[0].stat().st_size > MIN_CLIP_BYTES:
+                dest_path.write_bytes(produced[0].read_bytes())
+                produced[0].unlink(missing_ok=True)
+                _write_sidecar(dest_path, "apify_youtube", video_url,
+                               license_str="YouTube ToS (fair use editorial)",
+                               attribution=f"via YouTube — {video_url}", query=query)
+                print(f"  motion_sources: Apify+yt-dlp → {dest_path.name} ({dest_path.stat().st_size//1024}KB)")
+                return True
+
+        # Fallback: Apify downloader actor for the found URL
         dl_items = _apify_run(
             "streamers~youtube-video-downloader",
             {"videoUrls": [{"url": video_url}], "url": video_url,
@@ -315,6 +348,7 @@ def tier_apify_youtube(slide_cfg: dict, dest_path: Path) -> bool:
             if download_url:
                 break
         if not download_url:
+            print(f"  motion_sources: Apify downloader miss for '{video_url[:60]}'")
             return False
 
         raw = _http_get_bytes(download_url, timeout=120)
