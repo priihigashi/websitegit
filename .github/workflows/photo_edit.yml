@@ -416,7 +416,12 @@ jobs:
                           if not image_url4:
                               raise Exception("NB2 timed out or no image URL after 40 polls")
                           out = tmp_pfx + "_nb2.jpg"
-                          urllib.request.urlretrieve(image_url4, out)
+                          # Download with auth header — inference.sh URLs require Bearer token
+                          dl4 = _req.get(image_url4, headers=nb2_headers, stream=True, timeout=120)
+                          dl4.raise_for_status()
+                          with open(out, "wb") as _f4:
+                              for _chunk in dl4.iter_content(chunk_size=65536):
+                                  _f4.write(_chunk)
                           link = upload_to_drive(out, safe_stem + "_nb2.jpg", dest)
                           tools_out["nb2"] = {"status": "ok", "file": safe_stem + "_nb2.jpg", "drive_link": link}
                           print("  NB2: ok -> " + link)
