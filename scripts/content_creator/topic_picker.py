@@ -55,7 +55,7 @@ def fetch_drive_doc_content(doc_url_or_id: str) -> str:
         token = get_token()
         url = f"https://docs.googleapis.com/v1/documents/{doc_id}"
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-        doc = json.loads(urllib.request.urlopen(req).read())
+        doc = json.loads(urllib.request.urlopen(req, timeout=15).read())
         text_parts = []
         for block in doc.get("body", {}).get("content", []):
             for el in block.get("paragraph", {}).get("elements", []):

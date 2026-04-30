@@ -154,6 +154,16 @@ TEMPLATES = {
             "slides": 4,
             "structure": "cover (VERIFICAMOS stamp) → clip context → source overlay → sources/CTA",
         },
+        "dados-ou-agenda": {
+            # FORMAT-019 — Influencer/public figure bias check carousel
+            # 3 verdicts: BASEADO EM DADOS / VIÉS IDEOLÓGICO / VIÉS DE INTERESSE
+            # series_override: "DADOS OU AGENDA" (triggers this template)
+            # Requires approval before scheduling (same gate as Verificamos)
+            "series": "Dados ou Agenda?",
+            "tag": "Dados ou Agenda?",
+            "slides": 9,
+            "structure": "cover (hook+credibility badge) → claim → true fact 1 → true fact 2 → what was missing → exaggeration check → verdict (THE KEY SLIDE) → our verdict → CTA",
+        },
     },
     "usa": {
         "fact-checked": {
@@ -3133,6 +3143,21 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
   <div class="slide-hl">{h_pt}</div>
   <div class="slide-en">{h_en}</div>
   <div class="verdict-grid">{verdicts_html}</div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+"""
+        else:
+            # Unknown slide type — fall back to list rendering so the slide is never silently dropped.
+            items = slide.get("items_pt", slide.get("facts_pt", []))
+            items_li = "".join(f"<li>{esc(it)}</li>" for it in items)
+            print(f"  _build_brazil_html: unknown slide type '{stype}' — rendering as list fallback")
+            slides_html += f"""
+<div class="slide slide-list {motion_class}">
+  {corners}{clip_el}
+  <div class="tag">Saiba mais</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  <ul class="item-list">{items_li}</ul>
   <div class="swipe">SWIPE &#8594;</div>
 </div>
 """
