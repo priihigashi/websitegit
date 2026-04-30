@@ -398,12 +398,21 @@ jobs:
                   if do_nb2:
                       try:
                           import requests as _req, time as _time
+                          from PIL import Image as _PILNB
+                          import io as _ionb
                           key = os.environ.get("INFSH_KEY", "")
                           if not key:
                               raise Exception("no INFSH_KEY")
-                          img4_bytes = open(src_path, "rb").read()
-                          ext4 = "jpeg" if src_path.lower().endswith(".jpg") else "png"
-                          data_uri4 = "data:image/" + ext4 + ";base64," + base64.b64encode(img4_bytes).decode()
+                          # Resize to max 1400px and re-encode as JPEG to avoid 413 Payload Too Large
+                          _img_nb = _PILNB.open(src_path).convert("RGB")
+                          if max(_img_nb.size) > 1400:
+                              _r = 1400 / max(_img_nb.size)
+                              _img_nb = _img_nb.resize((int(_img_nb.size[0]*_r), int(_img_nb.size[1]*_r)), _PILNB.LANCZOS)
+                              print("  NB2: resized to " + str(_img_nb.size) + " for payload limit")
+                          _buf_nb = _ionb.BytesIO()
+                          _img_nb.save(_buf_nb, "JPEG", quality=85)
+                          img4_bytes = _buf_nb.getvalue()
+                          data_uri4 = "data:image/jpeg;base64," + base64.b64encode(img4_bytes).decode()
                           nb2_headers = {"Authorization": "Bearer " + key, "Content-Type": "application/json"}
                           nb2_payload = {
                               "app": "google/gemini-3-1-flash-image-preview",
