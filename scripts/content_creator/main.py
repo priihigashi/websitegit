@@ -737,72 +737,93 @@ def add_catalog_row(post_id, niche, series, topic, static_link, motion_link, tok
 
 
 def _animate_cover_kling(png_path, prompt, output_dir, variant):
-    """Animate cover PNG via Replicate kwai-kolors/kling-video (image-to-video).
-    Saves {variant}_01_cover_kling.mp4 to output_dir alongside Ken Burns version.
-    Falls back silently if key not set or API fails — Ken Burns is always the safety net.
+    """Animate cover PNG via Kling AI image-to-video (direct API).
+
+    Primary: KLING_API_KEY → api.klingai.com/v1/videos/image2video
+      Key format 'accessKey:secretKey' → JWT generated per-request.
+      Key without ':' → used as pre-generated Bearer token.
+    Falls back silently to Ken Burns if key missing or API fails.
     """
-    import base64
-    key = os.environ.get("PRI_OP_REPLICATE_API_KEY", "")
-    if not key:
-        print("  Kling/Replicate: PRI_OP_REPLICATE_API_KEY not set — skipping animated cover")
+    import base64, hashlib, hmac as _hmac
+
+    kling_key = os.environ.get("KLING_API_KEY", "").strip()
+    if not kling_key:
+        print("  Kling: KLING_API_KEY not set — skipping animated cover")
         return None
+
     try:
         with open(png_path, "rb") as f:
             img_b64 = base64.b64encode(f.read()).decode()
-        data_uri = f"data:image/png;base64,{img_b64}"
-        clean_prompt = (prompt or "Subtle cinematic camera movement, documentary style").strip()[:500]
+    except Exception as e:
+        print(f"  Kling: failed to read PNG ({e}) — skipping")
+        return None
 
+    clean_prompt = (prompt or "Subtle cinematic camera movement, documentary style").strip()[:500]
+    os.makedirs(output_dir, exist_ok=True)
+    kling_mp4 = os.path.join(output_dir, f"{variant}_01_cover_kling.mp4")
+
+    def _make_token(raw_key):
+        """Return Bearer token: generate JWT if key is 'accessKey:secretKey', else pass through."""
+        if ":" not in raw_key:
+            return raw_key
+        access_key, secret_key = raw_key.split(":", 1)
+        now = int(time.time())
+        h = base64.urlsafe_b64encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode()).rstrip(b"=").decode()
+        p = base64.urlsafe_b64encode(json.dumps({"iss": access_key, "exp": now + 1800, "nbf": now - 5}).encode()).rstrip(b"=").decode()
+        msg = f"{h}.{p}"
+        sig = _hmac.new(secret_key.encode(), msg.encode(), hashlib.sha256).digest()
+        return f"{msg}.{base64.urlsafe_b64encode(sig).rstrip(b'=').decode()}"
+
+    try:
+        token = _make_token(kling_key)
         payload = json.dumps({
-            "input": {
-                "image": data_uri,
-                "prompt": clean_prompt,
-                "duration": 5,
-                "aspect_ratio": "9:16",
-                "mode": "standard",
-            }
+            "model_name": "kling-v1",
+            "image": img_b64,
+            "prompt": clean_prompt,
+            "duration": "5",
+            "aspect_ratio": "9:16",
+            "mode": "std",
         }).encode()
         req = urllib.request.Request(
-            "https://api.replicate.com/v1/models/kwai-kolors/kling-video/predictions",
+            "https://api.klingai.com/v1/videos/image2video",
             data=payload,
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-                "Prefer": "wait=60",
-            },
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         )
-        resp = json.loads(urllib.request.urlopen(req, timeout=90).read())
-        pred_id = resp.get("id")
-        status = resp.get("status", "")
-        output = resp.get("output")
-
-        # Poll until done (max ~2 min)
-        for _ in range(24):
-            if status in ("succeeded", "failed", "canceled"):
-                break
-            time.sleep(5)
-            poll_req = urllib.request.Request(
-                f"https://api.replicate.com/v1/predictions/{pred_id}",
-                headers={"Authorization": f"Bearer {key}"},
-            )
-            resp = json.loads(urllib.request.urlopen(poll_req, timeout=15).read())
-            status = resp.get("status", "")
-            output = resp.get("output")
-
-        if status != "succeeded" or not output:
-            print(f"  Kling/Replicate: status={status} — keeping Ken Burns cover only")
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        task_id = (resp.get("data") or {}).get("task_id") or resp.get("task_id")
+        if not task_id:
+            print(f"  Kling: no task_id in response ({str(resp)[:200]}) — skipping")
             return None
 
-        video_url = output[0] if isinstance(output, list) else output
-        os.makedirs(output_dir, exist_ok=True)
-        kling_mp4 = os.path.join(output_dir, f"{variant}_01_cover_kling.mp4")
-        with urllib.request.urlopen(video_url, timeout=60) as r:
-            kling_data = r.read()
-        with open(kling_mp4, "wb") as f:
-            f.write(kling_data)
-        print(f"  Kling animated cover: {variant}_01_cover_kling.mp4 ({len(kling_data)//1024}KB)")
-        return kling_mp4
+        # Poll until done (max ~3 min)
+        for _ in range(36):
+            time.sleep(5)
+            poll_req = urllib.request.Request(
+                f"https://api.klingai.com/v1/videos/image2video/{task_id}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            poll = json.loads(urllib.request.urlopen(poll_req, timeout=15).read())
+            status = (poll.get("data") or {}).get("task_status") or poll.get("task_status", "")
+            if status.lower() in ("succeed", "success"):
+                videos = ((poll.get("data") or {}).get("task_result") or {}).get("videos") or []
+                video_url = videos[0].get("url", "") if videos else ""
+                if not video_url:
+                    print(f"  Kling: succeeded but no video URL — keeping Ken Burns")
+                    return None
+                with urllib.request.urlopen(video_url, timeout=60) as r:
+                    kling_data = r.read()
+                with open(kling_mp4, "wb") as f:
+                    f.write(kling_data)
+                print(f"  Kling animated cover: {variant}_01_cover_kling.mp4 ({len(kling_data)//1024}KB)")
+                return kling_mp4
+            if status.lower() in ("failed", "error"):
+                print(f"  Kling: task {task_id} failed (status={status}) — keeping Ken Burns")
+                return None
+
+        print(f"  Kling: timed out on task {task_id} — keeping Ken Burns")
+        return None
     except Exception as e:
-        print(f"  Kling/Replicate animation failed (non-fatal): {e}")
+        print(f"  Kling animation failed (non-fatal): {e}")
         return None
 
 

@@ -109,8 +109,8 @@ def tier_clip_collections(slide_cfg: dict, dest_path: Path) -> bool:
         token = _get_oauth_token()
         if not token:
             return False
-        tab = urllib.parse.quote("Clip Collections", safe="")
-        url = f"https://sheets.googleapis.com/v4/spreadsheets/{CLIP_COLLECTIONS_SHEET_ID}/values/{tab}"
+        enc = urllib.parse.quote("'Clip Collections'", safe="!:'")
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{CLIP_COLLECTIONS_SHEET_ID}/values/{enc}"
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
         rows = json.loads(urllib.request.urlopen(req, timeout=15).read()).get("values", [])
         if len(rows) < 2:
