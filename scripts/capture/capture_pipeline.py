@@ -1666,12 +1666,31 @@ def _try_embed_scrape(url: str, tmp_dir: str) -> list:
                 seen.add(dedup_key)
                 img_urls.append(raw)
 
-        if img_urls:
-            print(f"  [embed-scrape] Found {len(img_urls)} image URL(s) in embed HTML → Claude Vision")
-            return img_urls[:8]
+        if not img_urls:
+            print("  [embed-scrape] No CDN image URLs in embed HTML")
+            return []
 
-        print("  [embed-scrape] No CDN image URLs in embed HTML")
-        return []
+        # Download locally so screenshot walker picks them up for Drive upload.
+        slides_dir = os.path.join(tmp_dir, f"embed_slides_{shortcode}")
+        os.makedirs(slides_dir, exist_ok=True)
+        local_paths = []
+        for i, img_url in enumerate(img_urls[:8]):
+            try:
+                img_r = requests.get(img_url, timeout=15)
+                if img_r.status_code == 200 and len(img_r.content) > 1000:
+                    p = os.path.join(slides_dir, f"slide_{i:02d}.jpg")
+                    with open(p, "wb") as fh:
+                        fh.write(img_r.content)
+                    local_paths.append(p)
+            except Exception as dl_e:
+                print(f"    [embed-scrape] slide {i} download failed: {dl_e}")
+
+        if local_paths:
+            print(f"  [embed-scrape] Downloaded {len(local_paths)} slide(s) locally → Claude Vision + Drive upload")
+            return local_paths
+        # CDN URLs found but downloads failed — pass URLs directly to Vision as fallback
+        print(f"  [embed-scrape] Downloads failed, passing {len(img_urls)} URL(s) directly to Vision")
+        return img_urls[:8]
     except Exception as e:
         print(f"  [embed-scrape] Failed (non-fatal): {e}")
         return []
