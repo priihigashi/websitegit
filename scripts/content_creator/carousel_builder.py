@@ -396,6 +396,8 @@ Return ONLY a JSON object with these fields:
   "clip_suggestions": [
     {{
       "slide": 1,
+      "youtube_query": "YouTube search for COVER — construction tutorial or timelapse matching the topic. GOOD: 'roof shingles installation timelapse 2024', 'concrete driveway pour residential how to', 'kitchen cabinet install frameless tutorial'. Use 4-6 words. Avoid brand names unless they are the subject.",
+      "instagram_query": "Instagram/hashtag phrasing for the same subject — lowercase, no hashtag symbol. e.g. 'residential roofing installation'",
       "pexels_query": "Pexels stock video — specific material/action for COVER. GOOD: 'roof shingles installation aerial residential', 'concrete driveway pour south florida', 'kitchen remodel frameless cabinet install'. NO proper names. MINIMUM 4 words.",
       "pixabay_query": "Different wording from pexels_query — same subject, different angle. e.g. 'residential roofing contractor work' vs 'asphalt shingle install timelapse'",
       "archive_query": "Public-domain construction footage phrasing. e.g. 'residential construction 1970s archival', 'roofing trade work vintage footage'",
@@ -406,6 +408,8 @@ Return ONLY a JSON object with these fields:
     }},
     {{
       "slide": 3,
+      "youtube_query": "YouTube search matching SLIDE 3 subject — different query from cover. e.g. 'how to inspect roof before buying home', 'permit process residential addition explained'",
+      "instagram_query": "Instagram phrasing for slide 3 subject — lowercase, no hashtag symbol",
       "pexels_query": "Pexels stock video matching SLIDE 3 content — specific material/process. Different from cover query.",
       "pixabay_query": "Different wording same subject as slide 3 pexels_query",
       "archive_query": "Archival phrasing for slide 3 subject",

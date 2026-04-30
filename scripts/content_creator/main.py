@@ -775,6 +775,7 @@ def _animate_cover_kling(png_path, prompt, output_dir, variant):
         return f"{msg}.{base64.urlsafe_b64encode(sig).rstrip(b'=').decode()}"
 
     try:
+        import urllib.error as _uerr
         token = _make_token(kling_key)
         payload = json.dumps({
             "model_name": "kling-v1",
@@ -789,7 +790,12 @@ def _animate_cover_kling(png_path, prompt, output_dir, variant):
             data=payload,
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         )
-        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        try:
+            resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        except _uerr.HTTPError as _he:
+            body = _he.read(500).decode("utf-8", errors="replace")
+            print(f"  Kling: HTTP {_he.code} from API — body: {body[:300]}")
+            return None
         task_id = (resp.get("data") or {}).get("task_id") or resp.get("task_id")
         if not task_id:
             print(f"  Kling: no task_id in response ({str(resp)[:200]}) — skipping")
