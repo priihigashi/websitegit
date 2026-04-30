@@ -1545,6 +1545,80 @@ def _describe_with_claude_vision(image_sources: list, context: str = "") -> str:
         return ""
 
 
+def _fetch_carousel_slides_apify_post(url: str) -> list:
+    """Tier 1b: call apify~instagram-post-scraper to get carousel slide image URLs.
+
+    This actor is purpose-built for /p/ posts and returns childPosts[*].displayUrl
+    for every carousel slide — more reliable than instagram-scraper's images[] field.
+    Returns list of CDN image URLs (up to 10), or [] on any failure.
+    """
+    global _apify_limit_hit
+    if _apify_limit_hit or not APIFY_API_KEY:
+        return []
+    if "instagram.com" not in url:
+        return []
+
+    print(f"  [apify-post-scraper] Starting actor for {url.split('?')[0]}...")
+    try:
+        run_resp = requests.post(
+            f"{APIFY_BASE}/acts/apify~instagram-post-scraper/runs",
+            params={"token": APIFY_API_KEY},
+            json={
+                "directUrls": [url.split("?")[0]],
+                "resultsLimit": 1,
+                "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["DATACENTER"]},
+            },
+            timeout=30,
+        )
+        if run_resp.status_code == 403:
+            err = run_resp.json().get("error", {})
+            if "limit" in err.get("message", "").lower():
+                _apify_limit_hit = True
+            print(f"  [apify-post-scraper] 403: {err.get('message', run_resp.text)[:100]}")
+            return []
+        run_resp.raise_for_status()
+        run_id = run_resp.json()["data"]["id"]
+
+        for _ in range(12):
+            time.sleep(10)
+            st = requests.get(f"{APIFY_BASE}/actor-runs/{run_id}",
+                              params={"token": APIFY_API_KEY}, timeout=15)
+            status = st.json()["data"]["status"]
+            if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
+                break
+
+        if status != "SUCCEEDED":
+            print(f"  [apify-post-scraper] Run ended: {status}")
+            return []
+
+        items = requests.get(
+            f"{APIFY_BASE}/actor-runs/{run_id}/dataset/items",
+            params={"token": APIFY_API_KEY, "limit": 1, "format": "json"},
+            timeout=30,
+        ).json()
+        if not items:
+            print("  [apify-post-scraper] No items returned")
+            return []
+
+        item = items[0]
+        slides = []
+        # Carousel slides live in childPosts[*].displayUrl
+        for child in (item.get("childPosts") or [])[:10]:
+            u = child.get("displayUrl") or child.get("url") or ""
+            if u.startswith("http"):
+                slides.append(u)
+        # Single-image post fallback
+        if not slides and item.get("displayUrl", "").startswith("http"):
+            slides = [item["displayUrl"]]
+
+        print(f"  [apify-post-scraper] Found {len(slides)} slide image(s)")
+        return slides
+
+    except Exception as e:
+        print(f"  [apify-post-scraper] Failed (non-fatal): {e}")
+        return []
+
+
 def _try_vision_fallback(audio: str, tmp_dir: str, metadata: dict) -> str:
     """Always-on visual layer (audio-or-no-audio).
 
@@ -1560,15 +1634,23 @@ def _try_vision_fallback(audio: str, tmp_dir: str, metadata: dict) -> str:
     caption = metadata.get("caption", "")
 
     if audio == "__ig_carousel__":
-        # Tier 1: Apify (preferred when in credits)
+        # Tier 1: Apify instagram-scraper (already fetched in main — slide_image_urls from images[])
         slide_urls = metadata.get("slide_image_urls", [])
         if slide_urls:
             print(f"  Vision fallback: {len(slide_urls)} carousel slide(s) via Apify → Claude Haiku Vision")
             return _describe_with_claude_vision(slide_urls, context=caption)
 
         source_url = metadata.get("source_url", "")
+        # Tier 1b: Apify instagram-post-scraper — specifically designed for /p/ carousel posts.
+        # Returns childPosts[*].displayUrl which is more reliable than images[] on the reel scraper.
+        print("  Vision fallback: Apify instagram-scraper empty — trying apify~instagram-post-scraper (tier-1b)")
+        slide_urls_1b = _fetch_carousel_slides_apify_post(source_url)
+        if slide_urls_1b:
+            print(f"  Vision fallback: {len(slide_urls_1b)} slide(s) via apify~instagram-post-scraper → Claude Haiku Vision")
+            return _describe_with_claude_vision(slide_urls_1b, context=caption)
+
         # Tier 2: instaloader anonymous GraphQL (no credentials, public posts)
-        print("  Vision fallback: Apify empty — trying instaloader (tier-2)")
+        print("  Vision fallback: Apify post-scraper empty — trying instaloader (tier-2)")
         local_slides = _try_instaloader_slides(source_url, tmp_dir)
         if local_slides:
             print(f"  Vision fallback: {len(local_slides)} slide(s) via instaloader → Claude Haiku Vision")
@@ -1581,7 +1663,9 @@ def _try_vision_fallback(audio: str, tmp_dir: str, metadata: dict) -> str:
             print(f"  Vision fallback: {len(local_slides)} slide(s) via yt-dlp+cookies → Claude Haiku Vision")
             return _describe_with_claude_vision(local_slides, context=caption)
 
-        print("  Vision fallback: all 3 tiers empty — skipping carousel vision")
+        print("  Vision fallback: all 4 tiers empty — skipping carousel vision")
+        print("  [CAROUSEL DEBUG] Tiers tried: apify-scraper, apify-post-scraper, instaloader, yt-dlp+cookies")
+        print("  [CAROUSEL DEBUG] Fix: set PRI_OP_IG_COOKIES in GitHub Secrets with fresh browser cookies")
         return ""
     else:
         # Scale keyframes by video duration so longer videos aren't under-sampled.
