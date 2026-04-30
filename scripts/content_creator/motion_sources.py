@@ -284,20 +284,25 @@ def _apify_run(actor_id: str, input_body: dict, wait: int = 120) -> list:
 
 
 def _apify_yt_search(query: str) -> str:
-    """Try official then community YouTube scraper actors. Returns watch URL or ''."""
-    # apify~youtube-scraper is the official Apify actor — most maintained.
-    # Fall back to bernardo~youtube-scraper if it returns nothing.
-    for actor, input_body in [
-        ("apify~youtube-scraper",    {"searchTerms": [query], "maxResults": 3}),
-        ("bernardo~youtube-scraper", {"searchTerms": [query], "maxResults": 3}),
+    """Search YouTube via Apify streamers~youtube-scraper. Returns watch URL or ''."""
+    # streamers~youtube-scraper is the verified-working actor (exists, not 404/403).
+    # It accepts startUrls (YouTube search result pages) — NOT searchTerms field.
+    search_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(query)}"
+    for input_body in [
+        # Primary: startUrls format (YouTube search results page)
+        {"startUrls": [{"url": search_url}], "maxResults": 5,
+         "downloadSubtitles": False, "downloadComments": False},
+        # Fallback: searchTerms format in case actor supports it
+        {"searchTerms": [query], "maxResults": 5},
     ]:
-        items = _apify_run(actor, input_body, wait=120)
+        items = _apify_run("streamers~youtube-scraper", input_body, wait=120)
         if not items:
             continue
         for item in items:
+            vid_id = item.get("id") or item.get("videoId") or ""
             url = (item.get("url") or item.get("videoUrl")
-                   or item.get("id") and f"https://www.youtube.com/watch?v={item['id']}" or "")
-            if url and "youtube" in url:
+                   or (vid_id and f"https://www.youtube.com/watch?v={vid_id}") or "")
+            if url and "youtube.com/watch" in url:
                 return url
     return ""
 
