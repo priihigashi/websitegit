@@ -4057,7 +4057,7 @@ def main():
     parser.add_argument("url")
     parser.add_argument("--project",
                         choices=["auto", "unrouted",
-                                 "book", "brazil", "usa", "opc", "ugc", "stocks", "higashi",
+                                 "book", "brazil", "usa", "opc", "ugc", "stocks", "higashi", "bias",
                                  # legacy aliases — normalized to canonical names below
                                  "news", "content"],
                         default="auto",
