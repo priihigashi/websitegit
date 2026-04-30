@@ -607,7 +607,7 @@ def _trim_to_relevant_window(clip_path: Path, slide_cfg: dict,
         )
         if result.returncode == 0 and trimmed.exists() and trimmed.stat().st_size > MIN_CLIP_BYTES:
             clip_path.unlink(missing_ok=True)
-            trimmed.rename(clip_path)
+            shutil.move(str(trimmed), str(clip_path))  # shutil.move handles cross-device
             print(f"  trim: {target_duration}s window @ t={start_time:.1f}s → {clip_path.name}")
     except Exception as e:
         print(f"  trim: failed (non-fatal): {e}")

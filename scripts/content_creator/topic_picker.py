@@ -186,7 +186,9 @@ def get_clip_count_for_topic(topic: str) -> int:
             return 0
         header = [h.strip().lower() for h in rows[0]]
         topic_col = next((i for i, h in enumerate(header)
-                          if h in ("topic", "topic / title", "title", "subject")), 0)
+                          if h in ("topic", "topic / title", "title", "subject")), None)
+        if topic_col is None:
+            return 0  # no topic column found — can't match any row
         topic_lower = topic.strip().lower()
         count = 0
         for row in rows[1:]:
@@ -294,7 +296,9 @@ def pick_topics(count_opc=2, count_brazil=1, count_usa=1):
             brief = fetch_drive_doc_content(brief_raw) or brief_raw
         else:
             brief = brief_raw
-        clips_needed_idx = header_map.get("clips_needed") or header_map.get("clips needed")
+        _cn1 = header_map.get("clips_needed")
+        _cn2 = header_map.get("clips needed")
+        clips_needed_idx = _cn1 if _cn1 is not None else _cn2
         clips_needed_val = row[clips_needed_idx].strip() if clips_needed_idx is not None and clips_needed_idx < len(row) else ""
         entry = {
             "row_idx": idx,
