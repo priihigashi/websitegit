@@ -44,6 +44,7 @@ on:
           - auto
           - book
           - brazil
+          - bias
           - opc
           - ugc
           - usa
