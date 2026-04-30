@@ -378,8 +378,28 @@ Return ONLY a JSON object with these fields:
       "context_image_query": "Specific query matching SLIDE 4 tip content — show the solution or tool being described. GOOD: 'contractor measuring kitchen cabinet installation south florida', 'outdoor kitchen pergola concrete patio residential'. BAD: 'contractor', 'renovation', 'home project'."
     }}
   ],
-  "receipts_needed": ["URL or description of primary source to screenshot as evidence slide"],
-  "opposition_confirmation": "Name the opposing political side or outlet that also confirms this fact (leave empty string if not applicable)"
+  "clip_suggestions": [
+    {{
+      "slide": 1,
+      "pexels_query": "Pexels stock video — specific material/action for COVER. GOOD: 'roof shingles installation aerial residential', 'concrete driveway pour south florida', 'kitchen remodel frameless cabinet install'. NO proper names. MINIMUM 4 words.",
+      "pixabay_query": "Different wording from pexels_query — same subject, different angle. e.g. 'residential roofing contractor work' vs 'asphalt shingle install timelapse'",
+      "archive_query": "Public-domain construction footage phrasing. e.g. 'residential construction 1970s archival', 'roofing trade work vintage footage'",
+      "wikimedia_query": "CC-licensed construction or materials clip. e.g. 'asphalt shingle installation Commons'",
+      "motion_prompt": "5s direction: camera move + mood. e.g. 'slow aerial push-in on residential roof being installed, golden hour, cinematic'",
+      "motion_renderer": "playwright",
+      "visual_hint": "product-photo"
+    }},
+    {{
+      "slide": 3,
+      "pexels_query": "Pexels stock video matching SLIDE 3 content — specific material/process. Different from cover query.",
+      "pixabay_query": "Different wording same subject as slide 3 pexels_query",
+      "archive_query": "Archival phrasing for slide 3 subject",
+      "wikimedia_query": "CC clip for slide 3 subject",
+      "motion_prompt": "5s direction for slide 3 visual",
+      "motion_renderer": "playwright",
+      "visual_hint": "context-image"
+    }}
+  ]
 }}
 
 Rules:
