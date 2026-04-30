@@ -442,22 +442,25 @@ def tier_pexels(slide_cfg: dict, dest_path: Path) -> bool:
         for v in videos:
             page_url = v.get("url", "")
             photographer = v.get("user", {}).get("name", "Pexels")
-            for vf in sorted(v.get("video_files", []), key=lambda x: x.get("width", 0)):
-                if (vf.get("file_type") == "video/mp4"
-                        and vf.get("height", 0) >= vf.get("width", 1)):
-                    url = vf.get("link", "")
-                    if not url:
-                        continue
-                    raw = _http_get_bytes(url, timeout=60)
-                    if len(raw) < MIN_CLIP_BYTES:
-                        continue
-                    dest_path.write_bytes(raw)
-                    _write_sidecar(dest_path, "pexels", page_url or url,
-                                   license_str="Pexels License (free use)",
-                                   attribution=f"Video by {photographer} on Pexels",
-                                   query=query)
-                    print(f"  motion_sources: Pexels → {dest_path.name} ({len(raw)//1024}KB)")
-                    return True
+            # Sort: prefer portrait (height >= width), then accept landscape — clip uses object-fit:cover
+            files = sorted(v.get("video_files", []), key=lambda x: (x.get("height", 0) < x.get("width", 1), x.get("width", 0)))
+            for vf in files:
+                if vf.get("file_type") != "video/mp4":
+                    continue
+                url = vf.get("link", "")
+                if not url:
+                    continue
+                raw = _http_get_bytes(url, timeout=60)
+                if len(raw) < MIN_CLIP_BYTES:
+                    continue
+                dest_path.write_bytes(raw)
+                _write_sidecar(dest_path, "pexels", page_url or url,
+                               license_str="Pexels License (free use)",
+                               attribution=f"Video by {photographer} on Pexels",
+                               query=query)
+                print(f"  motion_sources: Pexels → {dest_path.name} ({len(raw)//1024}KB)")
+                return True
+        print(f"  motion_sources: Pexels no downloadable file for '{query[:40]}'")
         return False
     except Exception as e:
         print(f"  motion_sources: Pexels error ({query[:40]}): {e}")
@@ -488,12 +491,11 @@ def tier_pixabay(slide_cfg: dict, dest_path: Path) -> bool:
             return False
         for h in hits:
             videos = h.get("videos", {})
-            # Prefer medium quality (good balance of size + resolution)
+            # Try portrait sizes first (better fit for 9:16 slides), then landscape — clip uses object-fit:cover
             for size_key in ("medium", "small", "large", "tiny"):
                 vf = videos.get(size_key, {})
                 link = vf.get("url", "")
-                w, hh = vf.get("width", 0), vf.get("height", 0)
-                if not link or hh < w:  # require portrait-ish
+                if not link:
                     continue
                 raw = _http_get_bytes(link, timeout=60)
                 if len(raw) < MIN_CLIP_BYTES:
@@ -507,6 +509,7 @@ def tier_pixabay(slide_cfg: dict, dest_path: Path) -> bool:
                                query=query)
                 print(f"  motion_sources: Pixabay → {dest_path.name} ({len(raw)//1024}KB)")
                 return True
+        print(f"  motion_sources: Pixabay no downloadable file for '{query[:40]}'")
         return False
     except Exception as e:
         print(f"  motion_sources: Pixabay error ({query[:40]}): {e}")
