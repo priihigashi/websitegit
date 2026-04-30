@@ -1295,7 +1295,6 @@ def fetch_all_media(content, niche, work_dir):
         # better than black text on black. Editorial rule preserved: we never AI-generate
         # the person's face, but a contextual background is always acceptable.
         if not paths["cover"] and subject_type == "person" and search_q:
-            # Use topic text or option_b prompt to build a context query (strip personal names)
             ctx_q = cv.get("option_b", {}).get("prompt", "") or f"{search_q} justice court law"
             ctx_q = ctx_q[:80]
             c = _fetch_pexels_image(ctx_q, work_dir, cover_fname)
@@ -1307,6 +1306,19 @@ def fetch_all_media(content, niche, work_dir):
                 if c:
                     _set_cover(c, "pixabay", "stock", query=ctx_q)
                     print(f"  cover fallback → Pixabay context image for person miss")
+
+        # Non-person last resort — vision may have rejected everything above.
+        # Accept ANY Pexels/Pixabay result without vision check so cover is never black.
+        if not paths["cover"] and subject_type != "person" and search_q:
+            c = _fetch_pexels_image(search_q[:60], work_dir, cover_fname)
+            if c:
+                _set_cover(c, "pexels", "stock", query=search_q)
+                print(f"  cover last-resort → Pexels (no vision): {search_q[:50]}")
+            if not paths["cover"]:
+                c = _fetch_pixabay_image(search_q[:60], work_dir, cover_fname)
+                if c:
+                    _set_cover(c, "pixabay", "stock", query=search_q)
+                    print(f"  cover last-resort → Pixabay (no vision): {search_q[:50]}")
 
     # ── MIDDLE SLIDES — CONTEXT IMAGES ────────────────────────────────────
     # Cascade: AI cascade FIRST (NB2 → Seedream4.5 → Seedream5.0 → Gemini → SDXL
