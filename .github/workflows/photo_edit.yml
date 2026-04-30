@@ -40,6 +40,14 @@ on:
         required: false
         default: '1WdxoKIOFIa0E9eREe-uKLDgD4tLVegTw'
         type: string
+      send_notification:
+        description: 'Email on completion — leave false for batch (batch trigger sends its own summary)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 # ── FOLDER IDs ──────────────────────────────────────────────────────────────
 # Marketing > Image Creation > Enhanced Photos: 1WdxoKIOFIa0E9eREe-uKLDgD4tLVegTw
@@ -90,7 +98,8 @@ jobs:
           )
           if not creds.valid:
               creds.refresh(Request())
-          drive = build("drive", "v3", credentials=creds)
+          drive  = build("drive",  "v3", credentials=creds)
+          sheets = build("sheets", "v4", credentials=creds)
 
           # ── Config ──────────────────────────────────────────────────────────
           label      = (os.environ.get("LABEL") or "photo").strip()
@@ -152,6 +161,8 @@ jobs:
               "Remove lens grease glare/starburst halos and ghost reflections around lights while keeping fixture positions unchanged. "
               "Use clean window-driven lighting balance, neutral color rendering (not yellow), cozy warm-morning feel. "
               "If perspective correction is needed, keep it subtle and preserve field of view with minimal crop. "
+              "Correct barrel distortion from ultra-wide (0.5x) lenses if present: straighten curved walls, floors, "
+              "ceilings, and architectural lines back to true vertical/horizontal without cropping room content. "
               "Do not add/remove/move/replace anything: furniture, decor, plants, rugs, fixtures, doors, windows, "
               "appliances, wall art, sky content, pool water features, or landscaping. "
               "Do not alter materials, finishes, room dimensions, reflections, or architectural details. "
@@ -285,6 +296,25 @@ jobs:
                   print("  archived → old/: " + ef["name"])
               return old_fid
 
+          # ── Load per-image notes from Gallery Audit spreadsheet ──────────────
+          # Sheet: Higashi Website Tracker → "📸 Urbanova Gallery Audit" tab
+          # Columns: A=#  B=Filename  C=Caption  D=Provider  E=Enhanced  F=Priscila  G=Notes
+          GALLERY_AUDIT_SHEET_ID = "1qJnILSR_XOgRaPdTHYy1Qx1gnSyzQTj2E04u8kErfYw"
+          notes_by_filename = {}
+          try:
+              audit_resp = sheets.spreadsheets().values().get(
+                  spreadsheetId=GALLERY_AUDIT_SHEET_ID,
+                  range="'📸 Urbanova Gallery Audit'!A2:G200",
+              ).execute()
+              for row in audit_resp.get("values", []):
+                  fn   = row[1].strip() if len(row) > 1 else ""
+                  note = row[6].strip() if len(row) > 6 else ""
+                  if fn and note:
+                      notes_by_filename[fn] = note
+              print("Gallery Audit: loaded " + str(len(notes_by_filename)) + " per-image notes")
+          except Exception as e:
+              print("Gallery Audit: could not load notes (" + str(e)[:120] + ") — proceeding without")
+
           # ── Main loop ────────────────────────────────────────────────────────
           batch_results = []
           succeeded = 0
@@ -311,10 +341,25 @@ jobs:
 
                   # Archive any previous results for this stem
                   old_folder_id = archive_old_results(safe_stem, dest, old_folder_id)
+
+                  # base_stem: strip position prefix "NN_" added by trigger script
+                  # e.g. "01_01_fachada" → "01_fachada" (for STAGING dict + sheet lookup)
+                  base_stem = re.sub(r'^\d{2}_', '', stem)
+
                   per_image_prompt = FULL_PROMPT
-                  if safe_stem in STAGING_PROMPT_BY_STEM:
-                      per_image_prompt = FULL_PROMPT + " " + STAGING_PROMPT_BY_STEM[safe_stem]
-                      print("  Applying controlled exception prompt for stem: " + safe_stem)
+                  exception_key = base_stem if base_stem in STAGING_PROMPT_BY_STEM else (safe_stem if safe_stem in STAGING_PROMPT_BY_STEM else None)
+                  if exception_key:
+                      per_image_prompt = FULL_PROMPT + " " + STAGING_PROMPT_BY_STEM[exception_key]
+                      print("  Applying controlled exception prompt for: " + exception_key)
+
+                  # Inject per-image notes from Gallery Audit spreadsheet
+                  note_key = base_stem + ".jpg"
+                  if note_key not in notes_by_filename:
+                      note_key = stem + ".jpg"  # fallback: try exact stem match
+                  sheet_note = notes_by_filename.get(note_key, "")
+                  if sheet_note:
+                      per_image_prompt += " SPECIFIC NOTE FOR THIS PHOTO: " + sheet_note
+                      print("  Sheet note for " + note_key + ": " + sheet_note[:100])
 
                   tools_out = {}
 
@@ -483,9 +528,9 @@ jobs:
               f.write("failed=" + str(failed_count) + "\n")
           PYEOF
 
-      # ── EMAIL RESULTS ──────────────────────────────────────────────────────
+      # ── EMAIL RESULTS (only when send_notification=true — batch uses its own summary) ──
       - name: Email results
-        if: always()
+        if: always() && inputs.send_notification == 'true'
         env:
           PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
           LABEL: ${{ inputs.original_filename }}
