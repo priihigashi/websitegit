@@ -407,19 +407,19 @@ def fetch_reel_metadata(url: str) -> dict:
         )
         # Surface the real Apify error before raising — the generic 403 HTTP message
         # hides useful info like "Monthly usage hard limit exceeded".
-        if run_resp.status_code == 403:
-            err = run_resp.json().get("error", {})
+        if run_resp.status_code in (402, 403):
+            err = run_resp.json().get("error", {}) if run_resp.headers.get("content-type", "").startswith("application/json") else {}
             err_type = err.get("type", "unknown")
             err_msg  = err.get("message", run_resp.text)
-            if err_type == "platform-feature-disabled" and "limit" in err_msg.lower():
+            if run_resp.status_code == 402 or (err_type == "platform-feature-disabled" and "limit" in err_msg.lower()):
                 _apify_limit_hit = True
-                print(f"  WARNING Apify: monthly usage hard limit exceeded — switching to yt-dlp fallback for the rest of this run.")
+                print(f"  WARNING Apify: plan limit hit ({run_resp.status_code}) — skipping Apify for rest of run. ({err_msg[:80]})")
                 classified = classify_error(f"{err_type}: {err_msg}")
                 if classified:
                     send_quota_alert_email(classified, context="Apify IG metadata", url=url)
-                return _ig_metadata_fallback(url, reason="Apify monthly limit")
-            print(f"  WARNING Apify 403: {err_type} — {err_msg}")
-            return _ig_metadata_fallback(url, reason=f"Apify 403 {err_type}")
+                return _ig_metadata_fallback(url, reason=f"Apify {run_resp.status_code} limit")
+            print(f"  WARNING Apify {run_resp.status_code}: {err_type} — {err_msg}")
+            return _ig_metadata_fallback(url, reason=f"Apify {run_resp.status_code} {err_type}")
         run_resp.raise_for_status()
         run_id = run_resp.json()["data"]["id"]
         print(f"  Apify run started: {run_id}")
@@ -1570,11 +1570,14 @@ def _fetch_carousel_slides_apify_post(url: str) -> list:
             },
             timeout=30,
         )
-        if run_resp.status_code == 403:
-            err = run_resp.json().get("error", {})
-            if "limit" in err.get("message", "").lower():
+        if run_resp.status_code in (402, 403):
+            err = run_resp.json().get("error", {}) if run_resp.headers.get("content-type", "").startswith("application/json") else {}
+            msg = err.get("message", run_resp.text)[:120]
+            if run_resp.status_code == 402 or "limit" in msg.lower():
                 _apify_limit_hit = True
-            print(f"  [apify-post-scraper] 403: {err.get('message', run_resp.text)[:100]}")
+                print(f"  [apify-post-scraper] {run_resp.status_code} — Apify plan limit hit. Skipping Apify for rest of run. ({msg})")
+            else:
+                print(f"  [apify-post-scraper] {run_resp.status_code}: {msg}")
             return []
         run_resp.raise_for_status()
         run_id = run_resp.json()["data"]["id"]
@@ -3713,6 +3716,10 @@ def main():
     elif args.credits or is_ig:
         # Instagram/TikTok: use Apify for creator info + videoUrl fallback
         metadata = fetch_reel_metadata(args.url)
+        # Always preserve source_url so vision tiers (tier 1b+) can use the original URL
+        # even when Apify returns {} due to 402/rate-limit (source_url would otherwise be lost)
+        if "source_url" not in metadata or not metadata["source_url"]:
+            metadata["source_url"] = args.url
         if metadata and args.credits:
             args.notes = (args.notes or "") + (
                 f"\n\nCREDITS — Original creator: @{metadata['creator_handle']}"
