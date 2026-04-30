@@ -62,10 +62,13 @@ def _write_sidecar(dest_path: Path, source_tier: str, source_url: str,
         pass  # sidecar is nice-to-have, never block the clip
 
 
+_BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+
 def _http_get_bytes(url: str, timeout: int = 60, max_bytes: int = MAX_CLIP_BYTES) -> bytes:
     """GET a URL, return bytes, enforce size cap. Empty bytes on miss."""
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:
+        req = urllib.request.Request(url, headers={"User-Agent": _BROWSER_UA})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             # Peek content-length if available
             cl = resp.headers.get("Content-Length", "")
             if cl.isdigit() and int(cl) > max_bytes:
@@ -499,6 +502,7 @@ def tier_pixabay(slide_cfg: dict, dest_path: Path) -> bool:
                     continue
                 raw = _http_get_bytes(link, timeout=60)
                 if len(raw) < MIN_CLIP_BYTES:
+                    print(f"  motion_sources: Pixabay {size_key} too small ({len(raw)}B) url={link[:60]}")
                     continue
                 dest_path.write_bytes(raw)
                 page_url = h.get("pageURL", link)
