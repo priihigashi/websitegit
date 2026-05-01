@@ -640,10 +640,20 @@ def render_motion_remotion(cover_png_path, clip_path, output_dir, variant,
     mp4_path = Path(output_dir) / f"{variant}_{nn}_{base}_motion.mp4"
     gif_path = Path(output_dir) / f"{variant}_{nn}_{base}_motion.gif"
 
-    # Write props JSON — Remotion accepts --props=<file> for complex payloads
+    # Remotion serves assets from its own public/ dir via localhost:3000.
+    # Absolute /tmp paths are 404 — copy assets in, pass relative paths.
+    public_dir = remotion_root / "public"
+    public_dir.mkdir(exist_ok=True)
+    run_id = f"{variant}_{nn}"
+    staged_png = public_dir / f"{run_id}_poster.png"
+    staged_clip = public_dir / f"{run_id}_clip.mp4" if clip_path and Path(clip_path).exists() else None
+    shutil.copy2(cover_png_path, staged_png)
+    if staged_clip:
+        shutil.copy2(clip_path, staged_clip)
+
     props = {
-        "posterPng": str(Path(cover_png_path).resolve()),
-        "clipSrc": str(Path(clip_path).resolve()) if clip_path and Path(clip_path).exists() else None,
+        "posterPng": staged_png.name,           # relative — served by Remotion dev server
+        "clipSrc": staged_clip.name if staged_clip else None,
         "hookText": hook_text or "",
         "accentColor": "#F4C430",
     }
@@ -662,6 +672,9 @@ def render_motion_remotion(cover_png_path, clip_path, output_dir, variant,
             capture_output=True, timeout=180
         )
         props_file.unlink(missing_ok=True)
+        staged_png.unlink(missing_ok=True)
+        if staged_clip:
+            staged_clip.unlink(missing_ok=True)
         if r.returncode != 0 or not mp4_path.exists():
             err = r.stderr.decode("utf-8", errors="replace")[:300] if r.stderr else ""
             print(f"  Remotion render miss ({base}): {err}")
@@ -681,6 +694,9 @@ def render_motion_remotion(cover_png_path, clip_path, output_dir, variant,
         return str(mp4_path)
     except Exception as e:
         props_file.unlink(missing_ok=True)
+        staged_png.unlink(missing_ok=True)
+        if staged_clip:
+            staged_clip.unlink(missing_ok=True)
         print(f"  Remotion exception ({base}): {e}")
         return None
 
