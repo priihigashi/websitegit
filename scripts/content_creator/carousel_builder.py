@@ -1922,7 +1922,11 @@ def _fetch_youtube_clip_apify(youtube_query, dest_dir, filename):
 
 
 def fetch_clips(content, work_dir):
-    """Download video clips for motion version. Returns dict {slide_idx: abs_clip_path}.
+    """Download video clips for motion version. Returns (clips, clip_failures).
+
+    clips       = {slide_idx: abs_clip_path} for every slot that succeeded.
+    clip_failures = {slide_idx: slot_name}   for every slot that exhausted all tiers.
+    Callers must unpack both: clips, clip_failures = fetch_clips(content, work_dir)
 
     Distribution: cover + up to 2 evenly spaced middle slides (never sources).
     Source chain per slot is delegated to motion_sources.fetch_clip_with_fallback:
@@ -1940,9 +1944,10 @@ def fetch_clips(content, work_dir):
         from scripts.content_creator.motion_sources import fetch_clip_with_fallback  # type: ignore
 
     clips = {}
+    clip_failures = {}
     suggestions = content.get("clip_suggestions", [])
     if not suggestions:
-        return clips
+        return clips, clip_failures
 
     slides = content.get("slides", [])
     n_slides = len(slides)
@@ -1983,12 +1988,15 @@ def fetch_clips(content, work_dir):
             clips[slide_idx] = path
         else:
             print(f"  Clip slot '{slot_name}': every tier missed — Ken Burns floor on PNG")
+            clip_failures[slide_idx] = slot_name
 
     print(f"  fetch_clips: {len(clips)}/{len(clip_slots)} clip(s) ready: {list(clips.keys())}")
-    return clips
+    if clip_failures:
+        print(f"  fetch_clips: {len(clip_failures)} slot(s) failed — placeholder div will render in motion HTML: {list(clip_failures.keys())}")
+    return clips, clip_failures
 
 
-def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=None):
+def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=None, clip_failures=None):
     """Generate per-slide motion HTML files for Playwright video recording.
 
     Every-other-slide rule (cover + even-indexed middles, never sources):
@@ -2024,7 +2032,7 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
         rel_clip = os.path.relpath(clip_path, work_dir) if clip_path else None
         html_body = ""
 
-        # Clip sticker block — only when a clip was fetched for this slide
+        # Clip sticker block — real clip when fetched, placeholder when all tiers failed
         clip_block = ""
         if rel_clip:
             clip_block = f"""
@@ -2032,6 +2040,12 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
       <video class="clip-video" autoplay muted loop playsinline>
         <source src="{rel_clip}" type="video/mp4">
       </video>
+    </div>"""
+        elif (clip_failures or {}).get(slide_idx):
+            slot = (clip_failures or {}).get(slide_idx, "cover")
+            clip_block = f"""
+    <div class="clip-frame{'  clip-frame-mid' if slide_idx != 1 else ''} clip-frame-missing">
+      <div class="clip-missing-badge">⚠️ CLIP INDISPONÍVEL<br><small>Todos os tiers falharam.<br>Adicione manualmente:<br>resources/clips/{slot}.mp4</small></div>
     </div>"""
 
         if slide_idx == 1:
@@ -2158,6 +2172,11 @@ body{background:var(--ob);overflow:hidden}
             background:var(--ob);padding:6px 12px;position:absolute;top:-1px;right:-1px;
             border:1px solid var(--ca);z-index:3;letter-spacing:.05em;}
 .clip-video{width:100%;height:100%;object-fit:cover;display:block;}
+.clip-frame-missing{border:3px dashed #ff4444;background:#1a0000;}
+.clip-missing-badge{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  text-align:center;color:#ff6666;font-family:'JetBrains Mono',monospace;font-size:15px;
+  line-height:1.5;padding:12px;background:rgba(0,0,0,.7);}
+.clip-missing-badge small{font-size:12px;color:#ff9999;}
 """
 
 

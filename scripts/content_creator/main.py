@@ -978,7 +978,7 @@ def process_one_topic(topic_entry, run_date, drive):
     for sugg in content.get("clip_suggestions", []):
         sugg.setdefault("topic", topic)
     print("  Fetching video clips for motion...")
-    clips = fetch_clips(content, str(work))
+    clips, clip_failures = fetch_clips(content, str(work))
 
     # Thread clips into media_paths so HTML builders can render first-frame stills
     # on motion slides in the static cover.html (alternating clip-bg pattern).
@@ -991,7 +991,7 @@ def process_one_topic(topic_entry, run_date, drive):
         return None
 
     # 2b. Build per-slide motion HTML files (one per clip slot, separate from cover.html)
-    clip_html_files = build_motion_html(content, niche, slug, str(work), clips, media_paths=media_paths)
+    clip_html_files = build_motion_html(content, niche, slug, str(work), clips, media_paths=media_paths, clip_failures=clip_failures)
 
     # 3. Render PNGs (uses static cover.html — unchanged)
     print("  Rendering PNGs...")
@@ -1333,6 +1333,9 @@ def process_one_topic(topic_entry, run_date, drive):
         "cover_visual": content.get("cover_visual", {}),
         "clip_suggestions": content.get("clip_suggestions", []),
         "mentioned_people": mentioned_people,
+        # clip failure map — {slide_idx: slot_name} for slots that exhausted all 7 tiers
+        # non-empty = motion HTML shows ⚠️ placeholder; email preview surfaces the warning
+        "clip_failures": clip_failures,
     }
 
 

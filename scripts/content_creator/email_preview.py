@@ -148,6 +148,7 @@ def _build_one_carousel_html(post: dict, slides: list[dict]) -> str:
     static_link = post.get("static_link", "")
     motion_link = post.get("motion_link", "")
     folder_id = _extract_folder_id(static_link)
+    clip_failures = post.get("clip_failures") or {}
 
     blocks = []
     for i, s in enumerate(slides, start=1):
@@ -171,6 +172,14 @@ def _build_one_carousel_html(post: dict, slides: list[dict]) -> str:
           Motion: <a href="{motion_link}" style="color:#CBCC10;">open folder</a>
         </div>
         {''.join(blocks)}
+
+        {f'''
+        <div style="background:#1a0000;border-left:3px solid #ff4444;padding:14px 16px;margin-top:20px;border-radius:4px;">
+          <div style="font-family:Arial,sans-serif;color:#ff6666;font-size:13px;font-weight:700;">⚠️ CLIPS INDISPONÍVEIS — {len(clip_failures)} slot(s) falharam</div>
+          <div style="font-family:monospace;color:#ff9999;font-size:12px;line-height:1.7;margin-top:8px;">
+            {"<br/>".join(f"Slide {idx}: resources/clips/{slot}.mp4 — adicione manualmente" for idx, slot in clip_failures.items())}
+          </div>
+        </div>''' if clip_failures else ''}
 
         <div style="background:#111;border-left:3px solid #CBCC10;padding:14px 16px;margin-top:20px;border-radius:4px;">
           <div style="font-family:Arial,sans-serif;color:#CBCC10;font-size:13px;font-weight:700;">Reply commands</div>
