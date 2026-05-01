@@ -989,7 +989,10 @@ def _fetch_slide_photos_brazil(content, work_dir):
         sugg = sugg_by_slide.get(slide_i, {})
         photo_query = sugg.get("photo_query", "") or sugg.get("youtube_query", "")
         if not photo_query:
-            # Fallback: use slide heading as query
+            # Prefer context_image_query from the slide JSON (dados-ou-agenda + other templates emit this)
+            photo_query = slide.get("context_image_query", "")
+        if not photo_query:
+            # Last resort: slide heading (vague but better than nothing)
             photo_query = slide.get("heading_pt", "") or slide.get("heading_en", "")
         if not photo_query:
             continue
@@ -2167,6 +2170,14 @@ def build_html(content, niche, topic_slug, work_dir, handle="@HANDLE_PLACEHOLDER
     return None
 
 
+def _cap34(text: str) -> str:
+    """Hard-cap list item titles at 34 chars (reviewer limit) at word boundary."""
+    if len(text) <= 34:
+        return text
+    t = text[:34]
+    return t[:t.rfind(" ")].rstrip() if " " in t else t
+
+
 def _build_opc_html(content, slug, work_dir, media_paths=None):
     hl = content["headline"]
     # Guardrail: keep cover subhead short enough to avoid colliding with the bottom HUD lane.
@@ -2184,7 +2195,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
 
     items_html = ""
     for i, item in enumerate(content.get("slide3_items", []), 1):
-        items_html += f'''    <div class="list-item"><span class="list-num">{i:02d}</span><div><div class="list-text">{item["title"]}</div><div class="list-sub">{item["sub"]}</div></div></div>\n'''
+        items_html += f'''    <div class="list-item"><span class="list-num">{i:02d}</span><div><div class="list-text">{_cap34(item["title"])}</div><div class="list-sub">{item["sub"]}</div></div></div>\n'''
 
     sources_html = ""
     for i, src in enumerate(content.get("sources", []), 1):
@@ -2517,7 +2528,7 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
 
     items_html = ""
     for i, item in enumerate(content.get("slide3_items", []), 1):
-        items_html += f'''    <div class="list-item"><span class="list-num">{i:02d}</span><div><div class="list-text">{item["title"]}</div><div class="list-sub">{item["sub"]}</div></div></div>\n'''
+        items_html += f'''    <div class="list-item"><span class="list-num">{i:02d}</span><div><div class="list-text">{_cap34(item["title"])}</div><div class="list-sub">{item["sub"]}</div></div></div>\n'''
 
     sources_html = ""
     for i, src in enumerate(content.get("sources", []), 1):
@@ -2685,7 +2696,7 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
 
     items_html = ""
     for i, item in enumerate(content.get("slide3_items", []), 1):
-        items_html += f'''    <div class="list-item"><span class="list-num">{i:02d}</span><div><div class="list-text">{item["title"]}</div><div class="list-sub">{item["sub"]}</div></div></div>\n'''
+        items_html += f'''    <div class="list-item"><span class="list-num">{i:02d}</span><div><div class="list-text">{_cap34(item["title"])}</div><div class="list-sub">{item["sub"]}</div></div></div>\n'''
 
     sources_html = ""
     for i, src in enumerate(content.get("sources", []), 1):
@@ -3142,12 +3153,22 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
         f'<div class="sticker-slot"><img src="{cover_img}" alt="cover portrait"></div>'
     ) if cover_img else ""
     cover_sticker_class = "cover-with-sticker" if cover_img else ""
+    # Series tag — route by _template_key so each series shows its own label on the cover
+    _tkey = (content.get("_template_key") or "").lower()
+    _series_tag_map = {
+        "dados-ou-agenda": "Dados ou Agenda?",
+        "verificamos": "Verificamos",
+        "verificamos_clip": "Verificamos",
+        "arquivo-aberto": "Arquivo Aberto",
+        "a-conta": "A Conta que Ninguém Pagou",
+    }
+    cover_series_tag = _series_tag_map.get(_tkey, "Quem decidiu isso?")
     slides_html = f"""
 <div class="slide slide-cover slide-motion {cover_sticker_class}">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   {cover_bg_el}
   {cover_sticker_el}
-  <div class="tag">Quem decidiu isso?</div>
+  <div class="tag">{cover_series_tag}</div>
   <div class="cover-date">{cover_date}</div>
   <div class="cover-hl">{cover_hl}</div>
   <div class="cover-en">{cover_en}</div>
