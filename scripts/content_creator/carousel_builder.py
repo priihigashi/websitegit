@@ -403,7 +403,7 @@ Return ONLY a JSON object with these fields:
       "archive_query": "Public-domain construction footage phrasing. e.g. 'residential construction 1970s archival', 'roofing trade work vintage footage'",
       "wikimedia_query": "CC-licensed construction or materials clip. e.g. 'asphalt shingle installation Commons'",
       "motion_prompt": "5s direction: camera move + mood. e.g. 'slow aerial push-in on residential roof being installed, golden hour, cinematic'",
-      "motion_renderer": "playwright",
+      "motion_renderer": "remotion",
       "visual_hint": "product-photo"
     }},
     {{
