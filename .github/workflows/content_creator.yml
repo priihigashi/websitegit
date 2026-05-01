@@ -73,7 +73,7 @@ on:
 jobs:
   create-content:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     env:
       SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
       CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
