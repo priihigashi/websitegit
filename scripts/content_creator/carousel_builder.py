@@ -4,7 +4,7 @@ carousel_builder.py — Generates carousel HTML from template + topic, renders P
 Uses Claude Haiku for content generation, Playwright for rendering.
 Also generates Instagram caption following Priscila's copy rules.
 """
-import gzip, json, os, re, subprocess, sys, time, urllib.request, urllib.parse
+import datetime, gzip, json, os, re, subprocess, sys, time, urllib.request, urllib.parse
 from pathlib import Path
 import pathlib as _pl
 sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent / "capture"))
@@ -483,6 +483,12 @@ def generate_dados_content(topic, brief=""):
     # Strip any internal labels (EP001, EP002 etc.) from topic so they never appear in slides
     clean_topic = re.sub(r'\bEP\d{3,4}\b', '', topic).strip(' —-').strip()
 
+    # Build today's date string in PT-BR for cover_date — never let Haiku invent a date
+    _today = datetime.datetime.utcnow()
+    _months_pt = ["janeiro","fevereiro","março","abril","maio","junho",
+                  "julho","agosto","setembro","outubro","novembro","dezembro"]
+    _today_pt = f"{_today.day:02d} de {_months_pt[_today.month-1]} de {_today.year} · Brasil"
+
     prompt = f"""You are writing a FORMAT-019 "Dados ou Agenda?" Instagram carousel in Brazilian Portuguese.
 This format checks whether a public figure or influencer is presenting data honestly or pushing an agenda.
 
@@ -493,6 +499,7 @@ MANDATORY RULES:
 2. Language: Brazilian Portuguese throughout body copy. Headings have an English subtitle (small, grey).
 3. NEVER put internal identifiers like "EP001", "EP002", "FORMAT-019" in any slide text.
 4. Cover hook must make someone stop scrolling — state the tension: many followers, but is the content honest?
+5. cover_date MUST be exactly: "{_today_pt}" — do not invent or change this date.
 5. Slide 2 is about the SPECIFIC POST/CLAIM they made — quote or paraphrase what they said.
 6. The VERDICT slide is the most important — show the 3-way score as concrete percentages.
 7. Every factual slide needs a source name (Harvard, IMF, IBGE, etc.) visible in the text.
@@ -666,6 +673,8 @@ IMPORTANT:
             result = json.loads(m.group())
             # Inject template key so HTML builder knows which path to use
             result["_template_key"] = "dados-ou-agenda"
+            # Belt-and-suspenders: override cover_date with today (Haiku sometimes drifts to past years)
+            result["cover_date"] = _today_pt
             return result
         except json.JSONDecodeError as e:
             print(f"  Dados JSON parse error (attempt {attempt+1}): {e}")
@@ -3157,7 +3166,15 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
         # Bio-initials fallback — extract name from clip_suggestions[0].person_or_topic
         _cs = content.get("clip_suggestions", [{}])[0] if content.get("clip_suggestions") else {}
         _pot = _cs.get("person_or_topic", "")
-        _cname = _pot.split("+")[0].strip().split("—")[0].strip() if _pot else ""
+        # Extract only consecutive capitalized words (proper name) — stop at first lowercase word
+        _raw = _pot.split("+")[0].strip().split("—")[0].strip() if _pot else ""
+        _name_words = []
+        for _w in _raw.split():
+            if _w and _w[0].isupper():
+                _name_words.append(_w)
+            else:
+                break
+        _cname = " ".join(_name_words[:3]) or _raw[:30]  # max 3 name words; last-resort: first 30 chars
         _cini = "".join(w[0].upper() for w in _cname.split() if w)[:2] if _cname else ""
         if _cini:
             cover_sticker_el = (

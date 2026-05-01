@@ -200,8 +200,9 @@ def send_preview(posts, date_str):
             continue
 
         slug = (post.get("post_id") or "carousel").strip()
+        niche_label = (post.get("niche") or "opc").upper()
         subject = (
-            f"[REVIEW] OPC — {slug} — {len(slides)} slides — "
+            f"[REVIEW] {niche_label} — {slug} — {len(slides)} slides — "
             f"FOLDER:{folder_id} — reply APPROVE or feedback"
         )
         html = _build_one_carousel_html(post, slides)
