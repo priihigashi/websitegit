@@ -836,6 +836,7 @@ visual_hint values:
   "context-image" → slide references a specific institution, building, place, event, or document; fill context_image_query with a specific search term (e.g. "Câmara dos Deputados Brasília", "Viktor Orbán 2026", "Supremo Tribunal Federal fachada", "Congresso Nacional aerial")
   "none" → text-only, max 1 consecutive allowed
 First choice for Brazilian institutions: Agência Brasil CC BY 3.0 search terms. International subjects: English search terms.
+BANNED context_image_query patterns: NEVER copy words from heading_pt or heading_en into the query. The query is a stock photo search term — it must be a place/institution/person name, NOT a phrase from the slide copy. BAD: "Se comparar igual com igual" or "O ponto que importa". GOOD: "Conselho Nacional de Justiça STF fachada" or "STF Brasília Supremo Tribunal Federal". For comparison slides about judicial spending: always reference a specific court or government body (STF, CNJ, Câmara, TCU).
 
 CLIP SUGGESTIONS + MOTION PROMPTS RULE (non-negotiable):
 The motion pipeline runs an 8-tier source cascade per clip: YouTube (Apify) → Instagram (Apify) → Pexels → Pixabay → Archive.org → Wikimedia Commons → stock scrapers → Ken Burns zoom (last resort). You must write DIFFERENT phrasing per tier so each tier can succeed even if the others fail.
