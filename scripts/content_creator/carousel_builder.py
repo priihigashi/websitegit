@@ -318,6 +318,9 @@ def _web_research(topic, lang="en"):
 
 
 def generate_carousel_content(topic, niche, template_key=None, brief=""):
+    # Special templates checked BEFORE the generic niche short-circuit
+    if template_key == "dados-ou-agenda":
+        return generate_dados_content(topic, brief)
     if niche in ("brazil", "usa"):
         return generate_brazil_content(topic, brief)
     if not template_key:
@@ -466,6 +469,208 @@ Rules:
             continue
 
     print(f"  OPC content generation failed after 2 attempts for: {topic}")
+    return None
+
+
+def generate_dados_content(topic, brief=""):
+    """Generate FORMAT-019 Dados ou Agenda? bias-check carousel (9 slides, PT-BR).
+    Uses the brief from analyze_bias() as the primary source — never invents facts.
+    Structure: cover → post-context → data 1 → data 2 → what was missing →
+               exaggeration check → VERDICT (3-way score) → conclusion → CTA/sources.
+    """
+    brief_section = f"\n\nBRIEF / BIAS ANALYSIS (use this — it is the primary source):\n{brief}" if brief else ""
+
+    # Strip any internal labels (EP001, EP002 etc.) from topic so they never appear in slides
+    clean_topic = re.sub(r'\bEP\d{3,4}\b', '', topic).strip(' —-').strip()
+
+    prompt = f"""You are writing a FORMAT-019 "Dados ou Agenda?" Instagram carousel in Brazilian Portuguese.
+This format checks whether a public figure or influencer is presenting data honestly or pushing an agenda.
+
+Subject: "{clean_topic}"{brief_section}
+
+MANDATORY RULES:
+1. Use ONLY facts from the brief. Never invent numbers, claims, or sources.
+2. Language: Brazilian Portuguese throughout body copy. Headings have an English subtitle (small, grey).
+3. NEVER put internal identifiers like "EP001", "EP002", "FORMAT-019" in any slide text.
+4. Cover hook must make someone stop scrolling — state the tension: many followers, but is the content honest?
+5. Slide 2 is about the SPECIFIC POST/CLAIM they made — quote or paraphrase what they said.
+6. The VERDICT slide is the most important — show the 3-way score as concrete percentages.
+7. Every factual slide needs a source name (Harvard, IMF, IBGE, etc.) visible in the text.
+8. Tone: journalistic, calm, not accusatory. "Vamos ver o que os dados dizem."
+
+Return ONLY a valid JSON object with this exact structure:
+
+{{
+  "cover_pt": "DADOS OU VIÉS? — 4-6 words MAX, ALL CAPS",
+  "cover_en": "Data or agenda? — same as cover in English",
+  "cover_accent": "1 word from cover to highlight in accent color (e.g. 'VIÉS' or 'DADOS')",
+  "cover_date": "DD de mês de YYYY · Brasil",
+  "cover_credibility_badge": "ALTA CREDIBILIDADE|MÉDIA CREDIBILIDADE|BAIXA CREDIBILIDADE — pick one from brief",
+  "cover_visual": {{
+    "subject_type": "person",
+    "option_a": {{
+      "type": "ai-composition",
+      "prompt": "photorealistic portrait of [influencer name], Brazilian financial educator, professional look, dramatic side lighting, dark background — for Seedream 4.5",
+      "concept": "Close portrait of the influencer, serious look, editorial style",
+      "tool_hint": "seedream"
+    }},
+    "option_b": {{
+      "type": "graphic-design",
+      "concept": "Bold DADOS OU VIÉS? text over dark background, influencer handle in smaller type, accent yellow line"
+    }},
+    "recommended": "a",
+    "reason": "Influencer face stops scroll; viewer knows exactly who this is about"
+  }},
+  "slides": [
+    {{
+      "type": "quote",
+      "heading_pt": "O que ele disse",
+      "heading_en": "What they claimed",
+      "quote": "Direct paraphrase or quote of the specific claim they made in the post — in PT-BR",
+      "source": "@handle · [platform] · data",
+      "context_pt": "Why this claim matters: how many followers, what they were promoting or explaining",
+      "mentioned_people": [
+        {{"name": "Influencer Full Name", "role_pt": "Educador financeiro — X milhões de seguidores", "role_en": "Financial educator", "image_hint": "influencer name Instagram"}}
+      ],
+      "visual_hint": "bio-card",
+      "context_image_query": ""
+    }},
+    {{
+      "type": "data",
+      "heading_pt": "O que os dados dizem",
+      "heading_en": "What the data says",
+      "numbers": [
+        {{"value": "XX%", "label_pt": "dado verificado 1 com contexto", "label_en": "verified fact 1"}},
+        {{"value": "XX", "label_pt": "dado verificado 2 com contexto", "label_en": "verified fact 2"}}
+      ],
+      "mentioned_people": [],
+      "visual_hint": "context-image",
+      "context_image_query": "specific chart, graph, or institution related to this data — e.g. 'banco central brasil taxa juros dados' or 'IMF World Economic Outlook chart'"
+    }},
+    {{
+      "type": "list",
+      "heading_pt": "O que ele deixou de fora",
+      "heading_en": "What was missing",
+      "items_pt": [
+        "Contexto omitido 1 — o que os dados reais mostram",
+        "Contexto omitido 2 — informação que muda a conclusão",
+        "Contexto omitido 3 — fonte que contradiz ou qualifica"
+      ],
+      "mentioned_people": [],
+      "visual_hint": "context-image",
+      "context_image_query": "financial data research institution or document — e.g. 'relatorio banco mundial economia emergente' or 'FGV IBRE dados pesquisa'"
+    }},
+    {{
+      "type": "comparison",
+      "heading_pt": "O que ele disse vs. a realidade",
+      "heading_en": "Claimed vs. reality",
+      "left_label": "Ele disse",
+      "right_label": "Os dados mostram",
+      "items": [
+        {{"aspect": "Ponto 1 analisado", "left": "afirmação dele resumida", "right": "dado real com fonte"}},
+        {{"aspect": "Ponto 2 analisado", "left": "afirmação dele resumida", "right": "dado real com fonte"}}
+      ],
+      "mentioned_people": [],
+      "visual_hint": "context-image",
+      "context_image_query": "specific economic data visual — graph, report cover, or institution facade"
+    }},
+    {{
+      "type": "verdict",
+      "heading_pt": "VEREDICTO — Dados ou Agenda?",
+      "heading_en": "Data or Agenda?",
+      "verdicts": [
+        {{"label": "Baseado em Dados", "result": "XX%", "detail_pt": "O que está correto e embasado em fontes sólidas"}},
+        {{"label": "Viés Ideológico", "result": "XX%", "detail_pt": "Onde a visão de mundo influencia a apresentação dos fatos"}},
+        {{"label": "Viés de Interesse", "result": "XX%", "detail_pt": "Onde interesses comerciais, audiência ou marca pessoal distorcem o conteúdo"}}
+      ],
+      "mentioned_people": [],
+      "visual_hint": "none",
+      "context_image_query": ""
+    }},
+    {{
+      "type": "list",
+      "heading_pt": "Nossa conclusão",
+      "heading_en": "Our take",
+      "items_pt": [
+        "O que é seguro usar do conteúdo dele",
+        "O que deve ser verificado antes de aplicar",
+        "Como checar você mesmo: [fonte específica]"
+      ],
+      "mentioned_people": [],
+      "visual_hint": "context-image",
+      "context_image_query": "person reading financial documents research data — thoughtful analytical"
+    }}
+  ],
+  "clip_suggestions": [
+    {{
+      "person_or_topic": "influencer name + claim topic",
+      "slide": 1,
+      "duration_hint": "5-7 seconds",
+      "reason": "Cover: influencer speaking — creates personal connection",
+      "photo_query": "influencer full name",
+      "photo_bg_position": "center top",
+      "youtube_query": "influencer name educacao financeira video recente",
+      "instagram_query": "influencer handle financas pessoais dicas",
+      "pexels_query": "financial advisor presenting data chart screen",
+      "pixabay_query": "business person finance presentation data",
+      "archive_query": "financial education lecture economics",
+      "wikimedia_query": "economics finance education",
+      "motion_prompt": "slow push-in on financial educator speaking, documentary style, warm lighting, 5s",
+      "motion_renderer": "kenburns",
+      "visual_hint": "bio-card"
+    }}
+  ],
+  "sources": ["Source 1 — institution + specific report/year", "Source 2", "Source 3", "Source 4"],
+  "cta_pt": "Salva e manda pra quem precisa ver.",
+  "cta_en": "Save this.",
+  "caption_pt": "Instagram caption PT — 3-4 sentences. Hook: mention the influencer and the tension. Body: what you found. End: follow for Dados ou Agenda? series. Hashtags: max 8, no party names, no @-tags.",
+  "caption_en": "Instagram caption EN — same structure"
+}}
+
+IMPORTANT:
+- The percentages in verdicts[].result must add up to 100%.
+- If brief says "45% dados / 10% ideológico / 45% interesse" → use those exact numbers.
+- Cover credibility badge must match brief's credibility field (ALTA/MÉDIA/BAIXA).
+- quotes slide: the "quote" field must be the actual claim, not a meta description.
+- items_pt: write in simple PT-BR, max 15 words per bullet. Factual only.
+- comparison items: max 2 rows. Keep values short (under 10 words each side).
+- The comparison "left" column is what the influencer claimed; "right" is what data shows — always paired.
+- motion_renderer must always be "kenburns" for Brazil native template.
+- Never use party hashtags or @-tags in caption_pt."""
+
+    for attempt in range(2):
+        if attempt == 1:
+            research = _web_research(clean_topic, lang="pt")
+            if research:
+                print(f"  Dados: retrying with web research for: {clean_topic}")
+                prompt = (
+                    f"RESEARCH FOUND:\n{research}\n\n"
+                    "Use this research to supplement the brief. Do not invent. Brief takes priority.\n\n"
+                ) + prompt
+            else:
+                print("  Dados: no research — retrying with fresh call")
+
+        try:
+            text = _claude_with_fallback(
+                prompt, max_tokens=4000, timeout=60,
+                context=f"carousel_builder.dados(attempt {attempt+1})",
+            )
+        except Exception as e:
+            print(f"  LLM cascade failed (Dados, attempt {attempt+1}): {e}")
+            continue
+        m = re.search(r'\{[\s\S]*\}', text)
+        if not m:
+            print(f"  Dados content generation failed — no JSON in response (attempt {attempt+1})")
+            continue
+        try:
+            result = json.loads(m.group())
+            # Inject template key so HTML builder knows which path to use
+            result["_template_key"] = "dados-ou-agenda"
+            return result
+        except json.JSONDecodeError as e:
+            print(f"  Dados JSON parse error (attempt {attempt+1}): {e}")
+            continue
+    print("  Dados content generation failed after 2 attempts")
     return None
 
 
@@ -1819,7 +2024,8 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
             cover_img = (media_paths or {}).get("cover", "")
             bg_style = (
                 f'style="background-image:url(\'{cover_img}\');background-size:cover;'
-                f'background-position:center top;"' if cover_img else ""
+                f'background-position:center top;filter:brightness(0.52) contrast(1.1);"'
+                if cover_img else ""
             )
             if niche == "opc":
                 tag_text = esc(content.get("tag", "Oak Park Construction"))
