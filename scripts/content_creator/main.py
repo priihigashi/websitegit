@@ -1289,8 +1289,13 @@ def process_one_topic(topic_entry, run_date, drive):
             if isinstance(p, str):
                 mentioned_people.append(p)
             elif isinstance(p, dict):
-                mentioned_people.append(p.get("name", str(p)))
-    mentioned_people = list(dict.fromkeys(mentioned_people))  # dedupe, preserve order
+                name_val = p.get("name", "")
+                # Guard: Haiku can return nested dict as name (e.g. {"en":…,"pt":…}) — stringify it
+                mentioned_people.append(str(name_val) if name_val else str(p))
+    # dict.fromkeys requires hashable elements — stringify anything that slipped through
+    mentioned_people = list(dict.fromkeys(
+        x if isinstance(x, str) else str(x) for x in mentioned_people
+    ))
 
     # F6 fix: populate cover_urls so first-pass preview email shows real images.
     # make_cover_thumbnails_public scans direct children only — pass png_sub (not version_folder_id).
