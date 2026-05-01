@@ -131,6 +131,26 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   <span style="color:#F4C430">NEWS — Brazil + USA</span>
 </div>
 <div class="group-cards">
+<div class="tpl-card" id="card_who_is">
+  <div class="tpl-meta">
+    <div class="tpl-name">WHO IS THIS PERSON? — QUEM É ESSA PESSOA?</div>
+    <div class="tpl-format">FORMAT-020</div>
+    <div class="tpl-when">Profile carousel for any public figure: politician, religious leader, influencer. Cover: hook sentence → person sticker → air-quote → CTA. Slides: bio grid, quote, law they passed (with gov source label), PAC/funding money, network map, controversies. Works for Brazil and USA niches.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row"><button class="vbtn active" onclick="setVariant('who_is',0)">Single style</button></div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('who_is')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_who_is" src="who_is.html" scrolling="no" onload="initViewer('who_is')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('who_is')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_who_is">slide 1 / 6</div>
+  </div>
+</div>
+</div>
+<div class="group-cards">
 <div class="tpl-card" id="card_news_brazil">
   <div class="tpl-meta">
     <div class="tpl-name">QUEM DECIDIU ISSO?</div>
