@@ -318,7 +318,7 @@ canvas{max-height:180px}
 <script>
 // ── DATA (auto-replaced by ads_dashboard.py each refresh) ──
 const DATA = {
-  "updated": "2026-04-29",
+  "updated": "2026-05-01",
   "periods": {
     "15d": {
       "campaign": {
@@ -1550,7 +1550,7 @@ const DATA = {
   "config": {
     "campaign": {
       "name": "Oak Park Construction - Leads (Search/Calls)",
-      "status": "ENABLED",
+      "status": "PAUSED",
       "bid_strategy": "MAXIMIZE_CONVERSIONS",
       "daily_budget": 60.0,
       "target_cpa": 0.0
@@ -2855,6 +2855,15 @@ const DATA = {
       "calls": 2,
       "clicks": 35
     }
+  ],
+  "recent_daily": [
+    {"date": "2026-05-01", "spend": 0.0, "clicks": 0, "impressions": 0},
+    {"date": "2026-04-30", "spend": 0.0, "clicks": 0, "impressions": 0},
+    {"date": "2026-04-29", "spend": 121.01, "clicks": 12, "impressions": 316},
+    {"date": "2026-04-28", "spend": 120.0, "clicks": 13, "impressions": 278},
+    {"date": "2026-04-27", "spend": 119.97, "clicks": 18, "impressions": 332},
+    {"date": "2026-04-26", "spend": 82.82, "clicks": 8, "impressions": 200},
+    {"date": "2026-04-25", "spend": 1.83, "clicks": 1, "impressions": 22}
   ]
 };
 
@@ -3083,6 +3092,21 @@ function rWarnings(c,ag,kw){
   const top3=kw.filter(k=>k.conv===0).slice(0,3).map(k=>k.text+' ($'+k.spend.toFixed(0)+')').join(', ');
   const st=ag.find(a=>a.name.toUpperCase().includes('STUCCO'));
 
+  // ── ANOMALY ALERTS — 2-3 day window (fast-fire, no stabilization wait) ──
+  // These are OPERATIONAL failures, not strategic changes. 14-day rule does NOT apply here.
+  const campStatus=(DATA.config&&DATA.config.campaign&&DATA.config.campaign.status)||'UNKNOWN';
+  if(campStatus==='PAUSED'){
+    addW(el,'','&#x1F6A8;','<strong>CAMPAIGN IS PAUSED — ads stopped running.</strong> Spend = $0 while paused. Last change was via Bulk Actions (likely while adding negative keywords).','<strong>&#x26A0;&#xFE0F; Only YOU can fix this:</strong> ads.google.com &rarr; Campaigns &rarr; find "Oak Park Construction - Leads" &rarr; toggle the status switch to Enabled. Takes 30 seconds.','campaign_paused',null);
+  }
+  // Consecutive $0 days detection (uses recent_daily if available)
+  if(DATA.recent_daily&&DATA.recent_daily.length>=2){
+    const zero3=DATA.recent_daily.slice(0,3).filter(d=>d.spend===0&&(d.impressions||0)===0);
+    if(zero3.length>=2&&campStatus!=='PAUSED'){
+      // Only show if not already explained by PAUSED status
+      addW(el,'','&#x1F534;','<strong>'+zero3.length+' consecutive days with $0 spend and 0 impressions.</strong> Campaign status shows '+campStatus+' but ads are not showing.','Check: billing account, Quality Score on all keywords, and whether any ad groups have bids below auction floor','zero_days',null);
+    }
+  }
+
   if(cl<5) addW(el,'','&#x1F534;','<strong>Only '+cl+' calls in this period.</strong> Very low lead volume for $'+sp.toFixed(0)+' spent.','Check location targeting, ad scheduling, and bid strategy','low_calls',null);
   else if(cpl>300) addW(el,'','&#x1F534;','<strong>$'+sp.toFixed(0)+' spent &rarr; '+cl+' calls. Cost per call = $'+cpl.toFixed(0)+'.</strong> Target under $150.','Fix conversion tracking first','high_cpl',null);
   if(zs>200) addW(el,'','&#x1F534;','<strong>$'+zs.toFixed(0)+' spent on 0-conversion keywords.</strong> Top offenders: '+top3+'.','Click to see which to pause &amp; get a ready-to-paste script &#8595;','zero_kw',kw);
@@ -3107,7 +3131,7 @@ function rWarnings(c,ag,kw){
   }
 
   // ── Negative keyword action ready (Doc B: 8 groups, ~$200/mo recoverable) ──
-  addW(el,'g','&#x2705;','<strong>Neg keyword list ready — ~$200/mo recoverable.</strong> 8 groups identified from 30-day search-term audit: Painting, Home-buyers (Lennar/Pulte/DR Horton), Competitors (Ryans, KD Construction), Cost-shoppers (DIY/how-much), Out-of-area (Bradenton/Tampa), Small-job concrete, Metal/prefab, Developer project names.','Click to see the groups + how to add them &#8595;','neg_kw',null);
+  addW(el,'g','&#x2705;','<strong>28 negative keywords added (2026-04-30).</strong> Job-seeker terms, subcontractor, laborer, SEA, weather queries — all blocking. ~$200/mo recoverable. Monitor search terms in 30 days to confirm waste dropped.','Click to see what was added &#8595;','neg_kw',null);
 }
 
 function addW(el,cls,icon,text,action,key,kwData){

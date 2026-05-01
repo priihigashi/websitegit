@@ -278,6 +278,36 @@ def get_dayofweek_data(ga, customer_id):
     return [{"day": d, **dow[d]} for d in order if d in dow]
 
 
+def get_recent_daily_data(ga, customer_id):
+    """Pull last 7 days of daily spend/clicks/impressions. Used for 2-3 day anomaly detection."""
+    rows = []
+    today = datetime.date.today()
+    start = today - datetime.timedelta(days=6)
+    try:
+        r = ga.search(customer_id=customer_id, query=f"""
+            SELECT segments.date, metrics.cost_micros, metrics.clicks, metrics.impressions
+            FROM campaign
+            WHERE segments.date BETWEEN '{start}' AND '{today}'
+            AND campaign.id = {CAMPAIGN_ID}
+            ORDER BY segments.date DESC
+        """)
+        date_map = {}
+        for row in r:
+            date_map[row.segments.date] = {
+                "date":        row.segments.date,
+                "spend":       round(row.metrics.cost_micros / 1e6, 2),
+                "clicks":      row.metrics.clicks,
+                "impressions": row.metrics.impressions,
+            }
+        # Fill in any missing dates as $0 (campaign was off or no data)
+        for i in range(7):
+            d = str(today - datetime.timedelta(days=i))
+            rows.append(date_map.get(d, {"date": d, "spend": 0.0, "clicks": 0, "impressions": 0}))
+    except Exception as e:
+        print(f"  recent_daily failed: {e}")
+    return rows
+
+
 def get_all_data(customer_id, config):
     from google.ads.googleads.client import GoogleAdsClient
     client = GoogleAdsClient.load_from_dict(config)
@@ -301,7 +331,10 @@ def get_all_data(customer_id, config):
     print("  Pulling change log (last 30d)...")
     change_log = get_change_log(ga, customer_id)
 
-    return periods_data, calls, config_data, change_log, dow_data
+    print("  Pulling recent daily data (last 7d for anomaly detection)...")
+    recent_daily = get_recent_daily_data(ga, customer_id)
+
+    return periods_data, calls, config_data, change_log, dow_data, recent_daily
 
 
 def inject_data(html_path, data):
@@ -581,16 +614,17 @@ def main():
     }
 
     print("Pulling Google Ads data (all periods)...")
-    periods_data, calls, config_data, change_log, dow_data = get_all_data(customer_id, config)
+    periods_data, calls, config_data, change_log, dow_data, recent_daily = get_all_data(customer_id, config)
 
     today = datetime.date.today().isoformat()
     data  = {
-        "updated": today,
-        "periods": periods_data,
-        "calls":   calls,
-        "config":  config_data,
-        "changes": change_log,
-        "dow":     dow_data,
+        "updated":      today,
+        "periods":      periods_data,
+        "calls":        calls,
+        "config":       config_data,
+        "changes":      change_log,
+        "dow":          dow_data,
+        "recent_daily": recent_daily,
     }
 
     dashboard_dir = Path(__file__).parent.parent / "docs" / "dashboard"
