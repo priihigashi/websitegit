@@ -2,127 +2,185 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Who Is — Rabbi Yosef Mizrachi</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<title>Quem É — mizrachi</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-:root{--gold:#C9A84C;--cream:#F5EDD6;--dark:#0C0A07;--red:#8B1A1A;--muted:#7A7267;--W:1080px;--H:1350px;--P:90px}
-body{background:#111;display:flex;flex-direction:column;align-items:center;gap:32px;padding:32px;font-family:'Cormorant Garamond',serif}
-.slide{width:var(--W);height:var(--H);position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start;padding:var(--P)}
-.wi-bg{position:absolute;inset:0;background-size:cover;background-position:center top;opacity:.18;filter:grayscale(.2) contrast(1.15)}
-.wi-slide>*:not(.wi-bg):not(.wi-swipe){position:relative;z-index:2}
-
-/* ── Series tag ── */
-.wi-series-tag{font-family:'Space Mono',monospace;font-size:18px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin-bottom:30px}
-
-/* ── Slide headline ── */
-.wi-slide-hl{font-family:'Playfair Display',serif;font-size:72px;line-height:1.02;color:var(--cream);text-transform:uppercase;letter-spacing:.02em;margin-bottom:28px}
-
-/* ── Cover ── */
-.wi-cover{background:var(--dark);justify-content:space-between}
-.wi-cover-hook{font-family:'Playfair Display',serif;font-size:68px;line-height:1.05;color:var(--cream);font-style:italic;max-width:760px;margin-bottom:28px;position:relative;z-index:2}
-.wi-sticker{width:340px;height:380px;flex-shrink:0;border-radius:8px;background:rgba(201,168,76,.12);border:2px solid rgba(201,168,76,.3);display:flex;align-items:center;justify-content:center;align-self:center;position:relative;z-index:2}
-.wi-sticker-photo{background-size:cover;background-position:center top;border:none;border-radius:8px}
-.wi-initials{font-family:'Playfair Display',serif;font-size:96px;color:var(--gold)}
-.wi-cover-quote{position:relative;z-index:2;border-left:3px solid var(--gold);padding-left:24px;margin-top:28px;max-width:800px}
-.wi-cover-qmark{font-family:'Playfair Display',serif;font-size:72px;color:var(--gold);line-height:.6;display:block}
-.wi-cover-qtext{font-family:'Cormorant Garamond',serif;font-size:46px;font-style:italic;color:var(--cream);line-height:1.35}
-.wi-cover-cta{font-family:'Space Mono',monospace;font-size:26px;letter-spacing:.08em;color:var(--muted);margin-top:20px;position:relative;z-index:2}
-.wi-name-bar{font-family:'Space Mono',monospace;font-size:22px;letter-spacing:.18em;text-transform:uppercase;color:rgba(201,168,76,.65);position:absolute;bottom:90px;left:90px;z-index:2}
-.wi-swipe{font-family:'Space Mono',monospace;font-size:18px;color:rgba(245,237,214,.3);position:absolute;bottom:44px;right:90px;z-index:3;letter-spacing:.06em}
-
-/* ── Bio grid ── */
-.wi-slide-bio{background:#0C0A07}
-.wi-subject-bar{font-family:'Space Mono',monospace;font-size:18px;letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:22px}
-.wi-bio-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;flex:1}
-.wi-bio-cell{background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.18);border-radius:6px;padding:20px 22px}
-.wi-bio-label{font-family:'Space Mono',monospace;font-size:14px;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-bottom:8px}
-.wi-bio-value{font-family:'Cormorant Garamond',serif;font-size:32px;color:var(--cream);line-height:1.3}
-
-/* ── Quote slide ── */
-.wi-slide-quote{background:#0C0A07}
-.wi-pull-quote{margin:8px 0 20px;padding:28px 32px;border-left:4px solid var(--gold);background:rgba(201,168,76,.05);border-radius:0 6px 6px 0}
-.wi-qm{font-family:'Playfair Display',serif;font-size:80px;color:var(--gold);line-height:.5;display:inline-block;margin-right:8px}
-.wi-qtext{font-family:'Cormorant Garamond',serif;font-size:52px;font-style:italic;color:var(--cream);line-height:1.3}
-.wi-quote-attr{font-family:'Space Mono',monospace;font-size:20px;color:var(--gold);letter-spacing:.08em;margin-top:14px}
-.wi-quote-context{font-family:'Cormorant Garamond',serif;font-size:32px;color:var(--muted);line-height:1.45;margin-top:20px;font-style:italic}
-
-/* ── Law slide ── */
-.wi-slide-law{background:#0C0A07}
-.wi-law-name{font-family:'Playfair Display',serif;font-size:56px;color:var(--cream);line-height:1.1;margin-bottom:10px}
-.wi-law-year{font-family:'Space Mono',monospace;font-size:18px;color:var(--gold);letter-spacing:.1em;margin-bottom:22px}
-.wi-law-impact{font-family:'Cormorant Garamond',serif;font-size:36px;color:var(--cream);line-height:1.45;margin-bottom:28px;max-width:820px}
-.wi-screenshot-mock{background:#0F1118;border:1px solid rgba(201,168,76,.3);border-radius:8px;padding:22px 24px}
-.wi-screenshot-bar{height:10px;width:180px;background:rgba(201,168,76,.25);border-radius:4px;margin-bottom:14px}
-.wi-screenshot-label{font-family:'Space Mono',monospace;font-size:16px;color:var(--gold);letter-spacing:.1em;margin-bottom:6px}
-.wi-screenshot-url{font-family:'Space Mono',monospace;font-size:18px;color:rgba(245,237,214,.45)}
-
-/* ── Money slide ── */
-.wi-slide-money{background:#0C0A07}
-.wi-money-table{flex:1;display:flex;flex-direction:column;gap:0}
-.wi-money-row{display:flex;justify-content:space-between;align-items:baseline;padding:18px 0;border-bottom:1px solid rgba(201,168,76,.12)}
-.wi-money-source{font-family:'Cormorant Garamond',serif;font-size:34px;color:var(--cream)}
-.wi-money-amount{font-family:'Playfair Display',serif;font-size:44px;color:var(--gold)}
-.wi-money-note{font-family:'Space Mono',monospace;font-size:16px;color:var(--muted);letter-spacing:.06em;margin-top:20px;line-height:1.5}
-
-/* ── Network slide ── */
-.wi-slide-network{background:#0C0A07}
-.wi-network-layout{display:flex;gap:40px;align-items:flex-start;flex:1}
-.wi-network-center{display:flex;flex-direction:column;align-items:center;gap:12px;flex-shrink:0}
-.wi-center-dot{width:100px;height:100px;border-radius:50%;border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:36px;color:var(--gold);background:rgba(201,168,76,.08)}
-.wi-center-name{font-family:'Space Mono',monospace;font-size:14px;letter-spacing:.08em;color:var(--gold);text-align:center;max-width:120px;text-transform:uppercase}
-.wi-nodes-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1}
-.wi-node{display:flex;align-items:center;gap:14px;background:rgba(201,168,76,.04);border:1px solid rgba(201,168,76,.14);border-radius:6px;padding:14px 16px}
-.wi-node-dot{width:48px;height:48px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:14px;flex-shrink:0}
-.wi-node-name{font-family:'Cormorant Garamond',serif;font-size:26px;color:var(--cream);line-height:1.2}
-.wi-node-role{font-family:'Space Mono',monospace;font-size:12px;color:var(--muted);letter-spacing:.06em;margin-top:2px}
-
-/* ── Controversy slide ── */
-.wi-slide-controversy{background:#0C0A07}
-.wi-pills{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:28px}
-.wi-pill{font-family:'Space Mono',monospace;font-size:16px;letter-spacing:.06em;padding:8px 18px;border-radius:3px;border:1px solid rgba(139,26,26,.6);background:rgba(139,26,26,.1);color:#D4706A;text-transform:uppercase}
-.wi-controversy-body{font-family:'Cormorant Garamond',serif;font-size:38px;color:var(--cream);line-height:1.45;font-style:italic}
-
-/* ── Text slide ── */
-.wi-slide-text{background:#0C0A07}
-.wi-text-body{font-family:'Cormorant Garamond',serif;font-size:44px;color:var(--cream);line-height:1.45;max-width:860px}
-
-/* ── Sources slide ── */
-.wi-slide-sources{background:#0C0A07}
-.wi-src-head{font-family:'Playfair Display',serif;font-size:80px;color:var(--cream);text-transform:uppercase;line-height:1;margin-bottom:32px}
-.wi-src-list{flex:1;overflow:hidden}
-.wi-src-row{display:flex;gap:16px;padding:10px 0;border-bottom:1px solid rgba(245,237,214,.08);font-family:'Space Mono',monospace;font-size:18px;color:var(--muted)}
-.wi-src-num{color:var(--gold);width:32px;flex-shrink:0}
-.wi-handle{font-family:'Space Mono',monospace;font-size:18px;color:rgba(201,168,76,.55);position:absolute;bottom:44px;left:90px;z-index:3;letter-spacing:.06em}
+/* FORMAT-020 — Who Is This Person? — matches original Mizrachi editorial design */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--gold:#C9A84C;--gold-l:#E8CC7A;--cream:#F5EDD6;--dark:#0C0A07;--dark2:#141209;--dark3:#1C1810;--mid:#2A2318;--text:#E8E0CC;--muted:#8A7E68;--red:#8B1A1A;--blue:#1A3A5C}
+body{background:#050505;display:flex;flex-direction:column;align-items:center;font-family:'Cormorant Garamond',serif}
+.slide{width:1080px;height:1350px;position:relative;overflow:hidden;flex-shrink:0}
+.s1{background:var(--dark)}
+.s1 .noise{position:absolute;inset:0;background:radial-gradient(ellipse 100% 50% at 50% 0%,rgba(201,168,76,0.13) 0%,transparent 55%),repeating-linear-gradient(0deg,transparent 0px,transparent 79px,rgba(201,168,76,0.025) 79px,rgba(201,168,76,0.025) 80px)}
+.s1 .corners span{position:absolute;width:100px;height:100px;border-color:rgba(201,168,76,0.45);border-style:solid;display:block}
+.s1 .corners span:nth-child(1){top:44px;left:44px;border-width:2px 0 0 2px}
+.s1 .corners span:nth-child(2){top:44px;right:44px;border-width:2px 2px 0 0}
+.s1 .corners span:nth-child(3){bottom:44px;left:44px;border-width:0 0 2px 2px}
+.s1 .corners span:nth-child(4){bottom:44px;right:44px;border-width:0 2px 2px 0}
+.s1 .tag{position:absolute;top:84px;left:0;right:0;text-align:center;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.38em;color:var(--gold);text-transform:uppercase;opacity:0.75}
+.s1 .vframe{position:absolute;top:148px;left:80px;width:920px;height:750px;background:#080604;border:1.5px solid rgba(201,168,76,0.28);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;overflow:hidden}
+.s1 .vframe::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 50% 35% at 50% 25%,rgba(201,168,76,0.07) 0%,transparent 65%),linear-gradient(180deg,transparent 40%,rgba(0,0,0,0.7) 100%);pointer-events:none}
+.s1 .play{width:88px;height:88px;border-radius:50%;border:1.5px solid var(--gold);background:rgba(12,10,7,0.72);display:flex;align-items:center;justify-content:center;position:relative;z-index:2}
+.s1 .play::after{content:'\25B6';color:var(--gold);font-size:26px;margin-left:5px}
+.s1 .vlabel{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.32em;color:var(--gold-l);text-transform:uppercase;position:relative;z-index:2}
+.s1 .vurl{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:0.12em;position:relative;z-index:2}
+.s1 .bottom{position:absolute;bottom:72px;left:80px}
+.s1 .gline{width:52px;height:1px;background:var(--gold);margin-bottom:24px}
+.s1 .title{font-family:'Playfair Display',serif;font-size:68px;font-weight:900;color:var(--cream);line-height:1.0}
+.s1 .title em{color:var(--gold);font-style:italic;display:block}
+.s1 .sub{margin-top:14px;font-family:'Cormorant Garamond',serif;font-size:23px;font-weight:300;font-style:italic;color:var(--muted)}
+.s2{background:var(--dark2)}
+.s2 .lbar{position:absolute;top:0;left:0;width:7px;height:100%;background:linear-gradient(180deg,var(--gold) 0%,var(--red) 50%,var(--gold) 100%)}
+.s2 .head{position:absolute;top:80px;left:80px}
+.s2 .htag{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.42em;color:var(--gold);text-transform:uppercase;margin-bottom:18px;display:block}
+.s2 .htitle{font-family:'Playfair Display',serif;font-size:76px;font-weight:900;color:var(--cream);line-height:0.92}
+.s2 .htitle em{color:var(--gold);font-style:italic;font-size:82px;display:block}
+.s2 .divrow{position:absolute;top:350px;left:80px;display:flex;align-items:center;gap:14px;width:480px}
+.s2 .divrow span{flex:1;height:1px;background:rgba(201,168,76,0.25);display:block}
+.s2 .divrow i{width:7px;height:7px;background:var(--gold);transform:rotate(45deg);flex-shrink:0;display:block}
+.s2 .grid{position:absolute;top:400px;left:80px;width:920px;display:grid;grid-template-columns:1fr 1fr;gap:28px 56px}
+.s2 .glabel{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.36em;color:var(--gold);text-transform:uppercase;opacity:0.8;margin-bottom:7px;display:block}
+.s2 .gval{font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--text);line-height:1.45}
+.s2 .polem{position:absolute;bottom:72px;left:80px;right:80px}
+.s2 .ptag{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.4em;color:var(--red);text-transform:uppercase;margin-bottom:18px;display:flex;align-items:center;gap:10px}
+.s2 .ptag::before{content:'\26A0';font-size:13px}
+.s2 .pills{display:flex;flex-wrap:wrap;gap:10px}
+.s2 .pill{padding:9px 18px;border:1px solid rgba(139,26,26,0.45);font-family:'Cormorant Garamond',serif;font-size:17px;font-style:italic;color:#C87070;background:rgba(139,26,26,0.07);line-height:1}
+.src-grid{position:absolute;top:400px;left:80px;width:920px;display:flex;flex-direction:column;gap:0}
+.src-item{display:flex;gap:20px;padding:14px 0;border-bottom:1px solid rgba(201,168,76,0.12);align-items:start}
+.src-num{font-family:'Space Mono',monospace;font-size:14px;color:var(--gold);font-weight:700;flex-shrink:0;width:28px}
+.src-text{font-family:'Cormorant Garamond',serif;font-size:19px;color:var(--text);line-height:1.45}
+.vbot-src{position:absolute;bottom:72px;left:80px}
+.s3{background:var(--dark3)}
+.s3 .head3{position:absolute;top:56px;left:80px}
+.s3 .h3tag{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.4em;color:var(--gold);text-transform:uppercase;margin-bottom:12px;display:block}
+.s3 .h3title{font-family:'Playfair Display',serif;font-size:54px;font-weight:900;color:var(--cream);line-height:1.0}
+.s3 .h3title em{color:var(--gold);font-style:italic}
+.s3 .collage{position:absolute;top:220px;left:60px;width:960px;height:1000px}
+.s3 .hub{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:200px;border-radius:50%;border:2.5px solid var(--gold);background:var(--mid);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;box-shadow:0 0 0 10px rgba(201,168,76,0.08),0 0 50px rgba(201,168,76,0.12)}
+.s3 .hub-init{font-family:'Playfair Display',serif;font-size:58px;font-weight:900;color:var(--gold);line-height:1}
+.s3 .hub-name{font-family:'Cormorant Garamond',serif;font-size:12px;color:var(--muted);font-style:italic;text-align:center;padding:0 14px;margin-top:2px}
+.s3 .node{position:absolute;display:flex;flex-direction:column;align-items:center;width:140px;margin-left:-70px;margin-top:-70px}
+.s3 .avatar{width:110px;height:110px;border-radius:50%;border:2px solid rgba(201,168,76,0.35);background:var(--mid);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:var(--gold)}
+.s3 .nname{font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:600;color:var(--cream);text-align:center;line-height:1.2;margin-top:8px}
+.s3 .ntitle{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:0.18em;color:var(--muted);text-align:center;margin-top:3px;text-transform:uppercase}
+.s3 .n1{left:480px;top:70px}.s3 .n2{left:728px;top:148px}.s3 .n3{left:830px;top:430px}
+.s3 .n4{left:728px;top:718px}.s3 .n5{left:480px;top:810px}.s3 .n6{left:232px;top:718px}
+.s3 .n7{left:130px;top:430px}.s3 .n8{left:232px;top:148px}
+.s3 .arrows{position:absolute;inset:0;width:960px;height:1000px;pointer-events:none;z-index:5}
+.vs{position:relative;background:var(--dark)}
+.vs .topbar{position:absolute;top:0;left:0;right:0;height:6px}
+.vs .bign{position:absolute;top:20px;right:60px;font-family:'Playfair Display',serif;font-size:220px;font-weight:900;color:rgba(201,168,76,0.05);line-height:1}
+.vs .vtag{position:absolute;top:64px;left:80px;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.35em;color:var(--muted);text-transform:uppercase}
+.vs .vtag b{color:var(--gold);font-weight:400}
+.vs .vbox{position:absolute;top:140px;left:80px;width:920px;height:760px;border:1.5px solid rgba(201,168,76,0.22);background:#080604;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;overflow:hidden}
+.vs .vbox::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 50%,rgba(0,0,0,0.8) 100%)}
+.vs .vplay{width:76px;height:76px;border-radius:50%;border:1.5px solid var(--gold);background:rgba(12,10,7,0.72);display:flex;align-items:center;justify-content:center;position:relative;z-index:2}
+.vs .vplay::after{content:'\25B6';color:var(--gold);font-size:22px;margin-left:4px}
+.vs .vlbl{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.3em;color:var(--gold-l);text-transform:uppercase;position:relative;z-index:2}
+.vs .vlink{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);position:relative;z-index:2}
+.vs .vbot{position:absolute;bottom:72px;left:80px;width:860px}
+.vs .vtopic{display:inline-block;padding:6px 16px;border:1px solid rgba(201,168,76,0.38);font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.28em;color:var(--gold);text-transform:uppercase;margin-bottom:14px}
+.vs .vtitle{font-family:'Playfair Display',serif;font-size:46px;font-weight:700;color:var(--cream);line-height:1.1;margin-bottom:10px}
+.vs .vtitle em{color:var(--gold);font-style:italic}
+.vs .vdesc{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:300;font-style:italic;color:var(--muted);line-height:1.45}
+.vs .vcorner{position:absolute;bottom:72px;right:80px;width:52px;height:52px;border-right:1.5px solid rgba(201,168,76,0.28);border-bottom:1.5px solid rgba(201,168,76,0.28)}
 </style>
 </head>
 <body>
-
-<!-- COVER -->
-<div class="slide wi-cover">
-  <div class="wi-bg"></div>
-  <div class="wi-series-tag" style="position:relative;z-index:2">Quem é essa pessoa?</div>
-  <div class="wi-cover-hook">O Rabino Mais Controverso da Internet</div>
-  <div class="wi-sticker wi-sticker-initials"><div class="wi-initials">RY</div></div>
-  <div class="wi-cover-quote">
-    <span class="wi-cover-qmark">&#10077;</span>
-    <span class="wi-cover-qtext">Não me importo com sentimentos. Me importo com a verdade.</span>
-    <span class="wi-cover-qmark">&#10078;</span>
+<div class="slide s1">
+  <div class="noise"></div>
+  <div class="corners"><span></span><span></span><span></span><span></span></div>
+  <div class="tag">Rabbi Yosef Mizrachi · Compilation Series</div>
+  <div class="vframe"><div class="play"></div><div class="vlabel">ASSISTIR REEL COMPLETO</div><div class="vurl">instagram.com/reel/DTuMDLCj3Oa</div></div>
+  <div class="bottom">
+    <div class="gline"></div>
+    <div class="title">Rabbi Yosef<em>Mizrachi</em></div>
+    <div class="sub">O Rabino Mais Controverso da Internet</div>
   </div>
-  <div class="wi-cover-cta">Você não aprendeu isso na escola.</div>
-  <div class="wi-name-bar">Rabbi Yosef Mizrachi</div>
-  <div class="wi-swipe">SWIPE &#8594;</div>
+</div>
+<div class="slide s2">
+  <div class="lbar"></div>
+  <div class="head">
+    <span class="htag">Biografia · Biography</span>
+    <div class="htitle">Quem é<em>Mizrachi?</em></div>
+  </div>
+  <div class="divrow"><span></span><i></i><span></span></div>
+  <div class="grid"><div class="gitem"><span class="glabel">Nascimento · Born</span><span class="gval">1968 · Israel
+Herança Marroquina e Persa</span></div><div class="gitem"><span class="glabel">Background</span><span class="gval">Veterano do IDF · Ex-setor financeiro em Nova York</span></div><div class="gitem"><span class="glabel">Virada · Turning Point</span><span class="gval">1997 — Começou a estudar Torá na Ohr Yisrael Yeshiva, Monsey NY</span></div><div class="gitem"><span class="glabel">Missão · Mission</span><span class="gval">Kiruv Ortodoxo — traz judeus seculares de volta à fé via redes sociais</span></div><div class="gitem"><span class="glabel">Plataforma</span><span class="gval">DivineInformation.com · 1M+ seguidores nas plataformas</span></div><div class="gitem"><span class="glabel">Estilo · Style</span><span class="gval">Haredi, direto, viral, confrontacional — ensino sem filtro</span></div></div>
+  <div class="polem">
+    <div class="ptag">Tópicos Polêmicos</div>
+    <div class="pills"><div class="pill">Minimização do Holocausto (2016)</div><div class="pill">Condenado por 16 rabinos ortodoxos dos EUA</div><div class="pill">Proibição de tour em Londres (2014)</div><div class="pill">Críticas do Simon Wiesenthal Center</div><div class="pill">Alegações de &quot;seguimento cult-like&quot;</div><div class="pill">Torá vs Ciência — debates virais</div></div>
+  </div>
+</div>
+<div class="slide s3">
+  <div class="head3">
+    <span class="h3tag">Rede &amp; Conexões</span>
+    <div class="h3title">Pessoas Poderosas <em>&amp; Famosas</em></div>
+  </div>
+  <div class="collage">
+    <svg class="arrows" viewBox="0 0 960 1000" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="arr" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="rgba(201,168,76,0.55)"/></marker></defs>
+      <line x1="480" y1="400" x2="480" y2="220" stroke="rgba(201,168,76,0.38)" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#arr)"/><line x1="530" y1="420" x2="688" y2="298" stroke="rgba(201,168,76,0.38)" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#arr)"/><line x1="580" y1="500" x2="760" y2="500" stroke="rgba(201,168,76,0.38)" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#arr)"/><line x1="530" y1="580" x2="688" y2="708" stroke="rgba(201,168,76,0.38)" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#arr)"/><line x1="480" y1="600" x2="480" y2="760" stroke="rgba(201,168,76,0.38)" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#arr)"/><line x1="430" y1="580" x2="272" y2="708" stroke="rgba(201,168,76,0.38)" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#arr)"/><line x1="380" y1="500" x2="200" y2="500" stroke="rgba(201,168,76,0.38)" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#arr)"/><line x1="430" y1="420" x2="272" y2="298" stroke="rgba(201,168,76,0.38)" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#arr)"/>
+    </svg>
+    <div class="hub"><div class="hub-init">YM</div><div class="hub-name">Rabbi Yosef Mizrachi</div></div>
+    <div class="node n1"><div class="avatar">SB</div><div class="nname">Rabbi Shmuley Boteach</div><div class="ntitle">Celebrity Rabbi</div></div><div class="node n2"><div class="avatar">BN</div><div class="nname">Benjamin Netanyahu</div><div class="ntitle">PM · Israel</div></div><div class="node n3"><div class="avatar">OR</div><div class="nname">Orthodox Rabbinate EUA</div><div class="ntitle">16 Rabinos Críticos</div></div><div class="node n4"><div class="avatar">SW</div><div class="nname">Simon Wiesenthal Center</div><div class="ntitle">Org. Judaica</div></div><div class="node n5"><div class="avatar">TA</div><div class="nname">TorahAnytime Network</div><div class="ntitle">Plataforma de Mídia</div></div><div class="node n6"><div class="avatar">ID</div><div class="nname">Comunidade IDF</div><div class="ntitle">Alumni Militares Israel</div></div><div class="node n7"><div class="avatar">OY</div><div class="nname">Ohr Yisrael Yeshiva</div><div class="ntitle">Monsey · Nova York</div></div><div class="node n8"><div class="avatar">JP</div><div class="nname">Jewish Press &amp; Haaretz</div><div class="ntitle">Cobertura da Mídia</div></div>
+  </div>
 </div>
 
-<div class="slide wi-slide wi-slide-bio"><div class="wi-series-tag">Quem é essa pessoa?</div><div class="wi-slide-hl">QUEM É</div><div class="wi-subject-bar">Rabbi Yosef Mizrachi</div><div class="wi-bio-grid"><div class="wi-bio-cell"><div class="wi-bio-label">NASCIMENTO</div><div class="wi-bio-value">1968, Israel</div></div><div class="wi-bio-cell"><div class="wi-bio-label">BACKGROUND</div><div class="wi-bio-value">Veterano IDF · Ex-financeiro NY</div></div><div class="wi-bio-cell"><div class="wi-bio-label">VIRADA</div><div class="wi-bio-value">1997 — Estudou Torá em Monsey NY</div></div><div class="wi-bio-cell"><div class="wi-bio-label">PLATAFORMA</div><div class="wi-bio-value">1M+ seguidores nas redes sociais</div></div><div class="wi-bio-cell"><div class="wi-bio-label">MISSÃO</div><div class="wi-bio-value">Kiruv — trazer judeus à fé ortodoxa</div></div><div class="wi-bio-cell"><div class="wi-bio-label">ESTILO</div><div class="wi-bio-value">Direto, viral, confrontacional</div></div></div><div class="wi-swipe">SWIPE &#8594;</div></div><div class="slide wi-slide wi-slide-quote"><div class="wi-series-tag">Quem é essa pessoa?</div><div class="wi-slide-hl">O QUE ELE DIZ</div><div class="wi-pull-quote"><span class="wi-qm">&#10077;</span><span class="wi-qtext">If you don't observe the Torah, you're not really Jewish.</span><span class="wi-qm">&#10078;</span></div><div class="wi-quote-attr">&#8212; Yosef Mizrachi, 2019 — lecture viral</div><div class="wi-quote-context">Declaração condenada por 16 rabinos ortodoxos americanos.</div><div class="wi-swipe">SWIPE &#8594;</div></div><div class="slide wi-slide wi-slide-controversy"><div class="wi-series-tag">Quem é essa pessoa?</div><div class="wi-slide-hl">AS CONTROVÉRSIAS</div><div class="wi-pills"><span class="wi-pill">Minimização do Holocausto (2016)</span><span class="wi-pill">Proibido de entrar em Londres (2014)</span><span class="wi-pill">Condenado por 16 rabinos</span><span class="wi-pill">Torá vs Ciência — debates virais</span></div><div class="wi-controversy-body">Em 2016, afirmou que apenas 1 milhão de judeus morreram no Holocausto. Foi condenado por organizações judaicas nos EUA, Europa e Israel.</div><div class="wi-swipe">SWIPE &#8594;</div></div><div class="slide wi-slide wi-slide-network"><div class="wi-series-tag">Quem é essa pessoa?</div><div class="wi-slide-hl">REDE DE CONEXÕES</div><div class="wi-network-layout"><div class="wi-network-center"><div class="wi-center-dot">RY</div><div class="wi-center-name">Rabbi Yosef Mizrachi</div></div><div class="wi-nodes-grid"><div class="wi-node"><div class="wi-node-dot" style="border-color:#C9A84C;color:#C9A84C;">BN</div><div class="wi-node-name">Benjamin Netanyahu</div><div class="wi-node-role">PM Israel</div></div><div class="wi-node"><div class="wi-node-dot" style="border-color:#C9A84C;color:#C9A84C;">SB</div><div class="wi-node-name">Rabbi Shmuley Boteach</div><div class="wi-node-role">Celebrity Rabbi</div></div><div class="wi-node"><div class="wi-node-dot" style="border-color:#4A7AAA;color:#4A7AAA;">TA</div><div class="wi-node-name">Torah Anytime</div><div class="wi-node-role">Plataforma de mídia</div></div><div class="wi-node"><div class="wi-node-dot" style="border-color:#8B1A1A;color:#8B1A1A;">SW</div><div class="wi-node-name">Simon Wiesenthal Center</div><div class="wi-node-role">Org judaica EUA</div></div></div></div><div class="wi-swipe">SWIPE &#8594;</div></div>
+<div class="slide vs">
+  <div class="topbar" style="background:linear-gradient(90deg,#C9A84C,#8B1A1A)"></div>
+  <div class="bign">04</div>
+  <div class="vtag">Reel <b>01/03</b></div>
+  <div class="vbox"><div class="vplay"></div><div class="vlbl">Assistir Reel</div><div class="vlink">instagram.com/reel/DR-kgccEhwr</div></div>
+  <div class="vbot">
+    <div class="vtopic">Torah · Kiruv</div>
+    <div class="vtitle">Ensinamento Rabínico<br><em>Vai Viral</em></div>
+    <div class="vdesc">Uma de suas lições mais compartilhadas — perspectiva ortodoxa direta e sem filtro</div>
+  </div>
+  <div class="vcorner"></div>
+</div>
 
-<!-- SOURCES -->
-<div class="slide wi-slide wi-slide-sources">
-  <div class="wi-series-tag">Quem é essa pessoa?</div>
-  <div class="wi-src-head">FONTES.</div>
-  <div class="wi-src-list"><div class="wi-src-row"><span class="wi-src-num">01</span><span>DivinInformation.com — perfil oficial</span></div><div class="wi-src-row"><span class="wi-src-num">02</span><span>Simon Wiesenthal Center — comunicado 2014</span></div><div class="wi-src-row"><span class="wi-src-num">03</span><span>Rabbinical Council of America — condenação 2016</span></div></div>
-  <div class="wi-handle">@HANDLE_PLACEHOLDER</div>
-  <div class="wi-swipe">SALVA.</div>
+<div class="slide vs">
+  <div class="topbar" style="background:linear-gradient(90deg,#1A3A5C,#C9A84C)"></div>
+  <div class="bign">05</div>
+  <div class="vtag">Reel <b>02/03</b></div>
+  <div class="vbox"><div class="vplay"></div><div class="vlbl">Assistir Reel</div><div class="vlink">instagram.com/reel/DWGPiNLhGMj</div></div>
+  <div class="vbot">
+    <div class="vtopic">Controvérsia · Debate</div>
+    <div class="vtitle">Quando o Rabino<br><em>Fala Sem Filtro</em></div>
+    <div class="vdesc">Mizrachi no seu ponto mais polarizador — as declarações que dividiram o mundo judaico</div>
+  </div>
+  <div class="vcorner"></div>
+</div>
+
+<div class="slide vs">
+  <div class="topbar" style="background:linear-gradient(90deg,#C9A84C,#2A5A1A)"></div>
+  <div class="bign">06</div>
+  <div class="vtag">Reel <b>03/03</b></div>
+  <div class="vbox"><div class="vplay"></div><div class="vlbl">Assistir Reel</div><div class="vlink">instagram.com/reel/DVo4bkSDXt1</div></div>
+  <div class="vbot">
+    <div class="vtopic">Identidade Judaica</div>
+    <div class="vtitle">Torá vs<br><em>Mundo Moderno</em></div>
+    <div class="vdesc">Sua visão sobre judaísmo secular, assimilação e o que significa ser verdadeiramente judeu</div>
+  </div>
+  <div class="vcorner"></div>
+</div>
+
+<div class="slide s2">
+  <div class="lbar"></div>
+  <div class="head">
+    <span class="htag">Fontes · Sources</span>
+    <div class="htitle">A Fonte<em>É Esta.</em></div>
+  </div>
+  <div class="src-grid"><div class="src-item"><span class="src-num">01</span><span class="src-text">DivineInformation.com — Canal oficial de Rabbi Mizrachi</span></div>
+<div class="src-item"><span class="src-num">02</span><span class="src-text">Simon Wiesenthal Center — Statement on Mizrachi, 2016</span></div>
+<div class="src-item"><span class="src-num">03</span><span class="src-text">Jerusalem Post — Rabbi barred from UK tour, 2014</span></div>
+<div class="src-item"><span class="src-num">04</span><span class="src-text">Haaretz — Orthodox rabbis condemn Mizrachi, 2016</span></div>
+</div>
+  <div class="vbot-src">
+    <div class="pill" style="border-color:rgba(201,168,76,0.4);color:#C9A84C;">Salva · Save this</div>
+  </div>
 </div>
 
 </body>

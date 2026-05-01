@@ -3674,338 +3674,317 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}}
 
 
 def _build_who_is_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", media_paths=None):
-    """FORMAT-020 — Who Is This Person? (Quem é essa pessoa?)
-    Works for any public figure: politicians, religious leaders, influencers.
-    Cover: hook → sticker → air-quote → CTA.
-    Middle slides: bio grid, quote, law, money/PAC, network, controversy, text.
+    """FORMAT-020 — Who Is This Person? / Quem é essa pessoa?
+    Matches original Mizrachi luxury editorial design:
+    Playfair Display + Cormorant Garamond + Space Mono, warm dark brown + gold (#C9A84C) palette.
+    Cover: video/photo frame top + serif name bottom.
+    Bio: fact grid (2-col) + controversy pills.
+    Network: hub-spoke SVG diagram (up to 8 nodes).
+    Content slides: clip/photo box + topic tag + title + desc.
     Last slide: sources."""
 
     def esc(s):
         return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
-    subject_name  = esc(content.get("subject_name", "NOME AQUI"))
-    subject_title = esc(content.get("subject_title", ""))
-    series_label  = esc(content.get("series_label", "Quem é essa pessoa?"))
-    hook          = esc(content.get("hook", ""))
-    quote         = esc(content.get("quote", ""))
-    cta           = esc(content.get("cta", "Você não aprendeu isso na escola."))
-    sources       = content.get("sources", [])
-    slides_data   = content.get("slides", [])
+    subject_name     = content.get("subject_name", "")
+    subject_title    = esc(content.get("subject_title", ""))
+    series_label     = esc(content.get("series_label", "Quem É Essa Pessoa?"))
+    hub_initials     = esc(content.get("hub_initials", "??"))
+    bio_tag          = esc(content.get("bio_tag", "Biografia · Biography"))
+    bio_heading      = esc(content.get("bio_heading", "Quem é"))
+    _name_parts = subject_name.split()
+    _default_em = (esc(_name_parts[-1]) + "?") if _name_parts else "?"
+    bio_heading_em   = esc(content.get("bio_heading_em", _default_em))
+    bio_facts        = content.get("bio_facts", [])
+    controversy_tag  = esc(content.get("controversy_tag", "Tópicos Polêmicos"))
+    controversies    = content.get("controversies", [])
+    network_tag      = esc(content.get("network_tag", "Rede & Conexões"))
+    network_title    = esc(content.get("network_title", "Pessoas Poderosas"))
+    network_title_em = esc(content.get("network_title_em", "& Famosas"))
+    network_nodes    = content.get("network", [])
+    sources          = content.get("sources", [])
+    cover_url        = esc(content.get("cover_url", ""))
+    subject_name_esc = esc(subject_name)
 
-    cover_img = (media_paths or {}).get("cover", "")
-    cover_bg = (
-        f'<div class="wi-bg" style="background-image:url(\'{cover_img}\');"></div>'
-        if cover_img else '<div class="wi-bg"></div>'
-    )
+    cover_img  = (media_paths or {}).get("cover", "")
+    clips      = (media_paths or {}).get("clips", {})
 
-    # Cover sticker — photo or initials
     if cover_img:
-        sticker_el = (
-            f'<div class="wi-sticker wi-sticker-photo" '
-            f'style="background-image:url(\'{cover_img}\');"></div>'
+        vframe_inner = (
+            f'<div style="position:absolute;inset:0;background-image:url(\'{cover_img}\');'
+            f'background-size:cover;background-position:center 15%;'
+            f'filter:grayscale(.1) contrast(1.05);"></div>'
+            f'<div style="position:absolute;inset:0;background:linear-gradient(180deg,'
+            f'transparent 50%,rgba(0,0,0,0.65) 100%);pointer-events:none;"></div>'
         )
     else:
-        initials = "".join(w[0].upper() for w in subject_name.split() if w)[:2] or "??"
-        sticker_el = (
-            f'<div class="wi-sticker wi-sticker-initials">'
-            f'<div class="wi-initials">{initials}</div>'
+        vframe_inner = (
+            f'<div class="play"></div>'
+            f'<div class="vlabel">ASSISTIR REEL COMPLETO</div>'
+            f'<div class="vurl">{cover_url}</div>'
+        )
+
+    name_parts = subject_name.split()
+    if len(name_parts) >= 2:
+        first = esc(" ".join(name_parts[:-1]))
+        last  = esc(name_parts[-1])
+        name_html = f'{first}<em>{last}</em>'
+    else:
+        name_html = f'<em>{subject_name_esc}</em>'
+
+    bio_grid_html = ""
+    for fact in bio_facts[:6]:
+        lpt  = esc(fact.get("label_pt", ""))
+        len_ = esc(fact.get("label_en", ""))
+        val  = esc(fact.get("value", ""))
+        lbl  = f"{lpt} · {len_}" if len_ else lpt
+        bio_grid_html += (
+            f'<div class="gitem">'
+            f'<span class="glabel">{lbl}</span>'
+            f'<span class="gval">{val}</span>'
             f'</div>'
         )
 
-    # ── Slide builders ────────────────────────────────────────────────────────
-
-    def _slide_bio(s):
-        cells_html = ""
-        for c in s.get("cells", [])[:6]:
-            cells_html += (
-                f'<div class="wi-bio-cell">'
-                f'<div class="wi-bio-label">{esc(c.get("label",""))}</div>'
-                f'<div class="wi-bio-value">{esc(c.get("value",""))}</div>'
-                f'</div>'
-            )
-        return (
-            f'<div class="slide wi-slide wi-slide-bio">'
-            f'<div class="wi-series-tag">{series_label}</div>'
-            f'<div class="wi-slide-hl">{esc(s.get("heading","QUEM É"))}</div>'
-            f'<div class="wi-subject-bar">{subject_name}</div>'
-            f'<div class="wi-bio-grid">{cells_html}</div>'
-            f'<div class="wi-swipe">SWIPE &#8594;</div>'
-            f'</div>'
-        )
-
-    def _slide_quote(s):
-        img = (media_paths or {}).get("slides", {}).get(s.get("_slide_i", 99), "")
-        bg_el = f'<div class="wi-bg" style="background-image:url(\'{img}\');"></div>' if img else ""
-        return (
-            f'<div class="slide wi-slide wi-slide-quote">'
-            f'{bg_el}'
-            f'<div class="wi-series-tag">{series_label}</div>'
-            f'<div class="wi-slide-hl">{esc(s.get("heading","O QUE ELE DIZ"))}</div>'
-            f'<div class="wi-pull-quote">'
-            f'<span class="wi-qm">&#10077;</span>'
-            f'<span class="wi-qtext">{esc(s.get("quote",""))}</span>'
-            f'<span class="wi-qm">&#10078;</span>'
-            f'</div>'
-            f'<div class="wi-quote-attr">&#8212; {esc(s.get("attribution",""))}</div>'
-            f'<div class="wi-quote-context">{esc(s.get("context",""))}</div>'
-            f'<div class="wi-swipe">SWIPE &#8594;</div>'
-            f'</div>'
-        )
-
-    def _slide_law(s):
-        return (
-            f'<div class="slide wi-slide wi-slide-law">'
-            f'<div class="wi-series-tag">{series_label}</div>'
-            f'<div class="wi-slide-hl">{esc(s.get("heading","A LEI"))}</div>'
-            f'<div class="wi-law-name">{esc(s.get("law_name",""))}</div>'
-            f'<div class="wi-law-year">{esc(s.get("law_year",""))}</div>'
-            f'<div class="wi-law-impact">{esc(s.get("impact",""))}</div>'
-            f'<div class="wi-screenshot-mock">'
-            f'<div class="wi-screenshot-bar"></div>'
-            f'<div class="wi-screenshot-label">{esc(s.get("screenshot_label","Fonte: site oficial"))}</div>'
-            f'<div class="wi-screenshot-url">{esc(s.get("screenshot_url",""))}</div>'
-            f'</div>'
-            f'<div class="wi-swipe">SWIPE &#8594;</div>'
-            f'</div>'
-        )
-
-    def _slide_money(s):
-        items_html = ""
-        for it in s.get("items", []):
-            items_html += (
-                f'<div class="wi-money-row">'
-                f'<div class="wi-money-source">{esc(it.get("source",""))}</div>'
-                f'<div class="wi-money-amount">{esc(it.get("amount",""))}</div>'
-                f'</div>'
-            )
-        return (
-            f'<div class="slide wi-slide wi-slide-money">'
-            f'<div class="wi-series-tag">{series_label}</div>'
-            f'<div class="wi-slide-hl">{esc(s.get("heading","DE ONDE VEM O DINHEIRO"))}</div>'
-            f'<div class="wi-money-table">{items_html}</div>'
-            f'<div class="wi-money-note">{esc(s.get("note",""))}</div>'
-            f'<div class="wi-swipe">SWIPE &#8594;</div>'
-            f'</div>'
-        )
-
-    def _slide_network(s):
-        nodes_html = ""
-        for nd in s.get("nodes", [])[:8]:
-            col = nd.get("color", "#C9A84C")
-            nodes_html += (
-                f'<div class="wi-node">'
-                f'<div class="wi-node-dot" style="border-color:{col};color:{col};">'
-                f'{esc(nd.get("initials","??"))}'
-                f'</div>'
-                f'<div class="wi-node-name">{esc(nd.get("name",""))}</div>'
-                f'<div class="wi-node-role">{esc(nd.get("role",""))}</div>'
-                f'</div>'
-            )
-        initials_center = "".join(w[0].upper() for w in subject_name.split() if w)[:2] or "??"
-        return (
-            f'<div class="slide wi-slide wi-slide-network">'
-            f'<div class="wi-series-tag">{series_label}</div>'
-            f'<div class="wi-slide-hl">{esc(s.get("heading","REDE DE CONEXÕES"))}</div>'
-            f'<div class="wi-network-layout">'
-            f'<div class="wi-network-center">'
-            f'<div class="wi-center-dot">{initials_center}</div>'
-            f'<div class="wi-center-name">{subject_name}</div>'
-            f'</div>'
-            f'<div class="wi-nodes-grid">{nodes_html}</div>'
-            f'</div>'
-            f'<div class="wi-swipe">SWIPE &#8594;</div>'
-            f'</div>'
-        )
-
-    def _slide_controversy(s):
-        pills_html = "".join(
-            f'<span class="wi-pill">{esc(p)}</span>' for p in s.get("pills", [])
-        )
-        return (
-            f'<div class="slide wi-slide wi-slide-controversy">'
-            f'<div class="wi-series-tag">{series_label}</div>'
-            f'<div class="wi-slide-hl">{esc(s.get("heading","AS CONTROVÉRSIAS"))}</div>'
-            f'<div class="wi-pills">{pills_html}</div>'
-            f'<div class="wi-controversy-body">{esc(s.get("context",""))}</div>'
-            f'<div class="wi-swipe">SWIPE &#8594;</div>'
-            f'</div>'
-        )
-
-    def _slide_text(s):
-        img = (media_paths or {}).get("slides", {}).get(s.get("_slide_i", 99), "")
-        bg_el = f'<div class="wi-bg" style="background-image:url(\'{img}\');"></div>' if img else ""
-        return (
-            f'<div class="slide wi-slide wi-slide-text">'
-            f'{bg_el}'
-            f'<div class="wi-series-tag">{series_label}</div>'
-            f'<div class="wi-slide-hl">{esc(s.get("heading",""))}</div>'
-            f'<div class="wi-text-body">{esc(s.get("body",""))}</div>'
-            f'<div class="wi-swipe">SWIPE &#8594;</div>'
-            f'</div>'
-        )
-
-    # ── Build slides HTML ─────────────────────────────────────────────────────
-    SLIDE_BUILDERS = {
-        "bio": _slide_bio,
-        "quote": _slide_quote,
-        "law": _slide_law,
-        "money": _slide_money,
-        "network": _slide_network,
-        "controversy": _slide_controversy,
-        "text": _slide_text,
-    }
-
-    middle_slides_html = ""
-    for i, s in enumerate(slides_data, start=2):
-        s["_slide_i"] = i
-        stype = s.get("type", "text")
-        builder = SLIDE_BUILDERS.get(stype, _slide_text)
-        middle_slides_html += builder(s)
-
-    # Sources slide
-    src_rows = "".join(
-        f'<div class="wi-src-row"><span class="wi-src-num">{i:02d}</span><span>{esc(src)}</span></div>'
-        for i, src in enumerate(sources, 1)
+    pills_html = "".join(
+        f'<div class="pill">{esc(c)}</div>' for c in controversies
     )
 
-    # ── CSS ───────────────────────────────────────────────────────────────────
-    css = """
-*{box-sizing:border-box;margin:0;padding:0}
-:root{--gold:#C9A84C;--cream:#F5EDD6;--dark:#0C0A07;--red:#8B1A1A;--muted:#7A7267;--W:1080px;--H:1350px;--P:90px}
-body{background:#111;display:flex;flex-direction:column;align-items:center;gap:32px;padding:32px;font-family:'Cormorant Garamond',serif}
-.slide{width:var(--W);height:var(--H);position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start;padding:var(--P)}
-.wi-bg{position:absolute;inset:0;background-size:cover;background-position:center top;opacity:.18;filter:grayscale(.2) contrast(1.15)}
-.wi-slide>*:not(.wi-bg):not(.wi-swipe){position:relative;z-index:2}
+    NODE_POS = ["n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8"]
+    ARROW_COORDS = [
+        ("480", "400", "480", "220"),
+        ("530", "420", "688", "298"),
+        ("580", "500", "760", "500"),
+        ("530", "580", "688", "708"),
+        ("480", "600", "480", "760"),
+        ("430", "580", "272", "708"),
+        ("380", "500", "200", "500"),
+        ("430", "420", "272", "298"),
+    ]
+    arrows_svg = ""
+    nodes_html = ""
+    for i, node in enumerate(network_nodes[:8]):
+        x1, y1, x2, y2 = ARROW_COORDS[i]
+        arrows_svg += (
+            f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
+            f'stroke="rgba(201,168,76,0.38)" stroke-width="1.5" '
+            f'stroke-dasharray="7,4" marker-end="url(#arr)"/>'
+        )
+        ni   = esc(node.get("initials", ""))
+        nn   = esc(node.get("name", ""))
+        nt   = esc(node.get("title", ""))
+        pos  = NODE_POS[i]
+        nodes_html += (
+            f'<div class="node {pos}">'
+            f'<div class="avatar">{ni}</div>'
+            f'<div class="nname">{nn}</div>'
+            f'<div class="ntitle">{nt}</div>'
+            f'</div>'
+        )
 
-/* ── Series tag ── */
-.wi-series-tag{font-family:'Space Mono',monospace;font-size:18px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin-bottom:30px}
-
-/* ── Slide headline ── */
-.wi-slide-hl{font-family:'Playfair Display',serif;font-size:72px;line-height:1.02;color:var(--cream);text-transform:uppercase;letter-spacing:.02em;margin-bottom:28px}
-
-/* ── Cover ── */
-.wi-cover{background:var(--dark);justify-content:space-between}
-.wi-cover-hook{font-family:'Playfair Display',serif;font-size:68px;line-height:1.05;color:var(--cream);font-style:italic;max-width:760px;margin-bottom:28px;position:relative;z-index:2}
-.wi-sticker{width:340px;height:380px;flex-shrink:0;border-radius:8px;background:rgba(201,168,76,.12);border:2px solid rgba(201,168,76,.3);display:flex;align-items:center;justify-content:center;align-self:center;position:relative;z-index:2}
-.wi-sticker-photo{background-size:cover;background-position:center top;border:none;border-radius:8px}
-.wi-initials{font-family:'Playfair Display',serif;font-size:96px;color:var(--gold)}
-.wi-cover-quote{position:relative;z-index:2;border-left:3px solid var(--gold);padding-left:24px;margin-top:28px;max-width:800px}
-.wi-cover-qmark{font-family:'Playfair Display',serif;font-size:72px;color:var(--gold);line-height:.6;display:block}
-.wi-cover-qtext{font-family:'Cormorant Garamond',serif;font-size:46px;font-style:italic;color:var(--cream);line-height:1.35}
-.wi-cover-cta{font-family:'Space Mono',monospace;font-size:26px;letter-spacing:.08em;color:var(--muted);margin-top:20px;position:relative;z-index:2}
-.wi-name-bar{font-family:'Space Mono',monospace;font-size:22px;letter-spacing:.18em;text-transform:uppercase;color:rgba(201,168,76,.65);position:absolute;bottom:90px;left:90px;z-index:2}
-.wi-swipe{font-family:'Space Mono',monospace;font-size:18px;color:rgba(245,237,214,.3);position:absolute;bottom:44px;right:90px;z-index:3;letter-spacing:.06em}
-
-/* ── Bio grid ── */
-.wi-slide-bio{background:#0C0A07}
-.wi-subject-bar{font-family:'Space Mono',monospace;font-size:18px;letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:22px}
-.wi-bio-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;flex:1}
-.wi-bio-cell{background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.18);border-radius:6px;padding:20px 22px}
-.wi-bio-label{font-family:'Space Mono',monospace;font-size:14px;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-bottom:8px}
-.wi-bio-value{font-family:'Cormorant Garamond',serif;font-size:32px;color:var(--cream);line-height:1.3}
-
-/* ── Quote slide ── */
-.wi-slide-quote{background:#0C0A07}
-.wi-pull-quote{margin:8px 0 20px;padding:28px 32px;border-left:4px solid var(--gold);background:rgba(201,168,76,.05);border-radius:0 6px 6px 0}
-.wi-qm{font-family:'Playfair Display',serif;font-size:80px;color:var(--gold);line-height:.5;display:inline-block;margin-right:8px}
-.wi-qtext{font-family:'Cormorant Garamond',serif;font-size:52px;font-style:italic;color:var(--cream);line-height:1.3}
-.wi-quote-attr{font-family:'Space Mono',monospace;font-size:20px;color:var(--gold);letter-spacing:.08em;margin-top:14px}
-.wi-quote-context{font-family:'Cormorant Garamond',serif;font-size:32px;color:var(--muted);line-height:1.45;margin-top:20px;font-style:italic}
-
-/* ── Law slide ── */
-.wi-slide-law{background:#0C0A07}
-.wi-law-name{font-family:'Playfair Display',serif;font-size:56px;color:var(--cream);line-height:1.1;margin-bottom:10px}
-.wi-law-year{font-family:'Space Mono',monospace;font-size:18px;color:var(--gold);letter-spacing:.1em;margin-bottom:22px}
-.wi-law-impact{font-family:'Cormorant Garamond',serif;font-size:36px;color:var(--cream);line-height:1.45;margin-bottom:28px;max-width:820px}
-.wi-screenshot-mock{background:#0F1118;border:1px solid rgba(201,168,76,.3);border-radius:8px;padding:22px 24px}
-.wi-screenshot-bar{height:10px;width:180px;background:rgba(201,168,76,.25);border-radius:4px;margin-bottom:14px}
-.wi-screenshot-label{font-family:'Space Mono',monospace;font-size:16px;color:var(--gold);letter-spacing:.1em;margin-bottom:6px}
-.wi-screenshot-url{font-family:'Space Mono',monospace;font-size:18px;color:rgba(245,237,214,.45)}
-
-/* ── Money slide ── */
-.wi-slide-money{background:#0C0A07}
-.wi-money-table{flex:1;display:flex;flex-direction:column;gap:0}
-.wi-money-row{display:flex;justify-content:space-between;align-items:baseline;padding:18px 0;border-bottom:1px solid rgba(201,168,76,.12)}
-.wi-money-source{font-family:'Cormorant Garamond',serif;font-size:34px;color:var(--cream)}
-.wi-money-amount{font-family:'Playfair Display',serif;font-size:44px;color:var(--gold)}
-.wi-money-note{font-family:'Space Mono',monospace;font-size:16px;color:var(--muted);letter-spacing:.06em;margin-top:20px;line-height:1.5}
-
-/* ── Network slide ── */
-.wi-slide-network{background:#0C0A07}
-.wi-network-layout{display:flex;gap:40px;align-items:flex-start;flex:1}
-.wi-network-center{display:flex;flex-direction:column;align-items:center;gap:12px;flex-shrink:0}
-.wi-center-dot{width:100px;height:100px;border-radius:50%;border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:36px;color:var(--gold);background:rgba(201,168,76,.08)}
-.wi-center-name{font-family:'Space Mono',monospace;font-size:14px;letter-spacing:.08em;color:var(--gold);text-align:center;max-width:120px;text-transform:uppercase}
-.wi-nodes-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1}
-.wi-node{display:flex;align-items:center;gap:14px;background:rgba(201,168,76,.04);border:1px solid rgba(201,168,76,.14);border-radius:6px;padding:14px 16px}
-.wi-node-dot{width:48px;height:48px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:14px;flex-shrink:0}
-.wi-node-name{font-family:'Cormorant Garamond',serif;font-size:26px;color:var(--cream);line-height:1.2}
-.wi-node-role{font-family:'Space Mono',monospace;font-size:12px;color:var(--muted);letter-spacing:.06em;margin-top:2px}
-
-/* ── Controversy slide ── */
-.wi-slide-controversy{background:#0C0A07}
-.wi-pills{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:28px}
-.wi-pill{font-family:'Space Mono',monospace;font-size:16px;letter-spacing:.06em;padding:8px 18px;border-radius:3px;border:1px solid rgba(139,26,26,.6);background:rgba(139,26,26,.1);color:#D4706A;text-transform:uppercase}
-.wi-controversy-body{font-family:'Cormorant Garamond',serif;font-size:38px;color:var(--cream);line-height:1.45;font-style:italic}
-
-/* ── Text slide ── */
-.wi-slide-text{background:#0C0A07}
-.wi-text-body{font-family:'Cormorant Garamond',serif;font-size:44px;color:var(--cream);line-height:1.45;max-width:860px}
-
-/* ── Sources slide ── */
-.wi-slide-sources{background:#0C0A07}
-.wi-src-head{font-family:'Playfair Display',serif;font-size:80px;color:var(--cream);text-transform:uppercase;line-height:1;margin-bottom:32px}
-.wi-src-list{flex:1;overflow:hidden}
-.wi-src-row{display:flex;gap:16px;padding:10px 0;border-bottom:1px solid rgba(245,237,214,.08);font-family:'Space Mono',monospace;font-size:18px;color:var(--muted)}
-.wi-src-num{color:var(--gold);width:32px;flex-shrink:0}
-.wi-handle{font-family:'Space Mono',monospace;font-size:18px;color:rgba(201,168,76,.55);position:absolute;bottom:44px;left:90px;z-index:3;letter-spacing:.06em}
+    BAR_GRADIENTS = [
+        "linear-gradient(90deg,#C9A84C,#8B1A1A)",
+        "linear-gradient(90deg,#1A3A5C,#C9A84C)",
+        "linear-gradient(90deg,#C9A84C,#2A5A1A)",
+        "linear-gradient(90deg,#5A1A5A,#C9A84C)",
+        "linear-gradient(90deg,#8B1A1A,#C9A84C)",
+        "linear-gradient(90deg,#C9A84C,#1A3A5C)",
+    ]
+    slide_list = content.get("slides", [])
+    content_slides_html = ""
+    for si, sl in enumerate(slide_list):
+        slide_num   = si + 4
+        bar_grad    = BAR_GRADIENTS[si % len(BAR_GRADIENTS)]
+        count_label = f"{si + 1:02d}/{len(slide_list):02d}"
+        topic       = esc(sl.get("topic", ""))
+        title       = esc(sl.get("title", ""))
+        title_em    = esc(sl.get("title_italic", sl.get("title_em", "")))
+        desc        = esc(sl.get("desc", sl.get("desc_pt", "")))
+        url         = esc(sl.get("url", ""))
+        clip_img    = clips.get(slide_num, "")
+        if clip_img:
+            vbox_inner = (
+                f'<div style="position:absolute;inset:0;background-image:url(\'{clip_img}\');'
+                f'background-size:cover;background-position:center;'
+                f'filter:grayscale(.05) contrast(1.05);"></div>'
+            )
+        else:
+            vbox_inner = (
+                f'<div class="vplay"></div>'
+                f'<div class="vlbl">Assistir Reel</div>'
+                f'<div class="vlink">{url}</div>'
+            )
+        title_html = f"{title}<br><em>{title_em}</em>" if title_em else title
+        content_slides_html += f"""
+<div class="slide vs">
+  <div class="topbar" style="background:{bar_grad}"></div>
+  <div class="bign">{slide_num:02d}</div>
+  <div class="vtag">Reel <b>{count_label}</b></div>
+  <div class="vbox">{vbox_inner}</div>
+  <div class="vbot">
+    <div class="vtopic">{topic}</div>
+    <div class="vtitle">{title_html}</div>
+    <div class="vdesc">{desc}</div>
+  </div>
+  <div class="vcorner"></div>
+</div>
 """
 
-    # ── Full HTML ──────────────────────────────────────────────────────────────
-    full = f"""<!DOCTYPE html>
+    src_rows = "".join(
+        f'<div class="src-item">'
+        f'<span class="src-num">{i:02d}</span>'
+        f'<span class="src-text">{esc(s)}</span>'
+        f'</div>\n'
+        for i, s in enumerate(sources, 1)
+    )
+    sources_slide = f"""
+<div class="slide s2">
+  <div class="lbar"></div>
+  <div class="head">
+    <span class="htag">Fontes · Sources</span>
+    <div class="htitle">A Fonte<em>É Esta.</em></div>
+  </div>
+  <div class="src-grid">{src_rows}</div>
+  <div class="vbot-src">
+    <div class="pill" style="border-color:rgba(201,168,76,0.4);color:#C9A84C;">Salva · Save this</div>
+  </div>
+</div>
+"""
+
+    full_html = f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Who Is — {subject_name}</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<style>{css}</style>
+<title>Quem É — {slug}</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* FORMAT-020 — Who Is This Person? — matches original Mizrachi editorial design */
+*{{margin:0;padding:0;box-sizing:border-box}}
+:root{{--gold:#C9A84C;--gold-l:#E8CC7A;--cream:#F5EDD6;--dark:#0C0A07;--dark2:#141209;--dark3:#1C1810;--mid:#2A2318;--text:#E8E0CC;--muted:#8A7E68;--red:#8B1A1A;--blue:#1A3A5C}}
+body{{background:#050505;display:flex;flex-direction:column;align-items:center;font-family:'Cormorant Garamond',serif}}
+.slide{{width:1080px;height:1350px;position:relative;overflow:hidden;flex-shrink:0}}
+.s1{{background:var(--dark)}}
+.s1 .noise{{position:absolute;inset:0;background:radial-gradient(ellipse 100% 50% at 50% 0%,rgba(201,168,76,0.13) 0%,transparent 55%),repeating-linear-gradient(0deg,transparent 0px,transparent 79px,rgba(201,168,76,0.025) 79px,rgba(201,168,76,0.025) 80px)}}
+.s1 .corners span{{position:absolute;width:100px;height:100px;border-color:rgba(201,168,76,0.45);border-style:solid;display:block}}
+.s1 .corners span:nth-child(1){{top:44px;left:44px;border-width:2px 0 0 2px}}
+.s1 .corners span:nth-child(2){{top:44px;right:44px;border-width:2px 2px 0 0}}
+.s1 .corners span:nth-child(3){{bottom:44px;left:44px;border-width:0 0 2px 2px}}
+.s1 .corners span:nth-child(4){{bottom:44px;right:44px;border-width:0 2px 2px 0}}
+.s1 .tag{{position:absolute;top:84px;left:0;right:0;text-align:center;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.38em;color:var(--gold);text-transform:uppercase;opacity:0.75}}
+.s1 .vframe{{position:absolute;top:148px;left:80px;width:920px;height:750px;background:#080604;border:1.5px solid rgba(201,168,76,0.28);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;overflow:hidden}}
+.s1 .vframe::after{{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 50% 35% at 50% 25%,rgba(201,168,76,0.07) 0%,transparent 65%),linear-gradient(180deg,transparent 40%,rgba(0,0,0,0.7) 100%);pointer-events:none}}
+.s1 .play{{width:88px;height:88px;border-radius:50%;border:1.5px solid var(--gold);background:rgba(12,10,7,0.72);display:flex;align-items:center;justify-content:center;position:relative;z-index:2}}
+.s1 .play::after{{content:'\\25B6';color:var(--gold);font-size:26px;margin-left:5px}}
+.s1 .vlabel{{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.32em;color:var(--gold-l);text-transform:uppercase;position:relative;z-index:2}}
+.s1 .vurl{{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:0.12em;position:relative;z-index:2}}
+.s1 .bottom{{position:absolute;bottom:72px;left:80px}}
+.s1 .gline{{width:52px;height:1px;background:var(--gold);margin-bottom:24px}}
+.s1 .title{{font-family:'Playfair Display',serif;font-size:68px;font-weight:900;color:var(--cream);line-height:1.0}}
+.s1 .title em{{color:var(--gold);font-style:italic;display:block}}
+.s1 .sub{{margin-top:14px;font-family:'Cormorant Garamond',serif;font-size:23px;font-weight:300;font-style:italic;color:var(--muted)}}
+.s2{{background:var(--dark2)}}
+.s2 .lbar{{position:absolute;top:0;left:0;width:7px;height:100%;background:linear-gradient(180deg,var(--gold) 0%,var(--red) 50%,var(--gold) 100%)}}
+.s2 .head{{position:absolute;top:80px;left:80px}}
+.s2 .htag{{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.42em;color:var(--gold);text-transform:uppercase;margin-bottom:18px;display:block}}
+.s2 .htitle{{font-family:'Playfair Display',serif;font-size:76px;font-weight:900;color:var(--cream);line-height:0.92}}
+.s2 .htitle em{{color:var(--gold);font-style:italic;font-size:82px;display:block}}
+.s2 .divrow{{position:absolute;top:350px;left:80px;display:flex;align-items:center;gap:14px;width:480px}}
+.s2 .divrow span{{flex:1;height:1px;background:rgba(201,168,76,0.25);display:block}}
+.s2 .divrow i{{width:7px;height:7px;background:var(--gold);transform:rotate(45deg);flex-shrink:0;display:block}}
+.s2 .grid{{position:absolute;top:400px;left:80px;width:920px;display:grid;grid-template-columns:1fr 1fr;gap:28px 56px}}
+.s2 .glabel{{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.36em;color:var(--gold);text-transform:uppercase;opacity:0.8;margin-bottom:7px;display:block}}
+.s2 .gval{{font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--text);line-height:1.45}}
+.s2 .polem{{position:absolute;bottom:72px;left:80px;right:80px}}
+.s2 .ptag{{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.4em;color:var(--red);text-transform:uppercase;margin-bottom:18px;display:flex;align-items:center;gap:10px}}
+.s2 .ptag::before{{content:'\\26A0';font-size:13px}}
+.s2 .pills{{display:flex;flex-wrap:wrap;gap:10px}}
+.s2 .pill{{padding:9px 18px;border:1px solid rgba(139,26,26,0.45);font-family:'Cormorant Garamond',serif;font-size:17px;font-style:italic;color:#C87070;background:rgba(139,26,26,0.07);line-height:1}}
+.src-grid{{position:absolute;top:400px;left:80px;width:920px;display:flex;flex-direction:column;gap:0}}
+.src-item{{display:flex;gap:20px;padding:14px 0;border-bottom:1px solid rgba(201,168,76,0.12);align-items:start}}
+.src-num{{font-family:'Space Mono',monospace;font-size:14px;color:var(--gold);font-weight:700;flex-shrink:0;width:28px}}
+.src-text{{font-family:'Cormorant Garamond',serif;font-size:19px;color:var(--text);line-height:1.45}}
+.vbot-src{{position:absolute;bottom:72px;left:80px}}
+.s3{{background:var(--dark3)}}
+.s3 .head3{{position:absolute;top:56px;left:80px}}
+.s3 .h3tag{{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.4em;color:var(--gold);text-transform:uppercase;margin-bottom:12px;display:block}}
+.s3 .h3title{{font-family:'Playfair Display',serif;font-size:54px;font-weight:900;color:var(--cream);line-height:1.0}}
+.s3 .h3title em{{color:var(--gold);font-style:italic}}
+.s3 .collage{{position:absolute;top:220px;left:60px;width:960px;height:1000px}}
+.s3 .hub{{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:200px;border-radius:50%;border:2.5px solid var(--gold);background:var(--mid);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;box-shadow:0 0 0 10px rgba(201,168,76,0.08),0 0 50px rgba(201,168,76,0.12)}}
+.s3 .hub-init{{font-family:'Playfair Display',serif;font-size:58px;font-weight:900;color:var(--gold);line-height:1}}
+.s3 .hub-name{{font-family:'Cormorant Garamond',serif;font-size:12px;color:var(--muted);font-style:italic;text-align:center;padding:0 14px;margin-top:2px}}
+.s3 .node{{position:absolute;display:flex;flex-direction:column;align-items:center;width:140px;margin-left:-70px;margin-top:-70px}}
+.s3 .avatar{{width:110px;height:110px;border-radius:50%;border:2px solid rgba(201,168,76,0.35);background:var(--mid);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:var(--gold)}}
+.s3 .nname{{font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:600;color:var(--cream);text-align:center;line-height:1.2;margin-top:8px}}
+.s3 .ntitle{{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:0.18em;color:var(--muted);text-align:center;margin-top:3px;text-transform:uppercase}}
+.s3 .n1{{left:480px;top:70px}}.s3 .n2{{left:728px;top:148px}}.s3 .n3{{left:830px;top:430px}}
+.s3 .n4{{left:728px;top:718px}}.s3 .n5{{left:480px;top:810px}}.s3 .n6{{left:232px;top:718px}}
+.s3 .n7{{left:130px;top:430px}}.s3 .n8{{left:232px;top:148px}}
+.s3 .arrows{{position:absolute;inset:0;width:960px;height:1000px;pointer-events:none;z-index:5}}
+.vs{{position:relative;background:var(--dark)}}
+.vs .topbar{{position:absolute;top:0;left:0;right:0;height:6px}}
+.vs .bign{{position:absolute;top:20px;right:60px;font-family:'Playfair Display',serif;font-size:220px;font-weight:900;color:rgba(201,168,76,0.05);line-height:1}}
+.vs .vtag{{position:absolute;top:64px;left:80px;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.35em;color:var(--muted);text-transform:uppercase}}
+.vs .vtag b{{color:var(--gold);font-weight:400}}
+.vs .vbox{{position:absolute;top:140px;left:80px;width:920px;height:760px;border:1.5px solid rgba(201,168,76,0.22);background:#080604;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;overflow:hidden}}
+.vs .vbox::after{{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 50%,rgba(0,0,0,0.8) 100%)}}
+.vs .vplay{{width:76px;height:76px;border-radius:50%;border:1.5px solid var(--gold);background:rgba(12,10,7,0.72);display:flex;align-items:center;justify-content:center;position:relative;z-index:2}}
+.vs .vplay::after{{content:'\\25B6';color:var(--gold);font-size:22px;margin-left:4px}}
+.vs .vlbl{{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.3em;color:var(--gold-l);text-transform:uppercase;position:relative;z-index:2}}
+.vs .vlink{{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);position:relative;z-index:2}}
+.vs .vbot{{position:absolute;bottom:72px;left:80px;width:860px}}
+.vs .vtopic{{display:inline-block;padding:6px 16px;border:1px solid rgba(201,168,76,0.38);font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.28em;color:var(--gold);text-transform:uppercase;margin-bottom:14px}}
+.vs .vtitle{{font-family:'Playfair Display',serif;font-size:46px;font-weight:700;color:var(--cream);line-height:1.1;margin-bottom:10px}}
+.vs .vtitle em{{color:var(--gold);font-style:italic}}
+.vs .vdesc{{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:300;font-style:italic;color:var(--muted);line-height:1.45}}
+.vs .vcorner{{position:absolute;bottom:72px;right:80px;width:52px;height:52px;border-right:1.5px solid rgba(201,168,76,0.28);border-bottom:1.5px solid rgba(201,168,76,0.28)}}
+</style>
 </head>
 <body>
-
-<!-- COVER -->
-<div class="slide wi-cover">
-  {cover_bg}
-  <div class="wi-series-tag" style="position:relative;z-index:2">{series_label}</div>
-  <div class="wi-cover-hook">{hook}</div>
-  {sticker_el}
-  <div class="wi-cover-quote">
-    <span class="wi-cover-qmark">&#10077;</span>
-    <span class="wi-cover-qtext">{quote}</span>
-    <span class="wi-cover-qmark">&#10078;</span>
+<div class="slide s1">
+  <div class="noise"></div>
+  <div class="corners"><span></span><span></span><span></span><span></span></div>
+  <div class="tag">{series_label}</div>
+  <div class="vframe">{vframe_inner}</div>
+  <div class="bottom">
+    <div class="gline"></div>
+    <div class="title">{name_html}</div>
+    <div class="sub">{subject_title}</div>
   </div>
-  <div class="wi-cover-cta">{cta}</div>
-  <div class="wi-name-bar">{subject_name}</div>
-  <div class="wi-swipe">SWIPE &#8594;</div>
 </div>
-
-{middle_slides_html}
-
-<!-- SOURCES -->
-<div class="slide wi-slide wi-slide-sources">
-  <div class="wi-series-tag">{series_label}</div>
-  <div class="wi-src-head">FONTES.</div>
-  <div class="wi-src-list">{src_rows}</div>
-  <div class="wi-handle">{handle}</div>
-  <div class="wi-swipe">SALVA.</div>
+<div class="slide s2">
+  <div class="lbar"></div>
+  <div class="head">
+    <span class="htag">{bio_tag}</span>
+    <div class="htitle">{bio_heading}<em>{bio_heading_em}</em></div>
+  </div>
+  <div class="divrow"><span></span><i></i><span></span></div>
+  <div class="grid">{bio_grid_html}</div>
+  <div class="polem">
+    <div class="ptag">{controversy_tag}</div>
+    <div class="pills">{pills_html}</div>
+  </div>
 </div>
-
+<div class="slide s3">
+  <div class="head3">
+    <span class="h3tag">{network_tag}</span>
+    <div class="h3title">{network_title} <em>{network_title_em}</em></div>
+  </div>
+  <div class="collage">
+    <svg class="arrows" viewBox="0 0 960 1000" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="arr" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="rgba(201,168,76,0.55)"/></marker></defs>
+      {arrows_svg}
+    </svg>
+    <div class="hub"><div class="hub-init">{hub_initials}</div><div class="hub-name">{subject_name_esc}</div></div>
+    {nodes_html}
+  </div>
+</div>
+{content_slides_html}{sources_slide}
 </body>
 </html>"""
 
     html_path = Path(work_dir) / "cover.html"
-    html_path.write_text(full)
+    html_path.write_text(full_html)
     return str(html_path)
-
 
 def _build_the_case_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", media_paths=None):
     """FORMAT-021 — O Caso / The Case: topic/case-centric investigation carousel.
