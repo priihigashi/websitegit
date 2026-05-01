@@ -137,6 +137,23 @@ def check_html_placeholders(html_path: str) -> list[str]:
                 issues.append(
                     f"OPC cover subhead too long ({len(sub_txt)} chars) — max 110 to avoid HUD overlap."
                 )
+            # REV-03: Hook strength — subhead must contain a number, $, %, or urgency word.
+            _HOOK_URGENCY = {
+                "save", "stop", "never", "always", "warning", "mistake", "wrong", "truth",
+                "secret", "hidden", "real", "actually", "biggest", "worst", "must", "avoid",
+                "danger", "risk", "fail", "don't", "shouldn't", "every", "most", "red flag",
+            }
+            sub_lower = sub_txt.lower()
+            has_hook = (
+                any(c.isdigit() for c in sub_txt)
+                or "$" in sub_txt
+                or "%" in sub_txt
+                or any(w in sub_lower for w in _HOOK_URGENCY)
+            )
+            if not has_hook:
+                issues.append(
+                    "OPC hook miss: cover subtitle has no number, $, %, or urgency word — too weak to stop scroll."
+                )
         # Swipe text integrity + no clipping-prone typo patterns.
         if "WIPE →" in html:
             issues.append("OPC swipe label typo/clipping artifact detected ('WIPE →').")

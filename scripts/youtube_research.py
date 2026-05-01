@@ -21,6 +21,7 @@ import sys
 import json
 import re
 import argparse
+import subprocess
 from datetime import datetime
 
 try:
@@ -492,6 +493,50 @@ def save_to_sheet(sheet, video: dict, analysis: dict, topic: str):
     except Exception as e:
         print(f"  Sheet save error: {e}")
 
+_CLIP_THRESHOLD = 8  # must match CLIP_THRESHOLD in content_creator/main.py
+
+
+def _check_clip_threshold(ws, topic: str, niche: str) -> None:
+    """Send a one-shot email when a topic's Clip Collections count first hits _CLIP_THRESHOLD.
+    Fires only at exactly the threshold count to avoid repeat emails on subsequent runs."""
+    try:
+        all_rows = ws.get_all_values()
+        if not all_rows:
+            return
+        headers = [h.strip().lower() for h in all_rows[0]]
+        topic_col = next(
+            (i for i, h in enumerate(headers) if h in ("topic", "topic / title")), None
+        )
+        if topic_col is None:
+            return
+        count = sum(
+            1 for r in all_rows[1:]
+            if len(r) > topic_col and r[topic_col].strip().lower() == topic.strip().lower()
+        )
+        if count != _CLIP_THRESHOLD:
+            return
+        subject = f"[Clip Gate] '{topic[:50]}' now has {count} clips — ready to build"
+        body = (
+            f"Clip Collections threshold reached.\n\n"
+            f"Niche: {niche}\n"
+            f"Topic: {topic}\n"
+            f"Clips ready: {count} (threshold: {_CLIP_THRESHOLD})\n\n"
+            f"Next step: approve the row in Content Queue.\n"
+            f"content_creator.yml will build the carousel on the next run."
+        )
+        subprocess.run(
+            ["gh", "workflow", "run", "send_email.yml",
+             "--repo", "priihigashi/oak-park-ai-hub",
+             "-f", "to=priscila@oakpark-construction.com",
+             "-f", f"subject={subject}",
+             "-f", f"body={body}"],
+            check=False, timeout=30,
+        )
+        print(f"  Clip threshold email sent: '{topic[:50]}' has {count} clips ready.")
+    except Exception as e:
+        print(f"  _check_clip_threshold error (non-fatal): {e}")
+
+
 def update_clip_collections(sheet, topic: str, video_url: str, video_title: str, niche: str):
     """Write a high-relevance video to the Clip Collections tab so motion_sources.py
     can find real clips for carousel builds. Reads headers by name — safe to reorder."""
@@ -520,6 +565,7 @@ def update_clip_collections(sheet, topic: str, video_url: str, video_title: str,
 
         ws.append_row(row, value_input_option="USER_ENTERED")
         print(f"  Clip Collections: added [{niche}] {video_title[:50]}")
+        _check_clip_threshold(ws, topic, niche)
     except Exception as e:
         print(f"  update_clip_collections error (non-fatal): {e}")
 

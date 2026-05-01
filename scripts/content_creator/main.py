@@ -61,6 +61,8 @@ TEMPLATE_ROTATION_MODE = os.environ.get("TEMPLATE_ROTATION_MODE", "weekday").str
 TEMPLATE_ROTATION_ENABLED = os.environ.get("TEMPLATE_ROTATION_ENABLED", "1").strip().lower() not in ("0", "false", "no")
 MANUAL_MODE = os.environ.get("MANUAL_MODE", "0").strip().lower() in ("1", "true", "yes")
 MANUAL_TOPIC = os.environ.get("MANUAL_TOPIC", "").strip()
+if MANUAL_TOPIC:
+    MANUAL_MODE = True  # single-topic run — never processes the full queue
 MANUAL_NICHE = os.environ.get("MANUAL_NICHE", "").strip().lower()
 MANUAL_TEMPLATE = os.environ.get("MANUAL_TEMPLATE", "auto").strip().lower()
 MANUAL_TEMPLATE_SET = os.environ.get("MANUAL_TEMPLATE_SET", "").strip().lower()
