@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OPC — Tip — oak-park-tip</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { background:#1a1a1a; font-family:'Roboto Condensed', sans-serif; }
+body { display:flex; flex-direction:column; align-items:center; gap:32px; padding:32px; }
+
+/* ---- Core slide (1080×1350 IG 4:5) ---- */
+.slide {
+  position:relative; width:1080px; height:1350px; overflow:hidden;
+  display:flex; flex-direction:column; justify-content:flex-start;
+  padding:108px 108px; /* L/R 10%, T/B 8% */
+}
+
+/* ---- Corner brackets (OPC signature) ---- */
+.corner { position:absolute; width:28px; height:28px; z-index:10; }
+.corner.tl { top:40px; left:40px; border-top:2px solid var(--c-brk); border-left:2px solid var(--c-brk); }
+.corner.tr { top:40px; right:40px; border-top:2px solid var(--c-brk); border-right:2px solid var(--c-brk); }
+.corner.bl { bottom:40px; left:40px; border-bottom:2px solid var(--c-brk); border-left:2px solid var(--c-brk); }
+.corner.br { bottom:40px; right:40px; border-bottom:2px solid var(--c-brk); border-right:2px solid var(--c-brk); }
+
+/* ---- Tag (small kicker) ---- */
+.tag {
+  font-family:'JetBrains Mono', monospace; font-size:18px; font-weight:700;
+  letter-spacing:0.22em; text-transform:uppercase; color:var(--c-tag);
+  margin-bottom:42px;
+}
+
+/* ---- Headline ---- */
+.headline {
+  font-family:'Anton', sans-serif; font-size:128px; line-height:0.95;
+  color:var(--c-head); text-transform:uppercase; letter-spacing:-0.01em;
+}
+.headline .accent { color:#CBCC10; }
+
+/* Cover readability guardrail across photo-heavy backgrounds */
+.slide-cover .headline,
+.slide-cover .body-text,
+.slide-cover .tag,
+.slide-cover .arrow,
+.slide-cover .slide-logo {
+  text-shadow: 0 3px 18px rgba(0,0,0,0.65);
+}
+
+/* ---- Body ---- */
+.body-text {
+  font-family:'Roboto Condensed', sans-serif; font-size:34px; line-height:1.38;
+  color:var(--c-body); max-width:780px; margin-top:36px; font-weight:400;
+}
+
+/* Cover subtitle reserve: prevent collision with bottom HUD (SWIPE + license). */
+.slide-cover .body-text {
+  max-width:820px;
+  padding-bottom:150px;
+}
+
+/* ---- Big-number row (stat slide) ---- */
+.stat-big {
+  font-family:'Anton', sans-serif; font-size:clamp(2rem, 33vw, 360px); line-height:0.85;
+  color:#CBCC10; margin-top:auto; margin-bottom:30px; letter-spacing:-0.03em;
+  overflow:hidden; max-width:100%;
+}
+.stat-label {
+  font-family:'JetBrains Mono', monospace; font-size:24px; font-weight:700;
+  letter-spacing:0.15em; text-transform:uppercase; color:var(--c-body);
+  max-width:620px; line-height:1.4;
+}
+/* Stat slide overflow guard */
+.slide-stat { overflow:hidden; }
+
+/* ---- Numbered list ---- */
+.list { margin-top:12px; padding-bottom:80px; }
+.list-item {
+  display:flex; gap:36px; align-items:baseline; margin-bottom:28px;
+  padding-bottom:22px; border-bottom:1px solid var(--c-rule);
+}
+.list-item:last-child { border-bottom:none; }
+.list-num {
+  font-family:'Anton', sans-serif; font-size:72px; color:#CBCC10;
+  line-height:1; min-width:90px; letter-spacing:-0.02em;
+}
+.list-text {
+  font-family:'Roboto Condensed', sans-serif; font-size:36px; font-weight:700;
+  color:var(--c-head); line-height:1.15; flex:1;
+}
+.list-sub {
+  font-family:'Roboto Condensed', sans-serif; font-size:22px; font-weight:400;
+  color:var(--c-body); margin-top:6px; line-height:1.3;
+}
+
+/* ---- Pro tip block ---- */
+.tip-label {
+  font-family:'JetBrains Mono', monospace; font-size:20px; font-weight:700;
+  letter-spacing:0.2em; text-transform:uppercase; color:#CBCC10;
+  margin-bottom:24px;
+}
+.tip-big {
+  font-family:'Anton', sans-serif; font-size:108px; line-height:0.98;
+  color:var(--c-head); text-transform:uppercase; letter-spacing:-0.01em;
+}
+.tip-explain {
+  font-family:'Roboto Condensed', sans-serif; font-size:32px; line-height:1.4;
+  color:var(--c-body); max-width:820px; margin-top:36px;
+}
+
+/* ---- Sources slide ---- */
+.src-head {
+  font-family:'Anton', sans-serif; font-size:88px; line-height:0.95;
+  color:var(--c-head); text-transform:uppercase; margin-bottom:48px;
+}
+.src-list { margin-bottom:auto; }
+.src-row {
+  display:flex; gap:22px; align-items:baseline;
+  font-family:'JetBrains Mono', monospace; font-size:22px; font-weight:400;
+  color:var(--c-body); margin-bottom:18px; line-height:1.4;
+}
+.src-num { color:#CBCC10; font-weight:700; min-width:42px; }
+
+/* ---- Hero background image (cover slide) ---- */
+.bg-photo {
+  position:absolute; inset:0; background-size:cover; background-position:center;
+  z-index:1;
+}
+.slide-cover .bg-photo { background-image:url('resources/images/kitchen_reno_hero.jpg'); filter:grayscale(1) contrast(1.15) brightness(0.55); }
+.slide-cover .bg-photo::after {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.85) 100%);
+}
+.slide-cover > *:not(.bg-photo):not(.corner):not(.arrow):not(.slide-logo):not(.sticker-slot):not(.sticker-stamp) { position:relative; z-index:3; }
+
+/* Last slide mirrors cover treatment for stronger close-out */
+.slide-sources .bg-photo {
+  background-size:cover;
+  background-position:center;
+  filter:grayscale(1) contrast(1.15) brightness(0.52);
+}
+.slide-sources .bg-photo::after {
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.88) 100%);
+}
+.slide-sources > *:not(.bg-photo):not(.corner):not(.arrow):not(.slide-logo) { position:relative; z-index:3; }
+
+/* ---- Sticker slot (cover — Mike placeholder) ---- */
+.sticker-slot {
+  position:absolute; right:108px; top:240px;
+  width:360px; height:480px; z-index:5;
+  border:3px solid #CBCC10;
+  background:rgba(10,10,10,0.6);
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden;
+}
+.sticker-slot img, .sticker-slot video {
+  width:100%; height:100%; object-fit:cover; object-position:center 22%;
+  filter:grayscale(1) contrast(1.1);
+}
+.sticker-placeholder {
+  position:absolute; bottom:14px; left:0; right:0;
+  font-family:'JetBrains Mono', monospace; font-size:12px; color:#CBCC10;
+  text-align:center; letter-spacing:0.15em; line-height:1.3;
+  opacity:0.75;
+}
+.worker-silhouette {
+  position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+  width:72%; height:auto; color:#CBCC10; opacity:0.85;
+  filter:drop-shadow(0 0 12px rgba(203,204,16,0.25));
+}
+.v2 .worker-silhouette { color:#0A0A0A; opacity:0.75; }
+.v3 .worker-silhouette { color:#F0EBE3; opacity:0.85; }
+.sticker-stamp {
+  position:absolute; top:170px; right:108px; width:360px;
+  font-family:'Anton', sans-serif; font-size:26px; letter-spacing:0.2em;
+  color:#CBCC10; text-align:center;
+}
+
+/* ---- Arrow indicator (every slide except last) ---- */
+.arrow {
+  position:absolute; bottom:88px; right:108px; z-index:10;
+  font-family:'Anton', sans-serif; font-size:32px; color:#CBCC10;
+  letter-spacing:0.1em;
+}
+
+/* Cover HUD lane: keeps swipe + license out of title/subtitle flow. */
+.slide-cover .arrow {
+  bottom:46px;
+  right:108px;
+  font-size:30px;
+  line-height:1;
+  background:rgba(10,10,10,0.45);
+  padding:8px 12px;
+  border-radius:6px;
+}
+
+/* ---- Footer row (license + handle on last slide) ---- */
+.footer {
+  display:flex; justify-content:space-between; align-items:flex-end;
+  margin-top:24px;
+}
+.handle {
+  font-family:'Anton', sans-serif; font-size:38px; letter-spacing:0.05em;
+  color:#CBCC10;
+}
+.license {
+  font-family:'JetBrains Mono', monospace; font-size:20px; color:var(--c-body);
+  letter-spacing:0.1em;
+}
+.save-cta {
+  font-family:'Anton', sans-serif; font-size:72px; line-height:1;
+  color:#CBCC10; text-transform:uppercase; margin-top:24px;
+}
+
+/* ---- Slide logo (bottom corner) ---- */
+.slide-logo {
+  position:absolute; bottom:54px; left:108px;
+  font-family:'Anton', sans-serif; font-size:20px; letter-spacing:0.2em;
+  color:var(--c-tag); text-transform:uppercase; z-index:10;
+}
+
+.slide-cover .slide-logo {
+  bottom:46px;
+  left:108px;
+  line-height:1;
+  background:rgba(10,10,10,0.45);
+  padding:8px 12px;
+  border-radius:6px;
+}
+
+/* ---- OPC context-image panel for middle slides ---- */
+.context-img-slot {
+  width:100%;
+  min-height:420px;
+  max-height:520px;
+  margin:28px 0 18px;
+  border:2px solid var(--c-brk);
+  border-radius:10px;
+  overflow:hidden;
+  background:rgba(10,10,10,0.25);
+}
+.context-img-slot img {
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:center;
+  display:block;
+  filter:grayscale(0.08) contrast(1.03);
+}
+.context-img-slot .ctx-fallback {
+  width:100%;
+  height:100%;
+  min-height:420px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  text-align:center;
+  font-family:'JetBrains Mono', monospace;
+  font-size:18px;
+  line-height:1.4;
+  letter-spacing:0.08em;
+  color:var(--c-body);
+  text-transform:uppercase;
+}
+
+/* Branded placeholder shown when image is expected but not yet fetched */
+.context-img-placeholder {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(203,204,16,0.04),
+    rgba(203,204,16,0.04) 2px,
+    transparent 2px,
+    transparent 14px
+  );
+  border-style: dashed;
+}
+.ctx-placeholder-inner {
+  width:100%; height:100%; min-height:420px;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:18px;
+}
+.ctx-placeholder-icon {
+  font-size:52px; color:rgba(203,204,16,0.35); line-height:1;
+}
+.ctx-placeholder-label {
+  font-family:'JetBrains Mono', monospace; font-size:16px; font-weight:700;
+  letter-spacing:0.18em; text-transform:uppercase;
+  color:rgba(203,204,16,0.45); text-align:center; padding:0 24px;
+}
+.v2 .context-img-placeholder { background: repeating-linear-gradient(45deg, rgba(10,10,10,0.04), rgba(10,10,10,0.04) 2px, transparent 2px, transparent 14px); }
+.v2 .ctx-placeholder-icon, .v2 .ctx-placeholder-label { color:rgba(10,10,10,0.3); }
+
+/* tip-arrow glyph — safe cross-font solid triangle */
+.tip-arrow { font-size:0.85em; vertical-align:middle; }
+
+.project-note {
+  font-family:'Roboto Condensed', sans-serif;
+  font-size:27px;
+  line-height:1.35;
+  color:var(--c-body);
+  max-width:860px;
+  margin-top:16px;
+}
+
+/* =========================================================== */
+/* ============ VARIANT 1 — OBSIDIAN (primary dark) =========== */
+/* =========================================================== */
+.v1 {
+  --c-head:#F0EBE3; --c-body:#ccc8c0; --c-tag:rgba(240,235,227,0.55);
+  --c-brk:rgba(203,204,16,0.6); --c-rule:rgba(240,235,227,0.15);
+  background:#0A0A0A;
+}
+
+/* =========================================================== */
+/* ============== VARIANT 2 — CREAM (backup) ================= */
+/* =========================================================== */
+.v2 {
+  --c-head:#0A0A0A; --c-body:#2a2a2a; --c-tag:rgba(10,10,10,0.5);
+  --c-brk:rgba(10,10,10,0.35); --c-rule:rgba(10,10,10,0.12);
+  background:#F0EBE3;
+}
+.v2 .sticker-slot { background:rgba(240,235,227,0.4); border-color:#0A0A0A; }
+.v2 .sticker-stamp { color:#0A0A0A; }
+.v2 .slide-cover .bg-photo { filter:grayscale(1) contrast(1.1) brightness(0.85); }
+.v2 .slide-cover .bg-photo::after { background:linear-gradient(180deg, rgba(240,235,227,0.25) 0%, rgba(240,235,227,0.85) 100%); }
+/* FIX 9: cream variant text readability — semi-opaque cream wash over any dark photo */
+.v2.slide-cover::before {
+  content:''; position:absolute; inset:0; z-index:2;
+  background:rgba(240,235,227,0.6); pointer-events:none;
+}
+.v2.slide-cover .headline,
+.v2.slide-cover .body-text,
+.v2.slide-cover .tag,
+.v2.slide-cover .arrow,
+.v2.slide-cover .slide-logo {
+  color:#F0EBE3;
+}
+.v2.slide-cover .headline .accent { color:#CBCC10; }
+.v2 .slide-sources .bg-photo { filter:grayscale(1) contrast(1.08) brightness(0.88); }
+.v2 .slide-sources .bg-photo::after { background:linear-gradient(180deg, rgba(240,235,227,0.22) 0%, rgba(240,235,227,0.86) 100%); }
+.v2 .save-cta, .v2 .handle, .v2 .tip-label { color:#0A0A0A; }
+.v2 .headline .accent, .v2 .stat-big, .v2 .list-num, .v2 .src-num, .v2 .arrow { color:#0A0A0A; }
+.v2 .sticker-placeholder { color:#0A0A0A; }
+
+/* =========================================================== */
+/* ============ VARIANT 3 — LIME-FORWARD (experiment) ======== */
+/* =========================================================== */
+.v3 {
+  --c-head:#F0EBE3; --c-body:#CBCC10; --c-tag:rgba(203,204,16,0.7);
+  --c-brk:rgba(203,204,16,0.8); --c-rule:rgba(203,204,16,0.25);
+  background:#0A0A0A;
+}
+.v3 .headline { color:#CBCC10; }
+.v3 .headline .accent { color:#F0EBE3; }
+.v3 .stat-big { color:#F0EBE3; }
+.v3 .list-num, .v3 .src-num { color:#F0EBE3; }
+.v3 .tip-big { color:#CBCC10; }
+.v3 .save-cta { color:#F0EBE3; }
+.v3 .handle, .v3 .tip-label, .v3 .arrow { color:#F0EBE3; }
+.v3 .sticker-stamp { color:#F0EBE3; }
+
+</style>
+</head>
+<body>
+
+<!-- V1 -->
+<div class="slide slide-cover v1">
+  <div class="bg-photo"></div>
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Tip of the Week · Oak Park Construction</div>
+  <div class="headline">WHY YOUR ROOF <span class="accent">FAILS</span> EARLY</div>
+  <div class="body-text">Most Oak Park homeowners miss these 3 mistakes — and they cost $12K on average.</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-stat v1">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">The Real Number</div>
+  <div class="headline">THE REAL <span class="accent">NUMBER</span></div>
+  <div class="stat-big">$12K</div>
+  <div class="stat-label">Average cost of premature roof replacement when flashing is skipped</div>
+  <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-list v1">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">What To Know</div>
+  <div class="headline" style="font-size:96px; margin-bottom:36px;">THE <span class="accent">LIST.</span></div>
+  <div class="context-img-slot context-img-placeholder" data-query="roof ventilation attic inspection"><div class="ctx-placeholder-inner"><div class="ctx-placeholder-icon">&#9632;</div><div class="ctx-placeholder-label">PROCESS IMAGE</div></div></div>
+  <div class="list">
+    <div class="list-item"><span class="list-num">01</span><div><div class="list-text">SKIP THE FLASHING</div><div class="list-sub">Flashing seals every joint. Skip it and water gets in within 2 years.</div></div></div>
+    <div class="list-item"><span class="list-num">02</span><div><div class="list-text">WRONG VENTILATION</div><div class="list-sub">Poor airflow traps heat, warping shingles from inside out.</div></div></div>
+    <div class="list-item"><span class="list-num">03</span><div><div class="list-text">NO DRIP EDGE</div><div class="list-sub">Without drip edge, water wicks under the first shingle row.</div></div></div>
+  </div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-tip v1">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Pro Tip</div>
+  <div class="tip-label"><span class="tip-arrow">&#9658;</span> The Pro Move</div>
+  <div class="tip-big">THE PRO <span style="color:#CBCC10;">MOVE</span></div>
+  <div class="context-img-slot context-img-placeholder" data-query="drip edge roofing eave detail"><div class="ctx-placeholder-inner"><div class="ctx-placeholder-icon">&#9632;</div><div class="ctx-placeholder-label">TIP IN ACTION IMAGE</div></div></div>
+  <div class="tip-explain">Install ice-and-water shield on the first 3 feet and all valleys. Costs $300 extra. Saves $12,000.</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-sources v1">
+  <div class="bg-photo"></div>
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Sources</div>
+  <div class="src-head">WHERE THIS<br>COMES <span style="color:#CBCC10;">FROM.</span></div>
+  <div class="src-list">
+    <div class="src-row"><span class="src-num">01</span><span>National Roofing Contractors Assoc. — 2024 Cost Study</span></div>
+    <div class="src-row"><span class="src-num">02</span><span>Oak Park Building Dept — Code Section R905</span></div>
+  </div>
+  <div class="save-cta">SAVE THIS.</div>
+  <div class="footer">
+    <span class="handle">@oakparkconstruction</span>
+    <span class="license">LIC · CBC1263425</span>
+  </div>
+</div>
+
+
+<!-- V2 -->
+<div class="slide slide-cover v2">
+  <div class="bg-photo"></div>
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Tip of the Week · Oak Park Construction</div>
+  <div class="headline">WHY YOUR ROOF <span class="accent">FAILS</span> EARLY</div>
+  <div class="body-text">Most Oak Park homeowners miss these 3 mistakes — and they cost $12K on average.</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-stat v2">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">The Real Number</div>
+  <div class="headline">THE REAL <span class="accent">NUMBER</span></div>
+  <div class="stat-big">$12K</div>
+  <div class="stat-label">Average cost of premature roof replacement when flashing is skipped</div>
+  <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-list v2">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">What To Know</div>
+  <div class="headline" style="font-size:96px; margin-bottom:36px;">THE <span class="accent">LIST.</span></div>
+  <div class="context-img-slot context-img-placeholder" data-query="roof ventilation attic inspection"><div class="ctx-placeholder-inner"><div class="ctx-placeholder-icon">&#9632;</div><div class="ctx-placeholder-label">PROCESS IMAGE</div></div></div>
+  <div class="list">
+    <div class="list-item"><span class="list-num">01</span><div><div class="list-text">SKIP THE FLASHING</div><div class="list-sub">Flashing seals every joint. Skip it and water gets in within 2 years.</div></div></div>
+    <div class="list-item"><span class="list-num">02</span><div><div class="list-text">WRONG VENTILATION</div><div class="list-sub">Poor airflow traps heat, warping shingles from inside out.</div></div></div>
+    <div class="list-item"><span class="list-num">03</span><div><div class="list-text">NO DRIP EDGE</div><div class="list-sub">Without drip edge, water wicks under the first shingle row.</div></div></div>
+  </div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-tip v2">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Pro Tip</div>
+  <div class="tip-label"><span class="tip-arrow">&#9658;</span> The Pro Move</div>
+  <div class="tip-big">THE PRO <span style="color:#CBCC10;">MOVE</span></div>
+  <div class="context-img-slot context-img-placeholder" data-query="drip edge roofing eave detail"><div class="ctx-placeholder-inner"><div class="ctx-placeholder-icon">&#9632;</div><div class="ctx-placeholder-label">TIP IN ACTION IMAGE</div></div></div>
+  <div class="tip-explain">Install ice-and-water shield on the first 3 feet and all valleys. Costs $300 extra. Saves $12,000.</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-sources v2">
+  <div class="bg-photo"></div>
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Sources</div>
+  <div class="src-head">WHERE THIS<br>COMES <span style="color:#CBCC10;">FROM.</span></div>
+  <div class="src-list">
+    <div class="src-row"><span class="src-num">01</span><span>National Roofing Contractors Assoc. — 2024 Cost Study</span></div>
+    <div class="src-row"><span class="src-num">02</span><span>Oak Park Building Dept — Code Section R905</span></div>
+  </div>
+  <div class="save-cta">SAVE THIS.</div>
+  <div class="footer">
+    <span class="handle">@oakparkconstruction</span>
+    <span class="license">LIC · CBC1263425</span>
+  </div>
+</div>
+
+
+<!-- V3 -->
+<div class="slide slide-cover v3">
+  <div class="bg-photo"></div>
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Tip of the Week · Oak Park Construction</div>
+  <div class="headline">WHY YOUR ROOF <span class="accent">FAILS</span> EARLY</div>
+  <div class="body-text">Most Oak Park homeowners miss these 3 mistakes — and they cost $12K on average.</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-stat v3">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">The Real Number</div>
+  <div class="headline">THE REAL <span class="accent">NUMBER</span></div>
+  <div class="stat-big">$12K</div>
+  <div class="stat-label">Average cost of premature roof replacement when flashing is skipped</div>
+  <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-list v3">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">What To Know</div>
+  <div class="headline" style="font-size:96px; margin-bottom:36px;">THE <span class="accent">LIST.</span></div>
+  <div class="context-img-slot context-img-placeholder" data-query="roof ventilation attic inspection"><div class="ctx-placeholder-inner"><div class="ctx-placeholder-icon">&#9632;</div><div class="ctx-placeholder-label">PROCESS IMAGE</div></div></div>
+  <div class="list">
+    <div class="list-item"><span class="list-num">01</span><div><div class="list-text">SKIP THE FLASHING</div><div class="list-sub">Flashing seals every joint. Skip it and water gets in within 2 years.</div></div></div>
+    <div class="list-item"><span class="list-num">02</span><div><div class="list-text">WRONG VENTILATION</div><div class="list-sub">Poor airflow traps heat, warping shingles from inside out.</div></div></div>
+    <div class="list-item"><span class="list-num">03</span><div><div class="list-text">NO DRIP EDGE</div><div class="list-sub">Without drip edge, water wicks under the first shingle row.</div></div></div>
+  </div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-tip v3">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Pro Tip</div>
+  <div class="tip-label"><span class="tip-arrow">&#9658;</span> The Pro Move</div>
+  <div class="tip-big">THE PRO <span style="color:#F0EBE3;">MOVE</span></div>
+  <div class="context-img-slot context-img-placeholder" data-query="drip edge roofing eave detail"><div class="ctx-placeholder-inner"><div class="ctx-placeholder-icon">&#9632;</div><div class="ctx-placeholder-label">TIP IN ACTION IMAGE</div></div></div>
+  <div class="tip-explain">Install ice-and-water shield on the first 3 feet and all valleys. Costs $300 extra. Saves $12,000.</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<div class="slide slide-sources v3">
+  <div class="bg-photo"></div>
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Sources</div>
+  <div class="src-head">WHERE THIS<br>COMES <span style="color:#F0EBE3;">FROM.</span></div>
+  <div class="src-list">
+    <div class="src-row"><span class="src-num">01</span><span>National Roofing Contractors Assoc. — 2024 Cost Study</span></div>
+    <div class="src-row"><span class="src-num">02</span><span>Oak Park Building Dept — Code Section R905</span></div>
+  </div>
+  <div class="save-cta">SAVE THIS.</div>
+  <div class="footer">
+    <span class="handle">@oakparkconstruction</span>
+    <span class="license">LIC · CBC1263425</span>
+  </div>
+</div>
+
+</body>
+</html>

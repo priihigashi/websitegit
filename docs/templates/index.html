@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Template Gallery — Oak Park AI Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;min-height:100vh}
+
+/* ── Header ── */
+.gallery-top{background:#0A0A0A;padding:28px 40px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:baseline;gap:20px}
+.gallery-top h1{font-family:'JetBrains Mono',monospace;font-size:18px;letter-spacing:.12em;color:#CBCC10;text-transform:uppercase}
+.gallery-top p{font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(255,255,255,0.35);letter-spacing:.06em}
+
+/* ── Group header ── */
+.group-header{padding:32px 40px 16px;border-left:3px solid;margin-top:8px}
+.group-header span{font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:.18em;text-transform:uppercase}
+
+/* ── Cards grid ── */
+.group-cards{display:flex;flex-wrap:wrap;gap:40px;padding:0 40px 48px}
+
+/* ── Single template card ── */
+.tpl-card{background:#111;border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:28px;max-width:500px;flex:1 1 460px}
+.tpl-name{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;letter-spacing:.1em;color:#CBCC10;text-transform:uppercase}
+.tpl-format{font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(255,255,255,0.35);letter-spacing:.1em;margin-top:4px}
+.tpl-when{font-size:14px;color:rgba(255,255,255,0.6);margin-top:12px;line-height:1.55}
+
+/* ── Variant buttons ── */
+.variant-row{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 14px}
+.vbtn{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;padding:5px 12px;border-radius:3px;border:1px solid rgba(255,255,255,0.18);background:transparent;color:rgba(255,255,255,0.45);cursor:pointer;transition:all .15s}
+.vbtn:hover{border-color:#CBCC10;color:#CBCC10}
+.vbtn.active{border-color:#CBCC10;color:#CBCC10;background:rgba(203,204,16,0.1)}
+
+/* ── Slide frame ── */
+.viewer-row{display:flex;align-items:center;gap:12px}
+.arrow-btn{background:rgba(203,204,16,0.12);border:1px solid rgba(203,204,16,0.25);color:#CBCC10;font-size:20px;width:40px;height:60px;border-radius:4px;cursor:pointer;flex-shrink:0;transition:background .15s}
+.arrow-btn:hover{background:rgba(203,204,16,0.22)}
+.slide-frame-outer{position:relative;width:360px;height:450px;flex-shrink:0;overflow:hidden;background:#000;border-radius:6px;border:1px solid rgba(255,255,255,0.08)}
+.slide-frame-outer iframe{width:1080px;height:1350px;border:none;transform:scale(0.3333);transform-origin:top left;pointer-events:none}
+.slide-counter{font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(255,255,255,0.3);text-align:center;margin-top:8px;letter-spacing:.06em}
+</style>
+</head>
+<body>
+
+<div class="gallery-top">
+  <h1>Template Gallery</h1>
+  <p>Oak Park AI Hub · generated 2026-05-01 · follow code blindly</p>
+</div>
+
+
+<div class="group-header" style="border-left-color:#CBCC10">
+  <span style="color:#CBCC10">OPC — Oak Park Construction</span>
+</div>
+<div class="group-cards">
+<div class="tpl-card" id="card_opc_tip">
+  <div class="tpl-meta">
+    <div class="tpl-name">TIP OF THE WEEK</div>
+    <div class="tpl-format">FORMAT-010</div>
+    <div class="tpl-when">Weekly educational post. Explains one construction/renovation concept with a stat and a step-by-step list. The most common OPC template.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row"><button class="vbtn" onclick="setVariant('opc_tip',0)" id="vbtn_opc_tip_0">v1 — Dark + Lime</button><button class="vbtn" onclick="setVariant('opc_tip',5)" id="vbtn_opc_tip_1">v2 — Cream</button><button class="vbtn" onclick="setVariant('opc_tip',10)" id="vbtn_opc_tip_2">v3 — Obsidian</button></div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('opc_tip')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_opc_tip" src="opc_tip.html" scrolling="no" onload="initViewer('opc_tip')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('opc_tip')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_opc_tip">slide 1 / 5</div>
+  </div>
+</div>
+<div class="tpl-card" id="card_opc_illustrated">
+  <div class="tpl-meta">
+    <div class="tpl-name">ILLUSTRATED</div>
+    <div class="tpl-format">FORMAT-012</div>
+    <div class="tpl-when">Same 5-slide structure as Tip, but with context image panels on the list and tip slides. Use when you have a relevant photo to show alongside the steps.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row"><button class="vbtn" onclick="setVariant('opc_illustrated',0)" id="vbtn_opc_illustrated_0">v1 — Dark + Lime</button><button class="vbtn" onclick="setVariant('opc_illustrated',5)" id="vbtn_opc_illustrated_1">v2 — Cream</button><button class="vbtn" onclick="setVariant('opc_illustrated',10)" id="vbtn_opc_illustrated_2">v3 — Obsidian</button></div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('opc_illustrated')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_opc_illustrated" src="opc_illustrated.html" scrolling="no" onload="initViewer('opc_illustrated')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('opc_illustrated')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_opc_illustrated">slide 1 / 5</div>
+  </div>
+</div>
+<div class="tpl-card" id="card_opc_cutout">
+  <div class="tpl-meta">
+    <div class="tpl-name">CUTOUT</div>
+    <div class="tpl-format">FORMAT-014</div>
+    <div class="tpl-when">Same structure again, but designed for background-removed (cutout) images — floating person or product on a brand background. Best when NanoBanana cutout of Mike or a product is available.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row"><button class="vbtn" onclick="setVariant('opc_cutout',0)" id="vbtn_opc_cutout_0">v1 — Dark + Lime</button><button class="vbtn" onclick="setVariant('opc_cutout',5)" id="vbtn_opc_cutout_1">v2 — Cream</button><button class="vbtn" onclick="setVariant('opc_cutout',10)" id="vbtn_opc_cutout_2">v3 — Obsidian</button></div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('opc_cutout')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_opc_cutout" src="opc_cutout.html" scrolling="no" onload="initViewer('opc_cutout')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('opc_cutout')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_opc_cutout">slide 1 / 5</div>
+  </div>
+</div>
+<div class="tpl-card" id="card_opc_progress">
+  <div class="tpl-meta">
+    <div class="tpl-name">PROGRESS / BEFORE-AFTER</div>
+    <div class="tpl-format">FORMAT-011</div>
+    <div class="tpl-when">Project update posts. Shows current stage, what's done, what's next, and the team. Needs real project photos — placeholders show where photos go.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row"><button class="vbtn" onclick="setVariant('opc_progress',0)" id="vbtn_opc_progress_0">v1 — Dark</button><button class="vbtn" onclick="setVariant('opc_progress',5)" id="vbtn_opc_progress_1">v2 — Cream</button><button class="vbtn" onclick="setVariant('opc_progress',10)" id="vbtn_opc_progress_2">v3 — Obsidian</button></div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('opc_progress')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_opc_progress" src="opc_progress.html" scrolling="no" onload="initViewer('opc_progress')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('opc_progress')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_opc_progress">slide 1 / 5</div>
+  </div>
+</div></div>
+
+<div class="group-header" style="border-left-color:#F4C430">
+  <span style="color:#F4C430">NEWS — Brazil + USA</span>
+</div>
+<div class="group-cards">
+<div class="tpl-card" id="card_news_brazil">
+  <div class="tpl-meta">
+    <div class="tpl-name">QUEM DECIDIU ISSO?</div>
+    <div class="tpl-format">FORMAT-002</div>
+    <div class="tpl-when">Brazil political breakdown. 'Who actually decided this?' — traces a law, tariff, or policy back to the person who voted/approved it. Uses the native Brazil builder with dark + Canário yellow brand.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row"><button class="vbtn" onclick="setVariant('news_brazil',0)" id="vbtn_news_brazil_0">Single style</button></div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_brazil')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_brazil" src="news_brazil.html" scrolling="no" onload="initViewer('news_brazil')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_brazil">slide 1 / 5</div>
+  </div>
+</div>
+<div class="tpl-card" id="card_news_brazil_shared">
+  <div class="tpl-meta">
+    <div class="tpl-name">VERIFICAMOS / A CONTA</div>
+    <div class="tpl-format">FORMAT-013A/B</div>
+    <div class="tpl-when">Brazil fact-check or institutional source carousel. VERIFICAMOS = debunking a viral claim. A CONTA = tracing who should have paid or who benefited. Uses the shared template builder with Brazil colors.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row"><button class="vbtn" onclick="setVariant('news_brazil_shared',0)" id="vbtn_news_brazil_shared_0">Single style</button></div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_brazil_shared')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_brazil_shared" src="news_brazil_shared.html" scrolling="no" onload="initViewer('news_brazil_shared')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil_shared')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_brazil_shared">slide 1 / 5</div>
+  </div>
+</div>
+<div class="tpl-card" id="card_news_usa_shared">
+  <div class="tpl-meta">
+    <div class="tpl-name">THE CHAIN</div>
+    <div class="tpl-format">FORMAT-016</div>
+    <div class="tpl-when">USA bilingual carousel — same builder as Brazil shared, but with USA gold/amber colors. Traces a systemic issue step by step (chain of decisions). EN text primary, no PT required.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row"><button class="vbtn" onclick="setVariant('news_usa_shared',0)" id="vbtn_news_usa_shared_0">Single style (USA gold)</button></div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_usa_shared')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_usa_shared" src="news_usa_shared.html" scrolling="no" onload="initViewer('news_usa_shared')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_usa_shared')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_usa_shared">slide 1 / 5</div>
+  </div>
+</div></div>
+
+
+<script>
+// State per template: {currentSlide, variantOffset, totalSlides}
+const state = {};
+
+function initViewer(tid) {
+  const iframe = document.getElementById('viewer_' + tid);
+  const slides = iframe.contentDocument ? iframe.contentDocument.querySelectorAll('.slide') : [];
+  const total = slides.length;
+  state[tid] = { current: 0, total: total, variantOffset: 0 };
+  showSlide(tid, 0);
+  // Activate first variant button
+  const firstVBtn = document.querySelector('#card_' + tid + ' .vbtn');
+  if (firstVBtn) firstVBtn.classList.add('active');
+}
+
+function showSlide(tid, idx) {
+  const iframe = document.getElementById('viewer_' + tid);
+  if (!iframe.contentDocument) return;
+  const slides = iframe.contentDocument.querySelectorAll('.slide');
+  if (!slides.length) return;
+  idx = Math.max(0, Math.min(idx, slides.length - 1));
+  slides.forEach(s => s.style.display = 'none');
+  slides[idx].style.display = 'flex';
+  state[tid].current = idx;
+  // Counter shows position within the current variant block
+  const varOffset = state[tid].variantOffset;
+  const blockSize = state[tid].total / (state[tid].variantCount || 1);
+  const posInBlock = idx - varOffset + 1;
+  const counter = document.getElementById('counter_' + tid);
+  if (counter) counter.textContent = 'slide ' + posInBlock + ' / ' + Math.round(blockSize);
+}
+
+function nextSlide(tid) {
+  const s = state[tid];
+  if (!s) return;
+  const blockSize = Math.round(s.total / (s.variantCount || 1));
+  const maxInBlock = s.variantOffset + blockSize - 1;
+  const next = Math.min(s.current + 1, maxInBlock);
+  showSlide(tid, next);
+}
+
+function prevSlide(tid) {
+  const s = state[tid];
+  if (!s) return;
+  const prev = Math.max(s.current - 1, s.variantOffset);
+  showSlide(tid, prev);
+}
+
+function setVariant(tid, offset) {
+  const s = state[tid];
+  if (!s) return;
+  s.variantOffset = offset;
+  // Count variant buttons for this card
+  const vbtns = document.querySelectorAll('#card_' + tid + ' .vbtn');
+  s.variantCount = vbtns.length;
+  vbtns.forEach(b => b.classList.remove('active'));
+  // Find and activate the clicked button
+  const blockSize = Math.round(s.total / s.variantCount);
+  const btnIdx = Math.round(offset / blockSize);
+  if (vbtns[btnIdx]) vbtns[btnIdx].classList.add('active');
+  showSlide(tid, offset);
+}
+
+// Keyboard arrows for focused card (simple: targets last hovered)
+let focusedTid = null;
+document.querySelectorAll('.tpl-card').forEach(card => {
+  card.addEventListener('mouseenter', () => { focusedTid = card.id.replace('card_',''); });
+});
+document.addEventListener('keydown', e => {
+  if (!focusedTid) return;
+  if (e.key === 'ArrowRight') nextSlide(focusedTid);
+  if (e.key === 'ArrowLeft') prevSlide(focusedTid);
+});
+</script>
+</body>
+</html>
