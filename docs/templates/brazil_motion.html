@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Brazil News Motion — Quem Decidiu</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Anton&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ── MOTION TEMPLATE — Brazil News / Quem Decidiu Isso? ── */
+/* This is the HTML source that record_motion.js records into MP4+GIF.       */
+/* In pipeline: <video> src attributes are filled with real clip paths.       */
+/* In gallery:  CSS keyframe animations simulate motion as a preview.         */
+
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ob:#0A0A0A;--ca:#CBCC10;--pa:#F0EBE3;--gr:rgba(240,235,227,0.45);
+  --rule:rgba(240,235,227,0.12);--W:1080px;--H:1350px;--P:80px
+}
+body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}
+
+/* ── Slide base ── */
+.slide{
+  width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);
+  padding:var(--P);position:relative;overflow:hidden;flex-shrink:0;
+  display:flex;flex-direction:column
+}
+
+/* ── Corner brackets ── */
+.corner{position:absolute;width:28px;height:28px;z-index:10}
+.corner.tl{top:40px;left:40px;border-top:2px solid rgba(203,204,16,.6);border-left:2px solid rgba(203,204,16,.6)}
+.corner.tr{top:40px;right:40px;border-top:2px solid rgba(203,204,16,.6);border-right:2px solid rgba(203,204,16,.6)}
+.corner.bl{bottom:40px;left:40px;border-bottom:2px solid rgba(203,204,16,.6);border-left:2px solid rgba(203,204,16,.6)}
+.corner.br{bottom:40px;right:40px;border-bottom:2px solid rgba(203,204,16,.6);border-right:2px solid rgba(203,204,16,.6)}
+
+/* ── Full-bleed video background ── */
+.bg-video{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;object-position:center 20%;
+  filter:grayscale(1) contrast(1.15) brightness(.45);
+  z-index:1
+}
+/* CSS fallback when no video src — animated gradient simulates motion */
+.bg-video-placeholder{
+  position:absolute;inset:0;z-index:1;
+  background:linear-gradient(135deg,#1a1a1a 0%,#2a2a2a 50%,#0a0a0a 100%);
+  animation:bgPan 8s ease-in-out infinite alternate
+}
+@keyframes bgPan{
+  0%{background-position:0% 0%}
+  100%{background-position:100% 100%}
+}
+/* Halftone newspaper dot overlay */
+.halftone{
+  position:absolute;inset:0;z-index:2;pointer-events:none;
+  background-image:radial-gradient(circle,rgba(10,10,10,.5) 1px,transparent 1px);
+  background-size:6px 6px
+}
+/* Dark gradient vignette — bottom heavy for text legibility */
+.vignette{
+  position:absolute;inset:0;z-index:3;pointer-events:none;
+  background:linear-gradient(180deg,rgba(10,10,10,.08) 0%,rgba(10,10,10,.3) 40%,rgba(10,10,10,.82) 100%)
+}
+/* All content above video layers */
+.slide > *:not(.bg-video):not(.bg-video-placeholder):not(.halftone):not(.vignette):not(.corner){
+  position:relative;z-index:4
+}
+
+/* ── STICKER SLOT — colored video frame top right ── */
+.sticker-slot{
+  position:absolute;right:6%;top:8%;
+  width:300px;height:400px;
+  z-index:8;
+  border:3px solid var(--ca);
+  border-radius:2px;
+  overflow:hidden;
+  box-shadow:0 12px 60px rgba(0,0,0,.8)
+}
+.sticker-slot video{
+  width:100%;height:100%;
+  object-fit:cover;object-position:center top;
+  /* NO grayscale — stays in color, contrast with bg */
+}
+/* Sticker placeholder (gallery fallback) */
+.sticker-placeholder{
+  width:100%;height:100%;
+  background:linear-gradient(160deg,#2a2215 0%,#1a1a0a 100%);
+  display:flex;align-items:center;justify-content:center;
+  animation:stickerPulse 4s ease-in-out infinite alternate
+}
+@keyframes stickerPulse{
+  0%{filter:brightness(.8)}100%{filter:brightness(1.1)}
+}
+.sticker-initials-inner{
+  text-align:center
+}
+.sticker-initials-inner .ini{
+  font-family:'Anton',sans-serif;font-size:100px;color:var(--ca);line-height:1
+}
+.sticker-initials-inner .iname{
+  font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--gr);
+  text-transform:uppercase;letter-spacing:.1em;margin-top:8px
+}
+
+/* ── STAMP BADGE — overlaps top of sticker ── */
+.stamp-badge{
+  position:absolute;right:calc(6% - 4px);top:calc(8% - 18px);
+  z-index:9;
+  background:var(--ca);color:var(--ob);
+  font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;
+  padding:6px 14px;
+  border:2px solid var(--ob);
+  /* Slight tilt for editorial stamp feel */
+  transform:rotate(-1.5deg)
+}
+
+/* ── COVER TEXT ── */
+.cover-tag{
+  font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--gr);
+  margin-bottom:auto;/* pushes headline toward vertical center */
+  padding-top:0
+}
+.cover-headline{
+  font-family:'Playfair Display',serif;font-size:104px;font-weight:900;
+  line-height:.95;letter-spacing:-.01em;
+  max-width:58%;/* leaves room for sticker */
+  margin-bottom:24px;
+  /* Entrance animation */
+  animation:headlineIn 1.2s cubic-bezier(.16,1,.3,1) both
+}
+@keyframes headlineIn{
+  0%{opacity:0;transform:translateY(32px)}
+  100%{opacity:1;transform:translateY(0)}
+}
+.cover-headline em{
+  font-style:italic;color:var(--ca);
+}
+.cover-hook{
+  font-family:'Roboto Condensed',sans-serif;font-size:34px;font-weight:400;
+  line-height:1.4;color:var(--gr);max-width:56%;margin-bottom:32px;
+  animation:headlineIn 1.4s cubic-bezier(.16,1,.3,1) .15s both
+}
+
+/* ── PERSON ATTRIBUTION PILL — bottom left ── */
+.person-pill{
+  position:absolute;bottom:var(--P);left:var(--P);z-index:10;
+  border:1px solid var(--ca);
+  padding:8px 18px;
+  font-family:'JetBrains Mono',monospace;font-size:20px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--pa);
+  background:rgba(10,10,10,.6)
+}
+.person-pill em{color:var(--gr);font-style:normal}
+
+/* ── SWIPE ── */
+.swipe{
+  font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);
+  position:absolute;bottom:var(--P);right:var(--P);z-index:10;letter-spacing:.08em
+}
+.footer-handle{
+  font-family:'JetBrains Mono',monospace;font-size:20px;color:rgba(240,235,227,0.25);
+  position:absolute;bottom:calc(var(--P) - 28px);left:var(--P);z-index:10;letter-spacing:.06em
+}
+
+/* ── BODY SLIDES ── */
+.slide-body .bg-video,
+.slide-body .bg-video-placeholder{
+  filter:grayscale(1) contrast(1.1) brightness(.35);
+}
+.tag{
+  font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--ca);
+  margin-bottom:28px
+}
+.slide-hl{
+  font-family:'Playfair Display',serif;font-size:76px;font-weight:900;
+  line-height:.96;letter-spacing:-.01em;margin-bottom:16px
+}
+.slide-hl em{font-style:italic;color:var(--ca)}
+.slide-en{
+  font-family:'Roboto Condensed',sans-serif;font-size:26px;
+  color:var(--gr);margin-bottom:32px;line-height:1.3
+}
+
+/* ── TIMELINE slide body ── */
+.timeline-grid{display:flex;flex-direction:column;gap:0;flex:1}
+.tl-row{display:flex;gap:24px;padding:16px 0;border-bottom:1px solid var(--rule);align-items:flex-start}
+.tl-date{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--ca);min-width:110px;flex-shrink:0;letter-spacing:.04em;padding-top:3px}
+.tl-text{font-family:'Roboto Condensed',sans-serif;font-size:30px;color:var(--pa);line-height:1.3}
+
+/* ── NETWORK / BIO GRID ── */
+.bio-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:12px 0}
+.bio-card{display:flex;flex-direction:column;align-items:center;gap:8px}
+.bio-photo{width:120px;height:145px;border-radius:3px;object-fit:cover;object-position:center top;border:1px solid rgba(203,204,16,.25)}
+.bio-card .bio-initials{width:120px;height:145px;font-size:52px;border-radius:3px;background:rgba(203,204,16,.06);display:flex;align-items:center;justify-content:center;border:1px solid rgba(203,204,16,.25);font-family:'Anton',sans-serif;color:var(--ca)}
+.bio-name{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--pa);text-align:center;text-transform:uppercase;letter-spacing:.06em;line-height:1.3}
+.bio-role{font-family:'Roboto Condensed',sans-serif;font-size:13px;color:var(--gr);text-align:center;line-height:1.2}
+.bio-fact{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ca);text-align:center;opacity:.8}
+
+/* ── SOURCES slide ── */
+.src-head{font-family:'Playfair Display',serif;font-size:76px;font-weight:900;line-height:.95;margin-bottom:28px}
+.src-head em{font-style:italic;color:var(--ca)}
+.src-list{flex:1}
+.src-row{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--gr);display:flex;gap:16px;padding:10px 0;border-bottom:1px solid var(--rule);line-height:1.4}
+.src-num{color:var(--ca);flex-shrink:0;width:30px;font-weight:700}
+.cta-pt{font-family:'Playfair Display',serif;font-size:48px;font-weight:900;line-height:1;color:var(--ca);margin-top:20px}
+.cta-en{font-family:'Roboto Condensed',sans-serif;font-size:24px;color:var(--gr);margin-top:6px}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     SLIDE 1 — COVER (motion)
+     bg-video src → full-bleed person clip (grayscale by CSS filter)
+     sticker-slot video src → secondary clip of same person (COLOR)
+     stamp-badge → case status / date label (e.g. "ARQUIVADO · 2024")
+     person-pill → person name + party affiliation
+     cover-headline → use Playfair Display, em tag = yellow italic accent word
+══════════════════════════════════════════════════════════ -->
+<div class="slide slide-cover">
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
+
+  <!-- BG: real video clip, grayscale. Replace src with clip path in pipeline. -->
+  <!-- <video class="bg-video" autoplay loop muted playsinline src="resources/clips/cover_bg.mp4"></video> -->
+  <div class="bg-video-placeholder"></div>
+
+  <div class="halftone"></div>
+  <div class="vignette"></div>
+
+  <!-- STICKER: second clip of the person, stays in COLOR -->
+  <div class="sticker-slot">
+    <!-- <video autoplay loop muted playsinline src="resources/clips/cover_sticker.mp4"></video> -->
+    <div class="sticker-placeholder">
+      <div class="sticker-initials-inner">
+        <div class="ini">FB</div>
+        <div class="iname">Flávio Bolsonaro</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STAMP: case status / date — overlaps top of sticker -->
+  <div class="stamp-badge">ARQUIVADO · 2024</div>
+
+  <div class="cover-tag">Quem Decidiu Isso? / #001</div>
+
+  <div class="cover-headline">
+    Quem decidiu<br><em>encerrar</em> o caso<br>da Rachadinha?
+  </div>
+
+  <div class="cover-hook">
+    O dinheiro sumiu. O caso foi arquivado.<br>Mas alguém assinou cada decisão.
+  </div>
+
+  <div class="person-pill">Flávio Bolsonaro <em>· PL (extrema-direita)</em></div>
+  <div class="swipe">SEGUE O FIO &#8594;</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     SLIDE 2 — TIMELINE (motion bg)
+══════════════════════════════════════════════════════════ -->
+<div class="slide slide-body">
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
+
+  <!-- <video class="bg-video" autoplay loop muted playsinline src="resources/clips/slide2_bg.mp4"></video> -->
+  <div class="bg-video-placeholder"></div>
+  <div class="halftone"></div><div class="vignette"></div>
+
+  <div class="tag">A Linha do Tempo</div>
+  <div class="slide-hl">A <em>cadeia</em> de decisões.</div>
+  <div class="slide-en">The chain of decisions.</div>
+
+  <div class="timeline-grid">
+    <div class="tl-row"><div class="tl-date">SET · 2005</div><div class="tl-text">Flávio concede a Medalha Tiradentes a Adriano da Nóbrega — enquanto Adriano está preso por homicídio.</div></div>
+    <div class="tl-row"><div class="tl-date">2018</div><div class="tl-text">COAF sinaliza movimentações suspeitas no gabinete de Flávio na Alerj.</div></div>
+    <div class="tl-row"><div class="tl-date">2020</div><div class="tl-text">Fabrício Queiroz, ex-assessor, é preso em imóvel ligado ao advogado da família.</div></div>
+    <div class="tl-row"><div class="tl-date">2021</div><div class="tl-text">STJ anula as provas do COAF por questão processual de foro.</div></div>
+    <div class="tl-row"><div class="tl-date">SET · 2024</div><div class="tl-text">TJ-RJ arquiva o processo. Prescrição.</div></div>
+  </div>
+
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     SLIDE 3 — NETWORK / Conecta os Pontos (motion bg)
+══════════════════════════════════════════════════════════ -->
+<div class="slide slide-body">
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
+
+  <!-- <video class="bg-video" autoplay loop muted playsinline src="resources/clips/slide3_bg.mp4"></video> -->
+  <div class="bg-video-placeholder"></div>
+  <div class="halftone"></div><div class="vignette"></div>
+
+  <div class="tag">Conecta os Pontos</div>
+  <div class="slide-hl">A rede na <em>folha do gabinete</em>.</div>
+  <div class="slide-en">The network inside the office.</div>
+
+  <div class="bio-grid">
+    <div class="bio-card">
+      <div class="bio-initials">AN</div>
+      <div class="bio-name">Adriano da Nóbrega</div>
+      <div class="bio-role">Ex-PM · falecido 2020</div>
+      <div class="bio-fact">Medalha Tiradentes de Flávio</div>
+    </div>
+    <div class="bio-card">
+      <div class="bio-initials">FQ</div>
+      <div class="bio-name">Fabrício Queiroz</div>
+      <div class="bio-role">Ex-assessor · preso 2020</div>
+      <div class="bio-fact">Movimentações suspeitas</div>
+    </div>
+    <div class="bio-card">
+      <div class="bio-initials">RV</div>
+      <div class="bio-name">Raimunda Veras</div>
+      <div class="bio-role">Mãe de Adriano</div>
+      <div class="bio-fact">Na folha de pagamento</div>
+    </div>
+    <div class="bio-card">
+      <div class="bio-initials">DM</div>
+      <div class="bio-name">Danielle Mendonça</div>
+      <div class="bio-role">Ex-sogra de Adriano</div>
+      <div class="bio-fact">Também na folha</div>
+    </div>
+  </div>
+
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     SLIDE 4 — SOURCES
+══════════════════════════════════════════════════════════ -->
+<div class="slide slide-body">
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
+
+  <div class="tag">Fontes</div>
+  <div class="src-head">A fonte<br>é <em>esta.</em></div>
+
+  <div class="src-list">
+    <div class="src-row"><span class="src-num">01</span><span>O Globo — Caso Rachadinha: cronologia completa</span></div>
+    <div class="src-row"><span class="src-num">02</span><span>COAF — Relatório de Inteligência Financeira 2018</span></div>
+    <div class="src-row"><span class="src-num">03</span><span>TJ-RJ — Decisão de arquivamento, set/2024</span></div>
+    <div class="src-row"><span class="src-num">04</span><span>Agência Brasil — Flávio Bolsonaro e a Medalha Tiradentes</span></div>
+  </div>
+
+  <div class="cta-pt">Salva pra não esquecer.</div>
+  <div class="cta-en">Save this.</div>
+</div>
+
+</body>
+</html>
