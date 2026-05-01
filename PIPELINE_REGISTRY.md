@@ -21,6 +21,7 @@
 | fact-checked | usa | _build_news_shared_template_html | FORMAT-001 | Split Screen + Sources — USA news fact-check | ACTIVE |
 | the-chain | usa | _build_news_shared_template_html | FORMAT-016 | Bilingual carousel — same builder as Brazil | ACTIVE |
 | who-is | brazil | _build_who_is_html | FORMAT-020 | Who Is This Person? — profile carousel for any public figure (politician, rabbi, influencer). Cover: hook + sticker + air-quote + CTA. Slides: bio grid, quote, law, money/PAC, network, controversy. | ACTIVE |
+| the-case | brazil | _build_the_case_html | FORMAT-021 | O Caso / The Case — topic/case-centric investigation carousel. The CASE is the subject; a key person appears as context. Cover: case title + status pill + person attribution + hook. Slides: timeline, responsible party, person background, network, money trail. | ACTIVE |
 
 ---
 

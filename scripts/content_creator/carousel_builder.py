@@ -2218,6 +2218,8 @@ def build_html(content, niche, topic_slug, work_dir, handle="@HANDLE_PLACEHOLDER
         template_key = content.get("_template_key")
         if template_key == "who-is":
             return _build_who_is_html(content, topic_slug, work_dir, handle=handle, media_paths=media_paths)
+        if template_key == "the-case":
+            return _build_the_case_html(content, topic_slug, work_dir, handle=handle, media_paths=media_paths)
         if template_key in ("illustrated", "cutout"):
             return _build_news_shared_template_html(
                 content, topic_slug, work_dir, template_key, handle=handle, media_paths=media_paths, niche=niche
@@ -4002,6 +4004,398 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;gap:3
 
     html_path = Path(work_dir) / "cover.html"
     html_path.write_text(full)
+    return str(html_path)
+
+
+def _build_the_case_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", media_paths=None):
+    """FORMAT-021 — O Caso / The Case: topic/case-centric investigation carousel.
+    The CASE is the subject. A key person appears as context, not the main subject.
+    Cover: case title + status pill + person attribution + hook.
+    Slides: timeline, responsible, person_bg, network, money, list, quote, sources."""
+
+    def esc(s):
+        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+    case_title   = esc(content.get("case_title", "O CASO"))
+    case_title_en = esc(content.get("case_title_en", "THE CASE"))
+    case_status  = esc(content.get("case_status", ""))
+    person_name  = esc(content.get("person_name", ""))
+    person_party = esc(content.get("person_party", ""))
+    hook_pt      = esc(content.get("hook_pt", ""))
+    hook_en      = esc(content.get("hook_en", ""))
+    cta_pt       = esc(content.get("cta_pt", "Salva pra não esquecer."))
+    cta_en       = esc(content.get("cta_en", "Save this."))
+    sources      = content.get("sources", [])
+    series_label = esc(content.get("series_label", "O Caso"))
+
+    clips        = (media_paths or {}).get("clips", {})
+    cover_img    = (media_paths or {}).get("cover", "")
+    slide_photos = (media_paths or {}).get("slide_photos", {})
+
+    cover_bg_el = (
+        f'<div class="bg-photo" style="background-image:url(\'{cover_img}\');"></div>'
+        f'<div class="halftone"></div>'
+    ) if cover_img else ""
+
+    if cover_img:
+        cover_sticker_el = f'<div class="sticker-slot"><img src="{cover_img}" alt="cover portrait"></div>'
+        cover_sticker_class = "cover-with-sticker"
+    elif person_name:
+        _ini = "".join(w[0].upper() for w in person_name.split() if w)[:2]
+        cover_sticker_el = (
+            f'<div class="sticker-slot sticker-initials">'
+            f'<div class="bio-initials">{_ini}</div>'
+            f'<div class="bio-init-name">{person_name}</div>'
+            f'</div>'
+        )
+        cover_sticker_class = "cover-with-sticker"
+    else:
+        cover_sticker_el = ""
+        cover_sticker_class = ""
+
+    case_status_el = (
+        f'<div class="case-status-pill">{case_status}</div>'
+    ) if case_status else ""
+
+    person_attr_parts = [person_name] + ([person_party] if person_party else [])
+    person_attr_el = (
+        f'<div class="cover-person-attr">via {" · ".join(person_attr_parts)}</div>'
+    ) if person_name else ""
+
+    corners = '<div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>'
+
+    slides_html = f"""
+<div class="slide slide-cover slide-motion {cover_sticker_class}">
+  {corners}
+  {cover_bg_el}
+  {cover_sticker_el}
+  <div class="tag">{series_label}</div>
+  {case_status_el}
+  <div class="case-title">{case_title}</div>
+  <div class="case-title-en">{case_title_en}</div>
+  {person_attr_el}
+  <div class="hook-pt">{hook_pt}</div>
+  <div class="swipe">SEGUE O FIO &#8594;</div>
+  <div class="footer-handle">{handle}</div>
+</div>
+"""
+
+    for slide_i, slide in enumerate(content.get("slides", []), start=2):
+        stype = slide.get("type", "list")
+        h_pt  = esc(slide.get("heading_pt", ""))
+        h_en  = esc(slide.get("heading_en", ""))
+        is_motion_slide = (slide_i % 2 == 1)
+        motion_class = "slide-motion" if is_motion_slide else ""
+        slide_photo = (
+            slide_photos.get(slide_i, "")
+            or clips.get(slide_i, "")
+            or (media_paths or {}).get("slides", {}).get(slide_i, "")
+        )
+        clip_el = ""
+        if is_motion_slide and slide_photo:
+            clip_el = (
+                f'<div class="bg-photo" style="background-image:url(\'{slide_photo}\');"></div>'
+                f'<div style="position:absolute;inset:0;background:rgba(0,0,0,0.55);'
+                f'border-radius:inherit;z-index:2;pointer-events:none;"></div>'
+                f'<div class="halftone"></div>'
+            )
+
+        if stype == "timeline":
+            events_html = ""
+            for ev in slide.get("events", []):
+                d = esc(ev.get("date", ""))
+                t = esc(ev.get("text_pt", ev.get("text", "")))
+                events_html += f'<div class="tl-row"><div class="tl-date">{d}</div><div class="tl-text">{t}</div></div>'
+            slides_html += f"""
+<div class="slide slide-timeline {motion_class}">
+  {corners}{clip_el}
+  <div class="tag">A Linha do Tempo</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  <div class="timeline-grid">{events_html}</div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+"""
+
+        elif stype == "responsible":
+            institution = esc(slide.get("institution", ""))
+            decision_date = esc(slide.get("decision_date", ""))
+            impact_pt = esc(slide.get("impact_pt", ""))
+            impact_en = esc(slide.get("impact_en", ""))
+            ctx_q = esc(slide.get("context_image_query", ""))
+            _simg = slide_photo
+            if _simg:
+                resp_slot = f'<div class="context-img-slot"><img src="{_simg}" alt=""></div>'
+            elif ctx_q:
+                resp_slot = f'<div class="context-img-slot"><span class="ctx-query">[ IMG: {ctx_q} ]</span></div>'
+            else:
+                resp_slot = ""
+            slides_html += f"""
+<div class="slide slide-responsible {motion_class}">
+  {corners}{clip_el}
+  <div class="tag">Quem Decidiu</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  {resp_slot}
+  <div class="resp-institution">{institution}</div>
+  <div class="resp-date">{decision_date}</div>
+  <div class="resp-impact">{impact_pt}</div>
+  <div class="resp-impact-en">{impact_en}</div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+"""
+
+        elif stype == "person_bg":
+            bg_name  = esc(slide.get("name", content.get("person_name", "")))
+            bg_role  = esc(slide.get("role_pt", ""))
+            bg_party = esc(slide.get("party", content.get("person_party", "")))
+            bg_facts = slide.get("facts_pt", [])
+            facts_li = "".join(f"<li>{esc(f)}</li>" for f in bg_facts)
+            _hint = slide.get("image_hint", "") or bg_name
+            _bfn  = re.sub(r"[^\w]", "_", str(_hint).lower())[:30] + f"_s{slide_i}.jpg"
+            _bpath = _fetch_person_photo(_hint, work_dir, _bfn) if _hint else ""
+            if _bpath:
+                _sticker_el = (
+                    f'<div class="person-sticker" '
+                    f'style="background-image:url(\'{_bpath}\')"></div>'
+                )
+            else:
+                _ini = "".join(w[0].upper() for w in bg_name.split() if w)[:2] or "?"
+                _sticker_el = (
+                    f'<div class="person-sticker person-sticker-initials">'
+                    f'<div class="bio-initials">{_ini}</div>'
+                    f'<div class="bio-init-name">{bg_name}</div>'
+                    f'</div>'
+                )
+            party_el = f'<div class="party-tag">{bg_party}</div>' if bg_party else ""
+            slides_html += f"""
+<div class="slide slide-person-bg {motion_class}">
+  {corners}{clip_el}
+  <div class="tag">Quem É</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  {party_el}
+  <div class="profile-layout">
+    {_sticker_el}
+    <div><div class="bio-role-lg">{bg_role}</div><ul class="fact-list">{facts_li}</ul></div>
+  </div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+"""
+
+        elif stype == "network":
+            bio_cards = []
+            for _idx, _p in enumerate(slide.get("people", [])[:6]):
+                _name = esc(_p.get("name", "") if isinstance(_p, dict) else str(_p))
+                _role = esc((_p.get("role_pt", "") if isinstance(_p, dict) else "")[:50])
+                _conn = esc((_p.get("connection_pt", "") if isinstance(_p, dict) else "")[:60])
+                _hint = (_p.get("image_hint", "") if isinstance(_p, dict) else "") or _name
+                _bfn  = re.sub(r"[^\w]", "_", str(_hint).lower())[:30] + f"_s{slide_i}_{_idx}.jpg"
+                _bpath = _fetch_person_photo(_hint, work_dir, _bfn) if _hint else ""
+                if _bpath:
+                    _card_img = f'<img class="bio-photo" src="{_bpath}" alt="{_name}" style="object-position:center top;">'
+                else:
+                    _ini = "".join(w[0].upper() for w in _name.split() if w)[:2] or "?"
+                    _card_img = f'<div class="bio-initials">{_ini}</div>'
+                bio_cards.append(
+                    f'<div class="bio-card">{_card_img}'
+                    f'<div class="bio-name">{_name}</div>'
+                    f'<div class="bio-role">{_role}</div>'
+                    f'<div class="bio-conn">{_conn}</div>'
+                    f'</div>'
+                )
+            net_grid = f'<div class="bio-grid net-grid">{"".join(bio_cards)}</div>'
+            slides_html += f"""
+<div class="slide slide-network {motion_class}">
+  {corners}{clip_el}
+  <div class="tag">A Rede</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  {net_grid}
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+"""
+
+        elif stype == "money":
+            nums_html = ""
+            for n in slide.get("numbers", [])[:4]:
+                nums_html += (
+                    f'<div class="num-block">'
+                    f'<div class="num-val">{esc(n.get("value", ""))}</div>'
+                    f'<div class="num-label">{esc(n.get("label_pt", ""))}</div>'
+                    f'<div class="num-en">{esc(n.get("label_en", ""))}</div>'
+                    f'</div>'
+                )
+            slides_html += f"""
+<div class="slide slide-money {motion_class}">
+  {corners}{clip_el}
+  <div class="tag">O Rastro do Dinheiro</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  <div class="nums-grid">{nums_html}</div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+"""
+
+        elif stype == "quote":
+            slides_html += f"""
+<div class="slide slide-quote {motion_class}">
+  {corners}{clip_el}
+  <div class="tag">Não é opinião</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  <div class="quote-block">
+    <div class="quote-mark">"</div>
+    <div class="quote-text">{esc(slide.get("quote", ""))}</div>
+    <div class="quote-source">— {esc(slide.get("source", ""))}</div>
+  </div>
+  <div class="quote-context">{esc(slide.get("context_pt", ""))}</div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+"""
+
+        else:
+            items = slide.get("items_pt", slide.get("facts_pt", []))
+            items_li = "".join(f"<li>{esc(it)}</li>" for it in items)
+            if stype != "list":
+                print(f"  _build_the_case_html: unknown slide type '{stype}' — rendering as list fallback")
+            slides_html += f"""
+<div class="slide slide-list {motion_class}">
+  {corners}{clip_el}
+  <div class="tag">Segue o fio</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  <ul class="item-list">{items_li}</ul>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+"""
+
+    src_rows = "".join(
+        f'<div class="src-row"><span class="src-num">{i:02d}</span><span>{esc(s)}</span></div>\n'
+        for i, s in enumerate(sources, 1)
+    )
+    slides_html += f"""
+<div class="slide slide-sources">
+  {corners}
+  <div class="tag">Fontes</div>
+  <div class="src-head">A FONTE<br>É <span class="accent">ESTA.</span></div>
+  <div class="src-list">{src_rows}</div>
+  <div class="cta-pt">{cta_pt}</div>
+  <div class="cta-en">{cta_en}</div>
+  <div class="footer-handle">{handle}</div>
+</div>
+"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>O Caso — {slug}</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* FORMAT-021 O Caso — topic/case-centric investigation carousel */
+/* Inherits Rachadinha v2 brand spec (Canário dark editorial palette) */
+*{{box-sizing:border-box;margin:0;padding:0}}
+:root{{--ob:#0A0A0A;--pa:#F0EBE3;--ca:#CBCC10;--gr:rgba(240,235,227,0.45);--rule:rgba(240,235,227,0.12);--W:1080px;--H:1350px;--P:108px}}
+body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}}
+.slide{{width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);padding:var(--P);position:relative;overflow:hidden;flex-shrink:0;display:flex;flex-direction:column}}
+.corner{{position:absolute;width:28px;height:28px;z-index:10}}
+.corner.tl{{top:40px;left:40px;border-top:2px solid rgba(203,204,16,.6);border-left:2px solid rgba(203,204,16,.6)}}
+.corner.tr{{top:40px;right:40px;border-top:2px solid rgba(203,204,16,.6);border-right:2px solid rgba(203,204,16,.6)}}
+.corner.bl{{bottom:40px;left:40px;border-bottom:2px solid rgba(203,204,16,.6);border-left:2px solid rgba(203,204,16,.6)}}
+.corner.br{{bottom:40px;right:40px;border-bottom:2px solid rgba(203,204,16,.6);border-right:2px solid rgba(203,204,16,.6)}}
+.bg-photo{{position:absolute;inset:0;background-size:cover;background-position:center 20%;z-index:1;filter:grayscale(1) contrast(1.1) brightness(.55)}}
+.bg-photo::after{{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,10,.18) 0%,rgba(10,10,10,.78) 100%)}}
+.halftone{{position:absolute;inset:0;z-index:2;pointer-events:none;background-image:radial-gradient(circle,rgba(10,10,10,.55) 1px,transparent 1px);background-size:6px 6px}}
+.slide-motion > *:not(.bg-photo):not(.halftone):not(.corner):not(.swipe):not(.footer-handle):not(.sticker-slot){{position:relative;z-index:3}}
+/* Cover sticker — absolutely positioned right side (cover slide only) */
+.sticker-slot{{position:absolute;right:7%;top:18%;width:300px;height:390px;z-index:4;border:3px solid var(--ca);border-radius:4px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.7)}}
+.sticker-slot img{{width:100%;height:100%;object-fit:cover;object-position:center top;filter:grayscale(1) contrast(1.15) brightness(.95)}}
+.sticker-initials{{display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(203,204,16,.05)}}
+.cover-with-sticker .case-title{{max-width:56%}}
+.cover-with-sticker .case-title-en{{max-width:56%}}
+.cover-with-sticker .hook-pt{{max-width:56%}}
+.cover-with-sticker .cover-person-attr{{max-width:56%}}
+/* Global typography */
+.tag{{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--gr);margin-bottom:24px}}
+.accent{{color:var(--ca)}}
+.swipe{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);right:var(--P);z-index:10;letter-spacing:.08em}}
+.footer-handle{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);left:var(--P);z-index:10;letter-spacing:.06em}}
+/* COVER */
+.case-status-pill{{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--ca);background:rgba(203,204,16,.08);border:1px solid rgba(203,204,16,.3);padding:5px 14px;display:inline-block;margin-bottom:20px;letter-spacing:.12em;text-transform:uppercase;border-radius:2px}}
+.case-title{{font-family:'Anton',sans-serif;font-size:100px;line-height:.95;text-transform:uppercase;letter-spacing:-.01em;margin-bottom:16px}}
+.case-title-en{{font-family:'Roboto Condensed',sans-serif;font-size:30px;color:var(--gr);font-weight:400;line-height:1.3;margin-bottom:20px}}
+.cover-person-attr{{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--ca);letter-spacing:.08em;margin-bottom:20px;text-transform:uppercase}}
+.hook-pt{{font-family:'Roboto Condensed',sans-serif;font-size:36px;line-height:1.35;color:var(--pa);font-weight:400}}
+/* INNER SLIDE HEADINGS */
+.slide-hl{{font-family:'Anton',sans-serif;font-size:72px;line-height:.98;text-transform:uppercase;letter-spacing:-.01em;margin-bottom:12px}}
+.slide-en{{font-family:'Roboto Condensed',sans-serif;font-size:24px;color:var(--gr);font-weight:400;margin-bottom:32px;line-height:1.3}}
+/* TIMELINE */
+.timeline-grid{{flex:1;display:flex;flex-direction:column;gap:0;overflow:hidden}}
+.tl-row{{display:grid;grid-template-columns:160px 1fr;gap:20px;border-bottom:1px solid var(--rule);padding:18px 0;align-items:start}}
+.tl-date{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--ca);font-weight:700;letter-spacing:.06em;flex-shrink:0}}
+.tl-text{{font-family:'Roboto Condensed',sans-serif;font-size:34px;line-height:1.3;color:var(--pa)}}
+/* RESPONSIBLE PARTY */
+.resp-institution{{font-family:'Anton',sans-serif;font-size:52px;line-height:1;color:var(--ca);text-transform:uppercase;margin-bottom:14px}}
+.resp-date{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);margin-bottom:22px;letter-spacing:.08em}}
+.resp-impact{{font-family:'Roboto Condensed',sans-serif;font-size:38px;line-height:1.35;font-weight:700;margin-bottom:8px}}
+.resp-impact-en{{font-family:'Roboto Condensed',sans-serif;font-size:24px;color:var(--gr)}}
+/* PERSON BACKGROUND — inline sticker (not absolutely positioned) */
+.profile-layout{{display:flex;gap:36px;align-items:flex-start;flex:1}}
+.person-sticker{{width:240px;min-height:310px;flex-shrink:0;border:2px solid rgba(203,204,16,.35);border-radius:4px;overflow:hidden;background-size:cover;background-position:center top;filter:grayscale(.05) contrast(1.05)}}
+.person-sticker-initials{{display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(203,204,16,.05)}}
+.bio-role-lg{{font-family:'Roboto Condensed',sans-serif;font-size:30px;color:var(--ca);font-weight:700;margin-bottom:18px;line-height:1.2}}
+.bio-initials{{font-family:'Anton',sans-serif;font-size:80px;color:var(--ca);letter-spacing:.02em;line-height:1}}
+.bio-init-name{{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--gr);text-align:center;margin-top:10px;text-transform:uppercase;letter-spacing:.1em;padding:0 6px}}
+.fact-list{{list-style:none;flex:1}}
+.fact-list li{{font-family:'Roboto Condensed',sans-serif;font-size:34px;font-weight:400;padding:14px 0;border-bottom:1px solid var(--rule);line-height:1.3}}
+.fact-list li::before{{content:"▸ ";color:var(--ca)}}
+.party-tag{{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--ca);background:rgba(203,204,16,.08);padding:6px 14px;display:inline-block;margin-bottom:18px;letter-spacing:.12em;text-transform:uppercase}}
+/* NETWORK */
+.bio-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin:12px 0 20px;flex:1;align-content:start}}
+.net-grid{{grid-template-columns:repeat(3,1fr)}}
+.bio-card{{display:flex;flex-direction:column;align-items:center;gap:4px}}
+.bio-photo{{width:110px;height:130px;border-radius:4px;object-fit:cover;object-position:center top;filter:grayscale(.15) contrast(1.05)}}
+.bio-card .bio-initials{{width:110px;height:130px;font-size:48px;border-radius:4px;background:rgba(203,204,16,.08);display:flex;align-items:center;justify-content:center;border:1px solid rgba(203,204,16,.3)}}
+.bio-name{{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--pa);text-align:center;text-transform:uppercase;letter-spacing:.06em;line-height:1.3}}
+.bio-role{{font-family:'Roboto Condensed',sans-serif;font-size:12px;color:var(--gr);text-align:center;line-height:1.2}}
+.bio-conn{{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ca);text-align:center;line-height:1.2;margin-top:2px}}
+/* MONEY */
+.nums-grid{{display:grid;grid-template-columns:1fr 1fr;gap:24px;flex:1}}
+.num-block{{background:rgba(203,204,16,.05);border:1px solid rgba(203,204,16,.18);padding:24px 18px;border-radius:4px}}
+.num-val{{font-family:'Anton',sans-serif;font-size:76px;color:var(--ca);line-height:1;margin-bottom:8px}}
+.num-label{{font-family:'Roboto Condensed',sans-serif;font-size:28px;font-weight:700;margin-bottom:4px}}
+.num-en{{font-family:'Roboto Condensed',sans-serif;font-size:20px;color:var(--gr)}}
+/* LIST */
+.item-list{{list-style:none;flex:1}}
+.item-list li{{font-family:'Roboto Condensed',sans-serif;font-size:36px;font-weight:400;padding:16px 0;border-bottom:1px solid var(--rule);line-height:1.3}}
+.item-list li::before{{content:"→ ";color:var(--ca)}}
+/* QUOTE */
+.quote-block{{border-left:4px solid var(--ca);padding:24px 28px;margin-bottom:24px;flex:1;background:rgba(203,204,16,.04)}}
+.quote-mark{{font-family:'Anton',sans-serif;font-size:80px;color:var(--ca);line-height:.7;margin-bottom:10px}}
+.quote-text{{font-family:'Roboto Condensed',sans-serif;font-size:34px;line-height:1.4;margin-bottom:18px}}
+.quote-source{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--ca);letter-spacing:.08em}}
+.quote-context{{font-family:'Roboto Condensed',sans-serif;font-size:26px;color:var(--gr);line-height:1.4}}
+/* SOURCES */
+.src-head{{font-family:'Anton',sans-serif;font-size:80px;line-height:.95;text-transform:uppercase;margin-bottom:32px}}
+.src-list{{flex:1}}
+.src-row{{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--gr);display:flex;gap:16px;padding:10px 0;border-bottom:1px solid var(--rule);line-height:1.4}}
+.src-num{{color:var(--ca);flex-shrink:0;width:30px;font-weight:700}}
+.cta-pt{{font-family:'Anton',sans-serif;font-size:52px;line-height:1;color:var(--ca);text-transform:uppercase;margin-top:24px}}
+.cta-en{{font-family:'Roboto Condensed',sans-serif;font-size:24px;color:var(--gr);margin-top:6px}}
+/* CONTEXT IMAGE SLOT */
+.context-img-slot{{min-height:220px;max-height:340px;border:2px solid rgba(203,204,16,.25);border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:18px;background:rgba(10,10,10,.3);flex-shrink:0}}
+.context-img-slot img{{width:100%;height:100%;object-fit:cover;display:block}}
+.ctx-query{{font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--ca);text-align:center;padding:16px;opacity:.7}}
+</style>
+</head>
+<body>
+{slides_html}
+</body>
+</html>"""
+
+    html_path = Path(work_dir) / "cover.html"
+    html_path.write_text(html)
     return str(html_path)
 
 
