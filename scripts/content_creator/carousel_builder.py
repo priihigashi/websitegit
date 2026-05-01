@@ -227,6 +227,7 @@ MANDATORY RULES — follow these exactly:
 5. Series-premise rule: if the title asks a question, the carousel MUST answer it.
 6. Never use "todos", "maioria", "everyone" without qualifying with actual data.
 7. Tone: Fact-check energy. "Here are the facts. Now you know."
+0. COVER CLAIM RULE (non-negotiable, all series): The CLAIM or OPINION being discussed MUST appear on slide 1 (the cover). Not on slide 2 — on slide 1. The cover is the hook. The claim IS the hook. Format it as cover_claim: a provocative 1-line statement that stops the scroll. Rage-bait energy, Jubilee debate style. NEVER leave the cover as just a topic title with no claim.
 
 CAROUSEL STRUCTURE RULES (Brazil/News fact-check):
 8. Hook slide = THE BIG CLAIM/NUMBER only. Do NOT hint that you'll question it.
@@ -498,19 +499,20 @@ MANDATORY RULES:
 1. Use ONLY facts from the brief. Never invent numbers, claims, or sources.
 2. Language: Brazilian Portuguese throughout body copy. Headings have an English subtitle (small, grey).
 3. NEVER put internal identifiers like "EP001", "EP002", "FORMAT-019" in any slide text.
-4. Cover hook must make someone stop scrolling — state the tension: many followers, but is the content honest?
+4. cover_claim is NON-NEGOTIABLE — the exact claim/opinion being fact-checked, in 1 punchy sentence. This is the scroll-stopper on slide 1. Write it as rage-bait or mystery: "O Brasil gasta 3x mais que o mundo com Justiça." If the brief has a direct quote, use it. If not, distill the core claim to one provocative line. Max 12 words. NEVER leave cover_claim empty.
 5. cover_date MUST be exactly: "{_today_pt}" — do not invent or change this date.
-5. Slide 2 is about the SPECIFIC POST/CLAIM they made — quote or paraphrase what they said.
-6. The VERDICT slide is the most important — show the 3-way score as concrete percentages.
-7. Every factual slide needs a source name (Harvard, IMF, IBGE, etc.) visible in the text.
-8. Tone: journalistic, calm, not accusatory. "Vamos ver o que os dados dizem."
+6. Slide 2 is about the SPECIFIC POST/CLAIM they made — quote or paraphrase what they said. This expands what cover_claim stated on slide 1.
+7. The VERDICT slide is the most important — show the 3-way score as concrete percentages.
+8. Every factual slide needs a source name (Harvard, IMF, IBGE, etc.) visible in the text.
+9. Tone: journalistic, calm, not accusatory. "Vamos ver o que os dados dizem."
 
 Return ONLY a valid JSON object with this exact structure:
 
 {{
-  "cover_pt": "DADOS OU VIÉS? — 4-6 words MAX, ALL CAPS",
-  "cover_en": "Data or agenda? — same as cover in English",
-  "cover_accent": "1 word from cover to highlight in accent color (e.g. 'VIÉS' or 'DADOS')",
+  "cover_pt": "DADOS VS OPINIÃO — 4-6 words MAX, ALL CAPS (topic of this episode)",
+  "cover_en": "Data vs Opinion — same topic in English",
+  "cover_accent": "1 word from cover to highlight in accent color (e.g. 'OPINIÃO' or 'DADOS')",
+  "cover_claim": "The exact claim being fact-checked — 1 short punchy sentence, as the person said it. This is the HOOK on slide 1. Write it like rage-bait: provocative, mysterious, stops the scroll. E.g.: 'O Brasil gasta 3x mais que o mundo com Justiça.' or 'O Judiciário brasileiro é o mais caro do planeta.' Max 12 words. PORTUGUESE ONLY.",
   "cover_date": "DD de mês de YYYY · Brasil",
   "cover_credibility_badge": "ALTA CREDIBILIDADE|MÉDIA CREDIBILIDADE|BAIXA CREDIBILIDADE — pick one from brief",
   "cover_visual": {{
@@ -523,7 +525,7 @@ Return ONLY a valid JSON object with this exact structure:
     }},
     "option_b": {{
       "type": "graphic-design",
-      "concept": "Bold DADOS OU VIÉS? text over dark background, influencer handle in smaller type, accent yellow line"
+      "concept": "Bold DADOS VS OPINIÃO text over dark background, influencer handle in smaller type, accent yellow line"
     }},
     "recommended": "a",
     "reason": "Influencer face stops scroll; viewer knows exactly who this is about"
@@ -3078,6 +3080,7 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px;font-fam
 .tag{{font-family:'JetBrains Mono',monospace;font-size:24px;color:var(--mu);margin-bottom:22px;text-transform:uppercase}}
 .accent{{color:var(--ac)}}
 .cover-hl{{font-family:'Fraunces',serif;font-size:96px;line-height:1.02;text-transform:uppercase;margin-bottom:18px}}
+.cover-claim{{font-family:'Roboto Condensed',sans-serif;font-size:36px;font-weight:400;color:var(--pa);font-style:italic;line-height:1.3;margin-bottom:18px;border-left:3px solid var(--ac);padding-left:16px}}
 .cover-en,.slide-en,.cta-en{{font-style:italic;color:var(--mu)}}
 .slide-hl{{font-family:'Fraunces',serif;font-size:64px;line-height:1.08;text-transform:uppercase;margin-bottom:8px}}
 .item-list{{list-style:none;flex:1}}
@@ -3197,13 +3200,16 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
     # Series tag — route by _template_key so each series shows its own label on the cover
     _tkey = (content.get("_template_key") or "").lower()
     _series_tag_map = {
-        "dados-ou-agenda": "Dados ou Agenda?",
+        "dados-ou-agenda": "Dados vs Opinião",
         "verificamos": "Verificamos",
         "verificamos_clip": "Verificamos",
         "arquivo-aberto": "Arquivo Aberto",
         "a-conta": "A Conta que Ninguém Pagou",
     }
     cover_series_tag = _series_tag_map.get(_tkey, "Quem decidiu isso?")
+    # cover_claim: the hook claim shown on slide 1 — the opinion/statement being fact-checked
+    _cover_claim_raw = content.get("cover_claim", "")
+    cover_claim_el = f'<div class="cover-claim">"{esc(_cover_claim_raw)}"</div>' if _cover_claim_raw else ""
     slides_html = f"""
 <div class="slide slide-cover slide-motion {cover_sticker_class}">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
@@ -3212,6 +3218,7 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
   <div class="tag">{cover_series_tag}</div>
   <div class="cover-date">{cover_date}</div>
   <div class="cover-hl">{cover_hl}</div>
+  {cover_claim_el}
   <div class="cover-en">{cover_en}</div>
   {_cred_el}
   <div class="swipe">SWIPE &#8594;</div>
