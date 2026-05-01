@@ -3148,11 +3148,35 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
         f'<div class="bg-photo" style="background-image:url(\'{cover_img}\');"></div>'
         f'<div class="halftone"></div>'
     ) if cover_img else ""
-    # Cover sticker-slot: portrait photo absolutely positioned at right, same photo
-    cover_sticker_el = (
-        f'<div class="sticker-slot"><img src="{cover_img}" alt="cover portrait"></div>'
-    ) if cover_img else ""
-    cover_sticker_class = "cover-with-sticker" if cover_img else ""
+    # Cover sticker-slot: portrait photo absolutely positioned at right, same photo.
+    # When no AI image available, fall back to bio-initials so cover is never faceless.
+    if cover_img:
+        cover_sticker_el = f'<div class="sticker-slot"><img src="{cover_img}" alt="cover portrait"></div>'
+        cover_sticker_class = "cover-with-sticker"
+    else:
+        # Bio-initials fallback — extract name from clip_suggestions[0].person_or_topic
+        _cs = content.get("clip_suggestions", [{}])[0] if content.get("clip_suggestions") else {}
+        _pot = _cs.get("person_or_topic", "")
+        _cname = _pot.split("+")[0].strip().split("—")[0].strip() if _pot else ""
+        _cini = "".join(w[0].upper() for w in _cname.split() if w)[:2] if _cname else ""
+        if _cini:
+            cover_sticker_el = (
+                f'<div class="sticker-slot sticker-initials">'
+                f'<div class="bio-initials">{_cini}</div>'
+                f'<div class="bio-init-name">{esc(_cname)}</div>'
+                f'</div>'
+            )
+            cover_sticker_class = "cover-with-sticker"
+        else:
+            cover_sticker_el = ""
+            cover_sticker_class = ""
+    # Credibility badge (dados-ou-agenda: ALTA/MÉDIA/BAIXA CREDIBILIDADE)
+    _cred_raw = esc(content.get("cover_credibility_badge", ""))
+    if _cred_raw:
+        _cred_cls = "cred-alta" if "ALTA" in _cred_raw.upper() else ("cred-baixa" if "BAIXA" in _cred_raw.upper() else "cred-media")
+        _cred_el = f'<div class="cred-badge {_cred_cls}">{_cred_raw}</div>'
+    else:
+        _cred_el = ""
     # Series tag — route by _template_key so each series shows its own label on the cover
     _tkey = (content.get("_template_key") or "").lower()
     _series_tag_map = {
@@ -3172,6 +3196,7 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
   <div class="cover-date">{cover_date}</div>
   <div class="cover-hl">{cover_hl}</div>
   <div class="cover-en">{cover_en}</div>
+  {_cred_el}
   <div class="swipe">SWIPE &#8594;</div>
   <div class="footer-handle">{handle}</div>
 </div>
@@ -3315,6 +3340,28 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
                     ctx_slot = f'\n  <div class="context-img-slot"><span class="ctx-query">[ IMG: {ctx_q} ]</span></div>'
                 else:
                     ctx_slot = ""
+            elif v_hint == "bio-card":
+                # Bio-card: render influencer face + name + role alongside the quote.
+                # NAMED-PERSON → FACE RULE: every named person must have a visual anchor.
+                bio_cards = []
+                for _p in slide.get("mentioned_people", [])[:2]:
+                    _name = (_p.get("name", "") if isinstance(_p, dict) else str(_p)) or ""
+                    _role = (_p.get("role_pt", "") if isinstance(_p, dict) else "") or ""
+                    _hint = (_p.get("image_hint", "") if isinstance(_p, dict) else "") or _name
+                    _bfn = re.sub(r"[^\w]", "_", _hint.lower())[:30] + f"_s{slide_i}.jpg"
+                    _bpath = _fetch_person_photo(_hint, work_dir, _bfn) if _hint else ""
+                    if _bpath:
+                        _card_img = f'<img class="bio-photo" src="{_bpath}" alt="{esc(_name)}" style="object-position:center top;">'
+                    else:
+                        _ini = "".join(w[0].upper() for w in _name.split() if w)[:2] or "?"
+                        _card_img = f'<div class="bio-initials">{_ini}</div>'
+                    bio_cards.append(
+                        f'<div class="bio-card">{_card_img}'
+                        f'<div class="bio-name">{esc(_name)}</div>'
+                        f'<div class="bio-role">{esc(_role[:50])}</div>'
+                        f'</div>'
+                    )
+                ctx_slot = f'\n  <div class="bio-grid">{"".join(bio_cards)}</div>' if bio_cards else ""
             else:
                 ctx_slot = ""
             slides_html += f"""
@@ -3523,6 +3570,18 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}}
 .verdict-partial{{color:var(--ca)}}
 .verdict-false{{color:#f87171}}
 .verdict-detail{{font-family:'Roboto Condensed',sans-serif;font-size:28px;color:var(--pa);line-height:1.35}}
+/* BIO-CARD GRID (quote slides + multi-person slides) */
+.bio-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin:12px 0 20px}}
+.bio-card{{display:flex;flex-direction:column;align-items:center;gap:6px}}
+.bio-photo{{width:110px;height:130px;border-radius:4px;object-fit:cover;object-position:center top;filter:grayscale(.15) contrast(1.05)}}
+.bio-card .bio-initials{{width:110px;height:130px;font-size:48px;border-radius:4px;background:rgba(203,204,16,.08);display:flex;align-items:center;justify-content:center;border:1px solid rgba(203,204,16,.3)}}
+.bio-name{{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--pa);text-align:center;text-transform:uppercase;letter-spacing:.06em;line-height:1.3}}
+.bio-role{{font-family:'Roboto Condensed',sans-serif;font-size:12px;color:var(--gr);text-align:center;line-height:1.2}}
+/* CREDIBILITY BADGE (dados-ou-agenda cover) */
+.cred-badge{{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:5px 12px;border-radius:3px;display:inline-block;margin:8px 0}}
+.cred-alta{{color:#4ade80;border:1px solid rgba(74,222,128,.35);background:rgba(74,222,128,.08)}}
+.cred-media{{color:var(--ca);border:1px solid rgba(203,204,16,.35);background:rgba(203,204,16,.06)}}
+.cred-baixa{{color:#f87171;border:1px solid rgba(248,113,113,.35);background:rgba(248,113,113,.08)}}
 </style>
 </head>
 <body>
