@@ -98,7 +98,7 @@ def check_html_placeholders(html_path: str) -> list[str]:
                 f"OPC layout issue: expected >=3 context image slots on slides 2-4, found {slot_count}"
             )
 
-        img_count = len(re.findall(r'<div class="context-img-slot">\s*<img ', html))
+        img_count = len(re.findall(r'<div class="context-img-slot"[^>]*>\s*<img ', html))
         if img_count < 2:
             issues.append(
                 f"OPC visual floor miss: only {img_count} context slot(s) have real images; require >=2"
@@ -133,7 +133,7 @@ def check_html_placeholders(html_path: str) -> list[str]:
         # Swipe text integrity + no clipping-prone typo patterns.
         if "WIPE →" in html:
             issues.append("OPC swipe label typo/clipping artifact detected ('WIPE →').")
-        swipe_count = html.count("SWIPE →")
+        swipe_count = html.count("SWIPE →") + html.count("SWIPE &#8594;")
         if swipe_count < 4:
             issues.append(f"OPC swipe indicator missing on expected slides (found {swipe_count}, expected >=4).")
         # Ensure cover HUD lane classes are present.
@@ -162,7 +162,7 @@ def check_html_placeholders(html_path: str) -> list[str]:
         if sources_blocks and sources_with_bg < sources_blocks:
             issues.append("OPC last slide miss: sources slide is missing hero background image block.")
         # Relevance checks: each body slide context image query should share keywords with slide copy.
-        for slide_cls in ("slide-stat", "slide-list", "slide-tip"):
+        for slide_cls in ("slide-list", "slide-tip"):  # slide-stat has no image slot by design
             m_slide = re.search(rf'<div class="slide {slide_cls}[^"]*">([\s\S]*?)</div>\s*<div class="slide', html)
             if not m_slide:
                 continue
