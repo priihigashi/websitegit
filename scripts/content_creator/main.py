@@ -637,6 +637,10 @@ def render_motion_remotion(cover_png_path, clip_path, output_dir, variant,
     if base.endswith("_html"):
         base = base[:-5]
     nn = f"{slide_idx:02d}"
+    # Strip variant_nn_ prefix if already embedded in the filename (avoids "black_01_black_01_cover")
+    _prefix = f"{variant}_{nn}_"
+    if base.startswith(_prefix):
+        base = base[len(_prefix):]
     mp4_path = Path(output_dir) / f"{variant}_{nn}_{base}_motion.mp4"
     gif_path = Path(output_dir) / f"{variant}_{nn}_{base}_motion.gif"
 
