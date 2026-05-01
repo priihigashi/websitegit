@@ -3182,17 +3182,20 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
     def esc(s):
         return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
-    cover_pt    = esc(content.get("cover_pt", "TÍTULO AQUI"))
-    cover_en    = esc(content.get("cover_en", "TITLE HERE"))
-    cover_accent = esc(content.get("cover_accent", ""))
-    cover_date  = esc(content.get("cover_date", ""))
-    cta_pt      = esc(content.get("cta_pt", "Salva pra não esquecer."))
-    cta_en      = esc(content.get("cta_en", "Save this."))
+    cover_pt           = esc(content.get("cover_pt", "TÍTULO AQUI"))
+    cover_en           = esc(content.get("cover_en", "TITLE HERE"))
+    cover_accent       = esc(content.get("cover_accent", ""))
+    cover_date         = esc(content.get("cover_date", ""))
+    cover_stamp        = esc(content.get("cover_stamp", ""))        # e.g. "ARQUIVADO · 2024"
+    person_attribution = esc(content.get("person_attribution", "")) # e.g. "Flávio Bolsonaro · PL"
+    cta_pt             = esc(content.get("cta_pt", "Salva pra não esquecer."))
+    cta_en             = esc(content.get("cta_en", "Save this."))
     sources     = content.get("sources", [])
 
     raw_cover = content.get("cover_pt", "")
     if cover_accent and cover_accent in raw_cover:
-        cover_hl = cover_pt.replace(cover_accent, f'<span class="accent">{cover_accent}</span>', 1)
+        # em = italic + canário yellow (matches original Rachadinha EP001 design)
+        cover_hl = cover_pt.replace(cover_accent, f'<em>{cover_accent}</em>', 1)
     else:
         cover_hl = cover_pt
 
@@ -3262,14 +3265,15 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   {cover_bg_el}
   {cover_sticker_el}
+  {f'<div class="stamp-badge">{cover_stamp}</div>' if cover_stamp else ""}
   <div class="tag">{cover_series_tag}</div>
   <div class="cover-date">{cover_date}</div>
   <div class="cover-hl">{cover_hl}</div>
   {cover_claim_el}
   <div class="cover-en">{cover_en}</div>
   {_cred_el}
-  <div class="swipe">SWIPE &#8594;</div>
-  <div class="footer-handle">{handle}</div>
+  <div class="swipe">SEGUE O FIO &#8594;</div>
+  {f'<div class="person-pill">{person_attribution}</div>' if person_attribution else f'<div class="footer-handle">{handle}</div>'}
 </div>
 """
 
@@ -3613,7 +3617,7 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
 <head>
 <meta charset="UTF-8">
 <title>Brazil News — {slug}</title>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 /* ── Rachadinha v2 brand spec — canonical native Brazil template ── */
 *{{box-sizing:border-box;margin:0;padding:0}}
@@ -3646,10 +3650,17 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}}
 .footer-handle{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);left:var(--P);z-index:10;letter-spacing:.06em}}
 /* COVER */
 .slide-cover .cover-date{{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);margin-bottom:44px;letter-spacing:.1em}}
-.slide-cover .cover-hl{{font-family:'Anton',sans-serif;font-size:112px;line-height:.95;text-transform:uppercase;letter-spacing:-.01em;margin-bottom:28px}}
+.slide-cover .cover-hl{{font-family:'Playfair Display',serif;font-size:104px;font-weight:900;line-height:.93;letter-spacing:-.01em;margin-bottom:28px}}
+.slide-cover .cover-hl em{{font-style:italic;color:var(--ca)}}
 .slide-cover .cover-en{{font-family:'Roboto Condensed',sans-serif;font-size:32px;color:var(--gr);font-weight:400;line-height:1.35}}
+/* Stamp badge — overlaps top of sticker-slot */
+.stamp-badge{{position:absolute;right:calc(7% - 4px);top:calc(18% - 20px);z-index:9;background:var(--ca);color:var(--ob);font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;padding:6px 14px;border:2px solid var(--ob);transform:rotate(-1.5deg)}}
+/* Person attribution pill — bottom left, replaces plain handle on cover */
+.person-pill{{position:absolute;bottom:var(--P);left:var(--P);z-index:10;border:1px solid var(--ca);padding:7px 16px;font-family:'JetBrains Mono',monospace;font-size:19px;letter-spacing:.07em;text-transform:uppercase;color:var(--pa);background:rgba(10,10,10,.55)}}
+.person-pill em{{color:var(--gr);font-style:normal}}
 /* INNER SLIDE HEADINGS */
-.slide-hl{{font-family:'Anton',sans-serif;font-size:72px;line-height:.98;text-transform:uppercase;letter-spacing:-.01em;margin-bottom:12px}}
+.slide-hl{{font-family:'Playfair Display',serif;font-size:72px;font-weight:900;line-height:.96;letter-spacing:-.01em;margin-bottom:12px}}
+.slide-hl em{{font-style:italic;color:var(--ca)}}
 .slide-en{{font-family:'Roboto Condensed',sans-serif;font-size:24px;color:var(--gr);font-weight:400;margin-bottom:32px;line-height:1.3}}
 /* PROFILE */
 .party-tag{{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--ca);background:rgba(203,204,16,.08);padding:6px 14px;display:inline-block;margin-bottom:18px;letter-spacing:.12em;text-transform:uppercase}}
