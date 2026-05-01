@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Template Gallery — Oak Park AI Hub</title>
+<title>Template Gallery — Page 2: With Images</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -11,7 +11,7 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
 
 /* ── Page nav ── */
 .page-nav{background:#060606;padding:12px 40px;border-bottom:1px solid rgba(203,204,16,0.2);display:flex;gap:12px;align-items:center}
-.page-btn{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:7px 18px;border-radius:3px;text-decoration:none;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.4);transition:all .15s;cursor:pointer}
+.page-btn{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:7px 18px;border-radius:3px;text-decoration:none;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.4);transition:all .15s}
 .page-btn:hover{border-color:#CBCC10;color:#CBCC10}
 .page-btn.active{border-color:#CBCC10;color:#CBCC10;background:rgba(203,204,16,0.1)}
 .page-label{font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:.08em;margin-left:8px}
@@ -53,14 +53,14 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
 
 <!-- PAGE SWITCHER -->
 <div class="page-nav">
-  <span class="page-btn active">Page 1 — Clean</span>
-  <a href="wired.html" class="page-btn">Page 2 — With Images</a>
-  <span class="page-label">Page 1 = placeholder layout · Page 2 = dummy images as pipeline fills them</span>
+  <a href="index.html" class="page-btn">Page 1 — Clean</a>
+  <span class="page-btn active">Page 2 — With Images</span>
+  <span class="page-label">Dummy images show where the pipeline injects real photos</span>
 </div>
 
 <div class="gallery-top">
-  <h1>Template Gallery</h1>
-  <p>Oak Park AI Hub · generated 2026-05-01 · follow code blindly</p>
+  <h1>Template Gallery — Wired</h1>
+  <p>Oak Park AI Hub · dummy images injected · how it looks when the pipeline fills it in</p>
 </div>
 
 
@@ -198,7 +198,7 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
       </div>
       <button class="arrow-btn" onclick="nextSlide('news_brazil')">&#8594;</button>
     </div>
-    <div class="slide-counter" id="counter_news_brazil">slide 1 / 5</div>
+    <div class="slide-counter" id="counter_news_brazil">slide 1 / 6</div>
   </div>
 </div>
 <div class="tpl-card" id="card_news_brazil_shared">
@@ -223,7 +223,7 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   <div class="tpl-meta">
     <div class="tpl-name">QUEM DECIDIU — MOTION</div>
     <div class="tpl-format">FORMAT-002 · MOTION VERSION</div>
-    <div class="tpl-when">Motion variant of the Brazil News carousel. Playfair Display serif headline (not Anton). Full-bleed grayscale video bg + colored video in sticker frame + stamp badge + person attribution pill. Every slide has video background. CSS animations simulate motion in gallery — pipeline replaces with real clips.</div>
+    <div class="tpl-when">Motion variant of the Brazil News carousel. Playfair Display serif headline. Full-bleed grayscale video bg + colored video in sticker frame + stamp badge + person attribution pill. CSS animations simulate motion in gallery — pipeline replaces with real clips.</div>
   </div>
   <div class="tpl-viewer-wrap">
     <div class="variant-row"><button class="vbtn active" onclick="setVariant('brazil_motion',0)">Motion preview</button></div>
@@ -234,7 +234,7 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
       </div>
       <button class="arrow-btn" onclick="nextSlide('brazil_motion')">&#8594;</button>
     </div>
-    <div class="slide-counter" id="counter_brazil_motion">slide 1 / 6</div>
+    <div class="slide-counter" id="counter_brazil_motion">slide 1 / 4</div>
   </div>
 </div>
 <div class="tpl-card" id="card_news_usa_shared">
@@ -258,16 +258,166 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
 
 
 <script>
-// State per template: {currentSlide, variantOffset, totalSlides}
 const state = {};
+
+// ── Image seeds per template — consistent dummy photos ──
+const IMG = {
+  news_brazil: {
+    bg:      ['flaviobg','congress_building','flaviobg'],
+    sticker: 'politician_portrait',
+    bio:     ['adriano_nm','queiroz_fab','raimunda_v','danielle_m']
+  },
+  brazil_motion: {
+    bg:      ['flaviobg_m','congress_m','flaviobg_m2','archive_m'],
+    sticker: 'politician_motion'
+  },
+  who_is: {
+    bg:      ['mizrachi_bg','courtroom_bg','senate_bg'],
+    sticker: 'mizrachi_person',
+    bio:     ['ally1','ally2','ally3','ally4']
+  },
+  the_case: {
+    bg:      ['case_bg1','case_bg2','courthouse'],
+    sticker: 'case_person',
+    bio:     ['suspect1','suspect2','suspect3','suspect4']
+  },
+  news_brazil_shared: {
+    bg:      ['senado_bg','planalto_bg','congress_shared'],
+    bio:     ['br1','br2','br3','br4']
+  },
+  news_usa_shared: {
+    bg:      ['capitol_bg','whitehouse_bg','dc_bg'],
+    bio:     ['us1','us2','us3','us4']
+  },
+  opc_tip: {
+    bg:      ['kitchen_reno','bathroom_tiles','construction_site'],
+    sticker: 'contractor_mike',
+    ctx:     ['tile_work','grout_detail','kitchen_counter','floor_tile']
+  },
+  opc_illustrated: {
+    bg:      ['oak_park_exterior','renovation_before','oak_park_project'],
+    sticker: 'contractor_mike2',
+    ctx:     ['bathroom_reno','kitchen_progress','foundation_work','framing_opc']
+  },
+  opc_cutout: {
+    bg:      ['opc_dark_bg','opc_brand_bg','opc_obsidian'],
+    sticker: 'mike_cutout'
+  },
+  opc_progress: {
+    bg:      ['project_exterior','job_site_opc','progress_shot'],
+    sticker: 'mike_onsite',
+    ctx:     ['foundation_pour','framing_stage','drywall_hang','electrical_rough']
+  }
+};
+
+// ── Inject dummy images into all placeholder slots ──
+function wireImages(iframe, tid) {
+  const doc = iframe.contentDocument;
+  if (!doc) return;
+  const s = IMG[tid] || {};
+  let bgIdx = 0, bioIdx = 0, ctxIdx = 0;
+
+  // 1. bg-placeholder divs → bg-photo with real image
+  doc.querySelectorAll('.bg-placeholder').forEach(el => {
+    const seed = (s.bg && s.bg[bgIdx]) || ('bg_' + tid + '_' + bgIdx);
+    el.className = 'bg-photo';
+    el.style.cssText = (el.getAttribute('style') || '') +
+      ';background-image:url("https://picsum.photos/seed/' + seed + '/1080/1350")';
+    bgIdx++;
+  });
+
+  // 2. bg-photo already in HTML but pointing to missing local resources/ → replace URL
+  doc.querySelectorAll('.bg-photo').forEach(el => {
+    const cur = el.style.backgroundImage || '';
+    if (!cur || cur.includes('resources/') || cur === 'none') {
+      const seed = (s.bg && s.bg[bgIdx]) || ('bgp_' + tid + '_' + bgIdx);
+      el.style.backgroundImage = 'url("https://picsum.photos/seed/' + seed + '/1080/1350")';
+      bgIdx++;
+    }
+  });
+
+  // 3. bg-video-placeholder (motion template) → colored live gradient
+  doc.querySelectorAll('.bg-video-placeholder').forEach((el, i) => {
+    const seed = (s.bg && s.bg[bgIdx]) || ('bgv_' + tid + '_' + i);
+    el.style.backgroundImage = 'url("https://picsum.photos/seed/' + seed + '/1080/1350")';
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center 20%';
+    el.style.filter = 'grayscale(1) contrast(1.1) brightness(.45)';
+    el.style.animation = 'none'; // stop the default gradient animation so the photo shows
+    bgIdx++;
+  });
+
+  // 4. sticker-placeholder → real portrait image
+  doc.querySelectorAll('.sticker-placeholder').forEach(el => {
+    const seed = s.sticker || ('sticker_' + tid);
+    el.innerHTML = '<img src="https://picsum.photos/seed/' + seed + '/310/410"'
+      + ' style="width:100%;height:100%;object-fit:cover;object-position:center top;">';
+  });
+
+  // 5. sticker-slot video placeholder (motion) → portrait image
+  doc.querySelectorAll('.sticker-slot .sticker-placeholder').forEach(el => {
+    const seed = s.sticker || ('stickerm_' + tid);
+    el.innerHTML = '<img src="https://picsum.photos/seed/' + seed + '/310/410"'
+      + ' style="width:100%;height:100%;object-fit:cover;object-position:center top;">';
+  });
+
+  // 6. sticker-inner (OPC Mike slot / profile slide) → photo
+  doc.querySelectorAll('.sticker-inner').forEach(el => {
+    if (el.querySelector('img')) return; // already has image
+    const seed = s.sticker || ('stinner_' + tid);
+    el.innerHTML = '<img src="https://picsum.photos/seed/' + seed + '/260/340"'
+      + ' style="width:100%;height:100%;object-fit:cover;object-position:center top;">';
+  });
+
+  // 7. bio-card .bio-initials → bio-photo img
+  doc.querySelectorAll('.bio-card .bio-initials').forEach(el => {
+    const seed = (s.bio && s.bio[bioIdx]) || ('bio_' + tid + '_' + bioIdx);
+    const img = doc.createElement('img');
+    img.className = 'bio-photo';
+    img.src = 'https://picsum.photos/seed/' + seed + '/120/145';
+    img.style.cssText = 'width:120px;height:145px;object-fit:cover;object-position:center top;'
+      + 'border-radius:3px;border:1px solid rgba(203,204,16,.25);display:block;';
+    el.parentNode.replaceChild(img, el);
+    bioIdx++;
+  });
+
+  // 8. context-img-placeholder (OPC illustrated) → construction photo
+  doc.querySelectorAll('.context-img-placeholder').forEach(el => {
+    const seed = (s.ctx && s.ctx[ctxIdx]) || ('ctx_' + tid + '_' + ctxIdx);
+    const img = doc.createElement('img');
+    img.src = 'https://picsum.photos/seed/' + seed + '/600/400';
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:4px;display:block;';
+    el.parentNode.replaceChild(img, el);
+    ctxIdx++;
+  });
+
+  // 9. ctx-fallback (OPC illustrated inner fallback text) → photo
+  doc.querySelectorAll('.ctx-fallback').forEach(el => {
+    const seed = (s.ctx && s.ctx[ctxIdx]) || ('ctxf_' + tid + '_' + ctxIdx);
+    const img = doc.createElement('img');
+    img.src = 'https://picsum.photos/seed/' + seed + '/600/400';
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+    el.parentNode.replaceChild(img, el);
+    ctxIdx++;
+  });
+
+  // 10. OPC before/after photo slots (progress template)
+  doc.querySelectorAll('.photo-slot-placeholder, .before-slot, .after-slot').forEach(el => {
+    if (el.querySelector('img')) return;
+    const seed = (s.ctx && s.ctx[ctxIdx]) || ('photo_' + tid + '_' + ctxIdx);
+    el.innerHTML = '<img src="https://picsum.photos/seed/' + seed + '/800/600"'
+      + ' style="width:100%;height:100%;object-fit:cover;display:block;">';
+    ctxIdx++;
+  });
+}
 
 function initViewer(tid) {
   const iframe = document.getElementById('viewer_' + tid);
   const slides = iframe.contentDocument ? iframe.contentDocument.querySelectorAll('.slide') : [];
   const total = slides.length;
   state[tid] = { current: 0, total: total, variantOffset: 0 };
+  wireImages(iframe, tid);
   showSlide(tid, 0);
-  // Activate first variant button
   const firstVBtn = document.querySelector('#card_' + tid + ' .vbtn');
   if (firstVBtn) firstVBtn.classList.add('active');
 }
@@ -281,7 +431,6 @@ function showSlide(tid, idx) {
   slides.forEach(s => s.style.display = 'none');
   slides[idx].style.display = 'flex';
   state[tid].current = idx;
-  // Counter shows position within the current variant block
   const varOffset = state[tid].variantOffset;
   const blockSize = state[tid].total / (state[tid].variantCount || 1);
   const posInBlock = idx - varOffset + 1;
@@ -309,18 +458,15 @@ function setVariant(tid, offset) {
   const s = state[tid];
   if (!s) return;
   s.variantOffset = offset;
-  // Count variant buttons for this card
   const vbtns = document.querySelectorAll('#card_' + tid + ' .vbtn');
   s.variantCount = vbtns.length;
   vbtns.forEach(b => b.classList.remove('active'));
-  // Find and activate the clicked button
   const blockSize = Math.round(s.total / s.variantCount);
   const btnIdx = Math.round(offset / blockSize);
   if (vbtns[btnIdx]) vbtns[btnIdx].classList.add('active');
   showSlide(tid, offset);
 }
 
-// Keyboard arrows for focused card (simple: targets last hovered)
 let focusedTid = null;
 document.querySelectorAll('.tpl-card').forEach(card => {
   card.addEventListener('mouseenter', () => { focusedTid = card.id.replace('card_',''); });
