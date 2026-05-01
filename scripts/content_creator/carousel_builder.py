@@ -3323,7 +3323,7 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
                     f'</div>'
                 )
             slides_html += f"""
-<div class="slide slide-list {motion_class}">
+<div class="slide slide-data {motion_class}">
   {corners}{clip_el}
   <div class="tag">Na prática</div>
   <div class="slide-hl">{h_pt}</div>
@@ -3341,9 +3341,15 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
             verdicts_html = ""
             for v in slide.get("verdicts", []):
                 result_raw = v.get("result", "")
-                result_class = "verdict-true" if "VERDADEIRO" in result_raw.upper() else (
-                    "verdict-false" if "FALSO" in result_raw.upper() else "verdict-partial"
-                )
+                label_raw = v.get("label", "").upper()
+                # Color by VERDADEIRO/FALSO keywords first; fall back to label meaning
+                # (dados-ou-agenda uses percentage result strings like "45%" — label determines color)
+                if "VERDADEIRO" in result_raw.upper() or "DADOS" in label_raw or "CORRETO" in label_raw:
+                    result_class = "verdict-true"
+                elif "FALSO" in result_raw.upper() or "INTERESSE" in label_raw or "COMERCIAL" in label_raw:
+                    result_class = "verdict-false"
+                else:
+                    result_class = "verdict-partial"  # Viés Ideológico and PARCIALMENTE CORRETO → yellow
                 verdicts_html += (
                     f'<div class="verdict-row">'
                     f'<div class="verdict-label">{esc(v.get("label",""))}</div>'
@@ -3628,7 +3634,8 @@ def visual_audit(content, niche):
     for i, s in enumerate(slides, start=2):
         if s.get("mentioned_people") and s.get("visual_hint") != "bio-card":
             for p in s.get("mentioned_people", []):
-                issues.append(f"Slide {i}: '{p.get('name','?')}' named but visual_hint != bio-card — face won't render.")
+                name = p.get("name", "?") if isinstance(p, dict) else str(p)
+                issues.append(f"Slide {i}: '{name}' named but visual_hint != bio-card — face won't render.")
 
     # context-image with empty query
     for i, s in enumerate(slides, start=2):

@@ -1285,7 +1285,11 @@ def process_one_topic(topic_entry, run_date, drive):
     # Collect mentioned people + cover_visual for reply guide in preview email
     mentioned_people = []
     for slide in content.get("slides", []):
-        mentioned_people.extend(slide.get("mentioned_people", []))
+        for p in slide.get("mentioned_people", []):
+            if isinstance(p, str):
+                mentioned_people.append(p)
+            elif isinstance(p, dict):
+                mentioned_people.append(p.get("name", str(p)))
     mentioned_people = list(dict.fromkeys(mentioned_people))  # dedupe, preserve order
 
     # F6 fix: populate cover_urls so first-pass preview email shows real images.
