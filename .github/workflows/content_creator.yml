@@ -35,6 +35,10 @@ on:
         description: 'Manual topic text'
         required: false
         default: ''
+      manual_brief:
+        description: 'Brief for manual build (Google Doc URL or plain text). Overrides auto-brief in manual mode.'
+        required: false
+        default: ''
       manual_template:
         description: 'Manual template (single). Use "motion" to re-render Ken Burns on existing PNGs without rebuilding carousel.'
         required: false
@@ -124,6 +128,7 @@ jobs:
           MANUAL_MODE: ${{ github.event.inputs.manual_mode || 'false' }}
           MANUAL_NICHE: ${{ github.event.inputs.manual_niche || '' }}
           MANUAL_TOPIC: ${{ github.event.inputs.manual_topic || '' }}
+          MANUAL_BRIEF: ${{ github.event.inputs.manual_brief || '' }}
           MANUAL_TEMPLATE: ${{ github.event.inputs.manual_template || 'auto' }}
           MANUAL_TEMPLATE_SET: ${{ github.event.inputs.manual_template_set || 'single' }}
           TEST_OUTPUT_FOLDER: ${{ github.event.inputs.test_output_folder || '' }}
@@ -249,6 +254,7 @@ jobs:
           MANUAL_MODE: ${{ github.event.inputs.manual_mode || 'false' }}
           MANUAL_NICHE: ${{ github.event.inputs.manual_niche || '' }}
           MANUAL_TOPIC: ${{ github.event.inputs.manual_topic || '' }}
+          MANUAL_BRIEF: ${{ github.event.inputs.manual_brief || '' }}
           MANUAL_TEMPLATE: ${{ github.event.inputs.manual_template || 'auto' }}
           MANUAL_TEMPLATE_SET: ${{ github.event.inputs.manual_template_set || 'single' }}
           TEST_OUTPUT_FOLDER: ${{ github.event.inputs.test_output_folder || '' }}

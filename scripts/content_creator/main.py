@@ -64,6 +64,7 @@ MANUAL_TOPIC = os.environ.get("MANUAL_TOPIC", "").strip()
 MANUAL_NICHE = os.environ.get("MANUAL_NICHE", "").strip().lower()
 MANUAL_TEMPLATE = os.environ.get("MANUAL_TEMPLATE", "auto").strip().lower()
 MANUAL_TEMPLATE_SET = os.environ.get("MANUAL_TEMPLATE_SET", "").strip().lower()
+MANUAL_BRIEF = os.environ.get("MANUAL_BRIEF", "").strip()  # Google Docs URL or plain text brief
 # When set, all Drive uploads go to this test folder instead of normal series destinations.
 TEST_OUTPUT_FOLDER = os.environ.get("TEST_OUTPUT_FOLDER", "").strip()
 
@@ -1450,6 +1451,19 @@ def main():
         print(f"  template={MANUAL_TEMPLATE}")
         print(f"  template_set={MANUAL_TEMPLATE_SET}")
 
+        # Resolve MANUAL_BRIEF: fetch Google Doc if URL, else use as-is
+        resolved_brief = ""
+        if MANUAL_BRIEF:
+            if "docs.google.com/document" in MANUAL_BRIEF or (MANUAL_BRIEF.startswith("https://") and "/d/" in MANUAL_BRIEF):
+                from topic_picker import fetch_drive_doc_content
+                resolved_brief = fetch_drive_doc_content(MANUAL_BRIEF) or MANUAL_BRIEF
+                print(f"  brief: fetched {len(resolved_brief)} chars from Drive doc")
+            else:
+                resolved_brief = MANUAL_BRIEF
+                print(f"  brief: using provided text ({len(resolved_brief)} chars)")
+        else:
+            print("  brief: none provided (MANUAL_BRIEF not set)")
+
         if MANUAL_TEMPLATE_SET == "all":
             if MANUAL_NICHE == "opc":
                 tkeys = ["tip", "illustrated", "cutout"]
@@ -1463,7 +1477,7 @@ def main():
             entry = {
                 "topic": MANUAL_TOPIC,
                 "niche": MANUAL_NICHE,
-                "brief": f"Manual run from workflow_dispatch. Template request: {t}",
+                "brief": resolved_brief or f"Manual run from workflow_dispatch. Template request: {t}",
                 "url": "",
                 "format": "",
                 "series_override": "DADOS OU AGENDA" if t == "dados-ou-agenda" else "",
