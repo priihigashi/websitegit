@@ -348,16 +348,16 @@ Return ONLY a JSON object with these fields:
 {{
   "headline": "3-4 word cover headline (ALL CAPS, punchy)",
   "accent_word": "1 word from headline to highlight in accent color",
-  "subhead": "1 sentence under the headline",
+  "subhead": "1 sentence under the headline — MUST contain at least one of: a specific number, a dollar amount, or a named consequence/fear. BANNED: generic phrases like 'what to look for', 'things you should know', 'tips for'. Good: '$20K mistake most homeowners make before signing' | '3 red flags contractors hope you miss'",
   "slide2_headline": "3-4 word headline for slide 2",
-  "slide2_stat": "a big number or stat WITH QUALIFIER (e.g. 'UP TO $15K' not '$12K')",
+  "slide2_stat": "a big number or stat WITH QUALIFIER (e.g. 'UP TO $15K' not '$12K') — stat_number MUST be 40 characters or fewer including spaces",
   "slide2_label": "1 line explaining the stat — include source name",
   "slide3_items": [
     {{"title": "Item 1 title", "sub": "1 line detail with cost range if applicable"}},
     {{"title": "Item 2 title", "sub": "1 line detail"}},
     {{"title": "Item 3 title", "sub": "1 line detail"}}
   ],
-  "slide4_headline": "3-4 word tip/action headline",
+  "slide4_headline": "3-4 word tip/action headline — if the slide content is about risks, warnings, red flags, mistakes to avoid, or things that can go wrong, the label MUST be one of: RED FLAG, WATCH OUT, or AVOID THIS. NEVER use THE PRO MOVE, PRO TIP, or EXPERT ADVICE on warning slides",
   "slide4_body": "2-3 sentences explaining the tip — educational, no promises",
   "mentioned_people": [
     {{"name": "Full Name", "role_en": "role / why they're named", "slide": 4, "image_hint": "Wikipedia or editorial headshot search term"}}
@@ -426,6 +426,7 @@ Return ONLY a JSON object with these fields:
 }}
 
 Rules:
+- Write as Mike, a South Florida contractor talking directly to a homeowner. First person. Conversational but expert. Florida-licensed (CBC1263425). NEVER promise specific outcomes, results, or timelines. NEVER use superlatives (best, #1, guaranteed). Stats must reference a real source.
 - Keep it simple, direct, no jargon
 - Stats MUST use ranges (e.g. "$5K-$15K") not exact averages — safer and more honest
 - Every stat must name its source in slide2_label or on the sources slide
@@ -473,13 +474,23 @@ Rules:
     return None
 
 
-def generate_dados_content(topic, brief=""):
+def generate_dados_content(topic, brief="", capture_brief=None):
     """Generate FORMAT-019 Dados ou Agenda? bias-check carousel (9 slides, PT-BR).
     Uses the brief from analyze_bias() as the primary source — never invents facts.
     Structure: cover → post-context → data 1 → data 2 → what was missing →
                exaggeration check → VERDICT (3-way score) → conclusion → CTA/sources.
+
+    capture_brief: required context from /capture. If None or empty, raises ValueError
+    so the pipeline skips this post rather than letting Haiku invent content.
     """
-    brief_section = f"\n\nBRIEF / BIAS ANALYSIS (use this — it is the primary source):\n{brief}" if brief else ""
+    # FIX 5: brief gate — do not generate FORMAT-019 without a capture brief
+    effective_brief = capture_brief if capture_brief else brief
+    if not effective_brief or not str(effective_brief).strip():
+        raise ValueError(
+            "capture_brief required for FORMAT-019 (Dados ou Agenda?) — run /capture first. "
+            "Haiku must NOT invent bias analysis without a real capture brief."
+        )
+    brief_section = f"\n\nBRIEF / BIAS ANALYSIS (use this — it is the primary source):\n{effective_brief}"
 
     # Strip any internal labels (EP001, EP002 etc.) from topic so they never appear in slides
     clean_topic = re.sub(r'\bEP\d{3,4}\b', '', topic).strip(' —-').strip()
@@ -630,6 +641,7 @@ Return ONLY a valid JSON object with this exact structure:
     }}
   ],
   "sources": ["Source 1 — institution + specific report/year", "Source 2", "Source 3", "Source 4"],
+  "source_handle": "real Instagram username without @ symbol — e.g. 'thiagodespaiva' or 'primo_rico'. If unknown, use the person's full name in lowercase with underscores e.g. 'thiago_de_paiva'. NEVER write HANDLE_PLACEHOLDER or any placeholder text.",
   "cta_pt": "Salva e manda pra quem precisa ver.",
   "cta_en": "Save this.",
   "caption_pt": "Instagram caption PT — 3-4 sentences. Hook: mention the influencer and the tension. Body: what you found. End: follow for Dados ou Agenda? series. Hashtags: max 8, no party names, no @-tags.",
@@ -645,7 +657,8 @@ IMPORTANT:
 - comparison items: max 2 rows. Keep values short (under 10 words each side).
 - The comparison "left" column is what the influencer claimed; "right" is what data shows — always paired.
 - motion_renderer must always be "kenburns" for Brazil native template.
-- Never use party hashtags or @-tags in caption_pt."""
+- Never use party hashtags or @-tags in caption_pt.
+- source_handle MUST be the real Instagram username without @. If you don't know it, use the person's full name in lowercase with underscores. NEVER write HANDLE_PLACEHOLDER."""
 
     for attempt in range(2):
         if attempt == 1:
@@ -677,6 +690,17 @@ IMPORTANT:
             result["_template_key"] = "dados-ou-agenda"
             # Belt-and-suspenders: override cover_date with today (Haiku sometimes drifts to past years)
             result["cover_date"] = _today_pt
+            # FIX 4: validate source_handle — retry if PLACEHOLDER crept in
+            _sh = str(result.get("source_handle", ""))
+            if "PLACEHOLDER" in _sh.upper() or "HANDLE" in _sh.upper():
+                if attempt < 1:
+                    print(f"  Dados: source_handle contains placeholder ('{_sh}') — retrying")
+                    continue
+                else:
+                    raise ValueError(
+                        f"source_handle still contains placeholder after 2 attempts: '{_sh}'. "
+                        "Run /capture first to identify the influencer's real Instagram handle."
+                    )
             return result
         except json.JSONDecodeError as e:
             print(f"  Dados JSON parse error (attempt {attempt+1}): {e}")
@@ -3259,10 +3283,18 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
             or clips.get(slide_i, "")
             or (media_paths or {}).get("slides", {}).get(slide_i, "")
         )
+        v_hint_raw = str(slide.get("visual_hint", "none")).strip().lower()
         if is_motion_slide and slide_photo:
+            # FIX 10: add explicit dark overlay when context-image bg is present so text stays white
+            _ctx_overlay = (
+                '<div style="position:absolute;inset:0;background:rgba(0,0,0,0.55);'
+                'border-radius:inherit;z-index:2;pointer-events:none;"></div>'
+                if v_hint_raw == "context-image" else ""
+            )
             clip_el = (
                 f'<div class="bg-photo" style="background-image:url(\'{slide_photo}\');"></div>'
                 f'<div class="halftone"></div>'
+                f'{_ctx_overlay}'
             )
         else:
             clip_el = ""
@@ -3794,6 +3826,111 @@ def visual_audit(content, niche):
     else:
         summary = f"VISUAL AUDIT: {len(issues)} ISSUE(S) FOUND:\n" + "\n".join(f"  - {x}" for x in issues)
     return is_ok, issues, summary
+
+
+def generate_caption(topic, niche, slide_texts=None):
+    """Generate Instagram caption + hashtags via Claude Haiku.
+
+    Returns dict with keys:
+      caption            — 150-200 char body (no hashtags)
+      in_post_hashtags   — 5 hashtags for caption body
+      first_comment_hashtags — 20-25 hashtags for first comment
+
+    OPC rules: no promises, no superlatives, no outcome guarantees.
+    Brazil/USA rules: attribution only, never hashtag political party names.
+    """
+    slide_context = ""
+    if slide_texts:
+        slide_context = "\n\nSlide text context:\n" + "\n".join(
+            f"  Slide {i+1}: {str(t)[:120]}" for i, t in enumerate(slide_texts[:6])
+        )
+
+    if niche == "opc":
+        copy_rules_caption = (
+            "OPC caption rules: "
+            "Write as Mike, a South Florida contractor. First person, conversational. "
+            "NEVER promise outcomes, results, timelines, or guarantees. "
+            "NEVER use superlatives (best, #1, guaranteed, always). "
+            "Hook = first sentence visible in feed (question or surprising fact). "
+            "Keep body 150-200 chars total. Educational, not sales-y."
+        )
+        hashtag_rules = (
+            "In-post hashtags (5): use broad contractor/homeowner topics. "
+            "e.g. #southfloridacontractor #oakparkbuilds #homeremodel #contractortips #floridahomeowner\n"
+            "First-comment hashtags (20-25): mix of niche construction + local Florida tags. "
+            "NEVER use superlative tags (#best, #top, #1contractor). "
+            "Include: #generalcontractor #remodeling #construction #homeimp #floridarealestate "
+            "#homeinspection #diy #homeowner #contractorlife #buildingpermit + 10-15 more specific ones."
+        )
+    elif niche == "brazil":
+        copy_rules_caption = (
+            "Brazil caption rules (PT-BR): "
+            "Hook = first sentence stops the scroll — provocative question or number. "
+            "Body: 150-200 chars total, factual, no editorial opinion, no accusation. "
+            "Attribution without traffic: small attribution 'via @handle' if needed — never @-tag or hashtag them. "
+            "End with: 'Salva pra não esquecer.' or similar PT CTA."
+        )
+        hashtag_rules = (
+            "In-post hashtags (5): topic-only PT hashtags. "
+            "e.g. #politicabrasileira #senadofederal #fiscalizacao #direitoshumanos #govbr\n"
+            "First-comment hashtags (20-25): NEVER include party abbreviations (#PT, #PL, #PSDB, #MDB) "
+            "or politician names as hashtags (#Bolsonaro, #Lula, #Moraes). "
+            "Topic-only: #congresso #stf #senadofederal #politicabrasileira #democracia + 15-20 more."
+        )
+    else:  # usa
+        copy_rules_caption = (
+            "USA caption rules (English): "
+            "Hook = first sentence stops the scroll — provocative question or number. "
+            "Body: 150-200 chars total, factual, no editorial opinion. "
+            "Attribution without traffic: small 'via @handle' if needed — never @-tag or hashtag them."
+        )
+        hashtag_rules = (
+            "In-post hashtags (5): topic-only US news hashtags. "
+            "e.g. #usnews #congress #factcheck #americanpolitics #mediabias\n"
+            "First-comment hashtags (20-25): NEVER use politician names as hashtags. "
+            "Topic-only: #usnews #congress #senate #factcheck #mediabias + 15-20 more."
+        )
+
+    prompt = f"""Generate an Instagram caption for this carousel post.
+
+Topic: "{topic}"
+Niche: {niche.upper()}
+{copy_rules_caption}
+{slide_context}
+
+{hashtag_rules}
+
+Return ONLY a valid JSON object:
+{{
+  "caption": "150-200 character caption body (NO hashtags in this field). Hook on first line.",
+  "in_post_hashtags": "#tag1 #tag2 #tag3 #tag4 #tag5",
+  "first_comment_hashtags": "#tag1 #tag2 ... (20-25 tags, space-separated)"
+}}"""
+
+    for attempt in range(2):
+        try:
+            text = _claude_with_fallback(
+                prompt, max_tokens=600, timeout=20,
+                context=f"generate_caption({niche}, attempt {attempt+1})",
+            )
+        except Exception as e:
+            print(f"  generate_caption LLM failed (attempt {attempt+1}): {e}")
+            continue
+        m = re.search(r'\{[\s\S]*\}', text)
+        if not m:
+            print(f"  generate_caption: no JSON in response (attempt {attempt+1})")
+            continue
+        try:
+            result = json.loads(m.group())
+            # Basic validation
+            if result.get("caption") and result.get("in_post_hashtags") and result.get("first_comment_hashtags"):
+                print(f"  Caption generated ({len(result['caption'])} chars)")
+                return result
+        except json.JSONDecodeError as e:
+            print(f"  generate_caption JSON parse error (attempt {attempt+1}): {e}")
+            continue
+    print("  generate_caption: failed after 2 attempts — returning empty")
+    return {"caption": "", "in_post_hashtags": "", "first_comment_hashtags": ""}
 
 
 def ensure_template_carousel_exists(series_folder_id: str, drive) -> str:

@@ -149,6 +149,10 @@ def _build_one_carousel_html(post: dict, slides: list[dict]) -> str:
     motion_link = post.get("motion_link", "")
     folder_id = _extract_folder_id(static_link)
     clip_failures = post.get("clip_failures") or {}
+    # FIX 3: caption data
+    caption_body = post.get("caption", "")
+    in_post_hashtags = post.get("in_post_hashtags", "")
+    first_comment_hashtags = post.get("first_comment_hashtags", "")
 
     blocks = []
     for i, s in enumerate(slides, start=1):
@@ -180,6 +184,14 @@ def _build_one_carousel_html(post: dict, slides: list[dict]) -> str:
             {"<br/>".join(f"Slide {idx}: resources/clips/{slot}.mp4 — adicione manualmente" for idx, slot in clip_failures.items())}
           </div>
         </div>''' if clip_failures else ''}
+
+        {f'''
+        <div style="background:#0d1a0d;border-left:3px solid #4ade80;padding:14px 16px;margin-top:20px;border-radius:4px;">
+          <div style="font-family:Arial,sans-serif;color:#4ade80;font-size:13px;font-weight:700;">📝 INSTAGRAM CAPTION</div>
+          <div style="font-family:Arial,sans-serif;color:#d0d0d0;font-size:14px;line-height:1.6;margin-top:10px;white-space:pre-wrap;">{caption_body}</div>
+          {f'<div style="font-family:Arial,sans-serif;color:#aaaaaa;font-size:13px;margin-top:10px;">{in_post_hashtags}</div>' if in_post_hashtags else ''}
+          {f'<div style="margin-top:12px;"><div style="font-family:Arial,sans-serif;color:#4ade80;font-size:12px;font-weight:700;">First comment hashtags:</div><div style="font-family:monospace;color:#aaaaaa;font-size:12px;line-height:1.6;margin-top:4px;white-space:pre-wrap;">{first_comment_hashtags}</div></div>' if first_comment_hashtags else ''}
+        </div>''' if caption_body else ''}
 
         <div style="background:#111;border-left:3px solid #CBCC10;padding:14px 16px;margin-top:20px;border-radius:4px;">
           <div style="font-family:Arial,sans-serif;color:#CBCC10;font-size:13px;font-weight:700;">Reply commands</div>

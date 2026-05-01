@@ -25,7 +25,7 @@ ET = pytz.timezone("America/New_York")
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))  # for routing.py
 from topic_picker import pick_topics, get_clip_count_for_topic
-from carousel_builder import generate_carousel_content, build_html, render_pngs, generate_image_suggestions, visual_audit, fetch_all_media, fetch_clips, build_motion_html
+from carousel_builder import generate_carousel_content, build_html, render_pngs, generate_image_suggestions, visual_audit, fetch_all_media, fetch_clips, build_motion_html, generate_caption
 from routing import get_route
 import urllib.request, urllib.parse
 from email_preview import send_preview, update_catalog_status
@@ -933,6 +933,18 @@ def process_one_topic(topic_entry, run_date, drive):
     # 1. Generate content
     print("  Generating content via Claude Haiku...")
     brief = topic_entry.get("brief", "")
+    # FIX 5: FORMAT-019 brief gate — skip post if no capture brief exists
+    if series_override == "DADOS OU AGENDA" and not brief.strip():
+        print(f"  SKIP: no capture brief found for {post_id} — FORMAT-019 (Dados ou Agenda?) requires /capture first")
+        if queue_row:
+            write_queue_status(queue_row, status="Needs Brief",
+                               extra={"notes": "FORMAT-019 skipped: no capture brief. Run /capture first."})
+        _send_alert(
+            f"FORMAT-019 skipped: '{topic[:60]}'\n"
+            f"Reason: no capture brief found in Content Queue 'brief / angle' column.\n"
+            f"Fix: run /capture on the source post, then re-approve in Content Queue."
+        )
+        return None
     # Verificamos: Route A = clip overlay (verificamos_clip), Route B = debunk carousel (verificamos)
     # Dados ou Agenda: always uses the dados-ou-agenda template (9-slide bias check)
     if series_override == "VERIFICAMOS":
@@ -1310,6 +1322,44 @@ def process_one_topic(topic_entry, run_date, drive):
     except Exception as _cover_err:
         print(f"  cover_urls fetch failed (non-fatal): {_cover_err}")
 
+    # FIX 3: Generate Instagram caption + hashtags
+    print("  Generating Instagram caption...")
+    _slide_texts = []
+    for _sl in content.get("slides", []):
+        for _field in ("heading_pt", "heading_en", "items_pt", "quote", "context_pt"):
+            _v = _sl.get(_field)
+            if isinstance(_v, list):
+                _slide_texts.extend(_v)
+            elif _v:
+                _slide_texts.append(str(_v))
+    caption_result = {}
+    try:
+        caption_result = generate_caption(topic, niche, _slide_texts)
+    except Exception as _cap_err:
+        print(f"  Caption generation failed (non-fatal): {_cap_err}")
+    # Save caption.txt alongside PNGs in work_dir
+    if caption_result.get("caption"):
+        try:
+            caption_txt = (
+                f"CAPTION\n{caption_result['caption']}\n\n"
+                f"IN-POST HASHTAGS\n{caption_result.get('in_post_hashtags', '')}\n\n"
+                f"FIRST COMMENT HASHTAGS\n{caption_result.get('first_comment_hashtags', '')}\n"
+            )
+            (work / "caption.txt").write_text(caption_txt, encoding="utf-8")
+            # Upload caption.txt to version folder root in Drive
+            try:
+                from googleapiclient.http import MediaInMemoryUpload
+                drive.files().create(
+                    body={"name": "caption.txt", "parents": [version_folder_id]},
+                    media_body=MediaInMemoryUpload(caption_txt.encode("utf-8"), mimetype="text/plain"),
+                    supportsAllDrives=True, fields="id",
+                ).execute()
+                print("  caption.txt → Drive version folder")
+            except Exception as _cap_up_err:
+                print(f"  caption.txt Drive upload failed (non-fatal): {_cap_up_err}")
+        except Exception as _cap_save_err:
+            print(f"  caption.txt save failed (non-fatal): {_cap_save_err}")
+
     return {
         "post_id": post_id,
         "topic": topic,
@@ -1336,6 +1386,10 @@ def process_one_topic(topic_entry, run_date, drive):
         # clip failure map — {slide_idx: slot_name} for slots that exhausted all 7 tiers
         # non-empty = motion HTML shows ⚠️ placeholder; email preview surfaces the warning
         "clip_failures": clip_failures,
+        # FIX 3: caption data for preview email
+        "caption": caption_result.get("caption", ""),
+        "in_post_hashtags": caption_result.get("in_post_hashtags", ""),
+        "first_comment_hashtags": caption_result.get("first_comment_hashtags", ""),
     }
 
 

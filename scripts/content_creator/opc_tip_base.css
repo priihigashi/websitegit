@@ -54,17 +54,20 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 
 /* ---- Big-number row (stat slide) ---- */
 .stat-big {
-  font-family:'Anton', sans-serif; font-size:360px; line-height:0.85;
+  font-family:'Anton', sans-serif; font-size:clamp(2rem, 33vw, 360px); line-height:0.85;
   color:#CBCC10; margin-top:auto; margin-bottom:30px; letter-spacing:-0.03em;
+  overflow:hidden; max-width:100%;
 }
 .stat-label {
   font-family:'JetBrains Mono', monospace; font-size:24px; font-weight:700;
   letter-spacing:0.15em; text-transform:uppercase; color:var(--c-body);
   max-width:620px; line-height:1.4;
 }
+/* Stat slide overflow guard */
+.slide-stat { overflow:hidden; }
 
 /* ---- Numbered list ---- */
-.list { margin-top:12px; }
+.list { margin-top:12px; padding-bottom:80px; }
 .list-item {
   display:flex; gap:36px; align-items:baseline; margin-bottom:28px;
   padding-bottom:22px; border-bottom:1px solid var(--c-rule);
@@ -317,6 +320,11 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 .v2 .sticker-stamp { color:#0A0A0A; }
 .v2 .slide-cover .bg-photo { filter:grayscale(1) contrast(1.1) brightness(0.85); }
 .v2 .slide-cover .bg-photo::after { background:linear-gradient(180deg, rgba(240,235,227,0.25) 0%, rgba(240,235,227,0.85) 100%); }
+/* FIX 9: cream variant text readability — semi-opaque cream wash over any dark photo */
+.v2.slide-cover::before {
+  content:''; position:absolute; inset:0; z-index:2;
+  background:rgba(240,235,227,0.6); pointer-events:none;
+}
 .v2.slide-cover .headline,
 .v2.slide-cover .body-text,
 .v2.slide-cover .tag,

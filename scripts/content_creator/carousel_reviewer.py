@@ -90,6 +90,13 @@ def check_html_placeholders(html_path: str) -> list[str]:
             + "; ".join(ctx_matches[:3])
         )
 
+    # @HANDLE_PLACEHOLDER in rendered HTML — source_handle was never resolved
+    if "@HANDLE_PLACEHOLDER" in html:
+        issues.append(
+            "Brazil handle not resolved — '@HANDLE_PLACEHOLDER' visible in HTML; "
+            "check source_handle field in content JSON (generate_dados_content retry logic)"
+        )
+
     # OPC-specific quality checks (prevent text-only middle slides)
     if "Tip of the Week · Oak Park Construction" in html:
         slot_count = len(re.findall(r'class="context-img-slot"', html))
@@ -717,6 +724,18 @@ def check_built_post(result: dict) -> dict:
             all_issues.extend(_check_provenance(prov))
         except Exception as e:
             all_issues.append(f"media_provenance.json read/parse failed: {e}")
+
+    # 5. Caption check — caption.txt must exist before post can go to Buffer
+    caption_path = Path(work_dir_env) / post_id / "caption.txt"
+    if not caption_path.exists():
+        for candidate in Path(work_dir_env).glob(f"**/{post_id}/caption.txt"):
+            caption_path = candidate
+            break
+    if not caption_path.exists():
+        all_issues.append(
+            "caption.txt missing — no Instagram caption was generated; "
+            "post cannot be scheduled to Buffer (check generate_caption() call in main.py)"
+        )
 
     passed = len(all_issues) == 0
     return {
