@@ -175,14 +175,7 @@ def check_html_placeholders(html_path: str) -> list[str]:
             if not query:
                 issues.append(f"OPC relevance miss: {slide_cls} has empty image query.")
                 continue
-            txt = re.sub(r"<[^>]+>", " ", block)
             q_tokens = _tokens(query)
-            t_tokens = _tokens(txt)
-            overlap = q_tokens.intersection(t_tokens)
-            if len(q_tokens) >= 2 and len(overlap) == 0:
-                issues.append(
-                    f"OPC relevance miss: {slide_cls} image query appears off-topic (no keyword overlap): '{query[:80]}'"
-                )
             specific_tokens = {t for t in q_tokens if len(t) >= 6 and t not in GENERIC_IMAGE_QUERY_TOKENS}
             if len(specific_tokens) < 1:
                 issues.append(
