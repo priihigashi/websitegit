@@ -269,7 +269,8 @@ const IMG = {
   },
   brazil_motion: {
     bg:      ['flaviobg_m','congress_m','flaviobg_m2','archive_m'],
-    sticker: 'politician_motion'
+    sticker: 'politician_motion',
+    bio:     ['nobrega_m','queiroz_m','raimunda_m','danielle_m']
   },
   who_is: {
     bg:      ['mizrachi_bg','courtroom_bg','senate_bg'],
@@ -336,15 +337,27 @@ function wireImages(iframe, tid) {
     }
   });
 
-  // 3. bg-video-placeholder (motion template) → colored live gradient
-  doc.querySelectorAll('.bg-video-placeholder').forEach((el, i) => {
+  // 3. bg-video-placeholder OR bg-video-slot (motion template) → static photo stand-in
+  doc.querySelectorAll('.bg-video-placeholder, .bg-video-slot').forEach((el, i) => {
     const seed = (s.bg && s.bg[bgIdx]) || ('bgv_' + tid + '_' + i);
     el.style.backgroundImage = 'url("https://picsum.photos/seed/' + seed + '/1080/1350")';
     el.style.backgroundSize = 'cover';
     el.style.backgroundPosition = 'center 20%';
     el.style.filter = 'grayscale(1) contrast(1.1) brightness(.45)';
-    el.style.animation = 'none'; // stop the default gradient animation so the photo shows
+    el.style.animation = 'none';
     bgIdx++;
+  });
+
+  // 3b. shared-bg (USA/Brazil shared templates) with empty or missing background
+  doc.querySelectorAll('.shared-bg').forEach(el => {
+    const cur = el.style.backgroundImage || '';
+    if (!cur || cur === "url('')" || cur === 'url("")' || cur.includes('resources/') || cur === 'none') {
+      const seed = (s.bg && s.bg[bgIdx]) || ('shbg_' + tid + '_' + bgIdx);
+      el.style.backgroundImage = 'url("https://picsum.photos/seed/' + seed + '/1080/1350")';
+      el.style.backgroundSize = 'cover';
+      el.style.backgroundPosition = 'center 20%';
+      bgIdx++;
+    }
   });
 
   // 4. sticker-placeholder → real portrait image
@@ -369,6 +382,15 @@ function wireImages(iframe, tid) {
       + ' style="width:100%;height:100%;object-fit:cover;object-position:center top;">';
   });
 
+  // 6b. sticker-slot.sticker-initials and person-sticker.person-sticker-initials
+  // (the_case.html pattern — sticker IS the initials block, no .sticker-placeholder inside)
+  doc.querySelectorAll('.sticker-slot.sticker-initials, .person-sticker.person-sticker-initials').forEach(el => {
+    if (el.querySelector('img')) return;
+    const seed = s.sticker || ('stkinit_' + tid);
+    el.innerHTML = '<img src="https://picsum.photos/seed/' + seed + '/310/410"'
+      + ' style="width:100%;height:100%;object-fit:cover;object-position:center top;">';
+  });
+
   // 7. bio-card .bio-initials → bio-photo img
   doc.querySelectorAll('.bio-card .bio-initials').forEach(el => {
     const seed = (s.bio && s.bio[bioIdx]) || ('bio_' + tid + '_' + bioIdx);
@@ -376,13 +398,13 @@ function wireImages(iframe, tid) {
     img.className = 'bio-photo';
     img.src = 'https://picsum.photos/seed/' + seed + '/120/145';
     img.style.cssText = 'width:120px;height:145px;object-fit:cover;object-position:center top;'
-      + 'border-radius:3px;border:1px solid rgba(203,204,16,.25);display:block;';
+      + 'border-radius:3px;border:1px solid rgba(255,255,255,.2);display:block;';
     el.parentNode.replaceChild(img, el);
     bioIdx++;
   });
 
-  // 8. context-img-placeholder (OPC illustrated) → construction photo
-  doc.querySelectorAll('.context-img-placeholder').forEach(el => {
+  // 8. context-img-placeholder OR context-img-slot → photo
+  doc.querySelectorAll('.context-img-placeholder, .context-img-slot').forEach(el => {
     const seed = (s.ctx && s.ctx[ctxIdx]) || ('ctx_' + tid + '_' + ctxIdx);
     const img = doc.createElement('img');
     img.src = 'https://picsum.photos/seed/' + seed + '/600/400';
