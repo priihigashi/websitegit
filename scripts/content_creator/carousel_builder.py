@@ -3277,6 +3277,10 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
         stype = slide.get("type", "list")
         h_pt  = esc(slide.get("heading_pt", ""))
         h_en  = esc(slide.get("heading_en", ""))
+        # Heading accent — highlight one word/phrase yellow (same mechanic as cover_accent)
+        h_accent = esc(slide.get("heading_accent", ""))
+        if h_accent and h_accent in h_pt:
+            h_pt = h_pt.replace(h_accent, f'<span class="accent">{h_accent}</span>', 1)
         # Alternating motion pattern: odd slide_i (3, 5, 7) = motion (grayscale photo + halftone)
         # even (2, 4, 6) = static (no bg, clean dark slide)
         is_motion_slide = (slide_i % 2 == 1)
@@ -3515,6 +3519,63 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
   <div class="swipe">SWIPE &#8594;</div>
 </div>
 """
+        elif stype == "timeline":
+            events_html = ""
+            for ev in slide.get("events", []):
+                d = esc(ev.get("date", ""))
+                t = esc(ev.get("text_pt", ev.get("text", "")))
+                events_html += (
+                    f'<div class="tl-row">'
+                    f'<div class="tl-date">{d}</div>'
+                    f'<div class="tl-text">{t}</div>'
+                    f'</div>'
+                )
+            tag_label = esc(slide.get("tag_label", "A Linha do Tempo"))
+            slides_html += f"""
+<div class="slide slide-timeline {motion_class}">
+  {corners}{clip_el}
+  <div class="tag">{tag_label}</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  <div class="timeline-grid">{events_html}</div>
+  <div class="swipe">SEGUE O FIO &#8594;</div>
+</div>
+"""
+
+        elif stype == "network":
+            bio_cards = []
+            for _idx, _p in enumerate(slide.get("people", [])[:4]):
+                _name = esc(_p.get("name", "") if isinstance(_p, dict) else str(_p))
+                _role = esc((_p.get("role_pt", "") if isinstance(_p, dict) else "")[:50])
+                _fact = esc((_p.get("fact_pt", "") if isinstance(_p, dict) else "")[:80])
+                _hint = (_p.get("image_hint", "") if isinstance(_p, dict) else "") or _name
+                _bfn  = re.sub(r"[^\w]", "_", str(_hint).lower())[:30] + f"_s{slide_i}_{_idx}.jpg"
+                _bpath = _fetch_person_photo(_hint, work_dir, _bfn) if _hint else ""
+                if _bpath:
+                    _card_img = f'<img class="bio-photo" src="{_bpath}" alt="{_name}" style="object-position:center top;">'
+                else:
+                    _ini = "".join(w[0].upper() for w in _name.split() if w)[:2] or "?"
+                    _card_img = f'<div class="bio-initials">{_ini}</div>'
+                bio_cards.append(
+                    f'<div class="bio-card">{_card_img}'
+                    f'<div class="bio-name">{_name}</div>'
+                    f'<div class="bio-role">{_role}</div>'
+                    f'<div class="bio-fact">{_fact}</div>'
+                    f'</div>'
+                )
+            net_html = f'<div class="bio-grid net-grid-2col">{"".join(bio_cards)}</div>'
+            tag_label = esc(slide.get("tag_label", "Conecta os Pontos"))
+            slides_html += f"""
+<div class="slide slide-network {motion_class}">
+  {corners}{clip_el}
+  <div class="tag">{tag_label}</div>
+  <div class="slide-hl">{h_pt}</div>
+  <div class="slide-en">{h_en}</div>
+  {net_html}
+  <div class="swipe">SEGUE O FIO &#8594;</div>
+</div>
+"""
+
         else:
             # Unknown slide type — fall back to list rendering so the slide is never silently dropped.
             items = slide.get("items_pt", slide.get("facts_pt", []))
@@ -3661,6 +3722,14 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}}
 .cred-alta{{color:#4ade80;border:1px solid rgba(74,222,128,.35);background:rgba(74,222,128,.08)}}
 .cred-media{{color:var(--ca);border:1px solid rgba(203,204,16,.35);background:rgba(203,204,16,.06)}}
 .cred-baixa{{color:#f87171;border:1px solid rgba(248,113,113,.35);background:rgba(248,113,113,.08)}}
+/* TIMELINE slide (FORMAT-002 addition — matches original Rachadinha EP001 A Linha do Tempo) */
+.timeline-grid{{display:flex;flex-direction:column;gap:0;flex:1}}
+.tl-row{{display:flex;gap:24px;padding:14px 0;border-bottom:1px solid var(--rule);align-items:flex-start}}
+.tl-date{{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--ca);min-width:110px;flex-shrink:0;letter-spacing:.04em;padding-top:3px}}
+.tl-text{{font-family:'Roboto Condensed',sans-serif;font-size:30px;color:var(--pa);line-height:1.3}}
+/* NETWORK slide (FORMAT-002 addition — matches original Rachadinha EP001 Conecta os Pontos) */
+.net-grid-2col{{grid-template-columns:1fr 1fr!important}}
+.bio-fact{{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ca);text-align:center;line-height:1.3;margin-top:2px;opacity:.85}}
 </style>
 </head>
 <body>
