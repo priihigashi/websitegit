@@ -44,13 +44,19 @@ WHAT TO CARRY FORWARD (find and continue):
 - Flow Plans Tracker: https://docs.google.com/spreadsheets/d/1fggy918FgPfnMQ-dzGQk2zx9uhi2_-uWXMKGW4MA47k
 
 ### Drive — PIPELINE FIX Folder (source of truth for fix history)
-- PIPELINE FIX folder:           https://drive.google.com/drive/folders/1FHPkx8VA6c-Wmy6hI3uX_weSPwJPBp3z
-- HTML TEMPLATES subfolder:      1PMwIYurzv2GY077hlz7oHr82hNPsY6XI
-- PIPELINE INVENTORY (master):   https://docs.google.com/document/d/1yPsSqh24ioXU3cwwnkwH0oeSUsenTDvqESrIXfJ066A/edit  ← READ THIS FIRST
-- Fix Report — OPC full audit:   https://docs.google.com/document/d/1d7AxdhpP6C93iOlM0Wwn1e93TIuQa3HukeliLjYcLjE/edit
-- Fix Report — general pipeline: https://docs.google.com/document/d/1J-jn4NrQXu_if8T9_Bz4wyzZ-zQqx7gE33CbiQ-KcTw/edit
-- Fix Report — Dados vs Opinião: https://docs.google.com/document/d/1TUzpI_zeOG0Vndc7vZ5wu7ZCM0E2Tj5kbiZ9bJCvUrU/edit
-- Fix Report — FORMAT-019:       https://docs.google.com/document/d/1pxnNTGaQwIj7l7XepDCt_6LalxlYOyHhK6O6_ItTsjs/edit
+- PIPELINE FIX folder:               https://drive.google.com/drive/folders/1FHPkx8VA6c-Wmy6hI3uX_weSPwJPBp3z
+- HTML TEMPLATES subfolder:          https://drive.google.com/drive/folders/1PMwIYurzv2GY077hlz7oHr82hNPsY6XI
+  - OPC subfolder:                   https://drive.google.com/drive/folders/1F5P8RkpvwdyR2DLXEXKJPmKIte6G8SUr
+  - NEWS subfolder:                  https://drive.google.com/drive/folders/1UiIjuHbI3kdFlmaiCalNWAn5leV7Jc3H
+- FULL CIRCLE PLAN (master plan):    https://docs.google.com/document/d/17B8wc4wWmcBapl_4gduHyMzjYl4R4y_RYuvZae5xRPU/edit  ← START HERE
+- Template Registry (series×template): https://docs.google.com/document/d/17HnoR76_D-L1KOj8Qng03zIHZGwwsk2R9JQ5eKzuEEI/edit
+- Carousel Design Feedback Log:      https://docs.google.com/document/d/1zonzZNmW5wdDmtJxzozyqaBpf1i6KX068vEyhJ2qb_4/edit  (APPEND ONLY — change log)
+- Gallery quick-link doc:            https://docs.google.com/document/d/1xHU5NQZMYtDIVM93LIlZUDkz0biBKTxvQzaMaPnEows/edit
+- PIPELINE INVENTORY (fix history):  https://docs.google.com/document/d/1yPsSqh24ioXU3cwwnkwH0oeSUsenTDvqESrIXfJ066A/edit
+- Fix Report — OPC full audit:       https://docs.google.com/document/d/1d7AxdhpP6C93iOlM0Wwn1e93TIuQa3HukeliLjYcLjE/edit
+- Fix Report — general pipeline:     https://docs.google.com/document/d/1J-jn4NrQXu_if8T9_Bz4wyzZ-zQqx7gE33CbiQ-KcTw/edit
+- Fix Report — Dados vs Opinião:     https://docs.google.com/document/d/1TUzpI_zeOG0Vndc7vZ5wu7ZCM0E2Tj5kbiZ9bJCvUrU/edit
+- Fix Report — FORMAT-019:           https://docs.google.com/document/d/1pxnNTGaQwIj7l7XepDCt_6LalxlYOyHhK6O6_ItTsjs/edit
 
 ### Repo files added in fix sessions (not just scripts/content_creator/)
 - PIPELINE_REGISTRY.md:     repo root — template source of truth
@@ -89,7 +95,34 @@ WHAT TO CARRY FORWARD (find and continue):
 
 ---
 
-## 2. PIPELINE ARCHITECTURE (end-to-end)
+## 2. FULL CIRCLE PLAN — EXECUTION ORDER (LOCKED)
+
+Workflow: Templates → Wire → Run → React (Writing OR Images)
+Source doc: https://docs.google.com/document/d/17B8wc4wWmcBapl_4gduHyMzjYl4R4y_RYuvZae5xRPU/edit
+
+SECTION 1 — Template Selection (WHERE WE ARE NOW)
+  Walk through all templates. Lock category + sub-series. Build selected.html.
+  Order: OPC first → Brazil → Brazil Contexto → USA
+  OPC Tip of the Week ✅ locked. Next: opc_progress → opc_illustrated → opc_cutout → News
+
+SECTION 2 — Template Design Gaps (done per template, right after it's locked)
+  P1 Face slot (news_brazil_shared + news_usa_shared) — unblocks 5 series
+  P2 .compare-grid — unblocks Dados vs Opiniao
+  P3 Verdict slide — unblocks fact-check series
+  P4 Before/after panel — unblocks opc_progress
+  P5-P10 — context slots, avatar, map, data viz, 6-slide layout
+
+SECTION 3 — Wire to Pipeline (carousel_builder.py + naming consistency + schema + Drive folder map)
+SECTION 4 — Run Pipeline (trigger content_creator.yml, observe preview email)
+SECTION 5 — Writing fixes (ONLY if Section 4 text is bad)
+SECTION 6 — Images/Video fixes (ONLY if Section 4 visuals are bad)
+SECTION 7 — Hygiene (topic_picker bugs, APPROVE button placement, queue cleanup)
+
+KEY RULE: No content built in chat. Everything through the pipeline. React to email output.
+
+---
+
+## 3. PIPELINE ARCHITECTURE (end-to-end)
 
 1. CAPTURE — URL dropped into Inspiration Library (Ideas & Inbox). capture_pipeline.yml runs, downloads video, writes transcript, saves to Content Hub in Drive.
 2. TEMPLATE — carousel_builder.py generates HTML from a locked series template (see selected.html for chosen templates). Template defines slide structure, color palette, and image slot positions.
@@ -226,7 +259,52 @@ Update sections 3 and 4 above to reflect current state.
 
 ---
 
-## 8. RULES FOR THIS SKILL
+## 8. AIOX AGENT REVIEW — 2026-05-01
+
+### AIOX-ARCHITECT FINDINGS
+
+SKILL: Keep as-is. Add section gate markers (what must be true before each section starts).
+
+AGENT: Do NOT build a standalone pipeline-fixer agent. Reasons:
+- Tasks are code changes feeding a production pipeline. Auto-commit + auto-trigger = compounding silent failures.
+- pipeline already has silent-failure problem (CLAUDE.md rule 17). Autonomous code-fixer on top = dangerous.
+- The 4AM agent already handles nightly monitoring. Wire photo_matcher 401s and @HANDLE_PLACEHOLDER appearances into 🚨 Pipeline Failures tab. The 4AM agent reads that tab and can flag "fix is still broken after N runs" without touching code.
+
+ARCHITECTURE FLAGS — these will break Section 4 (run) if not addressed first:
+
+FLAG 1 (CRITICAL): Face slot is a Section 3 gate, not a post-run fix.
+news_brazil_shared.html and news_usa_shared.html are missing the sticker-slot HTML element.
+carousel_builder.py._build_news_shared_template_html() already calls the builder.
+If you run Section 4 before P1 (face slot) is fixed → named-person rule violated on EVERY News carousel built.
+Fix: Add sticker-slot HTML to news templates BEFORE wiring them. This is the first thing to do.
+
+FLAG 2 (VERIFY FIRST): photo_matcher.py may already use SHEETS_TOKEN correctly.
+The PENDING fix says "wrong credential (service account)" but the code reads SHEETS_TOKEN at line 23.
+Real issue is likely an expired token or stale GitHub secret, not wrong credential.
+Before coding anything: run `~/bin/gh secret list --repo priihigashi/oak-park-ai-hub` and verify SHEETS_TOKEN exists and is current.
+
+FLAG 3 (TIMING): Wire approval_handler.py → Buffer BEFORE starting daily 2:30 AM runs.
+Currently untested. If daily runs start and approval is broken, output piles up in Drive with no path to posting.
+Test the approval flow manually (send test email, reply APPROVE, confirm Buffer scheduling) before enabling automation.
+
+### AIOX-DEV FINDINGS
+[Pending — dev agent still running]
+
+---
+
+## 9. SECTION GATES (what must be true before each section starts)
+
+SECTION 1 gate: Gallery (wired.html) loads all templates correctly ✅ DONE
+SECTION 2 gate: Template is locked in selected.html for that series
+SECTION 3 gate: Section 2 design gap for that template is fixed
+SECTION 4 gate: At least one template is wired in Section 3 + approval_handler.py tested
+SECTION 5 gate: Section 4 produced output with bad text (don't run preemptively)
+SECTION 6 gate: Section 4 produced output with bad visuals (don't run preemptively)
+SECTION 7 gate: Run anytime, doesn't block other sections
+
+---
+
+## 11. RULES FOR THIS SKILL
 
 - APPEND ONLY — never delete prior session notes
 - Every link/ID must be verified before adding — mark unknowns [NEEDS LINK]
