@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>USA — Biography · Who is this person? — FORMAT-020</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   FORMAT-020 — BIOGRAPHY SLIDE · USA
+   WHO IS THIS PERSON?
+   Mirror of Brazil Biography — accent swapped to USA signal red.
+   Pipeline injects:
+     .bio-headline .bio-name → subject name (italic red)
+     .bio-field-value items   → actual fact text
+     .bio-pill items          → controversy topics
+   Colors: --ca #CC1F2D (InUS signal red)
+═══════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ob: #0D0B08;
+  --pa: #E8DECE;
+  --ca: #CC1F2D;
+  --gr: rgba(232,220,206,0.45);
+  --W: 1080px;
+  --H: 1350px;
+  --P: 96px;
+}
+body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}
+.slide{
+  width:var(--W);height:var(--H);
+  background:var(--ob);color:var(--pa);
+  padding:var(--P);
+  position:relative;overflow:hidden;
+  flex-shrink:0;display:flex;flex-direction:column;
+}
+
+/* ── Top label ── */
+.bio-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:18px;font-weight:700;
+  letter-spacing:.22em;text-transform:uppercase;
+  color:var(--ca);
+  margin-bottom:22px;
+}
+
+/* ── Headline ── */
+.bio-headline{
+  font-family:'Playfair Display',serif;
+  font-size:100px;font-weight:900;
+  line-height:.91;letter-spacing:-.015em;
+  margin-bottom:36px;
+}
+.bio-headline em{font-style:italic;color:var(--ca)}
+
+/* ── Divider rule ── */
+.bio-rule{
+  display:flex;align-items:center;gap:14px;
+  margin-bottom:42px;
+}
+.bio-rule-line{flex:1;height:1px;background:rgba(204,31,45,.28)}
+.bio-rule-gem{
+  width:8px;height:8px;background:var(--ca);
+  transform:rotate(45deg);flex-shrink:0;
+}
+
+/* ── 2-column fact grid ── */
+.bio-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:30px 56px;
+  align-content:start;
+}
+.bio-field-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:16px;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ca);opacity:.85;
+  margin-bottom:8px;
+}
+.bio-field-value{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:24px;font-weight:400;
+  line-height:1.38;color:var(--pa);
+}
+
+/* ── Topics section ── */
+.bio-topics-wrap{
+  margin-top:auto;
+  padding-top:36px;
+  border-top:1px solid rgba(204,31,45,.15);
+}
+.bio-topics-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:14px;font-weight:700;
+  letter-spacing:.2em;text-transform:uppercase;
+  color:var(--gr);margin-bottom:16px;
+}
+.bio-topics{display:flex;flex-wrap:wrap;gap:10px}
+.bio-pill{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:20px;font-weight:400;
+  color:var(--pa);
+  border:1px solid rgba(204,31,45,.38);
+  padding:7px 18px;border-radius:2px;
+}
+</style>
+</head>
+<body>
+
+<div class="slide">
+  <div class="bio-label">BIOGRAPHY</div>
+  <div class="bio-headline">Who is<br><em class="bio-name">this person?</em></div>
+  <div class="bio-rule">
+    <div class="bio-rule-line"></div>
+    <div class="bio-rule-gem"></div>
+    <div class="bio-rule-line"></div>
+  </div>
+  <div class="bio-grid">
+    <div class="bio-field">
+      <div class="bio-field-label">BORN</div>
+      <div class="bio-field-value">Year · Country of Origin</div>
+    </div>
+    <div class="bio-field">
+      <div class="bio-field-label">BACKGROUND</div>
+      <div class="bio-field-value">Career or prior context</div>
+    </div>
+    <div class="bio-field">
+      <div class="bio-field-label">TURNING POINT</div>
+      <div class="bio-field-value">Event that changed their path</div>
+    </div>
+    <div class="bio-field">
+      <div class="bio-field-label">MISSION</div>
+      <div class="bio-field-value">What they advocate or promote</div>
+    </div>
+    <div class="bio-field">
+      <div class="bio-field-label">PLATFORM</div>
+      <div class="bio-field-value">Where they operate · Reach</div>
+    </div>
+    <div class="bio-field">
+      <div class="bio-field-label">STYLE</div>
+      <div class="bio-field-value">How they communicate</div>
+    </div>
+  </div>
+  <div class="bio-topics-wrap">
+    <div class="bio-topics-label">◆ KEY CONTROVERSIES</div>
+    <div class="bio-topics">
+      <div class="bio-pill">Controversy 1</div>
+      <div class="bio-pill">Controversy 2</div>
+      <div class="bio-pill">Controversy 3</div>
+      <div class="bio-pill">Controversy 4</div>
+      <div class="bio-pill">Controversy 5</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
