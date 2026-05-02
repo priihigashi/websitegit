@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>USA News — FORMAT-002 — Who Decided This?</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ── FORMAT-002 canonical USA template — adapted from Brazil Rachadinha v2 ── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ob:#0A0A0A;--pa:#F0EBE3;--ca:#CC1F2D;--gr:rgba(240,235,227,0.45);--rule:rgba(240,235,227,0.12);--W:1080px;--H:1350px;--P:108px}
+body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}
+.slide{width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);padding:var(--P);position:relative;overflow:hidden;flex-shrink:0;display:flex;flex-direction:column}
+/* Corner brackets */
+.corner{position:absolute;width:28px;height:28px;z-index:10}
+.corner.tl{top:40px;left:40px;border-top:2px solid rgba(204,31,45,.6);border-left:2px solid rgba(204,31,45,.6)}
+.corner.tr{top:40px;right:40px;border-top:2px solid rgba(204,31,45,.6);border-right:2px solid rgba(204,31,45,.6)}
+.corner.bl{bottom:40px;left:40px;border-bottom:2px solid rgba(204,31,45,.6);border-left:2px solid rgba(204,31,45,.6)}
+.corner.br{bottom:40px;right:40px;border-bottom:2px solid rgba(204,31,45,.6);border-right:2px solid rgba(204,31,45,.6)}
+/* Full-bleed photo background */
+.bg-photo{position:absolute;inset:0;background-size:cover;background-position:center 20%;z-index:1;filter:grayscale(1) contrast(1.1) brightness(.55)}
+.bg-photo::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,10,.18) 0%,rgba(10,10,10,.78) 100%)}
+/* Placeholder when no real photo */
+.bg-placeholder{position:absolute;inset:0;z-index:1;background:linear-gradient(135deg,#1c1c1c 0%,#2a2a2a 40%,#141414 100%)}
+.bg-placeholder::after{content:'[ BACKGROUND PHOTO ]';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'JetBrains Mono',monospace;font-size:18px;color:rgba(255,255,255,0.15);letter-spacing:.12em}
+/* Halftone */
+.halftone{position:absolute;inset:0;z-index:2;pointer-events:none;background-image:radial-gradient(circle,rgba(10,10,10,.55) 1px,transparent 1px);background-size:6px 6px}
+/* Dark overlay */
+.dark-overlay{position:absolute;inset:0;z-index:2;pointer-events:none;background:rgba(10,10,10,.52)}
+.slide-motion > *:not(.bg-photo):not(.bg-placeholder):not(.halftone):not(.dark-overlay):not(.corner):not(.swipe):not(.footer-handle):not(.sticker-slot):not(.person-pill):not(.stamp-badge){position:relative;z-index:3}
+/* Sticker slot — cover portrait frame */
+.sticker-slot{position:absolute;right:7%;top:14%;width:310px;height:410px;z-index:4;border:3px solid var(--ca);border-radius:2px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.7)}
+.sticker-slot img{width:100%;height:100%;object-fit:cover;object-position:center top;filter:grayscale(1) contrast(1.15) brightness(.95)}
+/* Sticker placeholder */
+.sticker-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(204,31,45,.04);flex-direction:column;gap:12px}
+.sticker-placeholder .ini{font-family:'Playfair Display',serif;font-size:96px;font-weight:900;color:var(--ca);line-height:1}
+.sticker-placeholder .iname{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--gr);text-transform:uppercase;letter-spacing:.1em;text-align:center;padding:0 12px}
+/* Cover text constrained to left side */
+.cover-with-sticker .cover-hl{max-width:52%}
+.cover-with-sticker .cover-hook{max-width:52%}
+/* Stamp badge */
+.stamp-badge{position:absolute;right:calc(7% - 4px);top:calc(14% - 20px);z-index:9;background:var(--ca);color:var(--ob);font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;padding:6px 14px;border:2px solid var(--ob);transform:rotate(-1.5deg)}
+/* Person attribution pill */
+.person-pill{position:absolute;bottom:var(--P);left:var(--P);z-index:10;border:1px solid var(--ca);padding:7px 16px;font-family:'JetBrains Mono',monospace;font-size:19px;letter-spacing:.07em;text-transform:uppercase;color:var(--pa);background:rgba(10,10,10,.55)}
+.person-pill em{color:var(--gr);font-style:normal}
+/* Typography */
+.tag{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--gr);margin-bottom:32px}
+.swipe{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);right:var(--P);z-index:10;letter-spacing:.08em}
+.footer-handle{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);left:var(--P);z-index:10;letter-spacing:.06em}
+/* COVER */
+.slide-cover .cover-date{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);margin-bottom:44px;letter-spacing:.1em}
+.slide-cover .cover-hl{font-family:'Playfair Display',serif;font-size:104px;font-weight:900;line-height:.93;letter-spacing:-.01em;margin-bottom:24px}
+.slide-cover .cover-hl em{font-style:italic;color:var(--ca)}
+.slide-cover .cover-hook{font-family:'Roboto Condensed',sans-serif;font-size:32px;color:var(--gr);font-weight:400;line-height:1.4;margin-bottom:32px}
+/* INNER SLIDE HEADINGS */
+.slide-hl{font-family:'Playfair Display',serif;font-size:72px;font-weight:900;line-height:.96;letter-spacing:-.01em;margin-bottom:12px}
+.slide-hl em{font-style:italic;color:var(--ca)}
+.slide-en{font-family:'Roboto Condensed',sans-serif;font-size:24px;color:var(--gr);font-weight:400;margin-bottom:32px;line-height:1.3}
+/* PROFILE */
+.party-tag{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--ca);background:rgba(204,31,45,.08);padding:6px 14px;display:inline-block;margin-bottom:18px;letter-spacing:.12em;text-transform:uppercase}
+.profile-layout{display:flex;gap:36px;align-items:flex-start;flex:1}
+.sticker-inner{width:260px;min-height:340px;border:2px solid rgba(204,31,45,.35);display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:4px;overflow:hidden;flex-direction:column;background:rgba(204,31,45,.04)}
+.bio-initials{font-family:'Playfair Display',serif;font-size:80px;font-weight:900;color:var(--ca);line-height:1}
+.bio-init-name{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--gr);text-align:center;margin-top:12px;text-transform:uppercase;letter-spacing:.1em;padding:0 8px}
+.fact-list{list-style:none;flex:1}
+.fact-list li{font-family:'Roboto Condensed',sans-serif;font-size:34px;font-weight:400;padding:14px 0;border-bottom:1px solid var(--rule);line-height:1.3}
+.fact-list li::before{content:"▸ ";color:var(--ca)}
+/* DATA / STATS */
+.nums-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;flex:1}
+.num-block{background:rgba(204,31,45,.05);border:1px solid rgba(204,31,45,.18);padding:24px 18px;border-radius:4px}
+.num-val{font-family:'Playfair Display',serif;font-size:76px;font-weight:900;color:var(--ca);line-height:1;margin-bottom:8px}
+.num-label{font-family:'Roboto Condensed',sans-serif;font-size:28px;font-weight:700;margin-bottom:4px}
+.num-en{font-family:'Roboto Condensed',sans-serif;font-size:20px;color:var(--gr)}
+/* LIST */
+.item-list{list-style:none;flex:1}
+.item-list li{font-family:'Roboto Condensed',sans-serif;font-size:36px;font-weight:400;padding:16px 0;border-bottom:1px solid var(--rule);line-height:1.3}
+.item-list li::before{content:"→ ";color:var(--ca)}
+/* TIMELINE */
+.timeline-grid{display:flex;flex-direction:column;gap:0;flex:1}
+.tl-row{display:flex;gap:24px;padding:14px 0;border-bottom:1px solid var(--rule);align-items:flex-start}
+.tl-date{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--ca);min-width:110px;flex-shrink:0;letter-spacing:.04em;padding-top:3px}
+.tl-text{font-family:'Roboto Condensed',sans-serif;font-size:30px;color:var(--pa);line-height:1.3}
+/* NETWORK */
+.bio-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:12px 0;flex:1}
+.bio-card{display:flex;flex-direction:column;align-items:center;gap:6px}
+.bio-photo{width:120px;height:145px;border-radius:3px;object-fit:cover;object-position:center top;border:1px solid rgba(204,31,45,.25)}
+.bio-card .bio-initials{width:120px;height:145px;font-family:'Playfair Display',serif;font-size:48px;font-weight:900;border-radius:3px;background:rgba(204,31,45,.06);display:flex;align-items:center;justify-content:center;border:1px solid rgba(204,31,45,.25);color:var(--ca)}
+.bio-name{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--pa);text-align:center;text-transform:uppercase;letter-spacing:.06em;line-height:1.3}
+.bio-role{font-family:'Roboto Condensed',sans-serif;font-size:13px;color:var(--gr);text-align:center;line-height:1.2}
+.bio-fact{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ca);text-align:center;opacity:.85;margin-top:2px}
+/* QUOTE */
+.quote-block{border-left:4px solid var(--ca);padding:24px 28px;margin-bottom:24px;flex:1;background:rgba(204,31,45,.04)}
+.quote-mark{font-family:'Playfair Display',serif;font-size:80px;font-weight:900;color:var(--ca);line-height:.7;margin-bottom:10px}
+.quote-text{font-family:'Roboto Condensed',sans-serif;font-size:34px;line-height:1.4;margin-bottom:18px}
+.quote-source{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--ca);letter-spacing:.08em}
+/* SOURCES */
+.src-head{font-family:'Playfair Display',serif;font-size:80px;font-weight:900;line-height:.95;text-transform:uppercase;margin-bottom:32px}
+.src-list{flex:1}
+.src-row{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--gr);display:flex;gap:16px;padding:10px 0;border-bottom:1px solid var(--rule);line-height:1.4}
+.src-num{color:var(--ca);flex-shrink:0;width:30px;font-weight:700}
+.cta-pt{font-family:'Playfair Display',serif;font-size:52px;font-weight:900;line-height:1;color:var(--ca);margin-top:24px}
+.cta-en{font-family:'Roboto Condensed',sans-serif;font-size:24px;color:var(--gr);margin-top:6px}
+</style>
+</head>
+<body>
+
+<!-- SLIDE 1 — COVER -->
+<div class="slide slide-cover slide-motion cover-with-sticker">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="bg-placeholder"></div>
+  <div class="halftone"></div>
+  <div class="dark-overlay"></div>
+  <!-- Sticker: portrait placeholder (real photo injected by pipeline) -->
+  <div class="sticker-slot">
+    <div class="sticker-placeholder">
+      <div class="ini">AB</div>
+      <div class="iname">[Person's Name]</div>
+    </div>
+  </div>
+  <!-- Stamp overlapping sticker top -->
+  <div class="stamp-badge">ARCHIVED · 2024</div>
+  <div class="tag">WHO DECIDED THIS? / #001</div>
+  <div class="cover-hl">Who decided to<br><em>bury</em> this<br>case?</div>
+  <div class="cover-hook">The money vanished. The case was closed. But someone signed every decision.</div>
+  <div class="person-pill">[Person's Name] <em>· [Party (lean)]</em></div>
+  <div class="swipe">FOLLOW THE THREAD &#8594;</div>
+</div>
+
+<!-- SLIDE 2 — TIMELINE -->
+<div class="slide slide-timeline">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">TIMELINE</div>
+  <div class="slide-hl">The <em>chain</em> of decisions.</div>
+  <div class="slide-en">Follow the money — follow the power.</div>
+  <div class="timeline-grid">
+    <div class="tl-row"><div class="tl-date">[YEAR]</div><div class="tl-text">[First key event — when the scheme began or was first flagged.]</div></div>
+    <div class="tl-row"><div class="tl-date">[YEAR]</div><div class="tl-text">[Escalation or exposure — investigation opened, whistleblower, audit flag.]</div></div>
+    <div class="tl-row"><div class="tl-date">[YEAR]</div><div class="tl-text">[Key figure implicated or arrested — who was named and how.]</div></div>
+    <div class="tl-row"><div class="tl-date">[YEAR]</div><div class="tl-text">[Institutional response — how the system reacted (dismissal, ruling, coverage).]</div></div>
+    <div class="tl-row"><div class="tl-date">[YEAR]</div><div class="tl-text">[Outcome — case dropped, acquitted, statute of limitations, or pending.]</div></div>
+  </div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+
+<!-- SLIDE 3 — NETWORK / Connect the Dots (motion bg) -->
+<div class="slide slide-network slide-motion">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="bg-placeholder"></div>
+  <div class="halftone"></div>
+  <div class="dark-overlay"></div>
+  <div class="tag">CONNECT THE DOTS</div>
+  <div class="slide-hl">The <em>network</em> behind the office.</div>
+  <div class="slide-en">Who else was on the payroll?</div>
+  <div class="bio-grid">
+    <div class="bio-card">
+      <div class="bio-initials">AA</div>
+      <div class="bio-name">[Associate A]</div>
+      <div class="bio-role">[Role / connection]</div>
+      <div class="bio-fact">[Key fact]</div>
+    </div>
+    <div class="bio-card">
+      <div class="bio-initials">BB</div>
+      <div class="bio-name">[Associate B]</div>
+      <div class="bio-role">[Role / connection]</div>
+      <div class="bio-fact">[Key fact]</div>
+    </div>
+    <div class="bio-card">
+      <div class="bio-initials">CC</div>
+      <div class="bio-name">[Associate C]</div>
+      <div class="bio-role">[Role / connection]</div>
+      <div class="bio-fact">[Key fact]</div>
+    </div>
+    <div class="bio-card">
+      <div class="bio-initials">DD</div>
+      <div class="bio-name">[Associate D]</div>
+      <div class="bio-role">[Role / connection]</div>
+      <div class="bio-fact">[Key fact]</div>
+    </div>
+  </div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+
+<!-- SLIDE 4 — DATA / The Numbers -->
+<div class="slide slide-data">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">THE NUMBERS</div>
+  <div class="slide-hl">The <em>scale</em> of the scheme.</div>
+  <div class="slide-en">Hard data — no spin.</div>
+  <div class="nums-grid">
+    <div class="num-block">
+      <div class="num-val">$[X]M</div>
+      <div class="num-label">[Estimated amount diverted or misused]</div>
+      <div class="num-en">[Source — agency, audit, report]</div>
+    </div>
+    <div class="num-block">
+      <div class="num-val">[X]%</div>
+      <div class="num-label">[Key percentage — salary returned, budget cut, approval rate]</div>
+      <div class="num-en">[Source]</div>
+    </div>
+    <div class="num-block">
+      <div class="num-val">[X] yrs</div>
+      <div class="num-label">[Duration of the scheme or investigation]</div>
+      <div class="num-en">[Source]</div>
+    </div>
+    <div class="num-block">
+      <div class="num-val">0</div>
+      <div class="num-label">[Convictions, charges filed, or accountability measure]</div>
+      <div class="num-en">To date</div>
+    </div>
+  </div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+
+<!-- SLIDE 5 — PROFILE / Who made the call -->
+<div class="slide slide-profile slide-motion">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="bg-placeholder"></div>
+  <div class="halftone"></div>
+  <div class="dark-overlay"></div>
+  <div class="tag">WHO IS</div>
+  <div class="party-tag">[Party · Lean]</div>
+  <div class="slide-hl">[First] <em>[Last Name]</em></div>
+  <div class="slide-en">The person who made the call.</div>
+  <div class="profile-layout">
+    <div class="sticker-inner">
+      <div class="bio-initials">AB</div>
+      <div class="bio-init-name">[ PHOTO ]</div>
+    </div>
+    <ul class="fact-list">
+      <li>[Title / Office — e.g. Senator for [State] since [Year]]</li>
+      <li>[Family or political connection that matters]</li>
+      <li>[Career history most relevant to this story]</li>
+      <li>[How the case ended for them — charges, acquittal, silence]</li>
+    </ul>
+  </div>
+  <div class="swipe">SWIPE &#8594;</div>
+</div>
+
+<!-- SLIDE 6 — SOURCES -->
+<div class="slide slide-sources">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">SOURCES</div>
+  <div class="src-head">THE SOURCE<br>IS <span style="color:var(--ca)">HERE.</span></div>
+  <div class="src-list">
+    <div class="src-row"><span class="src-num">01</span><span>[Outlet — Article title or report name, year]</span></div>
+    <div class="src-row"><span class="src-num">02</span><span>[Outlet — Article title or report name, year]</span></div>
+    <div class="src-row"><span class="src-num">03</span><span>[Agency / Court — Document or decision name, date]</span></div>
+    <div class="src-row"><span class="src-num">04</span><span>[Outlet — Supporting article or investigation, year]</span></div>
+  </div>
+  <div class="cta-pt">Save this. Share this.</div>
+  <div class="footer-handle">@handle</div>
+</div>
+
+</body>
+</html>

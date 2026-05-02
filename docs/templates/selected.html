@@ -225,6 +225,29 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
+<!-- FORMAT-002 WHO DECIDED THIS? — USA full carousel -->
+<div class="tpl-card" id="card_news_usa_f002">
+  <div class="tpl-meta">
+    <div class="tpl-name">USA — WHO DECIDED THIS?</div>
+    <div class="tpl-format">FORMAT-002 · US · ✓ APPROVED</div>
+    <div class="tpl-category">USA News · political breakdown · 6 slides</div>
+    <div class="tpl-when">USA color-adapted FORMAT-002 carousel. 'Who actually decided this?' — traces a policy, case, or vote back to the person who made the call. Obsidian bg + signal red (#CC1F2D). Cover, Timeline, Network, Data, Profile, Sources. EN. Navigate all 6 slides with arrows.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row">
+      <button class="vbtn active">Single style</button>
+    </div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_usa_f002')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_usa_f002" src="news_usa_f002.html" scrolling="no" onload="initViewer('news_usa_f002')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_usa_f002')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_usa_f002">slide 1 / 6</div>
+  </div>
+</div>
+
 </div><!-- /group-cards USA Full Formats -->
 
 
@@ -607,6 +630,10 @@ const IMG = {
   news_brazil_f002: {
     bg:      ['congresso_nacional','stf_brazil','rachadinha_doc','senado_exterior','planalto_bg','fontes_br'],
     sticker: 'politician_br_main'
+  },
+  news_usa_f002: {
+    bg:      ['capitol_usa','whitehouse_night','senate_chamber','dc_protest','congress_vote','fontes_usa'],
+    sticker: 'politician_usa_main'
   },
   news_brazil_biography:{},
   news_usa_biography:   {},
