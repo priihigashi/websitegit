@@ -584,9 +584,9 @@ const IMG = {
   news_usa_biography:   {},
   news_brazil_network:  {},
   news_usa_network:     {},
-  news_brazil_duotone:  { bg: ['congresso_nacional','stf_brazil','senado_exterior'] },
-  news_usa_duotone:     { bg: ['capitol_usa','whitehouse_night','senate_chamber'] },
-  opc_duotone:          { bg: ['kitchen_reno','bathroom_tiles','construction_site'] }
+  news_brazil_duotone:  { photo_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=920&h=540&fit=crop&crop=face' },
+  news_usa_duotone:     { photo_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=920&h=540&fit=crop&crop=face' },
+  opc_duotone:          { photo_url: 'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=920&h=540&fit=crop' }
 };
 
 // ── Inject dummy images into all placeholder slots ──
@@ -597,12 +597,18 @@ function wireImages(iframe, tid) {
   let bgIdx = 0, bioIdx = 0, ctxIdx = 0;
 
   // 1. bg-placeholder divs → bg-photo with real image
+  // If IMG entry has photo_url (e.g. duotone templates needing a face portrait), use it directly
   doc.querySelectorAll('.bg-placeholder').forEach(el => {
-    const seed = (s.bg && s.bg[bgIdx]) || ('bg_' + tid + '_' + bgIdx);
+    let url;
+    if (s.photo_url) {
+      url = s.photo_url;
+    } else {
+      const seed = (s.bg && s.bg[bgIdx]) || ('bg_' + tid + '_' + bgIdx);
+      url = 'https://picsum.photos/seed/' + seed + '/1080/1350';
+      bgIdx++;
+    }
     el.className = 'bg-photo';
-    el.style.cssText = (el.getAttribute('style') || '') +
-      ';background-image:url("https://picsum.photos/seed/' + seed + '/1080/1350")';
-    bgIdx++;
+    el.style.cssText = 'background-image:url("' + url + '");background-size:cover;background-position:center 15%';
   });
 
   // 2. bg-photo already in HTML but pointing to missing local resources/ → replace URL
