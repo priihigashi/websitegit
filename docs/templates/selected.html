@@ -176,6 +176,26 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
+<!-- BRAZIL STANDALONE v2 — dark bg + yellow circle (no flag read) -->
+<div class="tpl-card" id="card_news_brazil_standalone_v2">
+  <div class="tpl-meta">
+    <div class="tpl-name">Brazil — Cover · Main Character v2</div>
+    <div class="tpl-format">FORMAT-STANDALONE-BR-v2</div>
+    <div class="tpl-category">Brazil News · story with a main person</div>
+    <div class="tpl-when">Same layer architecture as v1 but inverted: dark (#111111) bg + yellow (#FFE500) circle. Zero flag read. White text + yellow accents. Person placeholder is opaque (bg color) so circle never bleeds through. Circle repositioned center-right for clean orb effect. PT-BR. 3 slides.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_brazil_standalone_v2')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_brazil_standalone_v2" src="news_brazil_standalone_v2.html" scrolling="no" onload="initViewer('news_brazil_standalone_v2')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil_standalone_v2')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_brazil_standalone_v2">slide 1 / 3</div>
+  </div>
+</div>
+
 </div><!-- /group-cards News Brazil -->
 
 
@@ -300,6 +320,10 @@ const IMG = {
     sticker: 'politician_usa_main',
     bio:     ['usa_person1','usa_person2','usa_person3','usa_person4'],
     ctx:     ['usa_event','hearing_room','press_conference','document_usa']
+  },
+  news_brazil_standalone_v2: {
+    sticker: 'politician_br_v2',
+    ctx:     ['brazil_event2','congresso_exterior','institution_br2','crowd_protest2']
   }
 };
 
