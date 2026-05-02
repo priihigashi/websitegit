@@ -156,6 +156,26 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
+<!-- BRAZIL STANDALONE — lives inside News Brazil group -->
+<div class="tpl-card" id="card_news_brazil_standalone">
+  <div class="tpl-meta">
+    <div class="tpl-name">Brazil — Standalone</div>
+    <div class="tpl-format">FORMAT-STANDALONE-BR</div>
+    <div class="tpl-category">Brazil News · any topic · no series</div>
+    <div class="tpl-when">Drop any Brazil topic in — no series binding. Gold/green/red editorial palette, InBr-inspired layout. PT-BR.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_brazil_standalone')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_brazil_standalone" src="news_brazil_standalone.html" scrolling="no" onload="initViewer('news_brazil_standalone')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil_standalone')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_brazil_standalone">slide 1 / 6</div>
+  </div>
+</div>
+
 </div><!-- /group-cards News Brazil -->
 
 
@@ -194,47 +214,13 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
-</div><!-- /group-cards News USA -->
-
-
-<!-- ═══════════════════════════════════════════
-     NEWS — STANDALONE (pick-and-choose, any topic)
-     ═══════════════════════════════════════════ -->
-<div class="group-header" style="border-left-color:#888">
-  <span style="color:#aaa">News — Standalone</span>
-  <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(255,255,255,0.28);margin-top:6px;letter-spacing:.08em">
-    Not tied to any series — drop any topic in and go. Full palette + creative overlays.
-  </div>
-</div>
-<div class="group-cards">
-
-<!-- BRAZIL STANDALONE -->
-<div class="tpl-card" id="card_news_brazil_standalone">
-  <div class="tpl-meta">
-    <div class="tpl-name">Brazil — Standalone</div>
-    <div class="tpl-format">FORMAT-STANDALONE-BR</div>
-    <div class="tpl-category">Brazil News · any topic · editorial style</div>
-    <div class="tpl-when">InBr-inspired editorial design. 6 slides: cover → o que aconteceu → citação → personagens (4-card grid) → dados/números → fontes. Inline red/gold highlights, large decorative quote marks, ticket-notch bio-cards, geometric overlays. PT-BR.</div>
-  </div>
-  <div class="tpl-viewer-wrap">
-    <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('news_brazil_standalone')">&#8592;</button>
-      <div class="slide-frame-outer">
-        <iframe id="viewer_news_brazil_standalone" src="news_brazil_standalone.html" scrolling="no" onload="initViewer('news_brazil_standalone')"></iframe>
-      </div>
-      <button class="arrow-btn" onclick="nextSlide('news_brazil_standalone')">&#8594;</button>
-    </div>
-    <div class="slide-counter" id="counter_news_brazil_standalone">slide 1 / 6</div>
-  </div>
-</div>
-
-<!-- USA STANDALONE -->
+<!-- USA STANDALONE — lives inside News USA group -->
 <div class="tpl-card" id="card_news_usa_standalone">
   <div class="tpl-meta">
     <div class="tpl-name">USA — Standalone</div>
     <div class="tpl-format">FORMAT-STANDALONE-US</div>
-    <div class="tpl-category">USA News · any topic · editorial style</div>
-    <div class="tpl-when">InBr-adapted for EN. 6 slides: cover → what happened → key quote → the players (4-card grid) → by the numbers → sources. Signal Red + Deep Navy palette, inline red/navy highlights, large decorative quote marks, geometric overlays. EN.</div>
+    <div class="tpl-category">USA News · any topic · no series</div>
+    <div class="tpl-when">Drop any USA topic in — no series binding. Signal Red + Deep Navy editorial palette, EN. Mirror structure of Brazil Standalone.</div>
   </div>
   <div class="tpl-viewer-wrap">
     <div class="viewer-row">
@@ -248,7 +234,7 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
-</div><!-- /group-cards News Standalone -->
+</div><!-- /group-cards News USA -->
 
 
 <script>
