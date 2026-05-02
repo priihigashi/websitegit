@@ -315,6 +315,26 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
+<!-- Brazil Duotone Statement -->
+<div class="tpl-card" id="card_news_brazil_duotone">
+  <div class="tpl-meta">
+    <div class="tpl-name">Brazil — Duotone Statement</div>
+    <div class="tpl-format">FORMAT-DUO-BR · ✓ APPROVED</div>
+    <div class="tpl-category">Brazil News · standalone · statement cover</div>
+    <div class="tpl-when">Bright gold background (#C9A84C) + duotone portrait (navy shadows → gold highlights). Bold Playfair headline claim + large photo + pull quote + InBr attribution bar. One-slide post or carousel opener. Pipeline injects .bg-placeholder photo. PT-BR.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_brazil_duotone')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_brazil_duotone" src="news_brazil_duotone.html" scrolling="no" onload="initViewer('news_brazil_duotone')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil_duotone')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_brazil_duotone">slide 1 / 1</div>
+  </div>
+</div>
+
 </div><!-- /group-cards Brazil Standalones -->
 
 
@@ -424,7 +444,56 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
+<!-- USA Duotone Statement -->
+<div class="tpl-card" id="card_news_usa_duotone">
+  <div class="tpl-meta">
+    <div class="tpl-name">USA — Duotone Statement</div>
+    <div class="tpl-format">FORMAT-DUO-US · ✓ APPROVED</div>
+    <div class="tpl-category">USA News · standalone · statement cover</div>
+    <div class="tpl-when">Parchment background (#E8DECE) + red 8px top bar + duotone portrait (navy shadows → signal red highlights). Bold Playfair headline claim + large photo + pull quote + InUS attribution bar. One-slide post or carousel opener. Pipeline injects .bg-placeholder photo. EN.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_usa_duotone')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_usa_duotone" src="news_usa_duotone.html" scrolling="no" onload="initViewer('news_usa_duotone')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_usa_duotone')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_usa_duotone">slide 1 / 1</div>
+  </div>
+</div>
+
 </div><!-- /group-cards USA Standalones -->
+
+
+<!-- ═══ OPC STANDALONES ═══ -->
+<div class="group-header" style="border-left-color:#CBCC10">
+  <span style="color:#CBCC10">OPC — Oak Park Construction · Standalone Slides</span>
+</div>
+<div class="group-cards">
+
+<!-- OPC Duotone Statement -->
+<div class="tpl-card" id="card_opc_duotone">
+  <div class="tpl-meta">
+    <div class="tpl-name">OPC — Duotone Statement</div>
+    <div class="tpl-format">FORMAT-DUO-OPC · ✓ APPROVED</div>
+    <div class="tpl-category">OPC · standalone · statement cover</div>
+    <div class="tpl-when">Lime background (#CBCC10) + duotone portrait (obsidian shadows → lime highlights). Bold Playfair headline claim + large photo + client quote + Oak Park Construction attribution bar. One-slide post or project spotlight. Pipeline injects .bg-placeholder photo. EN.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('opc_duotone')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_opc_duotone" src="opc_duotone.html" scrolling="no" onload="initViewer('opc_duotone')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('opc_duotone')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_opc_duotone">slide 1 / 1</div>
+  </div>
+</div>
+
+</div><!-- /group-cards OPC Standalones -->
 
 
 <script>
@@ -504,7 +573,10 @@ const IMG = {
   news_brazil_biography:{},
   news_usa_biography:   {},
   news_brazil_network:  {},
-  news_usa_network:     {}
+  news_usa_network:     {},
+  news_brazil_duotone:  { bg: ['congresso_nacional','stf_brazil','senado_exterior'] },
+  news_usa_duotone:     { bg: ['capitol_usa','whitehouse_night','senate_chamber'] },
+  opc_duotone:          { bg: ['kitchen_reno','bathroom_tiles','construction_site'] }
 };
 
 // ── Inject dummy images into all placeholder slots ──
