@@ -55,7 +55,7 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
   text-decoration-thickness:3px;text-underline-offset:5px;
 }
 
-/* Duotone photo */
+/* Duotone photo — SVG filter handles full tonal mapping */
 .photo-wrap{
   width:920px;height:540px;border-radius:20px;
   overflow:hidden;position:relative;
@@ -65,15 +65,8 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
 .photo-wrap .photo{
   position:absolute;inset:0;
   background-size:cover;background-position:center 15%;
-  filter:grayscale(1) contrast(1.2) brightness(0.85);
-  mix-blend-mode:multiply;
   width:100%;height:100%;
-}
-.photo-wrap::after{
-  content:'';position:absolute;inset:0;
-  background:var(--highlight);
-  mix-blend-mode:screen;
-  pointer-events:none;
+  filter:url(#duotone-usa);
 }
 
 /* Quote */
@@ -130,6 +123,24 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
 </style>
 </head>
 <body>
+
+<!-- Duotone SVG filter: shadow #0D1B3E navy → highlight #E8C090 cream, with contrast boost -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="duotone-usa" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values=".299 .587 .114 0 0  .299 .587 .114 0 0  .299 .587 .114 0 0  0 0 0 1 0"/>
+    <feComponentTransfer>
+      <feFuncR type="linear" slope="1.4" intercept="-0.2"/>
+      <feFuncG type="linear" slope="1.4" intercept="-0.2"/>
+      <feFuncB type="linear" slope="1.4" intercept="-0.2"/>
+    </feComponentTransfer>
+    <feComponentTransfer>
+      <feFuncR type="table" tableValues="0.051 0.910"/>
+      <feFuncG type="table" tableValues="0.106 0.753"/>
+      <feFuncB type="table" tableValues="0.243 0.565"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
+
 <div class="slide">
   <div class="top-bar"></div>
 
