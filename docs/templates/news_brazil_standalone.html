@@ -65,45 +65,49 @@ body {
 }
 
 /* ── LAYER 1: Geometric circle blob ── */
-/* Isolated element — recolor by changing --blob-color only */
+/* Centered BEHIND the person's torso — NOT pushed to the right edge.
+   The left arc hides behind the person layer; the right arc is visible.
+   For cutout PNGs (background-removed photo), both arcs show through. */
 .blob-circle {
   position: absolute;
-  width: 800px;
-  height: 800px;
-  background: var(--blob-color);  /* ← one variable controls this */
+  width: 920px;
+  height: 920px;
+  background: var(--blob-color);
   border-radius: 50%;
-  right: -175px;
-  top: 345px;
+  left: 50px;    /* center lands at ~x=510, behind the person's torso */
+  top: 270px;
   z-index: 1;
-  /* No other styling — blob is purely a color shape */
 }
 
 /* ── LAYER 2: Person photo ── */
-/* Separate from blob and background — has visual depth via drop-shadow */
+/* IMPORTANT: Designed for background-removed PNG cutouts.
+   background is transparent so the circle shows through the cutout.
+   With a regular JPG the person layer is opaque — circle visible only on right arc.
+   Pipeline should supply background-removed PNG for the full cutout effect. */
 .person-layer {
   position: absolute;
   left: 0;
   top: 0;
-  width: 650px;
+  width: 660px;
   height: 100%;
   z-index: 2;
-  /* drop-shadow separates the person silhouette from the background */
-  filter: drop-shadow(8px 0 24px rgba(0,0,0,0.28));
+  background: transparent;   /* lets circle show through cutout transparent areas */
+  filter: drop-shadow(6px 0 20px rgba(0,0,0,0.22));
 }
-/* wireImages step 4 (.sticker-placeholder) injects the real photo here */
+/* Placeholder: semi-transparent so the circle orb is visible in the gallery */
 .person-layer .sticker-placeholder {
   width: 100%;
   height: 100%;
-  background: rgba(0,0,0,0.10); /* placeholder tint so slot is visible */
+  background: rgba(255,229,0,0.55); /* translucent yellow — shows the circle behind */
   display: block;
 }
-/* Applied to any img injected into the person layer */
+/* Photo: object-fit contain for cutout PNGs so the silhouette isn't cropped */
 .person-layer img,
 .person-layer .sticker-placeholder img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: center 8%;   /* show face near top */
+  object-fit: contain;          /* contain = no crop — works for cutout PNGs */
+  object-position: center bottom; /* anchor person at bottom, head floats up */
   filter: grayscale(1) contrast(1.15) brightness(0.90);
   display: block;
 }
@@ -156,111 +160,6 @@ body {
   color: var(--muted);
   letter-spacing: .01em;
 }
-
-
-/* ══════════════════════════════════════════════
-   SLIDE 2 — O QUE ACONTECEU
-   Same bg-color, context image, body copy
-══════════════════════════════════════════════ */
-.slide-body {
-  background: var(--bg-color);
-  padding: 68px 60px 60px;
-  display: flex;
-  flex-direction: column;
-}
-.slide-label {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 15px;
-  letter-spacing: .22em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 18px;
-}
-.slide-section-head {
-  font-family: 'Barlow Condensed', sans-serif;
-  font-weight: 900;
-  font-size: 80px;
-  line-height: 0.91;
-  text-transform: uppercase;
-  color: var(--text-color);
-  letter-spacing: -.01em;
-  margin-bottom: 32px;
-}
-/* ── Geometric accent line ── recolorable via --blob-color */
-.accent-rule {
-  width: 80px;
-  height: 5px;
-  background: var(--blob-color);  /* ← same variable as circle blob */
-  margin-bottom: 32px;
-  flex-shrink: 0;
-}
-.context-img-slot, .ctx-fallback {
-  width: 100%;
-  height: 340px;
-  background: rgba(0,0,0,0.10);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 28px;
-  flex-shrink: 0;
-}
-.context-img-slot img, .ctx-fallback img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.body-copy {
-  font-family: 'Barlow', sans-serif;
-  font-size: 30px;
-  line-height: 1.5;
-  color: var(--text-color);
-}
-.body-copy strong { font-weight: 700; }
-/* Inline highlight — recolorable via --hl-color */
-.hl {
-  background: var(--hl-color);
-  color: #fff;
-  padding: 0 6px;
-  border-radius: 1px;
-}
-
-
-/* ══════════════════════════════════════════════
-   SLIDE 3 — FONTES
-   Same bg-color, clean sources list
-══════════════════════════════════════════════ */
-.slide-sources {
-  background: var(--bg-color);
-  padding: 68px 60px 60px;
-  display: flex;
-  flex-direction: column;
-}
-.sources-head {
-  font-family: 'Barlow Condensed', sans-serif;
-  font-weight: 900;
-  font-size: 74px;
-  text-transform: uppercase;
-  color: var(--text-color);
-  letter-spacing: -.01em;
-  border-bottom: 4px solid var(--text-color);
-  padding-bottom: 20px;
-  margin-bottom: 36px;
-}
-.source-item {
-  font-family: 'Barlow', sans-serif;
-  font-size: 25px;
-  color: var(--text-color);
-  line-height: 1.55;
-  margin-bottom: 10px;
-}
-.source-item strong { font-weight: 700; }
-.source-footer {
-  margin-top: auto;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 16px;
-  color: var(--muted);
-  letter-spacing: .06em;
-}
 </style>
 </head>
 <body>
@@ -293,35 +192,6 @@ body {
 </div>
 
 
-<!-- ══════════════════════════════════════════════
-     SLIDE 2 — O QUE ACONTECEU
-══════════════════════════════════════════════ -->
-<div class="slide slide-body">
-  <div class="slide-label">02 / 03</div>
-  <div class="slide-section-head">O QUE<br>ACONTECEU</div>
-  <div class="accent-rule"></div>
-  <div class="context-img-slot">
-    <div class="ctx-fallback"></div>
-  </div>
-  <div class="body-copy">
-    Em <strong>[DATA]</strong>, <strong>[PESSOA / ÓRGÃO]</strong>
-    decidiu <span class="hl">[decisão central]</span>.
-    O impacto vai direto em <strong>[QUEM É AFETADO]</strong> —
-    e a maioria não sabia que isso estava sendo planejado.
-  </div>
-</div>
-
-
-<!-- ══════════════════════════════════════════════
-     SLIDE 3 — FONTES
-══════════════════════════════════════════════ -->
-<div class="slide slide-sources">
-  <div class="sources-head">Fontes</div>
-  <div class="source-item"><strong>[Veículo]</strong> — [Título da matéria], [Mês Ano]</div>
-  <div class="source-item"><strong>[Veículo]</strong> — [Título da matéria], [Mês Ano]</div>
-  <div class="source-item"><strong>[Documento oficial]</strong> — [Nome do doc], [Ano]</div>
-  <div class="source-footer">via @HANDLE_PLACEHOLDER · fair use / pesquisa própria</div>
-</div>
 
 </body>
 </html>
