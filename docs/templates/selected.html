@@ -156,13 +156,13 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
-<!-- BRAZIL STANDALONE — lives inside News Brazil group -->
+<!-- BRAZIL STANDALONE COVER -->
 <div class="tpl-card" id="card_news_brazil_standalone">
   <div class="tpl-meta">
     <div class="tpl-name">Brazil — Cover · Main Character</div>
     <div class="tpl-format">FORMAT-STANDALONE-BR</div>
     <div class="tpl-category">Brazil News · story with a main person</div>
-    <div class="tpl-when">Use when the story has a main actor (politician, official, CEO). Yellow bg (#FFE500), blue circle blob (#0057CC), B&W grayscale person left side, bold condensed headline top-right. All elements isolated via CSS variables — pipeline replaces person photo via .sticker-slot and recolors via --blob-color / --bg-color / --hl-color. PT-BR. Cover only (1 slide).</div>
+    <div class="tpl-when">Editorial dark cover. Black left zone (InBr logo + bold condensed headline). Right zone: person photo with red duotone filter + torn paper left edge. Pipeline injects person via .sticker-slot — CSS handles grayscale+duotone automatically. Recolor via --accent (red) + --bg (black). PT-BR. Cover only (1 slide).</div>
   </div>
   <div class="tpl-viewer-wrap">
     <div class="viewer-row">
@@ -176,23 +176,23 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
-<!-- BRAZIL STANDALONE v2 — dark bg + yellow circle (no flag read) -->
-<div class="tpl-card" id="card_news_brazil_standalone_v2">
+<!-- BRAZIL STATEMENT — mid-carousel quote/analysis slide -->
+<div class="tpl-card" id="card_news_brazil_statement">
   <div class="tpl-meta">
-    <div class="tpl-name">Brazil — Cover · Main Character v2</div>
-    <div class="tpl-format">FORMAT-STANDALONE-BR-v2</div>
-    <div class="tpl-category">Brazil News · story with a main person</div>
-    <div class="tpl-when">Same layer architecture as v1 but inverted: dark (#111111) bg + yellow (#FFE500) circle. Zero flag read. White text + yellow accents. Person placeholder is opaque (bg color) so circle never bleeds through. Circle centered behind person's torso. PT-BR. Cover only (1 slide).</div>
+    <div class="tpl-name">Brazil — Statement · Mid-Carousel</div>
+    <div class="tpl-format">FORMAT-STATEMENT-BR</div>
+    <div class="tpl-category">Brazil News · body slide · quote or analysis</div>
+    <div class="tpl-when">Mid-carousel slide. Quote opener (bold italic) + body text + attribution on black left zone. Person photo right with red duotone + diagonal angular divider. InBr logo bottom-left. Same duotone architecture as Cover — pipeline drops photo, CSS does the rest. Use for any slide where a named person is quoted. PT-BR.</div>
   </div>
   <div class="tpl-viewer-wrap">
     <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('news_brazil_standalone_v2')">&#8592;</button>
+      <button class="arrow-btn" onclick="prevSlide('news_brazil_statement')">&#8592;</button>
       <div class="slide-frame-outer">
-        <iframe id="viewer_news_brazil_standalone_v2" src="news_brazil_standalone_v2.html" scrolling="no" onload="initViewer('news_brazil_standalone_v2')"></iframe>
+        <iframe id="viewer_news_brazil_statement" src="news_brazil_statement.html" scrolling="no" onload="initViewer('news_brazil_statement')"></iframe>
       </div>
-      <button class="arrow-btn" onclick="nextSlide('news_brazil_standalone_v2')">&#8594;</button>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil_statement')">&#8594;</button>
     </div>
-    <div class="slide-counter" id="counter_news_brazil_standalone_v2">slide 1 / 1</div>
+    <div class="slide-counter" id="counter_news_brazil_statement">slide 1 / 1</div>
   </div>
 </div>
 
@@ -234,13 +234,13 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
-<!-- USA STANDALONE — lives inside News USA group -->
+<!-- USA STANDALONE COVER -->
 <div class="tpl-card" id="card_news_usa_standalone">
   <div class="tpl-meta">
     <div class="tpl-name">USA — Cover · Main Character</div>
     <div class="tpl-format">FORMAT-STANDALONE-US</div>
     <div class="tpl-category">USA News · story with a main person</div>
-    <div class="tpl-when">Use when the story has a main actor (senator, official, executive). Light bg (#F5F5F5), red circle blob (#CC1F2D), B&W grayscale person left side, bold condensed headline top-right. Mirror of Brazil Standalone — same CSS variable architecture. Pipeline replaces person photo via .sticker-slot and recolors via --blob-color / --bg-color / --hl-color. EN. Cover only (1 slide).</div>
+    <div class="tpl-when">Editorial dark cover. Black left zone (InUS logo + bold condensed headline). Right zone: person photo with blue duotone filter + torn paper left edge. Mirror architecture of Brazil Cover — swap --accent from red to blue. Pipeline injects person via .sticker-slot — CSS handles grayscale+duotone. EN. Cover only (1 slide).</div>
   </div>
   <div class="tpl-viewer-wrap">
     <div class="viewer-row">
@@ -251,6 +251,26 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
       <button class="arrow-btn" onclick="nextSlide('news_usa_standalone')">&#8594;</button>
     </div>
     <div class="slide-counter" id="counter_news_usa_standalone">slide 1 / 1</div>
+  </div>
+</div>
+
+<!-- USA STATEMENT — mid-carousel quote/analysis slide -->
+<div class="tpl-card" id="card_news_usa_statement">
+  <div class="tpl-meta">
+    <div class="tpl-name">USA — Statement · Mid-Carousel</div>
+    <div class="tpl-format">FORMAT-STATEMENT-US</div>
+    <div class="tpl-category">USA News · body slide · quote or analysis</div>
+    <div class="tpl-when">Mid-carousel slide. Quote opener (bold italic) + body text + attribution on black left zone. Person photo right with blue duotone + diagonal angular divider. InUS logo bottom-left. Mirror of Brazil Statement — same architecture, different accent color. EN.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_usa_statement')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_usa_statement" src="news_usa_statement.html" scrolling="no" onload="initViewer('news_usa_statement')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_usa_statement')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_usa_statement">slide 1 / 1</div>
   </div>
 </div>
 
@@ -310,20 +330,16 @@ const IMG = {
     bio:     ['us1','us2','us3','us4']
   },
   news_brazil_standalone: {
-    bg:      ['congresso_nacional','stf_brazil','planalto_night'],
-    sticker: 'politician_br_main',
-    bio:     ['br_person1','br_person2','br_person3','br_person4'],
-    ctx:     ['brazil_event','document_scan','institution_br','crowd_protest']
+    sticker: 'portrait_person_tall'
   },
   news_usa_standalone: {
-    bg:      ['capitol_usa','whitehouse_night','senate_chamber'],
-    sticker: 'politician_usa_main',
-    bio:     ['usa_person1','usa_person2','usa_person3','usa_person4'],
-    ctx:     ['usa_event','hearing_room','press_conference','document_usa']
+    sticker: 'portrait_person_suit'
   },
-  news_brazil_standalone_v2: {
-    sticker: 'politician_br_v2',
-    ctx:     ['brazil_event2','congresso_exterior','institution_br2','crowd_protest2']
+  news_brazil_statement: {
+    sticker: 'portrait_person_tall'
+  },
+  news_usa_statement: {
+    sticker: 'portrait_person_suit'
   }
 };
 

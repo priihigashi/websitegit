@@ -3,31 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <title>USA — Cover · Main Character</title>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Barlow:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Barlow:wght@400;700&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════
-   USA — COVER · MAIN CHARACTER
-   When to use: story has a main person / actor
-   Palette variables — change these to retheme:
-     --bg-color     slide background
-     --blob-color   large circle behind person
-     --text-color   headline + logo
-     --hl-color     inline text highlight
-   Layering order (z-index):
-     0 bg-color    (CSS background)
-     1 blob        (circle)
-     2 person      (B&W photo, separate from blob)
-     10 text/logo
+   USA — COVER · MAIN CHARACTER (v3 editorial)
+   Dark split layout. Person RIGHT, text LEFT.
+   Pipeline recolor via CSS vars:
+     --accent    photo duotone + decorative accents
+     --bg        slide background + text zone fill
+     --text      headline + logo
+   Person injected via .sticker-slot → .sticker-placeholder
+   Grayscale duotone applied entirely in CSS.
 ═══════════════════════════════════════════════ */
 :root {
-  /* ── THEME VARIABLES — edit these to retheme ── */
-  --bg-color:   #F5F5F5;   /* near-white — slide background */
-  --blob-color: #CC1F2D;   /* signal red circle — geometric layer */
-  --text-color: #0A0A0A;   /* black — headline, logo, labels */
-  --hl-color:   #CC1F2D;   /* inline highlight background */
-  --muted:      rgba(10,10,10,0.40);
-
-  /* ── Slide dimensions ── */
+  --accent: #1A56A8;          /* InUS deep blue */
+  --bg:     #0A0A0A;          /* editorial black */
+  --text:   #FFFFFF;
+  --muted:  rgba(255,255,255,0.32);
   --W: 1080px;
   --H: 1350px;
 }
@@ -41,154 +33,155 @@ body {
   padding: 24px;
   font-family: 'Barlow Condensed', sans-serif;
 }
+
 .slide {
-  width:  var(--W);
+  width: var(--W);
   height: var(--H);
   position: relative;
   overflow: hidden;
   flex-shrink: 0;
+  background: var(--bg);
+}
+
+/* ── PHOTO ZONE — right side, torn paper left edge ──
+   Same architecture as Brazil; accent color differs (blue duotone). */
+.photo-zone {
+  position: absolute;
+  right: 0; top: 0;
+  width: 580px; height: 100%;
+  z-index: 2;
+  filter: drop-shadow(-16px 0px 28px rgba(0,0,0,0.92));
+  clip-path: polygon(
+    13% 0%,
+    10% 3%,  17% 7%,  9% 11%, 16% 15%, 10% 19%,
+    17% 23%,  9% 27%, 16% 31%, 10% 35%, 17% 39%,
+     9% 43%, 16% 47%, 10% 51%, 17% 55%,  9% 59%,
+    16% 63%, 10% 67%, 17% 71%,  9% 75%, 15% 79%,
+    10% 83%, 16% 87%,  9% 91%, 15% 95%, 12% 100%,
+    100% 100%, 100% 0%
+  );
+}
+
+.sticker-placeholder {
+  width: 100%; height: 100%;
+  background: #1E1E1E;
+  display: block;
+}
+
+/* Blue editorial duotone — grayscale → sepia → hue-shift to blue */
+.photo-zone img,
+.photo-zone .sticker-placeholder img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  filter: grayscale(1) sepia(0.75) saturate(3.5) hue-rotate(195deg) brightness(0.68);
+  display: block;
+}
+
+/* ── TEXT ZONE — left side, black background ── */
+.text-zone {
+  position: absolute;
+  left: 0; top: 0;
+  width: 528px; height: 100%;
+  z-index: 10;
+  background: var(--bg);
+  padding: 64px 52px;
   display: flex;
   flex-direction: column;
 }
 
-
-/* ══════════════════════════════════════════════
-   SLIDE 1 — COVER · MAIN CHARACTER
-   Layer stack (bottom to top):
-     1. Light background (CSS)
-     2. Red circle blob (z-index 1) ← recolorable via --blob-color
-     3. B&W person photo  (z-index 2) ← separate, has own shadow
-     4. Text + logo       (z-index 10)
-══════════════════════════════════════════════ */
-.slide-cover {
-  background: var(--bg-color);
-}
-
-/* ── LAYER 1: Geometric circle blob ── */
-/* Centered BEHIND the person's torso — same architecture as Brazil.
-   Circle sits behind the person so both arcs frame the silhouette.
-   For cutout PNGs both arcs show; for regular JPGs right arc only. */
-.blob-circle {
-  position: absolute;
-  width: 920px;
-  height: 920px;
-  background: var(--blob-color);
-  border-radius: 50%;
-  left: 50px;    /* center lands at ~x=510, behind person's torso */
-  top: 270px;
-  z-index: 1;
-}
-
-/* ── LAYER 2: Person photo ── */
-/* Designed for background-removed PNG cutouts.
-   background is transparent so the circle shows through the cutout.
-   Pipeline should supply background-removed PNG for the full cutout effect. */
-.person-layer {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 660px;
-  height: 100%;
-  z-index: 2;
-  background: transparent;
-  filter: drop-shadow(6px 0 20px rgba(0,0,0,0.22));
-}
-.person-layer .sticker-placeholder {
-  width: 100%;
-  height: 100%;
-  background: rgba(245,245,245,0.55); /* translucent — shows the red circle behind */
-  display: block;
-}
-.person-layer img,
-.person-layer .sticker-placeholder img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center bottom;
-  filter: grayscale(1) contrast(1.15) brightness(0.90);
-  display: block;
-}
-
-/* ── LAYER 3: Logo (top left) ── */
 .cover-logo {
-  position: absolute;
-  top: 52px;
-  left: 52px;
-  z-index: 10;
-  font-family: 'Barlow Condensed', sans-serif;
   font-weight: 900;
-  font-size: 40px;
+  font-size: 38px;
   line-height: 1.05;
-  color: var(--text-color);
+  color: var(--text);
   letter-spacing: -.02em;
+  margin-bottom: auto;
 }
 .logo-top {
   display: block;
-  border-bottom: 3px solid var(--text-color);
-  padding-bottom: 3px;
-  margin-bottom: 3px;
+  color: var(--accent);
+  border-bottom: 3px solid var(--accent);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
 }
 
-/* ── LAYER 3: Headline (top right) ── */
 .cover-headline {
-  position: absolute;
-  top: 44px;
-  right: 44px;
-  left: 476px;          /* clears the person layer */
-  z-index: 10;
-  font-family: 'Barlow Condensed', sans-serif;
   font-weight: 900;
-  font-size: 102px;
-  line-height: 0.91;
+  font-size: 94px;
+  line-height: 0.87;
   text-transform: uppercase;
-  color: var(--text-color);
-  letter-spacing: -.015em;
+  color: var(--text);
+  letter-spacing: -.025em;
   word-break: break-word;
+  margin-bottom: 30px;
 }
 
-/* ── LAYER 3: Photo credit (bottom left) ── */
+.accent-rule {
+  width: 52px; height: 5px;
+  background: var(--accent);
+  margin-bottom: 18px;
+  flex-shrink: 0;
+}
+
 .cover-credit {
-  position: absolute;
-  bottom: 32px;
-  left: 44px;
-  z-index: 10;
   font-family: 'Barlow', sans-serif;
-  font-size: 19px;
+  font-size: 15px;
   color: var(--muted);
-  letter-spacing: .01em;
+  letter-spacing: .02em;
+}
+
+.slide-counter {
+  position: absolute;
+  top: 44px; right: 44px;
+  z-index: 20;
+  font-family: 'Barlow', sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  color: rgba(255,255,255,0.60);
+  background: rgba(0,0,0,0.50);
+  padding: 5px 13px;
+  border-radius: 24px;
+  letter-spacing: .04em;
+}
+
+.photo-credit-side {
+  position: absolute;
+  right: 14px; bottom: 40px;
+  z-index: 20;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  font-family: 'Barlow', sans-serif;
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: .06em;
 }
 </style>
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════
-     SLIDE 1 — COVER · MAIN CHARACTER
-══════════════════════════════════════════════ -->
-<div class="slide slide-cover">
+<div class="slide">
 
-  <!-- LAYER 1: Geometric circle blob (recolor via --blob-color) -->
-  <div class="blob-circle"></div>
-
-  <!-- LAYER 2: Person photo — separate from blob, has drop-shadow -->
-  <!-- Pipeline uses .sticker-slot → .sticker-placeholder to inject photo.
-       CSS on .person-layer applies grayscale automatically — pipeline just drops the photo. -->
-  <div class="person-layer sticker-slot">
+  <div class="photo-zone sticker-slot">
     <div class="sticker-placeholder"></div>
   </div>
 
-  <!-- LAYER 3: Text / logo (above everything) -->
-  <div class="cover-logo">
-    <span class="logo-top">In</span>US
+  <div class="text-zone">
+    <div class="cover-logo">
+      <span class="logo-top">In</span>US
+    </div>
+    <div class="cover-headline">
+      SENATOR NAMED IN SCHEME TO HAND SUPREME COURT TO THE FAR RIGHT
+    </div>
+    <div class="accent-rule"></div>
+    <div class="cover-credit">Photo : AP / Reuters</div>
   </div>
 
-  <div class="cover-headline">
-    SENATOR NAMED IN SCHEME TO HAND SUPREME COURT TO THE FAR RIGHT
-  </div>
+  <div class="slide-counter">1 / 10</div>
+  <div class="photo-credit-side">Photo : AP / Reuters</div>
 
-  <div class="cover-credit">Photo : AP / Reuters</div>
 </div>
-
-
 
 </body>
 </html>

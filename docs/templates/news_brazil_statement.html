@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Brasil — Statement · Mid-Carousel</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Barlow:ital,wght@0,400;0,700;1,700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   BRAZIL — STATEMENT · MID-CAROUSEL SLIDE
+   When to use: any body slide that quotes or
+   attributes a statement to the main person.
+   Layout: text LEFT (black) · person photo RIGHT (duotone).
+   Clean diagonal divider — not torn.
+   Pipeline recolor via:
+     --accent    diagonal edge + logo accent + duotone hue
+     --bg        text zone fill
+     --text      all typography
+   Person injected via .sticker-slot → .sticker-placeholder
+   CSS filters handle duotone — pipeline drops photo only.
+═══════════════════════════════════════════════ */
+:root {
+  --accent: #CC1F2D;          /* InBrazil signal red */
+  --bg:     #0A0A0A;          /* editorial black */
+  --text:   #FFFFFF;
+  --muted:  rgba(255,255,255,0.35);
+  --muted2: rgba(255,255,255,0.55);
+  --W: 1080px;
+  --H: 1350px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: #111;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 24px;
+  font-family: 'Barlow Condensed', sans-serif;
+}
+
+.slide {
+  width: var(--W);
+  height: var(--H);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg);
+}
+
+/* ── PHOTO ZONE — right side, clean diagonal left edge ──
+   Diagonal runs from x=18% at top to x=0% at bottom of zone.
+   Photo zone starts at x=560px in the slide.
+   Visible photo at top: 560 + (18% of 520px) = 654px from left.
+   Visible photo at bottom: 560px from left. */
+.photo-zone {
+  position: absolute;
+  right: 0; top: 0;
+  width: 520px; height: 100%;
+  z-index: 2;
+  filter: drop-shadow(-14px 0px 24px rgba(0,0,0,0.90));
+  clip-path: polygon(18% 0%, 100% 0%, 100% 100%, 0% 100%);
+}
+
+.sticker-placeholder {
+  width: 100%; height: 100%;
+  background: #1A1A1A;
+  display: block;
+}
+
+/* Red editorial duotone — matches the cover template */
+.photo-zone img,
+.photo-zone .sticker-placeholder img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  filter: grayscale(1) sepia(0.75) saturate(4) hue-rotate(315deg) brightness(0.68);
+  display: block;
+}
+
+/* ── TEXT ZONE — left side ── */
+.text-zone {
+  position: absolute;
+  left: 0; top: 0;
+  width: 618px; height: 100%;
+  z-index: 10;
+  background: var(--bg);
+  padding: 72px 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Quote block */
+.quote-block {
+  margin-bottom: auto;
+  margin-top: auto;
+}
+
+/* Opening quote line — bold, larger */
+.quote-opener {
+  font-family: 'Barlow', sans-serif;
+  font-weight: 700;
+  font-style: italic;
+  font-size: 60px;
+  line-height: 1.06;
+  color: var(--text);
+  letter-spacing: -.015em;
+  margin-bottom: 28px;
+  word-break: break-word;
+}
+
+/* Body quote text — lighter weight */
+.quote-body {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 400;
+  font-size: 46px;
+  line-height: 1.08;
+  color: var(--muted2);
+  letter-spacing: -.01em;
+  word-break: break-word;
+  margin-bottom: 40px;
+}
+
+/* Attribution */
+.quote-attribution {
+  font-family: 'Barlow', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.attribution-dash {
+  color: var(--accent);
+  margin-right: 10px;
+}
+
+/* ── LOGO — bottom left of text zone ── */
+.cover-logo {
+  font-weight: 900;
+  font-size: 32px;
+  line-height: 1.05;
+  color: var(--text);
+  letter-spacing: -.02em;
+  margin-top: auto;
+  padding-top: 32px;
+}
+.logo-top {
+  display: block;
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 3px;
+  margin-bottom: 3px;
+}
+
+/* ── SLIDE COUNTER — top right ── */
+.slide-counter {
+  position: absolute;
+  top: 44px; right: 44px;
+  z-index: 20;
+  font-family: 'Barlow', sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  color: rgba(255,255,255,0.60);
+  background: rgba(0,0,0,0.50);
+  padding: 5px 13px;
+  border-radius: 24px;
+  letter-spacing: .04em;
+}
+
+/* ── VERTICAL PHOTO CREDIT — right edge ── */
+.photo-credit-side {
+  position: absolute;
+  right: 14px; bottom: 40px;
+  z-index: 20;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  font-family: 'Barlow', sans-serif;
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: .06em;
+}
+</style>
+</head>
+<body>
+
+<div class="slide">
+
+  <!-- Photo zone: right side, diagonal left edge -->
+  <div class="photo-zone sticker-slot">
+    <div class="sticker-placeholder"></div>
+  </div>
+
+  <!-- Text zone: left side -->
+  <div class="text-zone">
+    <div class="quote-block">
+      <div class="quote-opener">
+        "NOME DA PESSOA não se arrepende.
+      </div>
+      <div class="quote-body">
+        Texto explicativo sobre a posição política ou declaração, com contexto suficiente para entender o que está em jogo nesta história.
+      </div>
+      <div class="quote-attribution">
+        <span class="attribution-dash">—</span>NOME DA FONTE
+      </div>
+    </div>
+    <div class="cover-logo">
+      <span class="logo-top">In</span>Br
+    </div>
+  </div>
+
+  <div class="slide-counter">4 / 10</div>
+  <div class="photo-credit-side">Foto : Agência Brasil</div>
+
+</div>
+
+</body>
+</html>
