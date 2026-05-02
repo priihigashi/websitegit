@@ -195,10 +195,11 @@ PENDING ⏳ (priority order — top = most impactful)
    File: scripts/content_creator/photo_matcher.py
 2. Fix per-slide image queries — Haiku prompt in build_content_brief() must emit context_image_query per slide
    File: scripts/content_creator/carousel_builder.py
-3. Fix @HANDLE_PLACEHOLDER — add niche_handles dict at top of carousel_builder.py, inject on cover slide render
-   File: scripts/content_creator/carousel_builder.py — cover HTML generation
+3. Fix @HANDLE_PLACEHOLDER — Dados ou Agenda: main.py build_html() call missing handle arg; content["source_handle"] is computed but never passed (silently ships @HANDLE_PLACEHOLDER on every Dados PNG)
+   File: scripts/content_creator/main.py — build_html() call in process_one_topic() ~line 1002
+   NOTE: OPC templates hardcode @oakparkconstruction in HTML directly, don't use param. Brazil/USA use the param. Investigate which series shows placeholder in prod PNGs first.
 4. Fix cover hook — OPC Haiku prompt must require: number OR dollar figure OR named consequence in hook
-   File: scripts/content_creator/carousel_builder.py — OPC prompt
+   File: scripts/content_creator/carousel_builder.py — add rule to hook field same as subhead (lines ~345-355)
 5. Add build history dedup — write one row to Build History tab (Ideas & Inbox) after each build, check last 30 days before picking topic
    File: scripts/content_creator/main.py
 6. Complete template walkthrough (opc_progress → illustrated → cutout → News templates) → update selected.html
@@ -288,7 +289,34 @@ Currently untested. If daily runs start and approval is broken, output piles up 
 Test the approval flow manually (send test email, reply APPROVE, confirm Buffer scheduling) before enabling automation.
 
 ### AIOX-DEV FINDINGS
-[Pending — dev agent still running]
+[Completed 2026-05-01 — code-level review of top 5 pending fixes]
+
+**FIX 1 — photo_matcher.py 401**
+READY TO CODE: YES
+Real root cause: `_get_token()` calls `json.loads(SHEETS_TOKEN)` then returns `data.get("access_token")` — returns empty string because SHEETS_TOKEN is the refresh credential JSON, not a live access token. It NEVER refreshes. Fix: replace `_get_token()` with the same refresh call pattern as `main.py::get_oauth_token()`. Do NOT change anything else.
+Silent failure: returns empty string → prints "no SHEETS_TOKEN" → returns None → every run silently falls to DALL-E. No error thrown.
+
+**FIX 2 — per-slide context_image_query**
+READY TO CODE: YES
+`context_image_query` already exists in Haiku schema (OPC prompt ~line 438, Brazil ~line 824). The OPC prompt shows static example queries — Haiku treats them as the answer template and returns the same query for all slides. Fix: at line 438 in the OPC prompt block, add explicit rule: "Each slide's context_image_query MUST be unique and describe only that slide's specific visual. Do NOT reuse queries across slides." Brazil prompts already enforce this. No schema change needed.
+Silent failure: identical images on all slides, no error thrown.
+
+**FIX 3 — @HANDLE_PLACEHOLDER (NEEDS INVESTIGATION FIRST)**
+READY TO CODE: NO
+OPC templates (carousel_builder.py lines ~2367, 2486, 2670, 2873) hardcode `@oakparkconstruction` directly in the HTML strings — they ignore the `handle` parameter entirely. Brazil/USA templates DO use the `handle` param. Before coding: identify which specific series is producing the visible `@HANDLE_PLACEHOLDER` in prod PNGs. The fix location depends on the answer: OPC = fix the hardcode, Brazil/USA = fix the `build_html()` call in main.py to pass `content.get("source_handle")`.
+
+**FIX 4 — OPC cover hook number/dollar requirement**
+READY TO CODE: YES
+The number constraint already exists on the `subhead` field (line ~351): "MUST contain at least one of: a specific number, a dollar amount, or a named consequence." Add the identical rule to the `hook` field in the same OPC prompt block (search for `"hook"` around lines 345-355). One-line addition. No schema change.
+Silent failure: vague hook ships, nobody stops scrolling.
+
+**FIX 5 — Build History dedup**
+READY TO CODE: NO
+Three things missing before this can be coded: (a) confirm "Build History" tab actually exists in Ideas & Inbox spreadsheet — no script currently references it, no HISTORY_TAB variable; (b) define match field: exact topic string match? slug? both?; (c) confirm WHERE in main.py the check runs — before `pick_topics()` (preferred) vs before `process_one_topic()`. If after pick, a failed build blocks that topic for 30 days.
+
+**NEW CRITICAL FINDING — Dados ou Agenda handle silently dropped (not in task list)**
+`main.py` line ~1002: `build_html(content, niche, slug, str(work), media_paths=media_paths)` — NO `handle` argument passed.
+For Dados ou Agenda series: `generate_carousel_content()` works hard to produce `content["source_handle"]` (with a retry loop). That value is extracted into the content dict but NEVER forwarded to `build_html()`. The handle the prompt generates is silently discarded. Result: `@HANDLE_PLACEHOLDER` renders on every Dados ou Agenda PNG and ships. No error. Add to PENDING task list — add as item 3a (higher priority than Fix 3 generic).
 
 ---
 
@@ -320,4 +348,6 @@ SECTION 7 gate: Run anytime, doesn't block other sections
 - selected.html created, OPC Tip of the Week locked as first chosen template (commit 977bc96)
 - Full Circle Plan restructured to 11 sections, templates-first (doc 17B8wc4wWmcBapl_4gduHyMzjYl4R4y_RYuvZae5xRPU)
 - Decided: Tip of the Week = flat category, no sub-series needed
-- Next: walk through opc_progress.html — does it need a sub-series? Does the before/after split panel need to be fixed before we can choose it?
+- AIOX-architect review complete: no standalone agent, 3 arch flags (face slot is Section 3 gate, verify photo_matcher secret, test approval handler before automation)
+- AIOX-dev review complete: Fixes 1+2+4 ready to code. Fix 3 needs investigation first. Fix 5 needs Build History tab confirmed. New critical: Dados ou Agenda source_handle silently dropped at main.py build_html() call — added as item 3 in PENDING.
+- Next: walk through opc_progress.html — does it need sub-series? Does before/after split panel need fixing before choosing it? (Section 2 design gap P4)
