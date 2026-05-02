@@ -59,6 +59,12 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
 .swatch-chip{width:38px;height:38px;border-radius:5px;border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 8px rgba(0,0,0,0.4)}
 .swatch-hex{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.04em;color:rgba(255,255,255,0.35);text-transform:uppercase}
 .swatch-name{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.04em;color:rgba(255,255,255,0.22);text-transform:uppercase}
+
+/* ── Section banner ── */
+.section-banner{background:#060606;padding:20px 40px;border-top:2px solid rgba(203,204,16,.18);border-bottom:1px solid rgba(255,255,255,.05);font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:rgba(203,204,16,.55);margin-top:24px}
+
+/* ── Pending badge on card description ── */
+.tpl-when .pending{color:rgba(255,170,0,.75);font-weight:700}
 </style>
 </head>
 <body>
@@ -76,28 +82,29 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   <p>Oak Park AI Hub · approved + locked · one per series · pipeline-ready</p>
 </div>
 
-<!-- ═══════════════════════════════════════════
-     OPC — Oak Park Construction
-     ═══════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════════════════
+     ROW 1 — FULL CAROUSEL FORMATS
+     Multi-slide sets that define a format end-to-end.
+     Use variant buttons to preview each slide in the set.
+     ═══════════════════════════════════════════════════════ -->
+<div class="section-banner">ROW 1 — Full Carousel Formats</div>
+
+<!-- ═══ OPC ═══ -->
 <div class="group-header" style="border-left-color:#CBCC10">
   <span style="color:#CBCC10">OPC — Oak Park Construction</span>
   <div class="palette-row">
     <div class="palette-swatch"><div class="swatch-chip" style="background:#0A0A0A"></div><div class="swatch-hex">#0A0A0A</div><div class="swatch-name">Obsidian</div></div>
     <div class="palette-swatch"><div class="swatch-chip" style="background:#CBCC10"></div><div class="swatch-hex">#CBCC10</div><div class="swatch-name">Lime</div></div>
     <div class="palette-swatch"><div class="swatch-chip" style="background:#F0EBE3"></div><div class="swatch-hex">#F0EBE3</div><div class="swatch-name">Cream</div></div>
-    <div class="palette-swatch"><div class="swatch-chip" style="background:#2A2A2A"></div><div class="swatch-hex">#2A2A2A</div><div class="swatch-name">Surface</div></div>
-    <div class="palette-swatch"><div class="swatch-chip" style="background:#808080"></div><div class="swatch-hex">#808080</div><div class="swatch-name">Muted</div></div>
   </div>
 </div>
 <div class="group-cards">
-
-<!-- TIP OF THE WEEK — main OPC category, no sub-series needed -->
 <div class="tpl-card" id="card_opc_tip">
   <div class="tpl-meta">
     <div class="tpl-name">TIP OF THE WEEK</div>
     <div class="tpl-format">FORMAT-010</div>
-    <div class="tpl-category">Main category · no sub-series</div>
-    <div class="tpl-when">Weekly educational post. One construction or renovation concept per post — stat on slide 2, step-by-step list on slide 3, product/material callout on slide 4, CTA on slide 5. No named person required — any relevant photo fills the context slot. Default OPC series.</div>
+    <div class="tpl-category">OPC · full carousel format · 5 slides</div>
+    <div class="tpl-when">Weekly educational post. One construction or renovation concept — stat on slide 2, step-by-step list on slide 3, product/material callout on slide 4, CTA on slide 5. No named person required. Use arrows to navigate all 5 slides. 3 color variants.</div>
   </div>
   <div class="tpl-viewer-wrap">
     <div class="variant-row">
@@ -115,35 +122,27 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
     <div class="slide-counter" id="counter_opc_tip">slide 1 / 5</div>
   </div>
 </div>
-
-<!-- ADD NEXT OPC CHOSEN TEMPLATE HERE (opc_progress, opc_illustrated, etc.) -->
-
 </div><!-- /group-cards OPC -->
 
 
-<!-- ═══════════════════════════════════════════
-     NEWS — BRAZIL
-     ═══════════════════════════════════════════ -->
+<!-- ═══ BRAZIL — FULL FORMATS ═══ -->
 <div class="group-header" style="border-left-color:#C9A84C">
-  <span style="color:#C9A84C">News — Brazil</span>
+  <span style="color:#C9A84C">News — Brazil · Full Formats</span>
   <div class="palette-row">
-    <div class="palette-swatch"><div class="swatch-chip" style="background:#0D0D0D"></div><div class="swatch-hex">#0D0D0D</div><div class="swatch-name">Ink</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#0D0B08"></div><div class="swatch-hex">#0D0B08</div><div class="swatch-name">Ink</div></div>
     <div class="palette-swatch"><div class="swatch-chip" style="background:#C9A84C"></div><div class="swatch-hex">#C9A84C</div><div class="swatch-name">Gold</div></div>
-    <div class="palette-swatch"><div class="swatch-chip" style="background:#2D6A4F"></div><div class="swatch-hex">#2D6A4F</div><div class="swatch-name">Deep Green</div></div>
-    <div class="palette-swatch"><div class="swatch-chip" style="background:#C62828"></div><div class="swatch-hex">#C62828</div><div class="swatch-name">Danger Red</div></div>
-    <div class="palette-swatch"><div class="swatch-chip" style="background:#F5F0E8"></div><div class="swatch-hex">#F5F0E8</div><div class="swatch-name">Cream</div></div>
-    <div class="palette-swatch"><div class="swatch-chip" style="background:#1C3A28"></div><div class="swatch-hex">#1C3A28</div><div class="swatch-name">Forest</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#F0EBE3"></div><div class="swatch-hex">#F0EBE3</div><div class="swatch-name">Parchment</div></div>
   </div>
 </div>
 <div class="group-cards">
 
-<!-- BRAZIL COVER BASE 1 — approved base for all Brazil news covers -->
+<!-- Cover Base 1 — Brazil -->
 <div class="tpl-card" id="card_news_brazil_cover_base">
   <div class="tpl-meta">
     <div class="tpl-name">Brazil — Cover · Base 1</div>
-    <div class="tpl-format">FORMAT-COVER-BR-BASE</div>
+    <div class="tpl-format">FORMAT-COVER-BR-BASE · ✓ APPROVED</div>
     <div class="tpl-category">Brazil News · base cover · all series</div>
-    <div class="tpl-when">Approved base cover for ALL Brazil news stories. Dark background + canário gold (#C9A84C) brand. Corner brackets, Playfair Display serif headline with italic gold accent word, portrait sticker card top-right (310×410px), person attribution pill bottom-left. Pipeline: inject background via .bg-photo, portrait via .sticker-slot. All series use this base — swap headline + person.</div>
+    <div class="tpl-when">Approved base cover for ALL Brazil news stories. Dark background + canário gold (#C9A84C). Corner brackets 64px safe margin, Playfair serif headline with italic gold accent word, portrait sticker card top-right (310×410px), person attribution pill bottom-left. Pipeline: inject .bg-photo + .sticker-slot.</div>
   </div>
   <div class="tpl-viewer-wrap">
     <div class="viewer-row">
@@ -157,72 +156,51 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
-<!-- BRAZIL STANDALONE COVER -->
-<div class="tpl-card" id="card_news_brazil_standalone">
+<!-- FORMAT-020 WHO IS THIS PERSON? — Brazil full set -->
+<div class="tpl-card" id="card_brazil_f020">
   <div class="tpl-meta">
-    <div class="tpl-name">Brazil — Cover · Main Character</div>
-    <div class="tpl-format">FORMAT-STANDALONE-BR</div>
-    <div class="tpl-category">Brazil News · story with a main person</div>
-    <div class="tpl-when">Editorial dark cover. Black left zone (InBr logo + bold condensed headline). Right zone: person photo with red duotone filter + torn paper left edge. Pipeline injects person via .sticker-slot — CSS handles grayscale+duotone automatically. Recolor via --accent (red) + --bg (black). PT-BR. Cover only (1 slide).</div>
+    <div class="tpl-name">Brazil — WHO IS THIS PERSON?</div>
+    <div class="tpl-format">FORMAT-020 · BR · ✓ APPROVED</div>
+    <div class="tpl-category">Brazil News · biographical carousel set · 2 slides</div>
+    <div class="tpl-when">FORMAT-020 complete set — use variant buttons to preview each slide. Biography: 2-col fact grid (6 bilingual fields), controversy pills. Network: hub-and-spoke diagram, 8 nodes at 45° with dashed gold lines. Both use InBr gold (#C9A84C). Pipeline fills fields + node names. PT-BR.</div>
   </div>
   <div class="tpl-viewer-wrap">
-    <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('news_brazil_standalone')">&#8592;</button>
-      <div class="slide-frame-outer">
-        <iframe id="viewer_news_brazil_standalone" src="news_brazil_standalone.html" scrolling="no" onload="initViewer('news_brazil_standalone')"></iframe>
-      </div>
-      <button class="arrow-btn" onclick="nextSlide('news_brazil_standalone')">&#8594;</button>
+    <div class="variant-row">
+      <button class="vbtn active" onclick="loadSlide('brazil_f020','news_brazil_biography.html',0)">Biography</button>
+      <button class="vbtn" onclick="loadSlide('brazil_f020','news_brazil_network.html',1)">Network</button>
     </div>
-    <div class="slide-counter" id="counter_news_brazil_standalone">slide 1 / 1</div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('brazil_f020')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_brazil_f020" src="news_brazil_biography.html" scrolling="no" onload="initViewer('brazil_f020')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('brazil_f020')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_brazil_f020">slide 1 / 1</div>
   </div>
 </div>
 
-<!-- BRAZIL STATEMENT — mid-carousel quote/analysis slide -->
-<div class="tpl-card" id="card_news_brazil_statement">
-  <div class="tpl-meta">
-    <div class="tpl-name">Brazil — Statement · Mid-Carousel</div>
-    <div class="tpl-format">FORMAT-STATEMENT-BR</div>
-    <div class="tpl-category">Brazil News · body slide · quote or analysis</div>
-    <div class="tpl-when">Mid-carousel slide. Quote opener (bold italic) + body text + attribution on black left zone. Person photo right with red duotone + diagonal angular divider. InBr logo bottom-left. Same duotone architecture as Cover — pipeline drops photo, CSS does the rest. Use for any slide where a named person is quoted. PT-BR.</div>
-  </div>
-  <div class="tpl-viewer-wrap">
-    <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('news_brazil_statement')">&#8592;</button>
-      <div class="slide-frame-outer">
-        <iframe id="viewer_news_brazil_statement" src="news_brazil_statement.html" scrolling="no" onload="initViewer('news_brazil_statement')"></iframe>
-      </div>
-      <button class="arrow-btn" onclick="nextSlide('news_brazil_statement')">&#8594;</button>
-    </div>
-    <div class="slide-counter" id="counter_news_brazil_statement">slide 1 / 1</div>
-  </div>
-</div>
-
-</div><!-- /group-cards News Brazil -->
+</div><!-- /group-cards Brazil Full Formats -->
 
 
-<!-- ═══════════════════════════════════════════
-     NEWS — USA
-     ═══════════════════════════════════════════ -->
+<!-- ═══ USA — FULL FORMATS ═══ -->
 <div class="group-header" style="border-left-color:#CC1F2D">
-  <span style="color:#CC1F2D">News — USA</span>
+  <span style="color:#CC1F2D">News — USA · Full Formats</span>
   <div class="palette-row">
-    <div class="palette-swatch"><div class="swatch-chip" style="background:#0D0D0D"></div><div class="swatch-hex">#0D0D0D</div><div class="swatch-name">Ink</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#0D0B08"></div><div class="swatch-hex">#0D0B08</div><div class="swatch-name">Ink</div></div>
     <div class="palette-swatch"><div class="swatch-chip" style="background:#CC1F2D"></div><div class="swatch-hex">#CC1F2D</div><div class="swatch-name">Signal Red</div></div>
-    <div class="palette-swatch"><div class="swatch-chip" style="background:#14213D"></div><div class="swatch-hex">#14213D</div><div class="swatch-name">Deep Navy</div></div>
     <div class="palette-swatch"><div class="swatch-chip" style="background:#E8DECE"></div><div class="swatch-hex">#E8DECE</div><div class="swatch-name">Parchment</div></div>
-    <div class="palette-swatch"><div class="swatch-chip" style="background:#E63946"></div><div class="swatch-hex">#E63946</div><div class="swatch-name">Hot Red</div></div>
-    <div class="palette-swatch"><div class="swatch-chip" style="background:#2C3E6B"></div><div class="swatch-hex">#2C3E6B</div><div class="swatch-name">Slate</div></div>
   </div>
 </div>
 <div class="group-cards">
 
-<!-- USA COVER BASE 1 — approved base for all USA news covers -->
+<!-- Cover Base 1 — USA -->
 <div class="tpl-card" id="card_news_usa_cover_base">
   <div class="tpl-meta">
     <div class="tpl-name">USA — Cover · Base 1</div>
-    <div class="tpl-format">FORMAT-COVER-US-BASE</div>
+    <div class="tpl-format">FORMAT-COVER-US-BASE · ✓ APPROVED</div>
     <div class="tpl-category">USA News · base cover · all series</div>
-    <div class="tpl-when">Approved base cover for ALL USA news stories. Same design language as Brazil Base 1. Signal red (#CC1F2D) replaces canário gold everywhere — corners, sticker frame, accent word, person pill border. Dark background + parchment text. Pipeline: inject background via .bg-photo, portrait via .sticker-slot. All USA series use this base.</div>
+    <div class="tpl-when">Approved base cover for ALL USA news stories. Same design language as Brazil Base 1. Signal red (#CC1F2D) replaces canário gold everywhere — corners, sticker frame, accent word, person pill border. Dark background + parchment text. Pipeline: inject .bg-photo + .sticker-slot.</div>
   </div>
   <div class="tpl-viewer-wrap">
     <div class="viewer-row">
@@ -236,13 +214,141 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
-<!-- USA STANDALONE COVER -->
+<!-- FORMAT-020 WHO IS THIS PERSON? — USA full set -->
+<div class="tpl-card" id="card_usa_f020">
+  <div class="tpl-meta">
+    <div class="tpl-name">USA — WHO IS THIS PERSON?</div>
+    <div class="tpl-format">FORMAT-020 · US · ✓ APPROVED</div>
+    <div class="tpl-category">USA News · biographical carousel set · 2 slides</div>
+    <div class="tpl-when">FORMAT-020 complete set — use variant buttons to preview each slide. Biography: 2-col fact grid (6 fields in English), controversies pills. Network: hub-and-spoke diagram, 8 nodes at 45° with dashed red lines. Both use InUS signal red (#CC1F2D). Pipeline fills fields + node names. EN.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row">
+      <button class="vbtn active" onclick="loadSlide('usa_f020','news_usa_biography.html',0)">Biography</button>
+      <button class="vbtn" onclick="loadSlide('usa_f020','news_usa_network.html',1)">Network</button>
+    </div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('usa_f020')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_usa_f020" src="news_usa_biography.html" scrolling="no" onload="initViewer('usa_f020')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('usa_f020')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_usa_f020">slide 1 / 1</div>
+  </div>
+</div>
+
+</div><!-- /group-cards USA Full Formats -->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     ROW 2 — STANDALONE SLIDES
+     Individual reusable slides — plug into any carousel.
+     ═══════════════════════════════════════════════════════ -->
+<div class="section-banner">ROW 2 — Standalone Slides · Mix &amp; Match into Any Carousel</div>
+
+<!-- ═══ BRAZIL STANDALONES ═══ -->
+<div class="group-header" style="border-left-color:#C9A84C">
+  <span style="color:#C9A84C">News — Brazil · Standalone Slides</span>
+</div>
+<div class="group-cards">
+
+<!-- Brazil Cover · Main Character — PENDING REVIEW -->
+<div class="tpl-card" id="card_news_brazil_standalone">
+  <div class="tpl-meta">
+    <div class="tpl-name">Brazil — Cover · Main Character</div>
+    <div class="tpl-format">FORMAT-STANDALONE-BR · ⚠️ PENDING REVIEW</div>
+    <div class="tpl-category">Brazil News · standalone cover · named person</div>
+    <div class="tpl-when">Split-screen dark cover. Black left zone (InBr logo + bold condensed headline). Right zone: person photo with red duotone + torn paper left edge. CSS handles grayscale+duotone — pipeline drops photo, never touches filters. Not yet approved — split-screen layout under review. PT-BR.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_brazil_standalone')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_brazil_standalone" src="news_brazil_standalone.html" scrolling="no" onload="initViewer('news_brazil_standalone')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil_standalone')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_brazil_standalone">slide 1 / 1</div>
+  </div>
+</div>
+
+<!-- Brazil Statement -->
+<div class="tpl-card" id="card_news_brazil_statement">
+  <div class="tpl-meta">
+    <div class="tpl-name">Brazil — Statement · Mid-Carousel</div>
+    <div class="tpl-format">FORMAT-STATEMENT-BR · ✓ APPROVED</div>
+    <div class="tpl-category">Brazil News · body slide · quote or analysis</div>
+    <div class="tpl-when">Mid-carousel quote slide. Quote opener (bold italic) + body text + attribution on black left zone. Person photo right with red duotone + diagonal divider. InBr logo bottom-left. Use for any slide quoting a named person. PT-BR.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_brazil_statement')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_brazil_statement" src="news_brazil_statement.html" scrolling="no" onload="initViewer('news_brazil_statement')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil_statement')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_brazil_statement">slide 1 / 1</div>
+  </div>
+</div>
+
+<!-- Brazil Biography — FORMAT-020 slide 1 -->
+<div class="tpl-card" id="card_news_brazil_biography">
+  <div class="tpl-meta">
+    <div class="tpl-name">Brazil — Biography · Quem é?</div>
+    <div class="tpl-format">FORMAT-020-BIO-BR · ✓ APPROVED</div>
+    <div class="tpl-category">Brazil News · standalone · biographical info slide</div>
+    <div class="tpl-when">Dark background. Large Playfair "Quem é / [name]?" (italic gold), divider diamond rule, 2-col fact grid: NASCIMENTO·BORN, BACKGROUND, VIRADA·TURNING POINT, MISSÃO·MISSION, PLATAFORMA, ESTILO·STYLE — all 24px Roboto Condensed for IG readability. Bottom: tópicos polêmicos pills. InBr gold (#C9A84C). FORMAT-020 slide 1.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_brazil_biography')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_brazil_biography" src="news_brazil_biography.html" scrolling="no" onload="initViewer('news_brazil_biography')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil_biography')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_brazil_biography">slide 1 / 1</div>
+  </div>
+</div>
+
+<!-- Brazil Network — FORMAT-020 slide 3 -->
+<div class="tpl-card" id="card_news_brazil_network">
+  <div class="tpl-meta">
+    <div class="tpl-name">Brazil — Network · Conexões</div>
+    <div class="tpl-format">FORMAT-020-NET-BR · ✓ APPROVED</div>
+    <div class="tpl-category">Brazil News · standalone · network diagram slide</div>
+    <div class="tpl-when">Hub-and-spoke connection map. "REDE &amp; CONEXÕES" + Playfair "Pessoas Poderosas &amp; Famosas". 840×840 diagram: center node (130px circle) + 8 satellites (100px circles) at 45° intervals, dashed gold SVG lines with arrowheads. Pipeline injects initials + names into each node. InBr gold (#C9A84C). FORMAT-020 slide 3.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_brazil_network')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_brazil_network" src="news_brazil_network.html" scrolling="no" onload="initViewer('news_brazil_network')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil_network')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_brazil_network">slide 1 / 1</div>
+  </div>
+</div>
+
+</div><!-- /group-cards Brazil Standalones -->
+
+
+<!-- ═══ USA STANDALONES ═══ -->
+<div class="group-header" style="border-left-color:#CC1F2D">
+  <span style="color:#CC1F2D">News — USA · Standalone Slides</span>
+</div>
+<div class="group-cards">
+
+<!-- USA Cover · Main Character — PENDING REVIEW -->
 <div class="tpl-card" id="card_news_usa_standalone">
   <div class="tpl-meta">
     <div class="tpl-name">USA — Cover · Main Character</div>
-    <div class="tpl-format">FORMAT-STANDALONE-US</div>
-    <div class="tpl-category">USA News · story with a main person</div>
-    <div class="tpl-when">Editorial dark cover. Black left zone (InUS logo + bold condensed headline). Right zone: person photo with blue duotone filter + torn paper left edge. Mirror architecture of Brazil Cover — swap --accent from red to blue. Pipeline injects person via .sticker-slot — CSS handles grayscale+duotone. EN. Cover only (1 slide).</div>
+    <div class="tpl-format">FORMAT-STANDALONE-US · ⚠️ PENDING REVIEW</div>
+    <div class="tpl-category">USA News · standalone cover · named person</div>
+    <div class="tpl-when">Split-screen dark cover. Black left zone (InUS logo + bold condensed headline). Right zone: person photo with blue duotone + torn paper edge. Mirror of Brazil Cover. Not yet approved — split-screen layout under review. EN.</div>
   </div>
   <div class="tpl-viewer-wrap">
     <div class="viewer-row">
@@ -256,13 +362,13 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
-<!-- USA STATEMENT — mid-carousel quote/analysis slide -->
+<!-- USA Statement -->
 <div class="tpl-card" id="card_news_usa_statement">
   <div class="tpl-meta">
     <div class="tpl-name">USA — Statement · Mid-Carousel</div>
-    <div class="tpl-format">FORMAT-STATEMENT-US</div>
+    <div class="tpl-format">FORMAT-STATEMENT-US · ✓ APPROVED</div>
     <div class="tpl-category">USA News · body slide · quote or analysis</div>
-    <div class="tpl-when">Mid-carousel slide. Quote opener (bold italic) + body text + attribution on black left zone. Person photo right with blue duotone + diagonal angular divider. InUS logo bottom-left. Mirror of Brazil Statement — same architecture, different accent color. EN.</div>
+    <div class="tpl-when">Mid-carousel quote slide. Quote opener (bold italic) + body text + attribution on black left zone. Person photo right with blue duotone + diagonal divider. InUS logo bottom-left. Mirror of Brazil Statement. EN.</div>
   </div>
   <div class="tpl-viewer-wrap">
     <div class="viewer-row">
@@ -276,7 +382,47 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
-</div><!-- /group-cards News USA -->
+<!-- USA Biography — FORMAT-020 slide 1 -->
+<div class="tpl-card" id="card_news_usa_biography">
+  <div class="tpl-meta">
+    <div class="tpl-name">USA — Biography · Who Is?</div>
+    <div class="tpl-format">FORMAT-020-BIO-US · ✓ APPROVED</div>
+    <div class="tpl-category">USA News · standalone · biographical info slide</div>
+    <div class="tpl-when">Dark background. Large Playfair "Who is / [name]?" (italic red), divider diamond rule, 2-col fact grid: BORN, BACKGROUND, TURNING POINT, MISSION, PLATFORM, STYLE — all 24px Roboto Condensed for IG readability. Bottom: key controversies pills. InUS signal red (#CC1F2D). FORMAT-020 slide 1.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_usa_biography')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_usa_biography" src="news_usa_biography.html" scrolling="no" onload="initViewer('news_usa_biography')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_usa_biography')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_usa_biography">slide 1 / 1</div>
+  </div>
+</div>
+
+<!-- USA Network — FORMAT-020 slide 3 -->
+<div class="tpl-card" id="card_news_usa_network">
+  <div class="tpl-meta">
+    <div class="tpl-name">USA — Network · Connections</div>
+    <div class="tpl-format">FORMAT-020-NET-US · ✓ APPROVED</div>
+    <div class="tpl-category">USA News · standalone · network diagram slide</div>
+    <div class="tpl-when">Hub-and-spoke connection map. "NETWORK &amp; CONNECTIONS" + Playfair "Powerful People &amp; Ties". 840×840 diagram: center node (130px) + 8 satellites (100px) at 45°, dashed red SVG lines with arrowheads. Pipeline injects initials + names. InUS signal red (#CC1F2D). FORMAT-020 slide 3.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_usa_network')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_usa_network" src="news_usa_network.html" scrolling="no" onload="initViewer('news_usa_network')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_usa_network')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_usa_network">slide 1 / 1</div>
+  </div>
+</div>
+
+</div><!-- /group-cards USA Standalones -->
 
 
 <script>
@@ -350,7 +496,13 @@ const IMG = {
   },
   news_usa_statement: {
     sticker: 'portrait_person_suit'
-  }
+  },
+  brazil_f020:          {},
+  usa_f020:             {},
+  news_brazil_biography:{},
+  news_usa_biography:   {},
+  news_brazil_network:  {},
+  news_usa_network:     {}
 };
 
 // ── Inject dummy images into all placeholder slots ──
@@ -528,6 +680,15 @@ function setVariant(tid, offset) {
   const btnIdx = Math.round(offset / blockSize);
   if (vbtns[btnIdx]) vbtns[btnIdx].classList.add('active');
   showSlide(tid, offset);
+}
+
+function loadSlide(tid, src, btnIdx) {
+  const vbtns = document.querySelectorAll('#card_' + tid + ' .vbtn');
+  vbtns.forEach(b => b.classList.remove('active'));
+  if (vbtns[btnIdx] !== undefined) vbtns[btnIdx].classList.add('active');
+  const iframe = document.getElementById('viewer_' + tid);
+  iframe.onload = function() { initViewer(tid); };
+  iframe.src = src;
 }
 
 let focusedTid = null;
