@@ -15,7 +15,7 @@
   --bg:#9A9B0C;
   --ink:#0A0A0A;
   --ink-mid:#1A1A00;
-  --shadow:#0A0A0A;
+  --shadow:#0F1A40;
   --highlight:#CBCC10;
   --cream:#F0EBE3;
   --W:1080px;--H:1350px;--P:80px;
@@ -115,7 +115,8 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
 </head>
 <body>
 
-<!-- Duotone SVG filter: shadow #0A0A0A obsidian → highlight #CBCC10 lime, with contrast boost -->
+<!-- Duotone SVG filter: shadow #0F1A40 deep navy → highlight #F0EBE3 cream, with contrast boost
+     (Mirrors Brazil/USA editorial duotone — navy shadows + warm highlight = high contrast face) -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <filter id="duotone-opc" color-interpolation-filters="sRGB">
     <feColorMatrix type="matrix" values=".299 .587 .114 0 0  .299 .587 .114 0 0  .299 .587 .114 0 0  0 0 0 1 0"/>
@@ -125,9 +126,9 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
       <feFuncB type="linear" slope="1.4" intercept="-0.2"/>
     </feComponentTransfer>
     <feComponentTransfer>
-      <feFuncR type="table" tableValues="0.039 0.796"/>
-      <feFuncG type="table" tableValues="0.039 0.800"/>
-      <feFuncB type="table" tableValues="0.039 0.063"/>
+      <feFuncR type="table" tableValues="0.059 0.941"/>
+      <feFuncG type="table" tableValues="0.102 0.922"/>
+      <feFuncB type="table" tableValues="0.251 0.890"/>
     </feComponentTransfer>
   </filter>
 </svg>
