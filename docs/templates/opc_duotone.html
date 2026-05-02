@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OPC — Duotone Statement · FORMAT-DUO-OPC</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Roboto+Condensed:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* FORMAT-DUO-OPC — OPC Duotone Statement Standalone
+   Lime background · duotone portrait · claim + quote · attribution
+   Duotone: shadows → obsidian #0A0A0A, highlights → lime #CBCC10 (blends into bg)
+   Single slide — goes to OPC standalone folder
+*/
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#CBCC10;
+  --ink:#0A0A0A;
+  --ink-mid:#1A1A00;
+  --shadow:#0A0A0A;
+  --highlight:#E0E040;
+  --cream:#F0EBE3;
+  --W:1080px;--H:1350px;--P:80px;
+}
+body{background:#111;display:flex;justify-content:center;padding:24px}
+.slide{
+  width:var(--W);height:var(--H);background:var(--bg);
+  position:relative;overflow:hidden;
+  display:flex;flex-direction:column;padding:var(--P);
+  flex-shrink:0;
+}
+.slide::before{
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(
+    0deg,transparent,transparent 3px,rgba(0,0,0,0.03) 3px,rgba(0,0,0,0.03) 4px
+  );
+}
+.slide>*{position:relative;z-index:1}
+
+/* Headline claim */
+.claim{
+  font-family:'Playfair Display',serif;
+  font-size:60px;font-weight:700;color:var(--ink);
+  line-height:1.12;letter-spacing:-0.01em;
+  margin-bottom:44px;flex-shrink:0;
+}
+.claim strong{font-weight:900}
+.claim u{text-decoration-thickness:3px;text-underline-offset:5px}
+
+/* Duotone photo */
+.photo-wrap{
+  width:920px;height:540px;border-radius:20px;
+  overflow:hidden;position:relative;
+  background:var(--shadow);
+  flex-shrink:0;align-self:center;
+}
+.photo-wrap .photo{
+  position:absolute;inset:0;
+  background-size:cover;background-position:center 15%;
+  filter:grayscale(1) contrast(1.25) brightness(0.8);
+  mix-blend-mode:multiply;
+  width:100%;height:100%;
+}
+.photo-wrap::after{
+  content:'';position:absolute;inset:0;
+  background:var(--highlight);
+  mix-blend-mode:screen;
+  pointer-events:none;
+}
+
+/* Quote */
+.quote-block{
+  flex:1;display:flex;flex-direction:column;justify-content:center;
+  padding-top:36px;
+}
+.quote-mark{
+  font-family:'Playfair Display',serif;
+  font-size:80px;font-weight:900;color:var(--ink);
+  line-height:0.6;opacity:0.15;margin-bottom:8px;
+}
+.quote-text{
+  font-family:'Playfair Display',serif;
+  font-size:33px;font-weight:400;font-style:italic;
+  color:var(--ink-mid);line-height:1.45;
+}
+
+/* Attribution bar */
+.attr{
+  display:flex;align-items:center;gap:20px;
+  padding-top:28px;flex-shrink:0;
+  border-top:2px solid rgba(10,10,10,0.2);
+}
+.logo-circle{
+  width:68px;height:68px;border-radius:50%;
+  background:var(--ink);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+}
+.logo-circle span{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:13px;font-weight:900;color:var(--bg);
+  letter-spacing:.04em;text-transform:uppercase;
+  text-align:center;line-height:1.2;
+}
+.attr-avatar{
+  width:56px;height:56px;border-radius:50%;
+  background:rgba(10,10,10,0.2);
+  border:2px solid rgba(10,10,10,0.3);
+  background-size:cover;background-position:center;
+  flex-shrink:0;
+}
+.attr-name{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:24px;font-weight:700;
+  color:var(--ink);letter-spacing:.1em;text-transform:uppercase;
+}
+.photo-credit{
+  position:absolute;right:18px;bottom:220px;
+  font-family:'Space Mono',monospace;font-size:10px;
+  color:rgba(10,10,10,0.3);letter-spacing:.1em;
+  transform:rotate(90deg);transform-origin:right center;
+  white-space:nowrap;
+}
+</style>
+</head>
+<body>
+<div class="slide">
+
+  <div class="claim">
+    <strong>[Project or Topic Name]</strong> changed the way this home was built. <u><strong>Here's the detail that made all the difference.</strong></u> One decision. Long-term impact.
+  </div>
+
+  <div class="photo-wrap">
+    <div class="photo bg-placeholder"></div>
+  </div>
+
+  <div class="quote-block">
+    <div class="quote-mark">"</div>
+    <div class="quote-text">[Client quote or expert opinion — one clear, memorable sentence about this project or tip.]</div>
+  </div>
+
+  <div class="attr">
+    <div class="logo-circle"><span>Oak Park<br>Construction</span></div>
+    <div class="attr-avatar sticker-slot"></div>
+    <div class="attr-name">Mike McFolling · GC</div>
+  </div>
+
+  <div class="photo-credit">Photo: Oak Park Construction</div>
+</div>
+</body>
+</html>
