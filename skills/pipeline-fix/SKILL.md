@@ -3,10 +3,18 @@
 
 ---
 
-## SESSION START — DO THIS FIRST
-Read sections 3 and 4 below. Then say exactly:
-"Pipeline-fix loaded. Status: [WORKING/BROKEN/UNTESTED]. Pending: [top 1–2 items]. Next action: [one thing]."
-Do not ask what to do. Execute the next pending action.
+## SESSION START — DO THIS FIRST (sync-up protocol)
+
+Step 1 — Read the PIPELINE INVENTORY doc (link in Section 1) to get the most current state. It may be more up to date than this file.
+Step 2 — Read sections 3 and 4 of this skill.
+Step 3 — Check GitHub for commits since last session: `gh run list --repo priihigashi/oak-park-ai-hub --limit 5`
+Step 4 — Say exactly: "Pipeline-fix loaded. Pipeline status: [building/broken]. Top pending fix: [one item]. Starting now."
+Step 5 — Execute the top item in section 4 PENDING list. Do not ask. Do not explain. Fix it.
+
+WHAT TO CARRY FORWARD (find and continue):
+- Any fix from section 4 PENDING that has a file path and clear description — start coding it
+- Any template not yet walked through (section 4 IN PROGRESS) — continue the walkthrough
+- Any test run result from last session — review it and react
 
 ---
 
@@ -34,6 +42,27 @@ Do not ask what to do. Execute the next pending action.
 ### Planning Docs
 - Full Circle Plan:   https://docs.google.com/document/d/17B8wc4wWmcBapl_4gduHyMzjYl4R4y_RYuvZae5xRPU/edit
 - Flow Plans Tracker: https://docs.google.com/spreadsheets/d/1fggy918FgPfnMQ-dzGQk2zx9uhi2_-uWXMKGW4MA47k
+
+### Drive — PIPELINE FIX Folder (source of truth for fix history)
+- PIPELINE FIX folder:           https://drive.google.com/drive/folders/1FHPkx8VA6c-Wmy6hI3uX_weSPwJPBp3z
+- HTML TEMPLATES subfolder:      1PMwIYurzv2GY077hlz7oHr82hNPsY6XI
+- PIPELINE INVENTORY (master):   https://docs.google.com/document/d/1yPsSqh24ioXU3cwwnkwH0oeSUsenTDvqESrIXfJ066A/edit  ← READ THIS FIRST
+- Fix Report — OPC full audit:   https://docs.google.com/document/d/1d7AxdhpP6C93iOlM0Wwn1e93TIuQa3HukeliLjYcLjE/edit
+- Fix Report — general pipeline: https://docs.google.com/document/d/1J-jn4NrQXu_if8T9_Bz4wyzZ-zQqx7gE33CbiQ-KcTw/edit
+- Fix Report — Dados vs Opinião: https://docs.google.com/document/d/1TUzpI_zeOG0Vndc7vZ5wu7ZCM0E2Tj5kbiZ9bJCvUrU/edit
+- Fix Report — FORMAT-019:       https://docs.google.com/document/d/1pxnNTGaQwIj7l7XepDCt_6LalxlYOyHhK6O6_ItTsjs/edit
+
+### Repo files added in fix sessions (not just scripts/content_creator/)
+- PIPELINE_REGISTRY.md:     repo root — template source of truth
+- PIPELINE_FIX_SEQUENCE.md: repo root — per-session checklist
+- scripts/content_creator/carousel_reviewer.py
+- scripts/content_creator/topic_picker.py
+- scripts/content_creator/photo_matcher.py
+
+### Last test carousels (Drive folders — for visual QA reference)
+- OPC v11 "How to Choose the Right Contractor": static → 12meJqAecsOCaFVDGJ1L8WkOH7BtUKLJP | motion → 1LhEYq-acnlADHvQqmX0_1jaZGkdoc7bx
+- Brazil Dados v3 (Gastos Judiciário): static → 1ZGfBWsPvkDKWnoGKCQXpQPPyaV7-1BoC | motion → 1bOAUsPGWQx_91rzwdl62873ReQHGXarg
+- OPC scheduled run x3 (08:27 UTC 2026-05-01): driveway-sinkhole, satisfying-epoxy, diy-garden-arbor folders in OPC _TEMPLATE_CAROUSEL
 
 ### Spreadsheets
 - Ideas & Inbox:      1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU  (Inspiration Library, Pipeline Failures tabs)
@@ -76,58 +105,76 @@ Trigger: content_creator.yml runs at 2:30 AM daily. Manual trigger via GitHub Ac
 ---
 
 ## 3. CURRENT STATUS SNAPSHOT
-[Updated: 2026-05-01]
+[Updated: 2026-05-01 — corrected from Pipeline Inventory doc]
+
+PIPELINE IS BUILDING ✅ — carousels render, reviewer passes, Drive upload works, emails send.
+Remaining issues are QUALITY problems, not infrastructure failures.
 
 WORKING ✅
-- Template gallery (index.html, wired.html) — page navigation functional
-- wired.html wireImages() — 5 bugs fixed (commit 630c485), all 10 templates show with dummy images
-- selected.html (Page 3 — Chosen) — created (commit 977bc96), OPC Tip of the Week locked in
-- Full Circle Plan doc — saved to Drive (ID: 17B8wc4wWmcBapl_4gduHyMzjYl4R4y_RYuvZae5xRPU)
-- email_preview.py — sends per-carousel emails with slide stack, clip failure warnings, caption block, APPROVE/REJECT commands
+- Pipeline runs end-to-end: topic_picker → carousel_builder → PNG render → Drive upload → email preview
+- Reviewer (carousel_reviewer.py) — passes 1/1 on OPC and Brazil
+- Caption generation — generate_caption() added to main.py, caption.txt saved to Drive folder ✅
+- Email preview — niche label dynamic (Brazil emails say [BRAZIL], not [OPC]) ✅
+- Stat overflow — clamp() + overflow:hidden in CSS ✅
+- SWIPE arrow overlap — padding-bottom 80px on list body ✅
+- PRO MOVE → RED FLAG — label logic fixed in Haiku prompt ✅
+- Motion filename doubled — fixed (commit 56c02b7) ✅
+- Job timeout — increased from 30 min → 90 min ✅
+- cover_claim field — added to Brazil JSON schema (commit ac243eb) ✅
+- Date injection — Haiku now gets today's date, won't invent 2025 (commit 9c8bb0f) ✅
+- Series tag map — "dados-ou-agenda" → "Dados vs Opinião" fixed (commit 1ebe8bb) ✅
+- Bio-initials fallback — renders when all image providers fail ✅
+- Reviewer false positives — 3 false-positive checks fixed (commits b41a051, 00832a2, 03f3df0) ✅
+- Template gallery — wired.html, index.html, selected.html all working ✅
+- Cream variant contrast — FIX applied in opc_tip_base.css ✅
 
-BROKEN / INCOMPLETE ❌
-- opc_progress.html — missing .before-slot/.after-slot split panel (before-after layout is wrong)
-- news_brazil_shared.html — CSS has .bio-card classes but no HTML elements for sticker/face slot on cover slide
-- news_usa_shared.html — same gap as above
-- scraper.py — uses `series_override = "Fact-Checked"` (mixed case) but main.py maps "FACT-CHECKED" (uppercase) → silent routing mismatch
-- carousel_builder.py — generate_brazil_content() missing: cover_claim field in JSON schema, date injection, data_confidence flag
-- email_preview.py — APPROVE/NOT GOOD/REJECT reply commands are buried below all slide images (should be at top)
+BROKEN / QUALITY ISSUES ❌
+- Photo catalog 401 Unauthorized — photo_matcher.py uses wrong credential (service account instead of SHEETS_TOKEN OAuth) → real OPC project photos never load, DALL-E generates generic images instead
+  File: scripts/content_creator/photo_matcher.py
+- Per-slide image queries — Haiku emits one query for whole carousel, not per-slide → all slides get same generic image
+  File: scripts/content_creator/carousel_builder.py → build_content_brief() Haiku prompt
+- @HANDLE_PLACEHOLDER — visible in final PNGs when NanoBanana/Seedream fail; 2 retries added but base issue unresolved for live posts
+  File: carousel_builder.py — cover slide HTML generation
+- Cover hook weak — no number, no pain point (e.g. "What to look for before you sign anything" — nobody stops scrolling for this)
+  File: carousel_builder.py — OPC Haiku prompt for cover hook
 
 UNTESTED 🟡
-- Full pipeline end-to-end (template → export → upload → email → approve → Buffer)
-- motion_sources.py 8-tier clip cascade
-- approval_handler.py Gmail reply detection
+- approval_handler.py — Gmail reply detection → Buffer scheduling
+- Build history dedup — same topic can repeat across runs (no memory between runs)
 
 ---
 
 ## 4. ACTIVE TASK LIST
 
-DONE ✅
-- Fix wireImages() 5 bugs in wired.html (commit 630c485)
-- Create selected.html with OPC Tip of the Week as first chosen template (commit 977bc96)
-- Update Full Circle Plan doc with new 11-section structure (templates-first)
-- Decide OPC Tip of the Week = main category, no sub-series needed
+DONE ✅ (this session + prior fix sessions)
+- Caption generation, stat overflow, SWIPE overlap, PRO MOVE label, date injection, series tag naming, reviewer false positives, motion filename, 90min timeout — all fixed
+- wired.html wireImages() 5 bugs fixed (commit 630c485)
+- selected.html created — OPC Tip of the Week locked as first chosen template (commit 977bc96)
+- Full Circle Plan restructured to 11 sections, templates-first
+- Tip of the Week = flat category, no sub-series needed
 
 IN PROGRESS 🔄
-- Template walkthrough: OPC done → next is OPC Progress (before/after) + OPC Illustrated + OPC Cutout
-- Building selected.html — adding approved templates one by one as walkthrough proceeds
+- Template walkthrough: Tip ✅ → next: opc_progress, opc_illustrated, opc_cutout, then News templates
+- Building selected.html — add each chosen template as walkthrough proceeds
 
-PENDING ⏳
-- Walk through OPC templates: opc_progress.html, opc_illustrated.html, opc_cutout.html — decide main category names, add chosen ones to selected.html
-- Walk through News templates: news_brazil.html, brazil_motion.html, news_brazil_shared.html, news_usa_shared.html, who_is.html, the_case.html
-- Fix opc_progress.html — add .before-slot/.after-slot split panel (Priority 4 from design audit)
-- Fix news_brazil_shared.html + news_usa_shared.html — add sticker slot HTML elements (Priority 1 — unblocks 5 series)
-- Fix scraper.py series_override case mismatch ("Fact-Checked" → "FACT-CHECKED")
-- Fix carousel_builder.py — add cover_claim, date injection, data_confidence to schema
-- Move APPROVE/REJECT reply commands to top of email_preview.py email body
-- Fix series naming everywhere: "Dados vs Opinião" (was "Dados ou Agenda?")
-- Wire chosen templates to pipeline (Section 3 of Full Circle Plan)
-- Run pipeline end-to-end and observe output
-- Queue hygiene: 946 blank rows in Inspiration Library, 11 foreign TotW misfires
+PENDING ⏳ (priority order — top = most impactful)
+1. Fix photo_matcher.py 401 — swap service account for SHEETS_TOKEN OAuth so real OPC photos load
+   File: scripts/content_creator/photo_matcher.py
+2. Fix per-slide image queries — Haiku prompt in build_content_brief() must emit context_image_query per slide
+   File: scripts/content_creator/carousel_builder.py
+3. Fix @HANDLE_PLACEHOLDER — add niche_handles dict at top of carousel_builder.py, inject on cover slide render
+   File: scripts/content_creator/carousel_builder.py — cover HTML generation
+4. Fix cover hook — OPC Haiku prompt must require: number OR dollar figure OR named consequence in hook
+   File: scripts/content_creator/carousel_builder.py — OPC prompt
+5. Add build history dedup — write one row to Build History tab (Ideas & Inbox) after each build, check last 30 days before picking topic
+   File: scripts/content_creator/main.py
+6. Complete template walkthrough (opc_progress → illustrated → cutout → News templates) → update selected.html
+7. Fix opc_progress.html — add .before-slot/.after-slot split panel
+8. Fix news_brazil_shared.html + news_usa_shared.html — add sticker slot HTML on cover slide
+9. Queue hygiene — 946 blank rows in Inspiration Library, 11 foreign TotW misfires
 
 BLOCKED 🚫
-- Can't run pipeline until templates are wired (selected.html walkthrough must finish first)
-- Can't fix news_brazil_shared / news_usa_shared until those templates are chosen in walkthrough
+- Approval → Buffer flow — untested, needs approval_handler.py Gmail trigger confirmed working first
 
 ---
 
