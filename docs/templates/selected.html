@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Template Gallery — Page 2: With Images</title>
+<title>Chosen Templates — Locked for Pipeline</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -29,9 +29,11 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
 .group-cards{display:flex;flex-wrap:wrap;gap:40px;padding:0 40px 48px}
 
 /* ── Single template card ── */
-.tpl-card{background:#111;border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:28px;max-width:500px;flex:1 1 460px}
+.tpl-card{background:#111;border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:28px;max-width:500px;flex:1 1 460px;position:relative}
+.tpl-card::before{content:'✓ CHOSEN';position:absolute;top:16px;right:16px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;color:#CBCC10;background:rgba(203,204,16,0.12);border:1px solid rgba(203,204,16,0.3);padding:3px 8px;border-radius:2px}
 .tpl-name{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;letter-spacing:.1em;color:#CBCC10;text-transform:uppercase}
 .tpl-format{font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(255,255,255,0.35);letter-spacing:.1em;margin-top:4px}
+.tpl-category{font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(203,204,16,0.6);letter-spacing:.1em;margin-top:6px;text-transform:uppercase}
 .tpl-when{font-size:14px;color:rgba(255,255,255,0.6);margin-top:12px;line-height:1.55}
 
 /* ── Variant buttons ── */
@@ -47,6 +49,9 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
 .slide-frame-outer{position:relative;width:360px;height:450px;flex-shrink:0;overflow:hidden;background:#000;border-radius:6px;border:1px solid rgba(255,255,255,0.08)}
 .slide-frame-outer iframe{width:1080px;height:1350px;border:none;transform:scale(0.3333);transform-origin:top left;pointer-events:none}
 .slide-counter{font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(255,255,255,0.3);text-align:center;margin-top:8px;letter-spacing:.06em}
+
+/* ── Empty state ── */
+.empty-notice{font-family:'JetBrains Mono',monospace;font-size:12px;color:rgba(255,255,255,0.2);padding:0 40px 48px;letter-spacing:.06em;line-height:1.8}
 </style>
 </head>
 <body>
@@ -54,29 +59,38 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
 <!-- PAGE SWITCHER -->
 <div class="page-nav">
   <a href="index.html" class="page-btn">Page 1 — Clean</a>
-  <span class="page-btn active">Page 2 — All Templates</span>
-  <a href="selected.html" class="page-btn">Page 3 — Chosen</a>
-  <span class="page-label">Dummy images show where the pipeline injects real photos</span>
+  <a href="wired.html" class="page-btn">Page 2 — All Templates</a>
+  <span class="page-btn active">Page 3 — Chosen</span>
+  <span class="page-label">Approved templates only — these are wired to the pipeline</span>
 </div>
 
 <div class="gallery-top">
-  <h1>Template Gallery — Wired</h1>
-  <p>Oak Park AI Hub · dummy images injected · how it looks when the pipeline fills it in</p>
+  <h1>Chosen Ones</h1>
+  <p>Oak Park AI Hub · approved + locked · one per series · pipeline-ready</p>
 </div>
 
-
+<!-- ═══════════════════════════════════════════
+     OPC — Oak Park Construction
+     ═══════════════════════════════════════════ -->
 <div class="group-header" style="border-left-color:#CBCC10">
   <span style="color:#CBCC10">OPC — Oak Park Construction</span>
 </div>
 <div class="group-cards">
+
+<!-- TIP OF THE WEEK — main OPC category, no sub-series needed -->
 <div class="tpl-card" id="card_opc_tip">
   <div class="tpl-meta">
     <div class="tpl-name">TIP OF THE WEEK</div>
     <div class="tpl-format">FORMAT-010</div>
-    <div class="tpl-when">Weekly educational post. Explains one construction/renovation concept with a stat and a step-by-step list. The most common OPC template.</div>
+    <div class="tpl-category">Main category · no sub-series</div>
+    <div class="tpl-when">Weekly educational post. One construction or renovation concept per post — stat on slide 2, step-by-step list on slide 3, product/material callout on slide 4, CTA on slide 5. No named person required — any relevant photo fills the context slot. Default OPC series.</div>
   </div>
   <div class="tpl-viewer-wrap">
-    <div class="variant-row"><button class="vbtn" onclick="setVariant('opc_tip',0)" id="vbtn_opc_tip_0">v1 — Dark + Lime</button><button class="vbtn" onclick="setVariant('opc_tip',5)" id="vbtn_opc_tip_1">v2 — Cream</button><button class="vbtn" onclick="setVariant('opc_tip',10)" id="vbtn_opc_tip_2">v3 — Obsidian</button></div>
+    <div class="variant-row">
+      <button class="vbtn" onclick="setVariant('opc_tip',0)" id="vbtn_opc_tip_0">v1 — Dark + Lime</button>
+      <button class="vbtn" onclick="setVariant('opc_tip',5)" id="vbtn_opc_tip_1">v2 — Cream</button>
+      <button class="vbtn" onclick="setVariant('opc_tip',10)" id="vbtn_opc_tip_2">v3 — Obsidian</button>
+    </div>
     <div class="viewer-row">
       <button class="arrow-btn" onclick="prevSlide('opc_tip')">&#8592;</button>
       <div class="slide-frame-outer">
@@ -87,175 +101,24 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
     <div class="slide-counter" id="counter_opc_tip">slide 1 / 5</div>
   </div>
 </div>
-<div class="tpl-card" id="card_opc_illustrated">
-  <div class="tpl-meta">
-    <div class="tpl-name">ILLUSTRATED</div>
-    <div class="tpl-format">FORMAT-012</div>
-    <div class="tpl-when">Same 5-slide structure as Tip, but with context image panels on the list and tip slides. Use when you have a relevant photo to show alongside the steps.</div>
-  </div>
-  <div class="tpl-viewer-wrap">
-    <div class="variant-row"><button class="vbtn" onclick="setVariant('opc_illustrated',0)" id="vbtn_opc_illustrated_0">v1 — Dark + Lime</button><button class="vbtn" onclick="setVariant('opc_illustrated',5)" id="vbtn_opc_illustrated_1">v2 — Cream</button><button class="vbtn" onclick="setVariant('opc_illustrated',10)" id="vbtn_opc_illustrated_2">v3 — Obsidian</button></div>
-    <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('opc_illustrated')">&#8592;</button>
-      <div class="slide-frame-outer">
-        <iframe id="viewer_opc_illustrated" src="opc_illustrated.html" scrolling="no" onload="initViewer('opc_illustrated')"></iframe>
-      </div>
-      <button class="arrow-btn" onclick="nextSlide('opc_illustrated')">&#8594;</button>
-    </div>
-    <div class="slide-counter" id="counter_opc_illustrated">slide 1 / 5</div>
-  </div>
-</div>
-<div class="tpl-card" id="card_opc_cutout">
-  <div class="tpl-meta">
-    <div class="tpl-name">CUTOUT</div>
-    <div class="tpl-format">FORMAT-014</div>
-    <div class="tpl-when">Same structure again, but designed for background-removed (cutout) images — floating person or product on a brand background. Best when NanoBanana cutout of Mike or a product is available.</div>
-  </div>
-  <div class="tpl-viewer-wrap">
-    <div class="variant-row"><button class="vbtn" onclick="setVariant('opc_cutout',0)" id="vbtn_opc_cutout_0">v1 — Dark + Lime</button><button class="vbtn" onclick="setVariant('opc_cutout',5)" id="vbtn_opc_cutout_1">v2 — Cream</button><button class="vbtn" onclick="setVariant('opc_cutout',10)" id="vbtn_opc_cutout_2">v3 — Obsidian</button></div>
-    <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('opc_cutout')">&#8592;</button>
-      <div class="slide-frame-outer">
-        <iframe id="viewer_opc_cutout" src="opc_cutout.html" scrolling="no" onload="initViewer('opc_cutout')"></iframe>
-      </div>
-      <button class="arrow-btn" onclick="nextSlide('opc_cutout')">&#8594;</button>
-    </div>
-    <div class="slide-counter" id="counter_opc_cutout">slide 1 / 5</div>
-  </div>
-</div>
-<div class="tpl-card" id="card_opc_progress">
-  <div class="tpl-meta">
-    <div class="tpl-name">PROGRESS / BEFORE-AFTER</div>
-    <div class="tpl-format">FORMAT-011</div>
-    <div class="tpl-when">Project update posts. Shows current stage, what's done, what's next, and the team. Needs real project photos — placeholders show where photos go.</div>
-  </div>
-  <div class="tpl-viewer-wrap">
-    <div class="variant-row"><button class="vbtn" onclick="setVariant('opc_progress',0)" id="vbtn_opc_progress_0">v1 — Dark</button><button class="vbtn" onclick="setVariant('opc_progress',5)" id="vbtn_opc_progress_1">v2 — Cream</button><button class="vbtn" onclick="setVariant('opc_progress',10)" id="vbtn_opc_progress_2">v3 — Obsidian</button></div>
-    <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('opc_progress')">&#8592;</button>
-      <div class="slide-frame-outer">
-        <iframe id="viewer_opc_progress" src="opc_progress.html" scrolling="no" onload="initViewer('opc_progress')"></iframe>
-      </div>
-      <button class="arrow-btn" onclick="nextSlide('opc_progress')">&#8594;</button>
-    </div>
-    <div class="slide-counter" id="counter_opc_progress">slide 1 / 5</div>
-  </div>
-</div></div>
 
+<!-- ADD NEXT OPC CHOSEN TEMPLATE HERE (opc_progress, opc_illustrated, etc.) -->
+
+</div><!-- /group-cards OPC -->
+
+
+<!-- ═══════════════════════════════════════════
+     NEWS — Brazil + USA
+     (add chosen news templates below)
+     ═══════════════════════════════════════════ -->
+<!--
 <div class="group-header" style="border-left-color:#F4C430">
   <span style="color:#F4C430">NEWS — Brazil + USA</span>
 </div>
 <div class="group-cards">
-<div class="tpl-card" id="card_who_is">
-  <div class="tpl-meta">
-    <div class="tpl-name">WHO IS THIS PERSON? — QUEM É ESSA PESSOA?</div>
-    <div class="tpl-format">FORMAT-020</div>
-    <div class="tpl-when">Profile carousel for any public figure: politician, religious leader, influencer. Cover: hook sentence → person sticker → air-quote → CTA. Slides: bio grid, quote, law they passed (with gov source label), PAC/funding money, network map, controversies. Works for Brazil and USA niches.</div>
-  </div>
-  <div class="tpl-viewer-wrap">
-    <div class="variant-row"><button class="vbtn active" onclick="setVariant('who_is',0)">Single style</button></div>
-    <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('who_is')">&#8592;</button>
-      <div class="slide-frame-outer">
-        <iframe id="viewer_who_is" src="who_is.html" scrolling="no" onload="initViewer('who_is')"></iframe>
-      </div>
-      <button class="arrow-btn" onclick="nextSlide('who_is')">&#8594;</button>
-    </div>
-    <div class="slide-counter" id="counter_who_is">slide 1 / 6</div>
-  </div>
+  ADD CHOSEN NEWS TEMPLATES HERE
 </div>
-<div class="tpl-card" id="card_the_case">
-  <div class="tpl-meta">
-    <div class="tpl-name">O CASO / THE CASE</div>
-    <div class="tpl-format">FORMAT-021</div>
-    <div class="tpl-when">Topic/case-centric investigation carousel. The CASE is the subject — a specific scandal, scheme, or decision. A key person appears as context, not the main headline. Cover: case title + status pill + person attribution + hook. Slides: timeline of events, responsible party (institution that decided), person background (only what's relevant to this case), network of connected people, money trail. Same dark Canário editorial palette as Quem Decidiu.</div>
-  </div>
-  <div class="tpl-viewer-wrap">
-    <div class="variant-row"><button class="vbtn active" onclick="setVariant('the_case',0)">Single style</button></div>
-    <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('the_case')">&#8592;</button>
-      <div class="slide-frame-outer">
-        <iframe id="viewer_the_case" src="the_case.html" scrolling="no" onload="initViewer('the_case')"></iframe>
-      </div>
-      <button class="arrow-btn" onclick="nextSlide('the_case')">&#8594;</button>
-    </div>
-    <div class="slide-counter" id="counter_the_case">slide 1 / 7</div>
-  </div>
-</div>
-</div>
-<div class="group-cards">
-<div class="tpl-card" id="card_news_brazil">
-  <div class="tpl-meta">
-    <div class="tpl-name">QUEM DECIDIU ISSO?</div>
-    <div class="tpl-format">FORMAT-002</div>
-    <div class="tpl-when">Brazil political breakdown. 'Who actually decided this?' — traces a law, tariff, or policy back to the person who voted/approved it. Uses the native Brazil builder with dark + Canário yellow brand.</div>
-  </div>
-  <div class="tpl-viewer-wrap">
-    <div class="variant-row"><button class="vbtn" onclick="setVariant('news_brazil',0)" id="vbtn_news_brazil_0">Single style</button></div>
-    <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('news_brazil')">&#8592;</button>
-      <div class="slide-frame-outer">
-        <iframe id="viewer_news_brazil" src="news_brazil.html" scrolling="no" onload="initViewer('news_brazil')"></iframe>
-      </div>
-      <button class="arrow-btn" onclick="nextSlide('news_brazil')">&#8594;</button>
-    </div>
-    <div class="slide-counter" id="counter_news_brazil">slide 1 / 6</div>
-  </div>
-</div>
-<div class="tpl-card" id="card_news_brazil_shared">
-  <div class="tpl-meta">
-    <div class="tpl-name">VERIFICAMOS / A CONTA</div>
-    <div class="tpl-format">FORMAT-013A/B</div>
-    <div class="tpl-when">Brazil fact-check or institutional source carousel. VERIFICAMOS = debunking a viral claim. A CONTA = tracing who should have paid or who benefited. Uses the shared template builder with Brazil colors.</div>
-  </div>
-  <div class="tpl-viewer-wrap">
-    <div class="variant-row"><button class="vbtn" onclick="setVariant('news_brazil_shared',0)" id="vbtn_news_brazil_shared_0">Single style</button></div>
-    <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('news_brazil_shared')">&#8592;</button>
-      <div class="slide-frame-outer">
-        <iframe id="viewer_news_brazil_shared" src="news_brazil_shared.html" scrolling="no" onload="initViewer('news_brazil_shared')"></iframe>
-      </div>
-      <button class="arrow-btn" onclick="nextSlide('news_brazil_shared')">&#8594;</button>
-    </div>
-    <div class="slide-counter" id="counter_news_brazil_shared">slide 1 / 5</div>
-  </div>
-</div>
-<div class="tpl-card" id="card_brazil_motion">
-  <div class="tpl-meta">
-    <div class="tpl-name">QUEM DECIDIU — MOTION</div>
-    <div class="tpl-format">FORMAT-002 · MOTION VERSION</div>
-    <div class="tpl-when">Motion variant of the Brazil News carousel. Playfair Display serif headline. Full-bleed grayscale video bg + colored video in sticker frame + stamp badge + person attribution pill. CSS animations simulate motion in gallery — pipeline replaces with real clips.</div>
-  </div>
-  <div class="tpl-viewer-wrap">
-    <div class="variant-row"><button class="vbtn active" onclick="setVariant('brazil_motion',0)">Motion preview</button></div>
-    <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('brazil_motion')">&#8592;</button>
-      <div class="slide-frame-outer">
-        <iframe id="viewer_brazil_motion" src="brazil_motion.html" scrolling="no" onload="initViewer('brazil_motion')"></iframe>
-      </div>
-      <button class="arrow-btn" onclick="nextSlide('brazil_motion')">&#8594;</button>
-    </div>
-    <div class="slide-counter" id="counter_brazil_motion">slide 1 / 4</div>
-  </div>
-</div>
-<div class="tpl-card" id="card_news_usa_shared">
-  <div class="tpl-meta">
-    <div class="tpl-name">THE CHAIN</div>
-    <div class="tpl-format">FORMAT-016</div>
-    <div class="tpl-when">USA bilingual carousel — same builder as Brazil shared, but with USA gold/amber colors. Traces a systemic issue step by step (chain of decisions). EN text primary, no PT required.</div>
-  </div>
-  <div class="tpl-viewer-wrap">
-    <div class="variant-row"><button class="vbtn" onclick="setVariant('news_usa_shared',0)" id="vbtn_news_usa_shared_0">Single style (USA gold)</button></div>
-    <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('news_usa_shared')">&#8592;</button>
-      <div class="slide-frame-outer">
-        <iframe id="viewer_news_usa_shared" src="news_usa_shared.html" scrolling="no" onload="initViewer('news_usa_shared')"></iframe>
-      </div>
-      <button class="arrow-btn" onclick="nextSlide('news_usa_shared')">&#8594;</button>
-    </div>
-    <div class="slide-counter" id="counter_news_usa_shared">slide 1 / 5</div>
-  </div>
-</div></div>
+-->
 
 
 <script>
@@ -263,6 +126,25 @@ const state = {};
 
 // ── Image seeds per template — consistent dummy photos ──
 const IMG = {
+  opc_tip: {
+    bg:      ['kitchen_reno','bathroom_tiles','construction_site'],
+    sticker: 'contractor_mike',
+    ctx:     ['tile_work','grout_detail','kitchen_counter','floor_tile']
+  },
+  opc_illustrated: {
+    bg:      ['oak_park_exterior','renovation_before','oak_park_project'],
+    sticker: 'contractor_mike2',
+    ctx:     ['bathroom_reno','kitchen_progress','foundation_work','framing_opc']
+  },
+  opc_cutout: {
+    bg:      ['opc_dark_bg','opc_brand_bg','opc_obsidian'],
+    sticker: 'mike_cutout'
+  },
+  opc_progress: {
+    bg:      ['project_exterior','job_site_opc','progress_shot'],
+    sticker: 'mike_onsite',
+    ctx:     ['foundation_pour','framing_stage','drywall_hang','electrical_rough']
+  },
   news_brazil: {
     bg:      ['flaviobg','congress_building','flaviobg'],
     sticker: 'politician_portrait',
@@ -290,25 +172,6 @@ const IMG = {
   news_usa_shared: {
     bg:      ['capitol_bg','whitehouse_bg','dc_bg'],
     bio:     ['us1','us2','us3','us4']
-  },
-  opc_tip: {
-    bg:      ['kitchen_reno','bathroom_tiles','construction_site'],
-    sticker: 'contractor_mike',
-    ctx:     ['tile_work','grout_detail','kitchen_counter','floor_tile']
-  },
-  opc_illustrated: {
-    bg:      ['oak_park_exterior','renovation_before','oak_park_project'],
-    sticker: 'contractor_mike2',
-    ctx:     ['bathroom_reno','kitchen_progress','foundation_work','framing_opc']
-  },
-  opc_cutout: {
-    bg:      ['opc_dark_bg','opc_brand_bg','opc_obsidian'],
-    sticker: 'mike_cutout'
-  },
-  opc_progress: {
-    bg:      ['project_exterior','job_site_opc','progress_shot'],
-    sticker: 'mike_onsite',
-    ctx:     ['foundation_pour','framing_stage','drywall_hang','electrical_rough']
   }
 };
 
@@ -377,14 +240,13 @@ function wireImages(iframe, tid) {
 
   // 6. sticker-inner (OPC Mike slot / profile slide) → photo
   doc.querySelectorAll('.sticker-inner').forEach(el => {
-    if (el.querySelector('img')) return; // already has image
+    if (el.querySelector('img')) return;
     const seed = s.sticker || ('stinner_' + tid);
     el.innerHTML = '<img src="https://picsum.photos/seed/' + seed + '/260/340"'
       + ' style="width:100%;height:100%;object-fit:cover;object-position:center top;">';
   });
 
   // 6b. sticker-slot.sticker-initials and person-sticker.person-sticker-initials
-  // (the_case.html pattern — sticker IS the initials block, no .sticker-placeholder inside)
   doc.querySelectorAll('.sticker-slot.sticker-initials, .person-sticker.person-sticker-initials').forEach(el => {
     if (el.querySelector('img')) return;
     const seed = s.sticker || ('stkinit_' + tid);
@@ -414,7 +276,7 @@ function wireImages(iframe, tid) {
     ctxIdx++;
   });
 
-  // 9. ctx-fallback (OPC illustrated inner fallback text) → photo
+  // 9. ctx-fallback → photo
   doc.querySelectorAll('.ctx-fallback').forEach(el => {
     const seed = (s.ctx && s.ctx[ctxIdx]) || ('ctxf_' + tid + '_' + ctxIdx);
     const img = doc.createElement('img');
