@@ -5,28 +5,26 @@
 <title>Brazil — Duotone Statement · FORMAT-DUO-BR</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Roboto+Condensed:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-/* FORMAT-DUO-BR — Brazil Duotone Statement Standalone
+/* FORMAT-DUO-BR — Brazil Duotone Statement Standalone (3 VARIANTS for color test)
    Bright gold background · duotone portrait · claim + quote · attribution
-   Duotone: shadows → navy #1A2060, highlights → gold #E8CC7A (blends into bg)
-   Single slide — goes to standalone_chosen in News Drive
+   V1: shadow #1A2060 navy → highlight #E8CC7A gold (current/classic)
+   V2: shadow #0A0A0A black → highlight #F0EBE3 cream (newspaper/Folha)
+   V3: shadow #2D0F3D deep purple → highlight #F0EBE3 cream (moody luxe)
 */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#C9A84C;
   --ink:#0D0B08;
   --ink-mid:#2A1E06;
-  --shadow:#1A2060;
-  --highlight:#E8CC7A;
   --W:1080px;--H:1350px;--P:80px;
 }
-body{background:#111;display:flex;justify-content:center;padding:24px}
+body{background:#111;display:flex;flex-direction:column;align-items:center;padding:24px;gap:24px}
 .slide{
   width:var(--W);height:var(--H);background:var(--bg);
   position:relative;overflow:hidden;
   display:flex;flex-direction:column;padding:var(--P);
   flex-shrink:0;
 }
-/* Subtle canvas texture */
 .slide::before{
   content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
   background:repeating-linear-gradient(
@@ -35,7 +33,14 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
 }
 .slide>*{position:relative;z-index:1}
 
-/* Headline claim */
+.variant-badge{
+  position:absolute;top:30px;right:30px;z-index:5;
+  background:rgba(13,11,8,0.85);color:#F0EBE3;
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:13px;font-weight:700;letter-spacing:.08em;
+  padding:8px 16px;border-radius:20px;text-transform:uppercase;
+}
+
 .claim{
   font-family:'Playfair Display',serif;
   font-size:60px;font-weight:700;color:var(--ink);
@@ -45,21 +50,23 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
 .claim strong{font-weight:900}
 .claim u{text-decoration-thickness:3px;text-underline-offset:5px}
 
-/* Duotone photo — SVG filter handles full tonal mapping */
 .photo-wrap{
   width:920px;height:540px;border-radius:20px;
   overflow:hidden;position:relative;
-  background:var(--shadow);
   flex-shrink:0;align-self:center;
 }
 .photo-wrap .photo{
   position:absolute;inset:0;
   background-size:cover;background-position:center 15%;
   width:100%;height:100%;
-  filter:url(#duotone-brazil);
 }
+.slide.v1 .photo-wrap{background:#1A2060}
+.slide.v1 .photo{filter:url(#duotone-brazil-v1)}
+.slide.v2 .photo-wrap{background:#0A0A0A}
+.slide.v2 .photo{filter:url(#duotone-brazil-v2)}
+.slide.v3 .photo-wrap{background:#2D0F3D}
+.slide.v3 .photo{filter:url(#duotone-brazil-v3)}
 
-/* Quote */
 .quote-block{
   flex:1;display:flex;flex-direction:column;justify-content:center;
   padding-top:36px;
@@ -75,7 +82,6 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
   color:var(--ink-mid);line-height:1.45;
 }
 
-/* Attribution bar */
 .attr{
   display:flex;align-items:center;gap:20px;
   padding-top:28px;flex-shrink:0;
@@ -104,7 +110,6 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
   color:var(--ink);letter-spacing:.1em;text-transform:uppercase;
 }
 
-/* Rotated photo credit */
 .photo-credit{
   position:absolute;right:18px;bottom:220px;
   font-family:'Space Mono',monospace;font-size:10px;
@@ -116,45 +121,86 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
 </head>
 <body>
 
-<!-- Duotone SVG filter: shadow #1A2060 navy → highlight #E8CC7A gold, with contrast boost -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <filter id="duotone-brazil" color-interpolation-filters="sRGB">
+  <!-- V1: Navy #1A2060 → Gold #E8CC7A (classic/current) -->
+  <filter id="duotone-brazil-v1" color-interpolation-filters="sRGB">
     <feColorMatrix type="matrix" values=".299 .587 .114 0 0  .299 .587 .114 0 0  .299 .587 .114 0 0  0 0 0 1 0"/>
-    <feComponentTransfer>
-      <feFuncR type="linear" slope="1.4" intercept="-0.2"/>
-      <feFuncG type="linear" slope="1.4" intercept="-0.2"/>
-      <feFuncB type="linear" slope="1.4" intercept="-0.2"/>
-    </feComponentTransfer>
-    <feComponentTransfer>
-      <feFuncR type="table" tableValues="0.102 0.910"/>
-      <feFuncG type="table" tableValues="0.125 0.800"/>
-      <feFuncB type="table" tableValues="0.376 0.478"/>
-    </feComponentTransfer>
+    <feComponentTransfer><feFuncR type="linear" slope="1.4" intercept="-0.2"/><feFuncG type="linear" slope="1.4" intercept="-0.2"/><feFuncB type="linear" slope="1.4" intercept="-0.2"/></feComponentTransfer>
+    <feComponentTransfer><feFuncR type="table" tableValues="0.102 0.910"/><feFuncG type="table" tableValues="0.125 0.800"/><feFuncB type="table" tableValues="0.376 0.478"/></feComponentTransfer>
+  </filter>
+  <!-- V2: Black #0A0A0A → Cream #F0EBE3 (newspaper) -->
+  <filter id="duotone-brazil-v2" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values=".299 .587 .114 0 0  .299 .587 .114 0 0  .299 .587 .114 0 0  0 0 0 1 0"/>
+    <feComponentTransfer><feFuncR type="linear" slope="1.4" intercept="-0.2"/><feFuncG type="linear" slope="1.4" intercept="-0.2"/><feFuncB type="linear" slope="1.4" intercept="-0.2"/></feComponentTransfer>
+    <feComponentTransfer><feFuncR type="table" tableValues="0.039 0.941"/><feFuncG type="table" tableValues="0.039 0.922"/><feFuncB type="table" tableValues="0.039 0.890"/></feComponentTransfer>
+  </filter>
+  <!-- V3: Deep purple #2D0F3D → Cream #F0EBE3 (moody luxe) -->
+  <filter id="duotone-brazil-v3" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values=".299 .587 .114 0 0  .299 .587 .114 0 0  .299 .587 .114 0 0  0 0 0 1 0"/>
+    <feComponentTransfer><feFuncR type="linear" slope="1.4" intercept="-0.2"/><feFuncG type="linear" slope="1.4" intercept="-0.2"/><feFuncB type="linear" slope="1.4" intercept="-0.2"/></feComponentTransfer>
+    <feComponentTransfer><feFuncR type="table" tableValues="0.176 0.941"/><feFuncG type="table" tableValues="0.059 0.922"/><feFuncB type="table" tableValues="0.239 0.890"/></feComponentTransfer>
   </filter>
 </svg>
 
-<div class="slide">
-
+<div class="slide v1">
+  <div class="variant-badge">V1 · NAVY → GOLD</div>
   <div class="claim">
     <strong>[Nome do Personagem]</strong> não age sozinho. <u><strong>Ele representa algo maior do que si mesmo.</strong></u> A questão não é o candidato — é o projeto por trás.
   </div>
-
   <div class="photo-wrap">
     <div class="photo bg-placeholder" style="background-image:url('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=920&h=540&fit=crop&crop=face')"></div>
   </div>
-
   <div class="quote-block">
     <div class="quote-mark">"</div>
     <div class="quote-text">[Citação direta do especialista ou fonte — uma frase que resume o ponto central do slide.]</div>
   </div>
-
   <div class="attr">
     <div class="logo-circle"><span>In</span><span>Br</span></div>
     <div class="attr-avatar sticker-slot"></div>
     <div class="attr-name">Nome do Especialista</div>
   </div>
-
   <div class="photo-credit">Foto: Agência Brasil / InBr</div>
 </div>
+
+<div class="slide v2">
+  <div class="variant-badge">V2 · BLACK → CREAM</div>
+  <div class="claim">
+    <strong>[Nome do Personagem]</strong> não age sozinho. <u><strong>Ele representa algo maior do que si mesmo.</strong></u> A questão não é o candidato — é o projeto por trás.
+  </div>
+  <div class="photo-wrap">
+    <div class="photo bg-placeholder" style="background-image:url('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=920&h=540&fit=crop&crop=face')"></div>
+  </div>
+  <div class="quote-block">
+    <div class="quote-mark">"</div>
+    <div class="quote-text">[Citação direta do especialista ou fonte — uma frase que resume o ponto central do slide.]</div>
+  </div>
+  <div class="attr">
+    <div class="logo-circle"><span>In</span><span>Br</span></div>
+    <div class="attr-avatar sticker-slot"></div>
+    <div class="attr-name">Nome do Especialista</div>
+  </div>
+  <div class="photo-credit">Foto: Agência Brasil / InBr</div>
+</div>
+
+<div class="slide v3">
+  <div class="variant-badge">V3 · PURPLE → CREAM</div>
+  <div class="claim">
+    <strong>[Nome do Personagem]</strong> não age sozinho. <u><strong>Ele representa algo maior do que si mesmo.</strong></u> A questão não é o candidato — é o projeto por trás.
+  </div>
+  <div class="photo-wrap">
+    <div class="photo bg-placeholder" style="background-image:url('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=920&h=540&fit=crop&crop=face')"></div>
+  </div>
+  <div class="quote-block">
+    <div class="quote-mark">"</div>
+    <div class="quote-text">[Citação direta do especialista ou fonte — uma frase que resume o ponto central do slide.]</div>
+  </div>
+  <div class="attr">
+    <div class="logo-circle"><span>In</span><span>Br</span></div>
+    <div class="attr-avatar sticker-slot"></div>
+    <div class="attr-name">Nome do Especialista</div>
+  </div>
+  <div class="photo-credit">Foto: Agência Brasil / InBr</div>
+</div>
+
 </body>
 </html>
