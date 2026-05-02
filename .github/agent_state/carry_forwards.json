@@ -1,37 +1,132 @@
 [
   {
-    "task": "Fix misclassified reel DXJwN9xpU1r \u2014 get correct niche from Priscila, then move Drive folder, update Inspiration Library row, update story ID prefix, add few-shot example to detect_project()",
-    "context": "Auto-detect classified as BOOK (confidence 0.85) but Priscila marked it WRONG. She exited before naming correct niche. Story ID: BCI-202604271635. Blocks few-shot training improvement.",
-    "auto_actionable": false
-  },
-  {
-    "task": "AIOX audit \u2014 3-agent run (architect + devops + dev) for detect_project(), run_unrouted(), unrouted_digest.py, unrouted_digest.yml, capture_pipeline.yml changes",
-    "context": "Deferred security/quality review. New auto-detect pipeline needs validation before production confidence.",
-    "auto_actionable": false
-  },
-  {
-    "task": "Fix visual-only video + IG carousel classification gap using Claude Vision",
-    "context": "When transcript is empty (no audio), Haiku only has caption as signal, higher chance of falling to unrouted. Route A: Call Claude Vision on video keyframes (FFmpeg) for silent videos and on slide images (Apify) for IG carousels using existing CLAUDE_KEY_4_CONTENT.",
+    "task": "Fix photo_matcher.py \u2014 replace _get_token() with refresh pattern",
+    "context": "This fix addresses an issue where the token is not refreshed, which is crucial for maintaining authentication.",
     "auto_actionable": true
   },
   {
-    "task": "Hand off to AIOX agent sequence (architect \u2192 dev \u2192 qa) with full brief",
-    "context": "Full handoff brief written with all files, script paths, spreadsheet IDs, and classification status clarification. Ready to escalate to AIOX-architect.",
+    "task": "Fix per-slide context_image_query in OPC prompt",
+    "context": "Ensures that the per-slide queries are unique, improving the overall data integrity.",
     "auto_actionable": true
   },
   {
-    "task": "Complete 3 parallel research/audit docs (A=research, B=negative keywords, C=lifetime audit) for weekly report + dashboard project",
-    "context": "No reporting back until all 3 docs exist; synthesis and dashboard build depend on these being completed first",
-    "auto_actionable": false
+    "task": "Fix Dados ou Agenda source_handle drop at main.py build_html() call",
+    "context": "This critical fix prevents the dropping of essential data, which affects the output of Dados PNGs.",
+    "auto_actionable": true
   },
   {
-    "task": "Synthesize findings from A+B+C docs and build dashboard",
-    "context": "Follows completion of the 3 parallel audit docs; needed before weekly report and execution",
-    "auto_actionable": false
+    "task": "Fix cover hook number rule in OPC prompt hook field",
+    "context": "Standardizes the hook field in the OPC prompt, improving consistency in data presentation.",
+    "auto_actionable": true
   },
   {
-    "task": "Ask Priscila Q1 (folder) and Q2 (bypass) at top of next chat",
-    "context": "Setup questions before starting A+B+C work in parallel",
+    "task": "Fix news_brazil_shared.html + news_usa_shared.html \u2014 add sticker-slot div on cover slide (Section 3 gate)",
+    "context": "This fix enhances the layout and functionality of the news shared templates, which is important for user experience.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Continue template walkthrough \u2014 opc_progress, opc_illustrated, opc_cutout, then News",
+    "context": "Completing the template walkthrough is essential for ensuring all templates are properly reviewed and optimized.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Update handoff doc with missing technical details",
+    "context": "Essential for ensuring all team members are aligned on the current state and requirements for the project.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Brand color differentiation \u2014 apply --ca CSS variable per niche",
+    "context": "Necessary for maintaining consistent branding across all template HTML files and Python scripts.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Overlay audit \u2014 verify every bg-image slide has .dark-overlay across all templates",
+    "context": "Important for visual consistency and accessibility across all templates.",
+    "auto_actionable": true
+  },
+  {
+    "task": "TRACK B \u2014 Pipeline Audit (6-step)",
+    "context": "Critical for reviewing and ensuring the integrity of the content creation pipeline.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Kids room loft NB2 result",
+    "context": "Photo enhancement was triggered last session via photo_edit.yml. Once result arrives in Gmail, add enhanced image to urbanova-paratehy gallery after 31_quarto_kids.jpg as second kids room photo.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Eco Park gourmet area screenshot",
+    "context": "User mentioned a screenshot from a video of the gourmet area for eco-park. Never sent or found. Ask next session or check Downloads.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Confirm furnished status for both properties",
+    "context": "If Urbanova or Eco Park is confirmed furnished, add Mobiliada back to badge + desc.",
+    "auto_actionable": true
+  },
+  {
+    "task": "BUG-01 \u2014 Stat slide text clips",
+    "context": "carousel_builder.py _build_opc_html stat section \u2014 add CSS clamp",
+    "auto_actionable": true
+  },
+  {
+    "task": "BUG-02 \u2014 SWIPE overlaps list text",
+    "context": "opc_tip_base.css + carousel_builder.py list slide",
+    "auto_actionable": true
+  },
+  {
+    "task": "IMG-02 \u2014 Fix photo catalog 401 error",
+    "context": "carousel_builder.py photo_matcher \u2014 check credential",
+    "auto_actionable": true
+  },
+  {
+    "task": "COPY-04 \u2014 Generate Instagram caption in pipeline",
+    "context": "build_content_brief Haiku output + preview email",
+    "auto_actionable": true
+  },
+  {
+    "task": "REV-03 \u2014 Add hook quality check to reviewer",
+    "context": "carousel_reviewer.py \u2014 scan for digit/$",
+    "auto_actionable": true
+  },
+  {
+    "task": "@HANDLE_PLACEHOLDER never resolved",
+    "context": "Every carousel ships with this visible, which affects the presentation and user experience.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Address critical issues blocking postagem for FORMAT-019",
+    "context": "These issues are preventing the posting of the FORMAT-019 carousels, which is crucial for the project's timeline.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Verify capture run 25179206737 completed",
+    "context": "To ensure the Instagram reel capture process was successful and identify any potential issues.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Wire video-research.yml to dual pipeline (Clip Collections tab + resources/clips/)",
+    "context": "This is necessary to automate the clip collection process and improve workflow efficiency.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Implement static post support in capture pipeline",
+    "context": "Currently, the capture pipeline does not support static posts, which limits the ability to capture and analyze important content.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Include fact check note in runs 1 and 2",
+    "context": "Fact check notes are important for verifying the content captured and ensuring accuracy in reporting.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Clip sticker pipeline audit",
+    "context": "Check keyword extraction, clip search/download, scene detection/trim, Kling fallback, Remotion sticker rendering, end-to-end verify.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Illustrated template reference",
+    "context": "Priscila mentioned an Instagram drawing/AI-illustration style reference. Never re-shared.",
     "auto_actionable": true
   }
 ]
