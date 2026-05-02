@@ -635,8 +635,12 @@ function wireImages(iframe, tid) {
       url = 'https://picsum.photos/seed/' + seed + '/1080/1350';
       bgIdx++;
     }
-    el.className = 'bg-photo';
-    el.style.cssText = 'background-image:url("' + url + '");background-size:cover;background-position:center 15%';
+    // Preserve existing classes (e.g. 'photo' for duotone) — only swap the placeholder marker
+    el.classList.remove('bg-placeholder');
+    el.classList.add('bg-photo');
+    el.style.backgroundImage = 'url("' + url + '")';
+    if (!el.style.backgroundSize) el.style.backgroundSize = 'cover';
+    if (!el.style.backgroundPosition) el.style.backgroundPosition = 'center 15%';
   });
 
   // 2. bg-photo already in HTML but pointing to missing local resources/ → replace URL
