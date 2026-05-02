@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Brasil — Cover · Base 1</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   BRAZIL NEWS — COVER · BASE 1
+   The approved brand style for all Brazil news covers.
+   Based on FORMAT-002 (Quem Decidiu Isso?) design language.
+
+   CSS variables — pipeline recolors via:
+     --ca   accent (canário gold #C9A84C) — corners, sticker frame, accents
+     --ob   background (near-black)
+     --pa   primary text (parchment)
+
+   Pipeline injects:
+     .bg-photo or .bg-placeholder → background image
+     .sticker-slot .sticker-placeholder → person portrait (310×410px)
+   Everything else is CSS.
+═══════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ob: #0A0A0A;
+  --pa: #F0EBE3;
+  --ca: #C9A84C;   /* canário gold — Brazil brand accent */
+  --gr: rgba(240,235,227,0.45);
+  --rule: rgba(240,235,227,0.12);
+  --W: 1080px;
+  --H: 1350px;
+  --P: 108px;
+}
+body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}
+.slide{
+  width:var(--W);height:var(--H);
+  background:var(--ob);color:var(--pa);
+  padding:var(--P);
+  position:relative;overflow:hidden;
+  flex-shrink:0;display:flex;flex-direction:column;
+}
+
+/* ── Corner brackets ── */
+.corner{position:absolute;width:28px;height:28px;z-index:10}
+.corner.tl{top:40px;left:40px;border-top:2px solid rgba(201,168,76,.6);border-left:2px solid rgba(201,168,76,.6)}
+.corner.tr{top:40px;right:40px;border-top:2px solid rgba(201,168,76,.6);border-right:2px solid rgba(201,168,76,.6)}
+.corner.bl{bottom:40px;left:40px;border-bottom:2px solid rgba(201,168,76,.6);border-left:2px solid rgba(201,168,76,.6)}
+.corner.br{bottom:40px;right:40px;border-bottom:2px solid rgba(201,168,76,.6);border-right:2px solid rgba(201,168,76,.6)}
+
+/* ── Background photo ── */
+.bg-photo{position:absolute;inset:0;background-size:cover;background-position:center 20%;z-index:1;filter:grayscale(1) contrast(1.1) brightness(.55)}
+.bg-photo::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,10,.18) 0%,rgba(10,10,10,.78) 100%)}
+.bg-placeholder{position:absolute;inset:0;z-index:1;background:linear-gradient(135deg,#1c1c1c 0%,#2a2a2a 40%,#141414 100%)}
+.bg-placeholder::after{content:'[ BACKGROUND PHOTO ]';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'JetBrains Mono',monospace;font-size:18px;color:rgba(255,255,255,0.12);letter-spacing:.12em}
+
+/* ── Halftone + dark overlay ── */
+.halftone{position:absolute;inset:0;z-index:2;pointer-events:none;background-image:radial-gradient(circle,rgba(10,10,10,.55) 1px,transparent 1px);background-size:6px 6px}
+.dark-overlay{position:absolute;inset:0;z-index:2;pointer-events:none;background:rgba(10,10,10,.52)}
+
+/* All text content above layers */
+.slide > *:not(.bg-photo):not(.bg-placeholder):not(.halftone):not(.dark-overlay):not(.corner):not(.swipe):not(.footer-handle):not(.sticker-slot):not(.person-pill):not(.stamp-badge){position:relative;z-index:3}
+
+/* ── Sticker slot — portrait card top-right ── */
+.sticker-slot{
+  position:absolute;
+  right:7%;top:14%;
+  width:310px;height:410px;
+  z-index:4;
+  border:3px solid var(--ca);
+  border-radius:2px;overflow:hidden;
+  box-shadow:0 8px 40px rgba(0,0,0,.7);
+}
+.sticker-slot img{
+  width:100%;height:100%;
+  object-fit:cover;object-position:center top;
+  filter:grayscale(1) contrast(1.15) brightness(.95);
+}
+.sticker-placeholder{
+  width:100%;height:100%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(201,168,76,.04);
+  flex-direction:column;gap:12px;
+}
+.sticker-placeholder .ini{
+  font-family:'Playfair Display',serif;
+  font-size:96px;font-weight:900;
+  color:var(--ca);line-height:1;
+}
+.sticker-placeholder .iname{
+  font-family:'JetBrains Mono',monospace;
+  font-size:14px;color:var(--gr);
+  text-transform:uppercase;letter-spacing:.1em;
+  text-align:center;padding:0 12px;
+}
+
+/* ── Stamp badge ── */
+.stamp-badge{
+  position:absolute;
+  right:calc(7% - 4px);top:calc(14% - 22px);
+  z-index:9;
+  background:var(--ca);color:var(--ob);
+  font-family:'JetBrains Mono',monospace;
+  font-size:18px;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;
+  padding:6px 14px;
+  border:2px solid var(--ob);
+  transform:rotate(-1.5deg);
+}
+
+/* ── Typography ── */
+.tag{
+  font-family:'JetBrains Mono',monospace;
+  font-size:22px;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;
+  color:var(--gr);
+  margin-bottom:32px;
+}
+.cover-hl{
+  font-family:'Playfair Display',serif;
+  font-size:104px;font-weight:900;
+  line-height:.93;letter-spacing:-.01em;
+  margin-bottom:24px;
+  max-width:52%;
+}
+.cover-hl em{font-style:italic;color:var(--ca)}
+.cover-hook{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:32px;font-weight:400;
+  color:var(--gr);line-height:1.4;
+  margin-bottom:32px;
+  max-width:52%;
+}
+
+/* ── Bottom elements ── */
+.person-pill{
+  position:absolute;
+  bottom:var(--P);left:var(--P);
+  z-index:10;
+  border:1px solid var(--ca);
+  padding:7px 16px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:19px;letter-spacing:.07em;
+  text-transform:uppercase;
+  color:var(--pa);
+  background:rgba(10,10,10,.55);
+}
+.person-pill em{color:var(--gr);font-style:normal}
+.swipe{
+  font-family:'JetBrains Mono',monospace;
+  font-size:22px;color:var(--gr);
+  position:absolute;bottom:var(--P);right:var(--P);
+  z-index:10;letter-spacing:.08em;
+}
+</style>
+</head>
+<body>
+
+<div class="slide slide-cover">
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
+
+  <!-- Background: pipeline injects photo here via .bg-photo -->
+  <div class="bg-placeholder"></div>
+  <div class="halftone"></div>
+  <div class="dark-overlay"></div>
+
+  <!-- Person portrait — pipeline injects via .sticker-slot -->
+  <div class="sticker-slot">
+    <div class="sticker-placeholder">
+      <div class="ini">??</div>
+      <div class="iname">Nome do Personagem</div>
+    </div>
+  </div>
+  <div class="stamp-badge">URGENTE · 2025</div>
+
+  <!-- Cover text — constrained to left 52% by CSS (sticker is right) -->
+  <div class="tag">InBr / #001</div>
+  <div class="cover-hl">Quem <em>decidiu</em><br>isso?</div>
+  <div class="cover-hook">O que não te contaram sobre esta decisão política.</div>
+
+  <!-- Bottom bar -->
+  <div class="person-pill">NOME DO POLÍTICO · <em>PARTIDO (ESPECTRO)</em></div>
+  <div class="swipe">SEGUE O FIO →</div>
+</div>
+
+</body>
+</html>

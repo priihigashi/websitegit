@@ -137,22 +137,23 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
 </div>
 <div class="group-cards">
 
-<div class="tpl-card" id="card_news_brazil_shared">
+<!-- BRAZIL COVER BASE 1 — approved base for all Brazil news covers -->
+<div class="tpl-card" id="card_news_brazil_cover_base">
   <div class="tpl-meta">
-    <div class="tpl-name">Brazil — Shared Series</div>
-    <div class="tpl-format">FORMAT-002 variant</div>
-    <div class="tpl-category">Brazil News · multi-series base</div>
-    <div class="tpl-when">Shared template structure for Brazil news series. Gold palette, dark background. Supports Quem Decidiu, Verificamos, A Conta que Ninguém Pagou, Arquivo Aberto series.</div>
+    <div class="tpl-name">Brazil — Cover · Base 1</div>
+    <div class="tpl-format">FORMAT-COVER-BR-BASE</div>
+    <div class="tpl-category">Brazil News · base cover · all series</div>
+    <div class="tpl-when">Approved base cover for ALL Brazil news stories. Dark background + canário gold (#C9A84C) brand. Corner brackets, Playfair Display serif headline with italic gold accent word, portrait sticker card top-right (310×410px), person attribution pill bottom-left. Pipeline: inject background via .bg-photo, portrait via .sticker-slot. All series use this base — swap headline + person.</div>
   </div>
   <div class="tpl-viewer-wrap">
     <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('news_brazil_shared')">&#8592;</button>
+      <button class="arrow-btn" onclick="prevSlide('news_brazil_cover_base')">&#8592;</button>
       <div class="slide-frame-outer">
-        <iframe id="viewer_news_brazil_shared" src="news_brazil_shared.html" scrolling="no" onload="initViewer('news_brazil_shared')"></iframe>
+        <iframe id="viewer_news_brazil_cover_base" src="news_brazil_cover_base.html" scrolling="no" onload="initViewer('news_brazil_cover_base')"></iframe>
       </div>
-      <button class="arrow-btn" onclick="nextSlide('news_brazil_shared')">&#8594;</button>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil_cover_base')">&#8594;</button>
     </div>
-    <div class="slide-counter" id="counter_news_brazil_shared">slide 1 / —</div>
+    <div class="slide-counter" id="counter_news_brazil_cover_base">slide 1 / 1</div>
   </div>
 </div>
 
@@ -215,22 +216,23 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
 </div>
 <div class="group-cards">
 
-<div class="tpl-card" id="card_news_usa_shared">
+<!-- USA COVER BASE 1 — approved base for all USA news covers -->
+<div class="tpl-card" id="card_news_usa_cover_base">
   <div class="tpl-meta">
-    <div class="tpl-name">USA — Shared Series</div>
-    <div class="tpl-format">FORMAT-001 variant</div>
-    <div class="tpl-category">USA News · multi-series base</div>
-    <div class="tpl-when">Shared template structure for USA news series. Red/navy palette, dark background. Supports History They Left Out, The Chain, Ground News series.</div>
+    <div class="tpl-name">USA — Cover · Base 1</div>
+    <div class="tpl-format">FORMAT-COVER-US-BASE</div>
+    <div class="tpl-category">USA News · base cover · all series</div>
+    <div class="tpl-when">Approved base cover for ALL USA news stories. Same design language as Brazil Base 1. Signal red (#CC1F2D) replaces canário gold everywhere — corners, sticker frame, accent word, person pill border. Dark background + parchment text. Pipeline: inject background via .bg-photo, portrait via .sticker-slot. All USA series use this base.</div>
   </div>
   <div class="tpl-viewer-wrap">
     <div class="viewer-row">
-      <button class="arrow-btn" onclick="prevSlide('news_usa_shared')">&#8592;</button>
+      <button class="arrow-btn" onclick="prevSlide('news_usa_cover_base')">&#8592;</button>
       <div class="slide-frame-outer">
-        <iframe id="viewer_news_usa_shared" src="news_usa_shared.html" scrolling="no" onload="initViewer('news_usa_shared')"></iframe>
+        <iframe id="viewer_news_usa_cover_base" src="news_usa_cover_base.html" scrolling="no" onload="initViewer('news_usa_cover_base')"></iframe>
       </div>
-      <button class="arrow-btn" onclick="nextSlide('news_usa_shared')">&#8594;</button>
+      <button class="arrow-btn" onclick="nextSlide('news_usa_cover_base')">&#8594;</button>
     </div>
-    <div class="slide-counter" id="counter_news_usa_shared">slide 1 / —</div>
+    <div class="slide-counter" id="counter_news_usa_cover_base">slide 1 / 1</div>
   </div>
 </div>
 
@@ -328,6 +330,14 @@ const IMG = {
   news_usa_shared: {
     bg:      ['capitol_bg','whitehouse_bg','dc_bg'],
     bio:     ['us1','us2','us3','us4']
+  },
+  news_brazil_cover_base: {
+    bg:      ['congresso_nacional','stf_brazil','senado_exterior'],
+    sticker: 'politician_br_main'
+  },
+  news_usa_cover_base: {
+    bg:      ['capitol_usa','whitehouse_night','senate_chamber'],
+    sticker: 'politician_usa_main'
   },
   news_brazil_standalone: {
     sticker: 'portrait_person_tall'
