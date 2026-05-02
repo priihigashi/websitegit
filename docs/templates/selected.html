@@ -52,6 +52,13 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
 
 /* ── Empty state ── */
 .empty-notice{font-family:'JetBrains Mono',monospace;font-size:12px;color:rgba(255,255,255,0.2);padding:0 40px 48px;letter-spacing:.06em;line-height:1.8}
+
+/* ── Palette display ── */
+.palette-row{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.palette-swatch{display:flex;flex-direction:column;align-items:center;gap:5px}
+.swatch-chip{width:38px;height:38px;border-radius:5px;border:1px solid rgba(255,255,255,0.12);box-shadow:0 2px 8px rgba(0,0,0,0.4)}
+.swatch-hex{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.04em;color:rgba(255,255,255,0.35);text-transform:uppercase}
+.swatch-name{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.04em;color:rgba(255,255,255,0.22);text-transform:uppercase}
 </style>
 </head>
 <body>
@@ -74,6 +81,13 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
      ═══════════════════════════════════════════ -->
 <div class="group-header" style="border-left-color:#CBCC10">
   <span style="color:#CBCC10">OPC — Oak Park Construction</span>
+  <div class="palette-row">
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#0A0A0A"></div><div class="swatch-hex">#0A0A0A</div><div class="swatch-name">Obsidian</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#CBCC10"></div><div class="swatch-hex">#CBCC10</div><div class="swatch-name">Lime</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#F0EBE3"></div><div class="swatch-hex">#F0EBE3</div><div class="swatch-name">Cream</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#2A2A2A"></div><div class="swatch-hex">#2A2A2A</div><div class="swatch-name">Surface</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#808080"></div><div class="swatch-hex">#808080</div><div class="swatch-name">Muted</div></div>
+  </div>
 </div>
 <div class="group-cards">
 
@@ -108,17 +122,133 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
 
 
 <!-- ═══════════════════════════════════════════
-     NEWS — Brazil + USA
-     (add chosen news templates below)
+     NEWS — BRAZIL
      ═══════════════════════════════════════════ -->
-<!--
-<div class="group-header" style="border-left-color:#F4C430">
-  <span style="color:#F4C430">NEWS — Brazil + USA</span>
+<div class="group-header" style="border-left-color:#C9A84C">
+  <span style="color:#C9A84C">News — Brazil</span>
+  <div class="palette-row">
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#0D0D0D"></div><div class="swatch-hex">#0D0D0D</div><div class="swatch-name">Ink</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#C9A84C"></div><div class="swatch-hex">#C9A84C</div><div class="swatch-name">Gold</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#2D6A4F"></div><div class="swatch-hex">#2D6A4F</div><div class="swatch-name">Deep Green</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#C62828"></div><div class="swatch-hex">#C62828</div><div class="swatch-name">Danger Red</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#F5F0E8"></div><div class="swatch-hex">#F5F0E8</div><div class="swatch-name">Cream</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#1C3A28"></div><div class="swatch-hex">#1C3A28</div><div class="swatch-name">Forest</div></div>
+  </div>
 </div>
 <div class="group-cards">
-  ADD CHOSEN NEWS TEMPLATES HERE
+
+<div class="tpl-card" id="card_news_brazil_shared">
+  <div class="tpl-meta">
+    <div class="tpl-name">Brazil — Shared Series</div>
+    <div class="tpl-format">FORMAT-002 variant</div>
+    <div class="tpl-category">Brazil News · multi-series base</div>
+    <div class="tpl-when">Shared template structure for Brazil news series. Gold palette, dark background. Supports Quem Decidiu, Verificamos, A Conta que Ninguém Pagou, Arquivo Aberto series.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_brazil_shared')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_brazil_shared" src="news_brazil_shared.html" scrolling="no" onload="initViewer('news_brazil_shared')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil_shared')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_brazil_shared">slide 1 / —</div>
+  </div>
 </div>
--->
+
+</div><!-- /group-cards News Brazil -->
+
+
+<!-- ═══════════════════════════════════════════
+     NEWS — USA
+     ═══════════════════════════════════════════ -->
+<div class="group-header" style="border-left-color:#CC1F2D">
+  <span style="color:#CC1F2D">News — USA</span>
+  <div class="palette-row">
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#0D0D0D"></div><div class="swatch-hex">#0D0D0D</div><div class="swatch-name">Ink</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#CC1F2D"></div><div class="swatch-hex">#CC1F2D</div><div class="swatch-name">Signal Red</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#14213D"></div><div class="swatch-hex">#14213D</div><div class="swatch-name">Deep Navy</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#E8DECE"></div><div class="swatch-hex">#E8DECE</div><div class="swatch-name">Parchment</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#E63946"></div><div class="swatch-hex">#E63946</div><div class="swatch-name">Hot Red</div></div>
+    <div class="palette-swatch"><div class="swatch-chip" style="background:#2C3E6B"></div><div class="swatch-hex">#2C3E6B</div><div class="swatch-name">Slate</div></div>
+  </div>
+</div>
+<div class="group-cards">
+
+<div class="tpl-card" id="card_news_usa_shared">
+  <div class="tpl-meta">
+    <div class="tpl-name">USA — Shared Series</div>
+    <div class="tpl-format">FORMAT-001 variant</div>
+    <div class="tpl-category">USA News · multi-series base</div>
+    <div class="tpl-when">Shared template structure for USA news series. Red/navy palette, dark background. Supports History They Left Out, The Chain, Ground News series.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_usa_shared')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_usa_shared" src="news_usa_shared.html" scrolling="no" onload="initViewer('news_usa_shared')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_usa_shared')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_usa_shared">slide 1 / —</div>
+  </div>
+</div>
+
+</div><!-- /group-cards News USA -->
+
+
+<!-- ═══════════════════════════════════════════
+     NEWS — STANDALONE (pick-and-choose, any topic)
+     ═══════════════════════════════════════════ -->
+<div class="group-header" style="border-left-color:#888">
+  <span style="color:#aaa">News — Standalone</span>
+  <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(255,255,255,0.28);margin-top:6px;letter-spacing:.08em">
+    Not tied to any series — drop any topic in and go. Full palette + creative overlays.
+  </div>
+</div>
+<div class="group-cards">
+
+<!-- BRAZIL STANDALONE -->
+<div class="tpl-card" id="card_news_brazil_standalone">
+  <div class="tpl-meta">
+    <div class="tpl-name">Brazil — Standalone</div>
+    <div class="tpl-format">FORMAT-STANDALONE-BR</div>
+    <div class="tpl-category">Brazil News · any topic · editorial style</div>
+    <div class="tpl-when">InBr-inspired editorial design. 6 slides: cover → o que aconteceu → citação → personagens (4-card grid) → dados/números → fontes. Inline red/gold highlights, large decorative quote marks, ticket-notch bio-cards, geometric overlays. PT-BR.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_brazil_standalone')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_brazil_standalone" src="news_brazil_standalone.html" scrolling="no" onload="initViewer('news_brazil_standalone')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil_standalone')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_brazil_standalone">slide 1 / 6</div>
+  </div>
+</div>
+
+<!-- USA STANDALONE -->
+<div class="tpl-card" id="card_news_usa_standalone">
+  <div class="tpl-meta">
+    <div class="tpl-name">USA — Standalone</div>
+    <div class="tpl-format">FORMAT-STANDALONE-US</div>
+    <div class="tpl-category">USA News · any topic · editorial style</div>
+    <div class="tpl-when">InBr-adapted for EN. 6 slides: cover → what happened → key quote → the players (4-card grid) → by the numbers → sources. Signal Red + Deep Navy palette, inline red/navy highlights, large decorative quote marks, geometric overlays. EN.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_usa_standalone')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_usa_standalone" src="news_usa_standalone.html" scrolling="no" onload="initViewer('news_usa_standalone')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_usa_standalone')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_usa_standalone">slide 1 / 6</div>
+  </div>
+</div>
+
+</div><!-- /group-cards News Standalone -->
 
 
 <script>
@@ -172,6 +302,18 @@ const IMG = {
   news_usa_shared: {
     bg:      ['capitol_bg','whitehouse_bg','dc_bg'],
     bio:     ['us1','us2','us3','us4']
+  },
+  news_brazil_standalone: {
+    bg:      ['congresso_nacional','stf_brazil','planalto_night'],
+    sticker: 'politician_br_main',
+    bio:     ['br_person1','br_person2','br_person3','br_person4'],
+    ctx:     ['brazil_event','document_scan','institution_br','crowd_protest']
+  },
+  news_usa_standalone: {
+    bg:      ['capitol_usa','whitehouse_night','senate_chamber'],
+    sticker: 'politician_usa_main',
+    bio:     ['usa_person1','usa_person2','usa_person3','usa_person4'],
+    ctx:     ['usa_event','hearing_room','press_conference','document_usa']
   }
 };
 

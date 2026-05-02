@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Brasil — Editorial Standalone</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:ital,wght@0,300;0,400;0,700;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   BRAZIL STANDALONE — Editorial / Investigation
+   Palette: Gold + Deep Green + Danger Red
+   Inspired by: Intercept Brasil editorial style
+═══════════════════════════════════════════════ */
+:root {
+  --bg:    #0D0D0D;
+  --bg2:   #111111;
+  --bg3:   #1C1C1C;
+
+  /* Primary brand — Brazil */
+  --gold:       #C9A84C;
+  --gold-d:     rgba(201,168,76,0.55);
+  --gold-g:     rgba(201,168,76,0.10);
+  --gold-ghost: rgba(201,168,76,0.05);
+
+  /* Secondary — Brazil flag green */
+  --green:      #2D6A4F;
+  --green-d:    rgba(45,106,79,0.70);
+  --green-g:    rgba(45,106,79,0.08);
+
+  /* Attention / danger */
+  --red:        #C62828;
+  --red-hl:     rgba(198,40,40,0.85); /* inline text highlight */
+  --red-g:      rgba(198,40,40,0.07);
+
+  /* Text */
+  --cream:  #F5F0E8;
+  --muted:  rgba(245,240,232,0.55);
+  --ghost:  rgba(245,240,232,0.14);
+
+  /* Geometric overlay colors — more = more creative options */
+  --geo1:  rgba(201,168,76,0.06);
+  --geo2:  rgba(45,106,79,0.05);
+  --geo3:  rgba(198,40,40,0.04);
+  --geo4:  rgba(201,168,76,0.03);
+
+  --W:  1080px;
+  --H:  1350px;
+  --P:  96px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background:#111;
+  display:flex;
+  flex-wrap:wrap;
+  gap:24px;
+  padding:24px;
+  font-family:'Roboto Condensed', sans-serif;
+}
+
+/* ═══ BASE SLIDE ═══ */
+.slide {
+  width:var(--W);
+  height:var(--H);
+  background:var(--bg);
+  color:var(--cream);
+  padding:var(--P);
+  position:relative;
+  overflow:hidden;
+  flex-shrink:0;
+  display:flex;
+  flex-direction:column;
+}
+
+/* ═══ GEOMETRIC TEXTURE LAYER ═══ */
+.geo-layer {
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  z-index:0;
+  overflow:hidden;
+}
+.geo-layer::before {
+  content:'';
+  position:absolute;
+  top:-220px; right:-220px;
+  width:560px; height:560px;
+  background:var(--geo1);
+  transform:rotate(45deg);
+}
+.geo-layer::after {
+  content:'';
+  position:absolute;
+  bottom:-160px; left:-120px;
+  width:380px; height:380px;
+  background:var(--geo2);
+  transform:rotate(30deg);
+}
+
+/* ═══ BACKGROUND PHOTO ═══ */
+.bg-placeholder {
+  position:absolute;
+  inset:0;
+  background-size:cover;
+  background-position:center 20%;
+  z-index:1;
+  filter:grayscale(1) contrast(1.1) brightness(0.40);
+}
+.bg-placeholder::after {
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(
+    180deg,
+    rgba(13,13,13,0.20) 0%,
+    rgba(13,13,13,0.65) 45%,
+    rgba(13,13,13,0.95) 100%
+  );
+}
+
+/* Content above bg */
+.slide > *:not(.bg-placeholder):not(.geo-layer) { position:relative; z-index:3; }
+
+/* ═══ CORNER BRACKETS ═══ */
+.corners span {
+  position:absolute;
+  width:50px; height:50px;
+  border-color:rgba(201,168,76,0.30);
+  border-style:solid;
+  display:block;
+}
+.corners span:nth-child(1) { top:50px; left:50px; border-width:2px 0 0 2px; }
+.corners span:nth-child(2) { top:50px; right:50px; border-width:2px 2px 0 0; }
+.corners span:nth-child(3) { bottom:50px; left:50px; border-width:0 0 2px 2px; }
+.corners span:nth-child(4) { bottom:50px; right:50px; border-width:0 2px 2px 0; }
+
+/* ═══ FOOTER ELEMENTS ═══ */
+.footer-handle {
+  position:absolute;
+  bottom:var(--P);
+  left:var(--P);
+  font-family:'JetBrains Mono', monospace;
+  font-size:20px;
+  color:var(--muted);
+  letter-spacing:0.06em;
+  z-index:10;
+}
+.swipe {
+  position:absolute;
+  bottom:var(--P);
+  right:var(--P);
+  font-family:'JetBrains Mono', monospace;
+  font-size:20px;
+  color:var(--gold-d);
+  letter-spacing:0.10em;
+  z-index:10;
+}
+
+/* ═══ RIGHT ACCENT STRIPE ═══ */
+.accent-stripe {
+  position:absolute;
+  top:0; right:0;
+  width:6px; height:100%;
+  background:linear-gradient(180deg, var(--gold) 0%, var(--green) 100%);
+  z-index:6;
+}
+
+/* ═══════════════════════════════════
+   SLIDE 1 — COVER
+═══════════════════════════════════ */
+.slide-cover { justify-content:flex-end; padding-bottom:148px; }
+
+/* Main person photo — pipeline injects face here */
+.sticker-slot {
+  position:absolute;
+  right:var(--P);
+  top:13%;
+  width:320px; height:430px;
+  z-index:4;
+  overflow:hidden;
+  border:2px solid rgba(201,168,76,0.35);
+}
+.sticker-placeholder {
+  width:100%; height:100%;
+  background:var(--bg3);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:'JetBrains Mono', monospace;
+  font-size:11px;
+  color:var(--gold-d);
+  letter-spacing:0.22em;
+}
+.sticker-slot img, .sticker-slot video {
+  width:100%; height:100%;
+  object-fit:cover;
+  object-position:top;
+  filter:grayscale(0.25) contrast(1.05);
+}
+
+/* Gold underline slash before headline */
+.cover-slash {
+  width:64px; height:4px;
+  background:var(--gold);
+  margin-bottom:20px;
+}
+
+.cover-label {
+  font-family:'JetBrains Mono', monospace;
+  font-size:13px;
+  letter-spacing:0.32em;
+  color:var(--gold);
+  text-transform:uppercase;
+  margin-bottom:16px;
+}
+
+.cover-headline {
+  font-family:'Anton', sans-serif;
+  font-size:88px;
+  line-height:0.93;
+  text-transform:uppercase;
+  letter-spacing:-0.01em;
+  max-width:58%;
+  margin-bottom:20px;
+}
+.cover-headline em {
+  color:var(--gold);
+  font-style:normal;
+  display:block;
+}
+
+.cover-sub {
+  font-family:'Roboto Condensed', sans-serif;
+  font-size:28px;
+  color:var(--muted);
+  font-weight:300;
+  max-width:54%;
+  line-height:1.35;
+}
+
+/* ═══════════════════════════════════
+   SLIDE 2 — CONTEXT / O QUE ACONTECEU
+═══════════════════════════════════ */
+.slide-context { background:var(--bg2); }
+
+.sec-label {
+  font-family:'JetBrains Mono', monospace;
+  font-size:12px;
+  letter-spacing:0.40em;
+  color:var(--gold);
+  text-transform:uppercase;
+  margin-bottom:20px;
+  display:block;
+}
+
+.ctx-heading {
+  font-family:'Anton', sans-serif;
+  font-size:70px;
+  line-height:0.94;
+  text-transform:uppercase;
+  color:var(--cream);
+  margin-bottom:44px;
+}
+.ctx-heading em { color:var(--gold); font-style:normal; }
+
+/* Inline text highlight — like InBr red blocks */
+.hl     { background:var(--red-hl); color:#fff; padding:1px 7px; line-height:1.6; }
+.hl-g   { background:var(--gold-g); color:var(--gold); padding:1px 7px; line-height:1.6; }
+.hl-gr  { background:var(--green-g); color:#6ECB9A; padding:1px 7px; line-height:1.6; }
+
+.ctx-body {
+  font-family:'Roboto Condensed', sans-serif;
+  font-size:32px;
+  line-height:1.50;
+  color:var(--cream);
+  font-weight:400;
+  max-width:780px;
+}
+
+/* Context image — pipeline injects institution/event photo here */
+.context-img-slot {
+  position:absolute;
+  right:var(--P);
+  bottom:140px;
+  width:280px; height:360px;
+  overflow:hidden;
+  border:2px solid rgba(201,168,76,0.20);
+}
+.ctx-fallback {
+  width:100%; height:100%;
+  background:var(--geo1);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:'JetBrains Mono', monospace;
+  font-size:10px;
+  color:var(--gold-d);
+  letter-spacing:0.22em;
+}
+.context-img-slot img {
+  width:100%; height:100%;
+  object-fit:cover;
+  filter:grayscale(0.5) contrast(1.05);
+}
+
+/* ═══════════════════════════════════
+   SLIDE 3 — QUOTE / CITAÇÃO
+═══════════════════════════════════ */
+.slide-quote { background:#080808; justify-content:center; }
+
+/* Massive decorative quote marks — like InBr editorial style */
+.qmark-open {
+  font-family:'Anton', sans-serif;
+  font-size:260px;
+  line-height:0.55;
+  color:var(--gold);
+  opacity:0.14;
+  position:absolute;
+  top:44px; left:52px;
+  z-index:0;
+  letter-spacing:-0.05em;
+  pointer-events:none;
+}
+.qmark-close {
+  font-family:'Anton', sans-serif;
+  font-size:260px;
+  line-height:0.55;
+  color:var(--gold);
+  opacity:0.14;
+  position:absolute;
+  bottom:100px; right:52px;
+  z-index:0;
+  letter-spacing:-0.05em;
+  pointer-events:none;
+}
+
+.quote-text {
+  font-family:'Roboto Condensed', sans-serif;
+  font-size:44px;
+  line-height:1.40;
+  color:var(--cream);
+  font-weight:400;
+  position:relative;
+  z-index:3;
+  max-width:880px;
+  margin:0 auto;
+  text-align:center;
+}
+.quote-text strong { color:var(--gold); font-weight:700; }
+
+/* Attribution box — like orange/gold box in InBr */
+.quote-attr {
+  position:absolute;
+  bottom:148px;
+  left:0; right:0;
+  text-align:center;
+  z-index:4;
+}
+.quote-name {
+  display:inline-block;
+  font-family:'JetBrains Mono', monospace;
+  font-size:13px;
+  letter-spacing:0.28em;
+  background:var(--gold);
+  color:#000;
+  padding:8px 22px;
+  font-weight:700;
+  text-transform:uppercase;
+}
+.quote-role {
+  font-family:'JetBrains Mono', monospace;
+  font-size:12px;
+  letter-spacing:0.18em;
+  color:var(--muted);
+  text-transform:uppercase;
+  margin-top:12px;
+}
+
+/* ═══════════════════════════════════
+   SLIDE 4 — PERSONAGENS / Characters
+═══════════════════════════════════ */
+.slide-chars { background:var(--bg); }
+
+.chars-heading {
+  font-family:'Anton', sans-serif;
+  font-size:54px;
+  line-height:0.95;
+  text-transform:uppercase;
+  color:var(--gold);
+  margin-bottom:56px;
+  letter-spacing:-0.01em;
+}
+
+/* 2×2 bio-card grid */
+.bio-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:32px;
+  position:relative;
+}
+
+.bio-card {
+  background:var(--bg3);
+  padding:24px;
+  display:flex;
+  flex-direction:row;
+  gap:20px;
+  border-left:3px solid var(--gold);
+  position:relative;
+}
+
+/* Ticket-notch on left edge — evokes the torn ticket InBr uses */
+.bio-card::before {
+  content:'';
+  position:absolute;
+  top:50%; left:-7px;
+  transform:translateY(-50%);
+  width:12px; height:12px;
+  border-radius:50%;
+  background:var(--bg);
+}
+
+.bio-photo {
+  width:110px; height:138px;
+  flex-shrink:0;
+  overflow:hidden;
+  background:var(--gold-ghost);
+}
+.bio-photo img {
+  width:100%; height:100%;
+  object-fit:cover;
+  object-position:top;
+  filter:grayscale(1) contrast(1.1);
+}
+.bio-initials {
+  width:110px; height:138px;
+  flex-shrink:0;
+  background:var(--gold-g);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:'Anton', sans-serif;
+  font-size:44px;
+  color:var(--gold);
+}
+
+.bio-info { display:flex; flex-direction:column; justify-content:center; gap:6px; }
+.bio-name {
+  font-family:'Anton', sans-serif;
+  font-size:26px;
+  color:var(--gold);
+  text-transform:uppercase;
+  line-height:1.0;
+}
+.bio-role {
+  font-family:'Roboto Condensed', sans-serif;
+  font-size:17px;
+  color:var(--muted);
+  font-weight:300;
+  line-height:1.3;
+}
+.bio-fact {
+  font-family:'Roboto Condensed', sans-serif;
+  font-size:19px;
+  color:var(--cream);
+  font-weight:400;
+  line-height:1.3;
+  margin-top:4px;
+}
+
+/* Network connection line between card pairs — like Intercept dotted lines */
+.net-line {
+  position:absolute;
+  top:50%;
+  left:calc(50% - 16px);
+  width:32px; height:2px;
+  background:linear-gradient(90deg, var(--gold-d), var(--green-d));
+  transform:translateY(-50%);
+  z-index:2;
+}
+.net-line::after {
+  content:'';
+  position:absolute;
+  width:8px; height:8px;
+  border-radius:50%;
+  background:var(--gold);
+  top:-3px; left:50%;
+  transform:translateX(-50%);
+}
+
+/* ═══════════════════════════════════
+   SLIDE 5 — DATA / NÚMEROS
+═══════════════════════════════════ */
+.slide-data { background:var(--bg2); justify-content:center; }
+
+/* Geometric diamond accent */
+.data-diamond {
+  position:absolute;
+  top:72px; right:72px;
+  width:180px; height:180px;
+  border:2px solid var(--gold-g);
+  transform:rotate(45deg);
+  opacity:0.5;
+}
+.data-diamond::before {
+  content:'';
+  position:absolute;
+  inset:20px;
+  border:1px solid var(--gold-ghost);
+}
+
+.data-label {
+  font-family:'JetBrains Mono', monospace;
+  font-size:13px;
+  letter-spacing:0.38em;
+  color:var(--gold);
+  text-transform:uppercase;
+  margin-bottom:28px;
+  display:block;
+}
+
+.data-number {
+  font-family:'Anton', sans-serif;
+  font-size:190px;
+  line-height:0.85;
+  color:var(--cream);
+  letter-spacing:-0.03em;
+  margin-bottom:16px;
+}
+.data-number span { color:var(--gold); }
+
+.data-unit {
+  font-family:'Roboto Condensed', sans-serif;
+  font-size:34px;
+  color:var(--gold-d);
+  font-weight:300;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  margin-bottom:44px;
+}
+
+.data-rule {
+  width:72px; height:2px;
+  background:var(--gold);
+  margin-bottom:32px;
+}
+
+.data-ctx {
+  font-family:'Roboto Condensed', sans-serif;
+  font-size:31px;
+  color:var(--cream);
+  font-weight:300;
+  line-height:1.42;
+  max-width:740px;
+}
+
+/* ═══════════════════════════════════
+   SLIDE 6 — FONTES / Sources
+═══════════════════════════════════ */
+.slide-sources { background:var(--bg); }
+
+.sources-h {
+  font-family:'Anton', sans-serif;
+  font-size:52px;
+  text-transform:uppercase;
+  color:var(--cream);
+  margin-bottom:14px;
+}
+.sources-rule {
+  width:56px; height:3px;
+  background:var(--gold);
+  margin-bottom:48px;
+}
+
+.source-list {
+  list-style:none;
+  display:flex;
+  flex-direction:column;
+  gap:22px;
+}
+.source-list li {
+  font-family:'Roboto Condensed', sans-serif;
+  font-size:24px;
+  color:var(--muted);
+  font-weight:300;
+  padding-left:20px;
+  border-left:2px solid var(--gold-g);
+  line-height:1.35;
+}
+.source-list li strong {
+  color:var(--cream);
+  font-weight:700;
+  display:block;
+  font-size:26px;
+}
+
+.sources-note {
+  margin-top:auto;
+  font-family:'JetBrains Mono', monospace;
+  font-size:14px;
+  color:var(--ghost);
+  letter-spacing:0.14em;
+  line-height:1.7;
+}
+</style>
+</head>
+<body>
+
+<!-- ════ SLIDE 1 — COVER ════ -->
+<div class="slide slide-cover">
+  <div class="geo-layer"></div>
+  <div class="bg-placeholder"></div>
+  <div class="accent-stripe"></div>
+  <div class="corners"><span></span><span></span><span></span><span></span></div>
+
+  <div class="sticker-slot">
+    <div class="sticker-placeholder">FOTO</div>
+  </div>
+
+  <div class="cover-slash"></div>
+  <div class="cover-label">Análise · Brasil</div>
+  <h1 class="cover-headline">TÍTULO DA<br><em>MATÉRIA</em></h1>
+  <p class="cover-sub">Subtítulo em uma ou duas linhas explicando o contexto principal</p>
+
+  <div class="footer-handle">@HANDLE_PLACEHOLDER</div>
+  <div class="swipe">DESLIZE ›</div>
+</div>
+
+<!-- ════ SLIDE 2 — CONTEXT ════ -->
+<div class="slide slide-context">
+  <div class="geo-layer"></div>
+  <div class="accent-stripe"></div>
+  <div class="corners"><span></span><span></span><span></span><span></span></div>
+
+  <span class="sec-label">O que aconteceu</span>
+  <h2 class="ctx-heading">O QUE<br><em>ESTÁ</em><br>EM JOGO</h2>
+
+  <p class="ctx-body">
+    Em <span class="hl">março de 2025</span>, o governo aprovou
+    contratos milionários com empresa
+    <span class="hl-g">suspeita de fraude</span>.
+    O valor total ultrapassa <span class="hl">R$ 200 milhões</span>
+    de recursos públicos — aprovados
+    pelo mesmo secretário em três estados.
+  </p>
+
+  <div class="context-img-slot">
+    <div class="ctx-fallback">IMAGEM</div>
+  </div>
+
+  <div class="footer-handle">@HANDLE_PLACEHOLDER</div>
+  <div class="swipe">DESLIZE ›</div>
+</div>
+
+<!-- ════ SLIDE 3 — QUOTE ════ -->
+<div class="slide slide-quote">
+  <div class="accent-stripe"></div>
+  <div class="corners"><span></span><span></span><span></span><span></span></div>
+
+  <div class="qmark-open">"</div>
+  <div class="qmark-close">"</div>
+
+  <p class="quote-text">
+    "O que se viu não foi um desvio
+    repentino de conduta, mas um
+    <strong>método discursivo</strong> já
+    consolidado na nova direita."
+  </p>
+
+  <div class="quote-attr">
+    <div class="quote-name">NOME DO ESPECIALISTA</div>
+    <div class="quote-role">Cargo · Instituição</div>
+  </div>
+
+  <div class="footer-handle">@HANDLE_PLACEHOLDER</div>
+  <div class="swipe">DESLIZE ›</div>
+</div>
+
+<!-- ════ SLIDE 4 — PERSONAGENS ════ -->
+<div class="slide slide-chars">
+  <div class="geo-layer"></div>
+  <div class="accent-stripe"></div>
+  <div class="corners"><span></span><span></span><span></span><span></span></div>
+
+  <h2 class="chars-heading">QUEM SÃO OS<br>PERSONAGENS</h2>
+
+  <div class="bio-grid">
+    <!-- Connection line in the middle column gap -->
+    <div class="net-line"></div>
+
+    <div class="bio-card">
+      <div class="bio-photo"><div class="sticker-placeholder" style="font-size:9px">FOTO</div></div>
+      <div class="bio-info">
+        <div class="bio-name">NOME SOBRENOME</div>
+        <div class="bio-role">Cargo / função ocupada no caso</div>
+        <div class="bio-fact">Dado relevante e verificado sobre essa pessoa.</div>
+      </div>
+    </div>
+
+    <div class="bio-card" style="border-left-color:var(--green)">
+      <div class="bio-photo"><div class="sticker-placeholder" style="font-size:9px;background:rgba(45,106,79,0.08)">FOTO</div></div>
+      <div class="bio-info">
+        <div class="bio-name" style="color:var(--green-d)">NOME SOBRENOME</div>
+        <div class="bio-role">Cargo / função ocupada no caso</div>
+        <div class="bio-fact">Dado relevante e verificado sobre essa pessoa.</div>
+      </div>
+    </div>
+
+    <div class="bio-card">
+      <div class="bio-initials">AB</div>
+      <div class="bio-info">
+        <div class="bio-name">NOME SOBRENOME</div>
+        <div class="bio-role">Cargo / função ocupada no caso</div>
+        <div class="bio-fact">Dado relevante e verificado sobre essa pessoa.</div>
+      </div>
+    </div>
+
+    <div class="bio-card" style="border-left-color:var(--red)">
+      <div class="bio-initials" style="color:var(--red);background:var(--red-g)">CD</div>
+      <div class="bio-info">
+        <div class="bio-name" style="color:var(--red)">NOME SOBRENOME</div>
+        <div class="bio-role">Cargo / função ocupada no caso</div>
+        <div class="bio-fact">Dado relevante e verificado sobre essa pessoa.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-handle">@HANDLE_PLACEHOLDER</div>
+  <div class="swipe">DESLIZE ›</div>
+</div>
+
+<!-- ════ SLIDE 5 — DATA ════ -->
+<div class="slide slide-data">
+  <div class="geo-layer"></div>
+  <div class="data-diamond"></div>
+  <div class="accent-stripe"></div>
+  <div class="corners"><span></span><span></span><span></span><span></span></div>
+
+  <span class="data-label">O que isso representa</span>
+  <div class="data-number">R$<span>200</span></div>
+  <div class="data-unit">Milhões de reais</div>
+  <div class="data-rule"></div>
+  <p class="data-ctx">
+    Em contratos com empresa suspeita de fraude,
+    aprovados pelo mesmo secretário ao longo
+    de três estados diferentes em quatro anos.
+  </p>
+
+  <div class="footer-handle">@HANDLE_PLACEHOLDER</div>
+  <div class="swipe">DESLIZE ›</div>
+</div>
+
+<!-- ════ SLIDE 6 — SOURCES ════ -->
+<div class="slide slide-sources">
+  <div class="geo-layer"></div>
+  <div class="accent-stripe"></div>
+  <div class="corners"><span></span><span></span><span></span><span></span></div>
+
+  <h2 class="sources-h">FONTES</h2>
+  <div class="sources-rule"></div>
+
+  <ul class="source-list">
+    <li><strong>The Intercept Brasil</strong>Reportagem investigativa — Thalys Reporter</li>
+    <li><strong>Folha de S.Paulo</strong>Reportagem com dados oficiais — data</li>
+    <li><strong>Agência Brasil / EBC</strong>Nota e documentos oficiais — data</li>
+    <li><strong>Portal da Transparência</strong>Contratos e licitações públicas</li>
+  </ul>
+
+  <div class="sources-note">
+    Conteúdo produzido com fontes verificadas e documentos públicos.<br>
+    Imagens: uso editorial — créditos indicados em cada foto.<br>
+    @HANDLE_PLACEHOLDER
+  </div>
+</div>
+
+</body>
+</html>
