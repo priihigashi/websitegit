@@ -185,9 +185,9 @@ DONE ✅ (this session + prior fix sessions)
 - selected.html created — OPC Tip of the Week locked as first chosen template (commit 977bc96)
 - Full Circle Plan restructured to 11 sections, templates-first
 - Tip of the Week = flat category, no sub-series needed
-- news_brazil_standalone.html — NEW standalone editorial template (InBr-style, PT-BR, 6 slides, gold/green/red palette, bio-cards, quote marks) (commit 3b058a6, 2026-05-02)
-- news_usa_standalone.html — NEW standalone editorial template (EN, signal red/deep navy, 6 slides, same structure as Brazil) (commit 3b058a6, 2026-05-02)
-- selected.html — added News Brazil + News USA + News Standalone groups with palette swatches (commit 3b058a6, 2026-05-02)
+- news_brazil_standalone.html — REBUILT (InBr-faithful). Yellow (#FFE500) bg, blue circle blob (#0057CC), B&W person left, Barlow Condensed 900, 3 slides. CSS-variable architecture. Pipeline-compatible slots. PT-BR.
+- news_usa_standalone.html — REBUILT (mirror of Brazil). Light (#F5F5F5) bg, red circle blob (#CC1F2D), same layer stack + slots. EN. 3 slides.
+- selected.html — News Brazil + News USA groups with palette swatches; standalone cards renamed "Cover · Main Character"; slide counters corrected to 1/3
 - Template Registry doc updated (appended TEMPLATE 11 + 12 + palette swatch reference, no overwrite)
 
 IN PROGRESS 🔄
@@ -336,6 +336,58 @@ SECTION 7 gate: Run anytime, doesn't block other sections
 
 ---
 
+## 10. STANDALONE TEMPLATE DESIGN PRINCIPLES (locked 2026-05-02)
+
+Every standalone template Priscila approves MUST follow this architecture so the pipeline can produce it without chat intervention.
+
+### How standalones are created
+1. Priscila sends a reference screenshot (e.g. @theinterceptbrasil cover)
+2. We recreate it faithfully in HTML — same layout, same font weight, same geometric shapes
+3. Every visual element becomes an ISOLATED CSS variable or a separate named CSS class
+
+### CSS variable architecture (non-negotiable)
+All color/theme control lives in `:root`:
+- `--bg-color` → slide background
+- `--blob-color` → geometric shape (circle, stripe, rectangle)
+- `--text-color` → headline, logo, labels
+- `--hl-color` → inline text highlight background
+Pipeline can swap the entire palette by overriding 4 variables. No HTML changes needed.
+
+### Person photo — pipeline injection protocol
+- Wrap person photo div with BOTH `person-layer` AND `sticker-slot` classes
+- Inside: `<div class="sticker-placeholder"></div>`
+- CSS on `.person-layer` applies grayscale + contrast — pipeline drops raw color photo, CSS converts it
+- `filter: drop-shadow()` on `.person-layer` div keeps the person VISUALLY SEPARATE from background
+- wireImages() in selected.html targets `.sticker-placeholder` and injects dummy photo for preview
+
+### Context photo (slide 2) — pipeline injection protocol
+- Use `<div class="context-img-slot">` with `<div class="ctx-fallback"></div>` inside
+- wireImages() targets `.context-img-slot` and injects context photo
+
+### Geometric elements — isolation rule
+- Each shape (circle blob, accent stripe, diagonal bar) is its OWN div/element
+- No shape is merged into a background gradient or pseudo-element that carries multiple jobs
+- Rationale: pipeline (or Priscila) can recolor one shape without touching others
+- Comment each element: `<!-- LAYER 1: ... -->` `<!-- LAYER 2: ... -->` so shape identity is scannable
+
+### 3-slide default for standalone
+Cover (main character) → Body/Context (what happened) → Sources
+Pipeline fills: headline, body copy, sources from the JSON content brief.
+Cover gets: person photo, headline, logo, credit line.
+Body gets: context image, body copy with [DATE] / [PERSON] / [DECISION] tokens.
+
+### What the pipeline NEVER needs to do
+- Crop or grayscale the photo (CSS handles it)
+- Know which niche's color to use (CSS variables handle it — pipeline passes `--blob-color` override if needed)
+- Come to chat to rebuild the template
+
+### Reference templates (source of truth)
+- Brazil: docs/templates/news_brazil_standalone.html (yellow bg, blue blob, PT-BR)
+- USA:    docs/templates/news_usa_standalone.html    (light bg, red blob, EN)
+Both are mirrors — same class structure, same slot names, only `:root` variables differ.
+
+---
+
 ## 11. RULES FOR THIS SKILL
 
 - APPEND ONLY — never delete prior session notes
@@ -346,6 +398,13 @@ SECTION 7 gate: Run anytime, doesn't block other sections
 ---
 
 ## SESSION NOTES
+
+### 2026-05-02
+- REBUILT news_brazil_standalone.html — faithful InBr recreation (yellow bg, blue circle blob, B&W person, Barlow Condensed 900, 3 slides). CSS-variable architecture, pipeline-compatible sticker-slot + context-img-slot.
+- REBUILT news_usa_standalone.html — mirror of Brazil (light bg, red circle blob, EN, 3 slides). Identical layer structure, only :root color variables differ.
+- selected.html — standalone cards renamed "Cover · Main Character", slide counters fixed to 1/3, tpl-when descriptions updated with pipeline-injection details
+- Locked STANDALONE TEMPLATE DESIGN PRINCIPLES in Section 10 of this SKILL (CSS variables, person isolation via drop-shadow, grayscale via CSS not pipeline, sticker-slot protocol)
+- Next: commit + push to main → GitHub Pages live. Then opc_progress.html walkthrough.
 
 ### 2026-05-01
 - wired.html wireImages() 5 bugs fixed (commit 630c485)

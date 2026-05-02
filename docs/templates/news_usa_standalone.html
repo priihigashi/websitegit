@@ -2,693 +2,325 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>USA — Editorial Standalone</title>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:ital,wght@0,300;0,400;0,700;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<title>USA — Cover · Main Character</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Barlow:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════
-   USA STANDALONE — Editorial / Investigation
-   Palette: Signal Red + Deep Navy + Parchment
-   Inspired by: Intercept Brasil editorial style — adapted for EN/USA
+   USA — COVER · MAIN CHARACTER
+   When to use: story has a main person / actor
+   Palette variables — change these to retheme:
+     --bg-color     slide background
+     --blob-color   large circle behind person
+     --text-color   headline + logo
+     --hl-color     inline text highlight
+   Layering order (z-index):
+     0 bg-color    (CSS background)
+     1 blob        (circle)
+     2 person      (B&W photo, separate from blob)
+     10 text/logo
 ═══════════════════════════════════════════════ */
 :root {
-  --bg:    #0D0D0D;
-  --bg2:   #111111;
-  --bg3:   #1A1A1A;
+  /* ── THEME VARIABLES — edit these to retheme ── */
+  --bg-color:   #F5F5F5;   /* near-white — slide background */
+  --blob-color: #CC1F2D;   /* signal red circle — geometric layer */
+  --text-color: #0A0A0A;   /* black — headline, logo, labels */
+  --hl-color:   #CC1F2D;   /* inline highlight background */
+  --muted:      rgba(10,10,10,0.40);
 
-  /* Primary brand — USA */
-  --red:        #CC1F2D;
-  --red-d:      rgba(204,31,45,0.55);
-  --red-g:      rgba(204,31,45,0.10);
-  --red-ghost:  rgba(204,31,45,0.05);
-
-  /* Secondary — deep navy (not flag-blue) */
-  --navy:       #14213D;
-  --navy-d:     rgba(20,33,61,0.80);
-  --navy-g:     rgba(20,33,61,0.10);
-
-  /* Attention / highlight */
-  --hot:        #E63946;
-  --hot-hl:     rgba(230,57,70,0.88);
-  --hot-g:      rgba(230,57,70,0.08);
-
-  /* Slate — secondary geo color */
-  --slate:      #2C3E6B;
-  --slate-d:    rgba(44,62,107,0.65);
-
-  /* Text */
-  --parchment: #E8DECE;
-  --muted:     rgba(232,222,206,0.55);
-  --ghost:     rgba(232,222,206,0.14);
-
-  /* Geometric overlay colors */
-  --geo1:  rgba(204,31,45,0.06);
-  --geo2:  rgba(20,33,61,0.07);
-  --geo3:  rgba(230,57,70,0.04);
-  --geo4:  rgba(44,62,107,0.05);
-
-  --W:  1080px;
-  --H:  1350px;
-  --P:  96px;
+  /* ── Slide dimensions ── */
+  --W: 1080px;
+  --H: 1350px;
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
-
 body {
-  background:#111;
-  display:flex;
-  flex-wrap:wrap;
-  gap:24px;
-  padding:24px;
-  font-family:'Roboto Condensed', sans-serif;
+  background: #111;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 24px;
+  font-family: 'Barlow Condensed', sans-serif;
 }
-
-/* ═══ BASE SLIDE ═══ */
 .slide {
-  width:var(--W);
-  height:var(--H);
-  background:var(--bg);
-  color:var(--parchment);
-  padding:var(--P);
-  position:relative;
-  overflow:hidden;
-  flex-shrink:0;
-  display:flex;
-  flex-direction:column;
+  width:  var(--W);
+  height: var(--H);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-/* ═══ GEOMETRIC TEXTURE LAYER ═══ */
-.geo-layer {
-  position:absolute;
-  inset:0;
-  pointer-events:none;
-  z-index:0;
-}
-.geo-layer::before {
-  content:'';
-  position:absolute;
-  width:520px; height:520px;
-  background:var(--geo1);
-  transform:rotate(22deg);
-  top:-80px; right:-140px;
-  border-radius:2px;
-}
-.geo-layer::after {
-  content:'';
-  position:absolute;
-  width:320px; height:320px;
-  background:var(--geo2);
-  transform:rotate(-14deg);
-  bottom:80px; left:-80px;
-  border-radius:2px;
+
+/* ══════════════════════════════════════════════
+   SLIDE 1 — COVER · MAIN CHARACTER
+   Layer stack (bottom to top):
+     1. Light background (CSS)
+     2. Red circle blob (z-index 1) ← recolorable via --blob-color
+     3. B&W person photo  (z-index 2) ← separate, has own shadow
+     4. Text + logo       (z-index 10)
+══════════════════════════════════════════════ */
+.slide-cover {
+  background: var(--bg-color);
 }
 
-/* ═══ ACCENT STRIPE — right edge ═══ */
-.accent-stripe {
-  position:absolute;
-  top:0; right:0;
-  width:6px; height:100%;
-  background:linear-gradient(to bottom, var(--red) 0%, var(--navy) 60%, transparent 100%);
-  z-index:1;
+/* ── LAYER 1: Geometric circle blob ── */
+/* Isolated element — recolor by changing --blob-color only */
+.blob-circle {
+  position: absolute;
+  width: 800px;
+  height: 800px;
+  background: var(--blob-color);  /* ← one variable controls this */
+  border-radius: 50%;
+  right: -175px;
+  top: 345px;
+  z-index: 1;
+  /* No other styling — blob is purely a color shape */
 }
 
-/* ═══ BG PHOTO / VIDEO ═══ */
-.bg-placeholder, .bg-photo {
-  position:absolute;
-  inset:0;
-  background:#1A1A1A no-repeat center 20% / cover;
-  z-index:0;
+/* ── LAYER 2: Person photo ── */
+/* Separate from blob and background — has visual depth via drop-shadow */
+.person-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 650px;
+  height: 100%;
+  z-index: 2;
+  /* drop-shadow separates the person silhouette from the background */
+  filter: drop-shadow(8px 0 24px rgba(0,0,0,0.28));
 }
-.bg-overlay {
-  position:absolute;
-  inset:0;
-  background:linear-gradient(
-    to bottom,
-    rgba(13,13,13,0.72) 0%,
-    rgba(13,13,13,0.55) 40%,
-    rgba(13,13,13,0.92) 80%,
-    rgba(13,13,13,0.98) 100%
-  );
-  z-index:1;
+/* wireImages step 4 (.sticker-placeholder) injects the real photo here */
+.person-layer .sticker-placeholder {
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.10); /* placeholder tint so slot is visible */
+  display: block;
 }
-
-/* ═══ NICHE LABEL ═══ */
-.niche-label {
-  font-family:'JetBrains Mono', monospace;
-  font-size:11px;
-  letter-spacing:.22em;
-  text-transform:uppercase;
-  color:var(--red);
-  z-index:10;
-  position:relative;
-}
-.niche-label span {
-  display:inline-block;
-  border-left:2px solid var(--red);
-  padding-left:10px;
+/* Applied to any img injected into the person layer */
+.person-layer img,
+.person-layer .sticker-placeholder img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 8%;   /* show face near top */
+  filter: grayscale(1) contrast(1.15) brightness(0.90);
+  display: block;
 }
 
-/* ═══ SLIDE NUMBER ═══ */
-.slide-num {
-  font-family:'JetBrains Mono', monospace;
-  font-size:10px;
-  letter-spacing:.14em;
-  color:var(--muted);
-  z-index:10;
-  position:relative;
+/* ── LAYER 3: Logo (top left) ── */
+.cover-logo {
+  position: absolute;
+  top: 52px;
+  left: 52px;
+  z-index: 10;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 900;
+  font-size: 40px;
+  line-height: 1.05;
+  color: var(--text-color);
+  letter-spacing: -.02em;
+}
+.logo-top {
+  display: block;
+  border-bottom: 3px solid var(--text-color);
+  padding-bottom: 3px;
+  margin-bottom: 3px;
 }
 
-/* ═══ HEADLINE STYLES ═══ */
-.cover-head {
-  font-family:'Anton', sans-serif;
-  font-size:88px;
-  line-height:0.96;
-  letter-spacing:-.01em;
-  text-transform:uppercase;
-  color:var(--parchment);
-  z-index:10;
-  position:relative;
-  margin-top:auto;
-}
-.cover-head em {
-  font-style:normal;
-  color:var(--red);
-}
-.cover-deck {
-  font-size:24px;
-  line-height:1.45;
-  color:var(--muted);
-  z-index:10;
-  position:relative;
-  margin-top:20px;
-  max-width:820px;
-}
-.section-title {
-  font-family:'Anton', sans-serif;
-  font-size:52px;
-  line-height:1.05;
-  text-transform:uppercase;
-  color:var(--parchment);
-  z-index:10;
-  position:relative;
-}
-.section-title em {
-  font-style:normal;
-  color:var(--red);
+/* ── LAYER 3: Headline (top right) ── */
+.cover-headline {
+  position: absolute;
+  top: 44px;
+  right: 44px;
+  left: 476px;          /* clears the person layer */
+  z-index: 10;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 900;
+  font-size: 102px;
+  line-height: 0.91;
+  text-transform: uppercase;
+  color: var(--text-color);
+  letter-spacing: -.015em;
+  word-break: break-word;
 }
 
-/* ═══ INLINE HIGHLIGHT ═══ */
-.hl {
-  background:var(--hot-hl);
-  color:#fff;
-  padding:1px 7px;
-  border-radius:1px;
-}
-.hl-n {
-  background:rgba(20,33,61,0.85);
-  color:var(--parchment);
-  padding:1px 7px;
-  border-radius:1px;
+/* ── LAYER 3: Photo credit (bottom left) ── */
+.cover-credit {
+  position: absolute;
+  bottom: 32px;
+  left: 44px;
+  z-index: 10;
+  font-family: 'Barlow', sans-serif;
+  font-size: 19px;
+  color: var(--muted);
+  letter-spacing: .01em;
 }
 
-/* ═══ BODY COPY ═══ */
-.body-copy {
-  font-size:27px;
-  line-height:1.65;
-  color:rgba(232,222,206,0.82);
-  z-index:10;
-  position:relative;
-  max-width:880px;
-}
-.body-copy strong {
-  color:var(--parchment);
-  font-weight:700;
-}
 
-/* ═══ STICKER SLOT ═══ */
-.sticker-slot {
-  width:310px;
-  height:410px;
-  border-radius:4px;
-  overflow:hidden;
-  border:2px solid rgba(204,31,45,0.4);
-  flex-shrink:0;
-  z-index:10;
-  position:relative;
+/* ══════════════════════════════════════════════
+   SLIDE 2 — WHAT HAPPENED
+   Same bg-color, context image, body copy
+══════════════════════════════════════════════ */
+.slide-body {
+  background: var(--bg-color);
+  padding: 68px 60px 60px;
+  display: flex;
+  flex-direction: column;
 }
-.sticker-placeholder {
-  width:100%;
-  height:100%;
-  background:#1E1E1E;
+.slide-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 18px;
 }
-
-/* ═══ LARGE DECORATIVE QUOTE MARKS ═══ */
-.qmark-open, .qmark-close {
-  font-family:'Anton', sans-serif;
-  font-size:260px;
-  line-height:1;
-  color:var(--red);
-  opacity:.12;
-  position:absolute;
-  z-index:0;
-  pointer-events:none;
+.slide-section-head {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 900;
+  font-size: 80px;
+  line-height: 0.91;
+  text-transform: uppercase;
+  color: var(--text-color);
+  letter-spacing: -.01em;
+  margin-bottom: 32px;
 }
-.qmark-open { top:-30px; left:60px; }
-.qmark-close { bottom:-80px; right:60px; }
-
-/* ═══ QUOTE BLOCK ═══ */
-.quote-block {
-  z-index:10;
-  position:relative;
-  padding:0;
+/* ── Geometric accent line ── recolorable via --blob-color */
+.accent-rule {
+  width: 80px;
+  height: 5px;
+  background: var(--blob-color);  /* ← same variable as circle blob */
+  margin-bottom: 32px;
+  flex-shrink: 0;
 }
-.quote-text {
-  font-family:'Roboto Condensed', sans-serif;
-  font-style:italic;
-  font-size:44px;
-  line-height:1.35;
-  color:var(--parchment);
-}
-.quote-name {
-  display:inline-block;
-  margin-top:28px;
-  background:var(--red);
-  color:#fff;
-  font-family:'JetBrains Mono', monospace;
-  font-size:13px;
-  letter-spacing:.14em;
-  text-transform:uppercase;
-  padding:6px 16px;
-  border-radius:2px;
-}
-.quote-role {
-  font-size:15px;
-  color:var(--muted);
-  margin-top:8px;
-  letter-spacing:.06em;
-  font-family:'JetBrains Mono', monospace;
-}
-
-/* ═══ BIO CARD GRID ═══ */
-.bio-grid {
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:28px;
-  z-index:10;
-  position:relative;
-  width:100%;
-}
-.bio-card {
-  background:#1A1A1A;
-  border:1px solid rgba(204,31,45,0.22);
-  border-radius:4px;
-  padding:22px 20px 20px;
-  position:relative;
-  overflow:hidden;
-}
-/* Ticket notch */
-.bio-card::before {
-  content:'';
-  position:absolute;
-  top:50%; left:-10px;
-  transform:translateY(-50%);
-  width:20px; height:20px;
-  background:var(--bg);
-  border-radius:50%;
-}
-.bio-photo {
-  width:110px;
-  height:130px;
-  object-fit:cover;
-  object-position:center top;
-  border-radius:3px;
-  border:1px solid rgba(204,31,45,0.35);
-  display:block;
-  margin-bottom:14px;
-}
-.bio-initials {
-  width:110px;
-  height:130px;
-  background:var(--navy);
-  border-radius:3px;
-  border:1px solid rgba(204,31,45,0.35);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-family:'Anton', sans-serif;
-  font-size:42px;
-  color:var(--red);
-  margin-bottom:14px;
-}
-.bio-name {
-  font-family:'Anton', sans-serif;
-  font-size:20px;
-  color:var(--parchment);
-  text-transform:uppercase;
-  letter-spacing:.04em;
-}
-.bio-role {
-  font-size:13px;
-  color:var(--red);
-  margin-top:4px;
-  font-family:'JetBrains Mono', monospace;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-}
-.bio-fact {
-  font-size:15px;
-  color:var(--muted);
-  margin-top:8px;
-  line-height:1.45;
-}
-
-/* ═══ CONNECTION LINE ═══ */
-.net-line {
-  width:2px;
-  height:60px;
-  background:linear-gradient(to bottom, transparent, var(--red), transparent);
-  margin:0 auto;
-  position:relative;
-  z-index:10;
-}
-.net-line::after {
-  content:'●';
-  position:absolute;
-  top:50%; left:50%;
-  transform:translate(-50%,-50%);
-  font-size:8px;
-  color:var(--red);
-}
-
-/* ═══ DATA / BIG STAT ═══ */
-.data-diamond {
-  width:14px; height:14px;
-  background:var(--red);
-  transform:rotate(45deg);
-  display:inline-block;
-  margin-right:10px;
-  vertical-align:middle;
-}
-.stat-number {
-  font-family:'Anton', sans-serif;
-  font-size:160px;
-  line-height:1;
-  color:var(--red);
-  z-index:10;
-  position:relative;
-  letter-spacing:-.02em;
-}
-.stat-unit {
-  font-family:'Anton', sans-serif;
-  font-size:60px;
-  color:var(--parchment);
-  z-index:10;
-  position:relative;
-}
-.stat-label {
-  font-size:28px;
-  color:var(--muted);
-  z-index:10;
-  position:relative;
-  max-width:780px;
-  line-height:1.4;
-  margin-top:8px;
-}
-.stat-source {
-  font-family:'JetBrains Mono', monospace;
-  font-size:13px;
-  color:rgba(232,222,206,0.35);
-  margin-top:24px;
-  letter-spacing:.06em;
-  z-index:10;
-  position:relative;
-}
-
-/* ═══ CONTEXT IMAGE SLOT ═══ */
 .context-img-slot, .ctx-fallback {
-  width:100%;
-  height:340px;
-  background:#1A1A1A;
-  border-radius:4px;
-  overflow:hidden;
-  z-index:10;
-  position:relative;
+  width: 100%;
+  height: 340px;
+  background: rgba(0,0,0,0.10);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 28px;
+  flex-shrink: 0;
 }
-.ctx-caption {
-  font-family:'JetBrains Mono', monospace;
-  font-size:11px;
-  color:var(--muted);
-  margin-top:10px;
-  letter-spacing:.06em;
-  z-index:10;
-  position:relative;
+.context-img-slot img, .ctx-fallback img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.body-copy {
+  font-family: 'Barlow', sans-serif;
+  font-size: 30px;
+  line-height: 1.5;
+  color: var(--text-color);
+}
+.body-copy strong { font-weight: 700; }
+/* Inline highlight — recolorable via --hl-color */
+.hl {
+  background: var(--hl-color);
+  color: #fff;
+  padding: 0 6px;
+  border-radius: 1px;
 }
 
-/* ═══ DIVIDER LINE ═══ */
-.divider {
-  width:64px;
-  height:2px;
-  background:var(--red);
-  z-index:10;
-  position:relative;
-  flex-shrink:0;
-}
 
-/* ═══ SOURCES SLIDE ═══ */
-.sources-title {
-  font-family:'Anton', sans-serif;
-  font-size:40px;
-  text-transform:uppercase;
-  color:var(--red);
-  z-index:10;
-  position:relative;
-  letter-spacing:.08em;
+/* ══════════════════════════════════════════════
+   SLIDE 3 — SOURCES
+   Same bg-color, clean sources list
+══════════════════════════════════════════════ */
+.slide-sources {
+  background: var(--bg-color);
+  padding: 68px 60px 60px;
+  display: flex;
+  flex-direction: column;
+}
+.sources-head {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 900;
+  font-size: 74px;
+  text-transform: uppercase;
+  color: var(--text-color);
+  letter-spacing: -.01em;
+  border-bottom: 4px solid var(--text-color);
+  padding-bottom: 20px;
+  margin-bottom: 36px;
 }
 .source-item {
-  font-family:'JetBrains Mono', monospace;
-  font-size:15px;
-  color:var(--muted);
-  line-height:1.8;
-  z-index:10;
-  position:relative;
+  font-family: 'Barlow', sans-serif;
+  font-size: 25px;
+  color: var(--text-color);
+  line-height: 1.55;
+  margin-bottom: 10px;
 }
-.source-item strong {
-  color:var(--parchment);
+.source-item strong { font-weight: 700; }
+.source-footer {
+  margin-top: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  color: var(--muted);
+  letter-spacing: .06em;
 }
-.handle-tag {
-  font-family:'JetBrains Mono', monospace;
-  font-size:11px;
-  letter-spacing:.12em;
-  color:rgba(232,222,206,0.25);
-  z-index:10;
-  position:relative;
-  margin-top:auto;
-}
-
-/* ═══ SPACERS ═══ */
-.gap-s { height:16px; flex-shrink:0; }
-.gap-m { height:28px; flex-shrink:0; }
-.gap-l { height:48px; flex-shrink:0; }
 </style>
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════
-     SLIDE 1 — COVER
-     ═══════════════════════════════════════════ -->
-<div class="slide">
-  <div class="bg-placeholder"></div>
-  <div class="bg-overlay"></div>
-  <div class="geo-layer"></div>
-  <div class="accent-stripe"></div>
+<!-- ══════════════════════════════════════════════
+     SLIDE 1 — COVER · MAIN CHARACTER
+══════════════════════════════════════════════ -->
+<div class="slide slide-cover">
 
-  <div class="niche-label"><span>USA · Ground News</span></div>
-  <div class="gap-m"></div>
+  <!-- LAYER 1: Geometric circle blob (recolor via --blob-color) -->
+  <div class="blob-circle"></div>
 
-  <div class="sticker-slot" style="position:relative;z-index:10;margin-top:auto">
+  <!-- LAYER 2: Person photo — separate from blob, has drop-shadow -->
+  <!-- Pipeline uses .sticker-slot → .sticker-placeholder to inject photo.
+       CSS on .person-layer applies grayscale automatically — pipeline just drops the photo. -->
+  <div class="person-layer sticker-slot">
     <div class="sticker-placeholder"></div>
   </div>
 
-  <div class="gap-m"></div>
-  <div class="cover-head">
-    THE STORY<br>NOBODY<br><em>COVERED.</em>
+  <!-- LAYER 3: Text / logo (above everything) -->
+  <div class="cover-logo">
+    <span class="logo-top">In</span>US
   </div>
-  <div class="cover-deck">
-    What happened, who decided it, and what it means for you — in plain English.
+
+  <div class="cover-headline">
+    SENATOR NAMED IN SCHEME TO HAND SUPREME COURT TO THE FAR RIGHT
   </div>
-  <div class="gap-m"></div>
-  <div class="niche-label" style="margin-top:auto">
-    <span>Swipe for the full breakdown →</span>
-  </div>
+
+  <div class="cover-credit">Photo : AP / Reuters</div>
 </div>
 
 
-<!-- ═══════════════════════════════════════════
+<!-- ══════════════════════════════════════════════
      SLIDE 2 — WHAT HAPPENED
-     ═══════════════════════════════════════════ -->
-<div class="slide">
-  <div class="geo-layer"></div>
-  <div class="accent-stripe"></div>
-
-  <div class="slide-num">02 / 06</div>
-  <div class="gap-m"></div>
-
-  <div class="section-title">WHAT<br><em>HAPPENED</em></div>
-  <div class="divider" style="margin:24px 0"></div>
-
+══════════════════════════════════════════════ -->
+<div class="slide slide-body">
+  <div class="slide-label">02 / 03</div>
+  <div class="slide-section-head">WHAT<br>HAPPENED</div>
+  <div class="accent-rule"></div>
   <div class="context-img-slot">
-    <!-- wireImages injects photo here -->
+    <div class="ctx-fallback"></div>
   </div>
-  <div class="ctx-caption">Source: [Photo credit / institution]</div>
-
-  <div class="gap-m"></div>
   <div class="body-copy">
-    On <strong>[DATE]</strong>, <strong>[INSTITUTION OR PERSON]</strong> announced
-    <span class="hl">[core decision or event]</span>. This affects
-    <strong>[WHO IS IMPACTED]</strong> directly — and most people
-    <strong>had no idea it was coming.</strong>
+    On <strong>[DATE]</strong>, <strong>[PERSON / INSTITUTION]</strong>
+    decided <span class="hl">[core decision]</span>.
+    The impact hits <strong>[WHO IS AFFECTED]</strong> directly —
+    and most people had no idea this was being planned.
   </div>
 </div>
 
 
-<!-- ═══════════════════════════════════════════
-     SLIDE 3 — KEY QUOTE
-     ═══════════════════════════════════════════ -->
-<div class="slide">
-  <div class="geo-layer"></div>
-  <div class="accent-stripe"></div>
-  <div class="qmark-open">"</div>
-  <div class="qmark-close">"</div>
-
-  <div class="slide-num">03 / 06</div>
-  <div class="gap-l"></div>
-
-  <div class="quote-block">
-    <div class="quote-text">
-      "[Their exact words — keep it short, punchy, and let the reader feel the weight of it.]"
-    </div>
-    <div class="quote-name">FIRST LAST · Title</div>
-    <div class="quote-role">Institution or Context — Date</div>
-  </div>
-
-  <div class="gap-l"></div>
-  <div class="body-copy">
-    What they meant: <span class="hl">plain-language explanation</span> of the quote's real implication — one sentence, no jargon.
-  </div>
-</div>
-
-
-<!-- ═══════════════════════════════════════════
-     SLIDE 4 — THE PLAYERS
-     ═══════════════════════════════════════════ -->
-<div class="slide">
-  <div class="geo-layer"></div>
-  <div class="accent-stripe"></div>
-
-  <div class="slide-num">04 / 06</div>
-  <div class="gap-m"></div>
-
-  <div class="section-title">THE<br><em>PLAYERS</em></div>
-  <div class="divider" style="margin:20px 0"></div>
-
-  <div class="bio-grid">
-    <div class="bio-card">
-      <div class="bio-initials">AB</div>
-      <div class="bio-name">Person One</div>
-      <div class="bio-role">Title / Role</div>
-      <div class="bio-fact">Key fact or connection — one line that makes you say "wait, really?"</div>
-    </div>
-    <div class="bio-card">
-      <div class="bio-initials">CD</div>
-      <div class="bio-name">Person Two</div>
-      <div class="bio-role">Title / Role</div>
-      <div class="bio-fact">Key fact or connection — one line that makes you say "wait, really?"</div>
-    </div>
-    <div class="net-line" style="grid-column:1/-1;width:2px;height:32px;margin:0 auto"></div>
-    <div class="bio-card">
-      <div class="bio-initials">EF</div>
-      <div class="bio-name">Person Three</div>
-      <div class="bio-role">Title / Role</div>
-      <div class="bio-fact">Key fact or connection — one line that makes you say "wait, really?"</div>
-    </div>
-    <div class="bio-card">
-      <div class="bio-initials">GH</div>
-      <div class="bio-name">Person Four</div>
-      <div class="bio-role">Title / Role</div>
-      <div class="bio-fact">Key fact or connection — one line that makes you say "wait, really?"</div>
-    </div>
-  </div>
-</div>
-
-
-<!-- ═══════════════════════════════════════════
-     SLIDE 5 — BY THE NUMBERS
-     ═══════════════════════════════════════════ -->
-<div class="slide">
-  <div class="geo-layer"></div>
-  <div class="accent-stripe"></div>
-
-  <div class="slide-num">05 / 06</div>
-  <div class="gap-m"></div>
-
-  <div class="niche-label"><span>By the numbers</span></div>
-  <div class="gap-s"></div>
-
-  <div class="stat-number">$[X]B</div>
-  <div class="stat-unit">billion</div>
-  <div class="stat-label">
-    [Plain-language description of what this number means] — context that shows the scale of the decision.
-  </div>
-  <div class="stat-source">Source: [Outlet / Report name, Year]</div>
-
-  <div class="divider" style="margin:40px 0"></div>
-
-  <div class="body-copy">
-    To put it in perspective: <span class="hl-n">[relatable comparison]</span>.
-    That's <strong>[X times bigger / smaller than something familiar]</strong>.
-  </div>
-
-  <div class="gap-m" style="margin-top:auto"></div>
-  <div class="context-img-slot" style="height:200px">
-    <!-- wireImages injects chart/photo here -->
-  </div>
-</div>
-
-
-<!-- ═══════════════════════════════════════════
-     SLIDE 6 — SOURCES
-     ═══════════════════════════════════════════ -->
-<div class="slide">
-  <div class="geo-layer"></div>
-  <div class="accent-stripe"></div>
-
-  <div class="slide-num">06 / 06</div>
-  <div class="gap-m"></div>
-
-  <div class="sources-title">SOURCES</div>
-  <div class="divider" style="margin:20px 0 32px"></div>
-
-  <div class="source-item">
-    <strong>[Outlet Name]</strong> — [Headline of article], [Month Year]
-  </div>
-  <div class="gap-s"></div>
-  <div class="source-item">
-    <strong>[Outlet Name]</strong> — [Headline of article], [Month Year]
-  </div>
-  <div class="gap-s"></div>
-  <div class="source-item">
-    <strong>[Official Source / Government Record]</strong> — [Document name], [Year]
-  </div>
-
-  <div class="gap-l" style="margin-top:auto"></div>
-  <div class="body-copy" style="font-size:22px;color:var(--muted)">
-    All sources verified. If you spot an error,<br>
-    DM us — we correct publicly.
-  </div>
-  <div class="gap-m"></div>
-
-  <div class="divider"></div>
-  <div class="gap-s"></div>
-  <div class="handle-tag">via @HANDLE_PLACEHOLDER · fair use / own research</div>
+<!-- ══════════════════════════════════════════════
+     SLIDE 3 — SOURCES
+══════════════════════════════════════════════ -->
+<div class="slide slide-sources">
+  <div class="sources-head">Sources</div>
+  <div class="source-item"><strong>[Outlet]</strong> — [Article headline], [Month Year]</div>
+  <div class="source-item"><strong>[Outlet]</strong> — [Article headline], [Month Year]</div>
+  <div class="source-item"><strong>[Official document]</strong> — [Document name], [Year]</div>
+  <div class="source-footer">via @HANDLE_PLACEHOLDER · fair use / own research</div>
 </div>
 
 </body>
