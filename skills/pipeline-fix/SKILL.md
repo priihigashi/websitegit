@@ -185,10 +185,14 @@ DONE ✅ (this session + prior fix sessions)
 - selected.html created — OPC Tip of the Week locked as first chosen template (commit 977bc96)
 - Full Circle Plan restructured to 11 sections, templates-first
 - Tip of the Week = flat category, no sub-series needed
+- news_brazil_standalone.html — NEW standalone editorial template (InBr-style, PT-BR, 6 slides, gold/green/red palette, bio-cards, quote marks) (commit 3b058a6, 2026-05-02)
+- news_usa_standalone.html — NEW standalone editorial template (EN, signal red/deep navy, 6 slides, same structure as Brazil) (commit 3b058a6, 2026-05-02)
+- selected.html — added News Brazil + News USA + News Standalone groups with palette swatches (commit 3b058a6, 2026-05-02)
+- Template Registry doc updated (appended TEMPLATE 11 + 12 + palette swatch reference, no overwrite)
 
 IN PROGRESS 🔄
-- Template walkthrough: Tip ✅ → next: opc_progress, opc_illustrated, opc_cutout, then News templates
-- Building selected.html — add each chosen template as walkthrough proceeds
+- Template walkthrough: Tip ✅ → Standalone Brazil/USA ✅ → next: opc_progress, opc_illustrated, opc_cutout, then remaining News series templates
+- Building selected.html — News Standalone added; OPC Progress/Illustrated/Cutout still pending
 
 PENDING ⏳ (priority order — top = most impactful)
 1. Fix photo_matcher.py 401 — swap service account for SHEETS_TOKEN OAuth so real OPC photos load
