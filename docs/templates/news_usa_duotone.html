@@ -6,18 +6,18 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Roboto+Condensed:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 /* FORMAT-DUO-US — USA Duotone Statement Standalone
-   Parchment background · duotone portrait · claim + quote · attribution
-   Duotone: shadows → navy #0D3A6B, highlights → signal red #E85060 (accent)
+   Red background · duotone portrait · claim + quote · attribution
+   Duotone: shadows → navy #0D1B3E, highlights → lighter red #E84040 (blends into bg)
    Single slide — goes to standalone_chosen in News Drive
 */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#E8DECE;
-  --ink:#0D0B08;
-  --ink-mid:#1A1410;
-  --accent:#CC1F2D;
-  --shadow:#0D3A6B;
-  --highlight:#E04050;
+  --bg:#CC1F2D;
+  --ink:#F0EBE3;
+  --ink-mid:#EDE8E0;
+  --shadow:#0D1B3E;
+  --highlight:#E84040;
+  --navy:#0D1B3E;
   --W:1080px;--H:1350px;--P:80px;
 }
 body{background:#111;display:flex;justify-content:center;padding:24px}
@@ -30,15 +30,15 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
 .slide::before{
   content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
   background:repeating-linear-gradient(
-    45deg,transparent,transparent 2px,rgba(0,0,0,0.018) 2px,rgba(0,0,0,0.018) 4px
+    45deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px
   );
 }
 .slide>*{position:relative;z-index:1}
 
-/* Red accent bar at top */
+/* Navy accent bar at top */
 .top-bar{
   position:absolute;top:0;left:0;right:0;height:8px;
-  background:var(--accent);z-index:2;
+  background:var(--navy);z-index:2;
 }
 
 /* Headline claim */
@@ -51,7 +51,7 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
 }
 .claim strong{font-weight:900}
 .claim u{
-  text-decoration-color:var(--accent);
+  text-decoration-color:rgba(240,235,227,0.55);
   text-decoration-thickness:3px;text-underline-offset:5px;
 }
 
@@ -83,7 +83,7 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
 }
 .quote-mark{
   font-family:'Playfair Display',serif;
-  font-size:80px;font-weight:900;color:var(--accent);
+  font-size:80px;font-weight:900;color:var(--ink);
   line-height:0.6;opacity:0.25;margin-bottom:8px;
 }
 .quote-text{
@@ -96,22 +96,22 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
 .attr{
   display:flex;align-items:center;gap:20px;
   padding-top:28px;flex-shrink:0;
-  border-top:2px solid rgba(13,11,8,0.15);
+  border-top:2px solid rgba(240,235,227,0.2);
 }
 .logo-circle{
   width:68px;height:68px;border-radius:50%;
-  background:var(--ink);flex-shrink:0;
+  background:var(--navy);flex-shrink:0;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
 }
 .logo-circle span{
   font-family:'Roboto Condensed',sans-serif;
-  font-size:17px;font-weight:900;color:var(--bg);
+  font-size:17px;font-weight:900;color:var(--ink);
   line-height:1.1;letter-spacing:.02em;
 }
 .attr-avatar{
   width:56px;height:56px;border-radius:50%;
-  background:rgba(13,11,8,0.15);
-  border:2px solid rgba(13,11,8,0.2);
+  background:rgba(240,235,227,0.2);
+  border:2px solid rgba(240,235,227,0.25);
   background-size:cover;background-position:center;
   flex-shrink:0;
 }
@@ -123,7 +123,7 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
 .photo-credit{
   position:absolute;right:18px;bottom:220px;
   font-family:'Space Mono',monospace;font-size:10px;
-  color:rgba(13,11,8,0.3);letter-spacing:.1em;
+  color:rgba(240,235,227,0.3);letter-spacing:.1em;
   transform:rotate(90deg);transform-origin:right center;
   white-space:nowrap;
 }
@@ -138,7 +138,7 @@ body{background:#111;display:flex;justify-content:center;padding:24px}
   </div>
 
   <div class="photo-wrap">
-    <div class="photo bg-placeholder"></div>
+    <div class="photo bg-placeholder" style="background-image:url('https://picsum.photos/id/1005/920/540')"></div>
   </div>
 
   <div class="quote-block">
