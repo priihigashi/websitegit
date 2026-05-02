@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>USA — Network · Powerful Connections — FORMAT-020</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   FORMAT-020 — NETWORK DIAGRAM SLIDE · USA
+   NETWORK & CONNECTIONS / POWERFUL PEOPLE & TIES
+   Mirror of Brazil Network — accent → InUS signal red.
+   Same math: 840×840 diagram, 8 nodes at 45°, r=300px.
+   Colors: --ca #CC1F2D (InUS signal red)
+═══════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ob: #0D0B08;
+  --pa: #E8DECE;
+  --ca: #CC1F2D;
+  --gr: rgba(232,220,206,0.45);
+  --dim: rgba(232,220,206,0.2);
+  --W: 1080px;
+  --H: 1350px;
+  --P: 96px;
+}
+body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}
+.slide{
+  width:var(--W);height:var(--H);
+  background:var(--ob);color:var(--pa);
+  padding:var(--P);
+  position:relative;overflow:hidden;
+  flex-shrink:0;display:flex;flex-direction:column;
+}
+.net-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:16px;font-weight:700;
+  letter-spacing:.2em;text-transform:uppercase;
+  color:var(--ca);margin-bottom:16px;
+}
+.net-headline{
+  font-family:'Playfair Display',serif;
+  font-size:72px;font-weight:900;
+  line-height:.92;letter-spacing:-.015em;
+  margin-bottom:28px;
+}
+.net-headline em{font-style:italic;color:var(--ca)}
+.diagram-wrap{
+  flex:1;display:flex;align-items:center;justify-content:center;
+}
+.diagram{
+  position:relative;width:840px;height:840px;flex-shrink:0;
+}
+.diagram svg{position:absolute;top:0;left:0;z-index:1}
+.node{
+  position:absolute;width:160px;
+  display:flex;flex-direction:column;align-items:center;
+  text-align:center;z-index:2;
+}
+.node-circle{
+  width:100px;height:100px;border-radius:50%;
+  background:#1A0D0D;border:2px solid var(--ca);
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 8px;
+  box-shadow:0 0 0 1px rgba(204,31,45,.12),0 4px 24px rgba(0,0,0,.6);
+}
+.node-init{
+  font-family:'Playfair Display',serif;
+  font-size:28px;font-weight:700;color:var(--ca);line-height:1;
+}
+.node-name{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:15px;font-weight:700;color:var(--pa);
+  line-height:1.2;max-width:150px;
+}
+.node-role{
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;color:var(--dim);
+  letter-spacing:.1em;text-transform:uppercase;
+  max-width:150px;margin-top:4px;
+}
+.node-center .node-circle{
+  width:130px;height:130px;border-width:3px;
+  background:#200A0A;
+  box-shadow:0 0 40px rgba(204,31,45,.18),0 4px 24px rgba(0,0,0,.8);
+}
+.node-center .node-init{font-size:40px}
+.node-center .node-name{font-size:14px;color:var(--gr)}
+</style>
+</head>
+<body>
+
+<div class="slide">
+  <div class="net-label">NETWORK &amp; CONNECTIONS</div>
+  <div class="net-headline">Powerful People<br><em>&amp; Ties</em></div>
+
+  <div class="diagram-wrap">
+    <div class="diagram">
+
+      <svg viewBox="0 0 840 840" width="840" height="840">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M0,1 L9,5 L0,9 Z" fill="#CC1F2D" fill-opacity="0.6"/>
+          </marker>
+        </defs>
+        <g stroke="#CC1F2D" stroke-width="1.2" stroke-dasharray="7,6"
+           stroke-opacity="0.4" marker-end="url(#arr)">
+          <line x1="420" y1="355" x2="420" y2="170"/>
+          <line x1="466" y1="374" x2="597" y2="243"/>
+          <line x1="485" y1="420" x2="670" y2="420"/>
+          <line x1="466" y1="466" x2="597" y2="597"/>
+          <line x1="420" y1="485" x2="420" y2="670"/>
+          <line x1="374" y1="466" x2="243" y2="597"/>
+          <line x1="355" y1="420" x2="170" y2="420"/>
+          <line x1="374" y1="374" x2="243" y2="243"/>
+        </g>
+      </svg>
+
+      <!-- CENTER NODE -->
+      <div class="node node-center" style="top:355px;left:340px">
+        <div class="node-circle"><span class="node-init">??</span></div>
+        <div class="node-name">Subject Name</div>
+        <div class="node-role">Role · Title</div>
+      </div>
+
+      <!-- Top (0°) -->
+      <div class="node" style="top:70px;left:340px">
+        <div class="node-circle"><span class="node-init">MO</span></div>
+        <div class="node-name">Media Outlet</div>
+        <div class="node-role">Press Coverage</div>
+      </div>
+
+      <!-- Top-right (45°) -->
+      <div class="node" style="top:158px;left:552px">
+        <div class="node-circle"><span class="node-init">AL</span></div>
+        <div class="node-name">Political Ally</div>
+        <div class="node-role">Legislator</div>
+      </div>
+
+      <!-- Right (90°) -->
+      <div class="node" style="top:370px;left:640px">
+        <div class="node-circle"><span class="node-init">IN</span></div>
+        <div class="node-name">Institution X</div>
+        <div class="node-role">Gov. Agency</div>
+      </div>
+
+      <!-- Bottom-right (135°) -->
+      <div class="node" style="top:582px;left:552px">
+        <div class="node-circle"><span class="node-init">PA</span></div>
+        <div class="node-name">Party Affiliation</div>
+        <div class="node-role">Political Ties</div>
+      </div>
+
+      <!-- Bottom (180°) -->
+      <div class="node" style="top:670px;left:340px">
+        <div class="node-circle"><span class="node-init">IO</span></div>
+        <div class="node-name">Intl. Organization</div>
+        <div class="node-role">NGO · Think Tank</div>
+      </div>
+
+      <!-- Bottom-left (225°) -->
+      <div class="node" style="top:582px;left:128px">
+        <div class="node-circle"><span class="node-init">PR</span></div>
+        <div class="node-name">Prior Role</div>
+        <div class="node-role">Career Path</div>
+      </div>
+
+      <!-- Left (270°) -->
+      <div class="node" style="top:370px;left:40px">
+        <div class="node-circle"><span class="node-init">OP</span></div>
+        <div class="node-name">Main Opponent</div>
+        <div class="node-role">Critic</div>
+      </div>
+
+      <!-- Top-left (315°) -->
+      <div class="node" style="top:158px;left:128px">
+        <div class="node-circle"><span class="node-init">FU</span></div>
+        <div class="node-name">Funding Source</div>
+        <div class="node-role">Financial Tie</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

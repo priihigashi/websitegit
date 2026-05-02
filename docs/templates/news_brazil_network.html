@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Brasil — Network · Pessoas Poderosas — FORMAT-020</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   FORMAT-020 — NETWORK DIAGRAM SLIDE · BRAZIL
+   REDE & CONEXÕES / PESSOAS PODEROSAS & FAMOSAS
+   Slide 3: hub-and-spoke connection map.
+   Pipeline injects:
+     .node-center .node-init  → subject initials
+     .node-center .node-name  → subject name
+     .node text fields        → connection details
+   Diagram: 840×840px, 8 nodes at 45° intervals, r=300px.
+   Colors: --ca #C9A84C (InBr canário gold)
+   FONT NOTE: circles bigger + text bumped for IG readability.
+═══════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ob: #0D0B08;
+  --pa: #F0EBE3;
+  --ca: #C9A84C;
+  --gr: rgba(240,235,227,0.45);
+  --dim: rgba(240,235,227,0.2);
+  --W: 1080px;
+  --H: 1350px;
+  --P: 96px;
+}
+body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}
+.slide{
+  width:var(--W);height:var(--H);
+  background:var(--ob);color:var(--pa);
+  padding:var(--P);
+  position:relative;overflow:hidden;
+  flex-shrink:0;display:flex;flex-direction:column;
+}
+
+/* ── Header ── */
+.net-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:16px;font-weight:700;
+  letter-spacing:.2em;text-transform:uppercase;
+  color:var(--ca);margin-bottom:16px;
+}
+.net-headline{
+  font-family:'Playfair Display',serif;
+  font-size:72px;font-weight:900;
+  line-height:.92;letter-spacing:-.015em;
+  margin-bottom:28px;
+}
+.net-headline em{font-style:italic;color:var(--ca)}
+
+/* ── Diagram container ── */
+.diagram-wrap{
+  flex:1;display:flex;align-items:center;justify-content:center;
+}
+.diagram{
+  position:relative;width:840px;height:840px;
+  flex-shrink:0;
+}
+.diagram svg{position:absolute;top:0;left:0;z-index:1}
+
+/* ── Nodes ── */
+.node{
+  position:absolute;
+  width:160px;
+  display:flex;flex-direction:column;align-items:center;
+  text-align:center;z-index:2;
+}
+.node-circle{
+  width:100px;height:100px;border-radius:50%;
+  background:#1A150D;border:2px solid var(--ca);
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 8px;
+  box-shadow:0 0 0 1px rgba(201,168,76,.12),0 4px 24px rgba(0,0,0,.6);
+}
+.node-init{
+  font-family:'Playfair Display',serif;
+  font-size:28px;font-weight:700;color:var(--ca);line-height:1;
+}
+.node-name{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:15px;font-weight:700;
+  color:var(--pa);line-height:1.2;max-width:150px;
+}
+.node-role{
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;color:var(--dim);
+  letter-spacing:.1em;text-transform:uppercase;
+  max-width:150px;margin-top:4px;
+}
+
+/* Center node — larger */
+.node-center .node-circle{
+  width:130px;height:130px;border-width:3px;
+  background:#221A0F;
+  box-shadow:0 0 40px rgba(201,168,76,.18),0 4px 24px rgba(0,0,0,.8);
+}
+.node-center .node-init{font-size:40px}
+.node-center .node-name{font-size:14px;color:var(--gr)}
+</style>
+</head>
+<body>
+
+<div class="slide">
+  <div class="net-label">REDE &amp; CONEXÕES</div>
+  <div class="net-headline">Pessoas Poderosas<br><em>&amp; Famosas</em></div>
+
+  <div class="diagram-wrap">
+    <div class="diagram">
+
+      <!-- SVG connecting lines (z-index 1, below circles) -->
+      <svg viewBox="0 0 840 840" width="840" height="840">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M0,1 L9,5 L0,9 Z" fill="#C9A84C" fill-opacity="0.6"/>
+          </marker>
+        </defs>
+        <g stroke="#C9A84C" stroke-width="1.2" stroke-dasharray="7,6"
+           stroke-opacity="0.4" marker-end="url(#arr)">
+          <!-- center→SB   --> <line x1="420" y1="355" x2="420" y2="170"/>
+          <!-- center→BN   --> <line x1="466" y1="374" x2="597" y2="243"/>
+          <!-- center→OR   --> <line x1="485" y1="420" x2="670" y2="420"/>
+          <!-- center→SW   --> <line x1="466" y1="466" x2="597" y2="597"/>
+          <!-- center→TA   --> <line x1="420" y1="485" x2="420" y2="670"/>
+          <!-- center→ID   --> <line x1="374" y1="466" x2="243" y2="597"/>
+          <!-- center→OY   --> <line x1="355" y1="420" x2="170" y2="420"/>
+          <!-- center→JP   --> <line x1="374" y1="374" x2="243" y2="243"/>
+        </g>
+      </svg>
+
+      <!-- CENTER NODE — subject (orbit center: 420,420; r=65) -->
+      <!-- top = cy - r = 420-65 = 355 | left = cx - 80 = 420-80 = 340 -->
+      <div class="node node-center" style="top:355px;left:340px">
+        <div class="node-circle"><span class="node-init">??</span></div>
+        <div class="node-name">Nome do Sujeito</div>
+        <div class="node-role">Papel · Cargo</div>
+      </div>
+
+      <!-- SB — top (0°), orbit: 420,120; r=50 → top=70, left=340 -->
+      <div class="node" style="top:70px;left:340px">
+        <div class="node-circle"><span class="node-init">MB</span></div>
+        <div class="node-name">Mídia Brasileira</div>
+        <div class="node-role">Veículo de Mídia</div>
+      </div>
+
+      <!-- BN — top-right (45°), orbit: 632,208 → top=158, left=552 -->
+      <div class="node" style="top:158px;left:552px">
+        <div class="node-circle"><span class="node-init">AL</span></div>
+        <div class="node-name">Aliado Político</div>
+        <div class="node-role">Parlamentar</div>
+      </div>
+
+      <!-- OR — right (90°), orbit: 720,420 → top=370, left=640 -->
+      <div class="node" style="top:370px;left:640px">
+        <div class="node-circle"><span class="node-init">IS</span></div>
+        <div class="node-name">Instituição X</div>
+        <div class="node-role">Gov. · Org.</div>
+      </div>
+
+      <!-- SW — bottom-right (135°), orbit: 632,632 → top=582, left=552 -->
+      <div class="node" style="top:582px;left:552px">
+        <div class="node-circle"><span class="node-init">PF</span></div>
+        <div class="node-name">Partido · Facção</div>
+        <div class="node-role">Legenda</div>
+      </div>
+
+      <!-- TA — bottom (180°), orbit: 420,720 → top=670, left=340 -->
+      <div class="node" style="top:670px;left:340px">
+        <div class="node-circle"><span class="node-init">OE</span></div>
+        <div class="node-name">Org. Internacional</div>
+        <div class="node-role">ONG · Think Tank</div>
+      </div>
+
+      <!-- ID — bottom-left (225°), orbit: 208,632 → top=582, left=128 -->
+      <div class="node" style="top:582px;left:128px">
+        <div class="node-circle"><span class="node-init">CA</span></div>
+        <div class="node-name">Cargo Anterior</div>
+        <div class="node-role">Trajetória</div>
+      </div>
+
+      <!-- OY — left (270°), orbit: 120,420 → top=370, left=40 -->
+      <div class="node" style="top:370px;left:40px">
+        <div class="node-circle"><span class="node-init">OP</span></div>
+        <div class="node-name">Opositor Principal</div>
+        <div class="node-role">Adversário</div>
+      </div>
+
+      <!-- JP — top-left (315°), orbit: 208,208 → top=158, left=128 -->
+      <div class="node" style="top:158px;left:128px">
+        <div class="node-circle"><span class="node-init">FN</span></div>
+        <div class="node-name">Financiador</div>
+        <div class="node-role">Origem dos Recursos</div>
+      </div>
+
+    </div><!-- /diagram -->
+  </div><!-- /diagram-wrap -->
+</div>
+
+</body>
+</html>
