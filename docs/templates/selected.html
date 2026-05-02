@@ -143,6 +143,29 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
 </div>
 <div class="group-cards">
 
+<!-- FORMAT-002 QUEM DECIDIU ISSO? — Brazil full carousel -->
+<div class="tpl-card" id="card_news_brazil_f002">
+  <div class="tpl-meta">
+    <div class="tpl-name">Brazil — QUEM DECIDIU ISSO?</div>
+    <div class="tpl-format">FORMAT-002 · ✓ APPROVED</div>
+    <div class="tpl-category">Brazil News · political breakdown · 6 slides</div>
+    <div class="tpl-when">Brazil political breakdown carousel. 'Who actually decided this?' — traces a law, tariff, or policy back to the person who voted/approved it. Uses native Brazil dark + Canário gold brand. Cover, 4 breakdown slides, Sources. PT-BR. Navigate all 6 slides with arrows.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row">
+      <button class="vbtn active">Single style</button>
+    </div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('news_brazil_f002')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_news_brazil_f002" src="news_brazil.html" scrolling="no" onload="initViewer('news_brazil_f002')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('news_brazil_f002')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_news_brazil_f002">slide 1 / 6</div>
+  </div>
+</div>
+
 <!-- FORMAT-020 WHO IS THIS PERSON? — Brazil full set -->
 <div class="tpl-card" id="card_brazil_f020">
   <div class="tpl-meta">
@@ -581,6 +604,10 @@ const IMG = {
   },
   brazil_f020:          {},
   usa_f020:             {},
+  news_brazil_f002: {
+    bg:      ['congresso_nacional','stf_brazil','rachadinha_doc','senado_exterior','planalto_bg','fontes_br'],
+    sticker: 'politician_br_main'
+  },
   news_brazil_biography:{},
   news_usa_biography:   {},
   news_brazil_network:  {},
