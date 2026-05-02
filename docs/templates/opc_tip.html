@@ -19,10 +19,10 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 
 /* ---- Corner brackets (OPC signature) ---- */
 .corner { position:absolute; width:28px; height:28px; z-index:10; }
-.corner.tl { top:40px; left:40px; border-top:2px solid var(--c-brk); border-left:2px solid var(--c-brk); }
-.corner.tr { top:40px; right:40px; border-top:2px solid var(--c-brk); border-right:2px solid var(--c-brk); }
-.corner.bl { bottom:40px; left:40px; border-bottom:2px solid var(--c-brk); border-left:2px solid var(--c-brk); }
-.corner.br { bottom:40px; right:40px; border-bottom:2px solid var(--c-brk); border-right:2px solid var(--c-brk); }
+.corner.tl { top:64px; left:64px; border-top:2px solid var(--c-brk); border-left:2px solid var(--c-brk); }
+.corner.tr { top:64px; right:64px; border-top:2px solid var(--c-brk); border-right:2px solid var(--c-brk); }
+.corner.bl { bottom:64px; left:64px; border-bottom:2px solid var(--c-brk); border-left:2px solid var(--c-brk); }
+.corner.br { bottom:64px; right:64px; border-bottom:2px solid var(--c-brk); border-right:2px solid var(--c-brk); }
 
 /* ---- Tag (small kicker) ---- */
 .tag {
@@ -188,7 +188,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 
 /* Cover HUD lane: keeps swipe + license out of title/subtitle flow. */
 .slide-cover .arrow {
-  bottom:46px;
+  bottom:72px;
   right:108px;
   font-size:30px;
   line-height:1;
@@ -217,13 +217,13 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 
 /* ---- Slide logo (bottom corner) ---- */
 .slide-logo {
-  position:absolute; bottom:54px; left:108px;
+  position:absolute; bottom:72px; left:108px;
   font-family:'Anton', sans-serif; font-size:20px; letter-spacing:0.2em;
   color:var(--c-tag); text-transform:uppercase; z-index:10;
 }
 
 .slide-cover .slide-logo {
-  bottom:46px;
+  bottom:72px;
   left:108px;
   line-height:1;
   background:rgba(10,10,10,0.45);
