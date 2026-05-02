@@ -162,7 +162,8 @@ body {
 
 
 /* ══════════════════════════════════════════════
-   SLIDE 2 — O QUE ACONTECEU
+   SLIDE 2 — FICHA DO CASO (editorial fact-file)
+   Three labeled rows → context image → summary
 ══════════════════════════════════════════════ */
 .slide-body {
   background: var(--bg-color);
@@ -181,12 +182,12 @@ body {
 .slide-section-head {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 900;
-  font-size: 80px;
+  font-size: 76px;
   line-height: 0.91;
   text-transform: uppercase;
   color: var(--text-color);
   letter-spacing: -.01em;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 .accent-rule {
   width: 80px;
@@ -195,13 +196,48 @@ body {
   margin-bottom: 32px;
   flex-shrink: 0;
 }
+
+/* ── Fact rows: QUEM / O QUÊ / QUANDO ── */
+/* Pipeline injects the value span per row */
+.fact-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-shrink: 0;
+}
+.fact-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  letter-spacing: .20em;
+  text-transform: uppercase;
+  color: var(--blob-color);  /* yellow label on dark */
+  min-width: 100px;
+  flex-shrink: 0;
+}
+.fact-value {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 32px;
+  line-height: 1.15;
+  color: var(--text-color);
+}
+.fact-divider {
+  width: 100%;
+  height: 1px;
+  background: rgba(255,255,255,0.10);
+  margin: 24px 0;
+  flex-shrink: 0;
+}
+
+/* ── Context image — shorter on this slide to leave room for facts ── */
 .context-img-slot, .ctx-fallback {
   width: 100%;
-  height: 340px;
+  height: 260px;
   background: rgba(255,255,255,0.06);
   border-radius: 3px;
   overflow: hidden;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
   flex-shrink: 0;
 }
 .context-img-slot img, .ctx-fallback img {
@@ -212,21 +248,21 @@ body {
 }
 .body-copy {
   font-family: 'Barlow', sans-serif;
-  font-size: 30px;
-  line-height: 1.5;
-  color: var(--text-color);
+  font-size: 26px;
+  line-height: 1.55;
+  color: rgba(255,255,255,0.80);
 }
-.body-copy strong { font-weight: 700; }
+.body-copy strong { font-weight: 700; color: var(--text-color); }
 .hl {
   background: var(--hl-color);
-  color: var(--hl-text);  /* dark text on yellow — readable */
+  color: var(--hl-text);
   padding: 0 6px;
   border-radius: 1px;
 }
 
 
 /* ══════════════════════════════════════════════
-   SLIDE 3 — FONTES
+   SLIDE 3 — FONTES (numbered citations + stamp)
 ══════════════════════════════════════════════ */
 .slide-sources {
   background: var(--bg-color);
@@ -241,24 +277,63 @@ body {
   text-transform: uppercase;
   color: var(--text-color);
   letter-spacing: -.01em;
-  border-bottom: 4px solid var(--blob-color);  /* yellow rule on dark */
+  border-bottom: 4px solid var(--blob-color);
   padding-bottom: 20px;
-  margin-bottom: 36px;
+  margin-bottom: 40px;
 }
-.source-item {
+
+/* Numbered source row */
+.source-row {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-shrink: 0;
+}
+.source-num {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 900;
+  font-size: 36px;
+  color: var(--blob-color);
+  line-height: 1;
+  min-width: 36px;
+  flex-shrink: 0;
+}
+.source-text {
   font-family: 'Barlow', sans-serif;
-  font-size: 25px;
-  color: var(--text-color);
-  line-height: 1.55;
-  margin-bottom: 10px;
-  opacity: 0.85;
+  font-size: 24px;
+  color: rgba(255,255,255,0.80);
+  line-height: 1.50;
 }
-.source-item strong { font-weight: 700; opacity: 1; }
-.source-footer {
+.source-text strong { font-weight: 700; color: var(--text-color); }
+
+/* "Como verificamos" stamp — pipeline can customize the text */
+.verify-stamp {
   margin-top: auto;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  padding-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.verify-label {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 16px;
+  font-size: 11px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--blob-color);
+}
+.verify-text {
+  font-family: 'Barlow', sans-serif;
+  font-size: 20px;
   color: var(--muted);
+  line-height: 1.45;
+}
+.source-footer {
+  margin-top: 20px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: rgba(255,255,255,0.22);
   letter-spacing: .06em;
 }
 </style>
@@ -292,32 +367,70 @@ body {
 
 
 <!-- ══════════════════════════════════════════════
-     SLIDE 2 — O QUE ACONTECEU
+     SLIDE 2 — FICHA DO CASO
+     Pipeline fills: fact_who, fact_what, fact_when, context image, body_summary
 ══════════════════════════════════════════════ -->
 <div class="slide slide-body">
   <div class="slide-label">02 / 03</div>
   <div class="slide-section-head">O QUE<br>ACONTECEU</div>
   <div class="accent-rule"></div>
+
+  <!-- Fact rows — pipeline injects .fact-value text per row -->
+  <div class="fact-row">
+    <span class="fact-label">Quem</span>
+    <span class="fact-value">[Nome completo / Instituição]</span>
+  </div>
+  <div class="fact-row">
+    <span class="fact-label">O quê</span>
+    <span class="fact-value">[Decisão ou ação em uma linha]</span>
+  </div>
+  <div class="fact-row">
+    <span class="fact-label">Quando</span>
+    <span class="fact-value">[Data — ex: 12 de maio de 2026]</span>
+  </div>
+
+  <div class="fact-divider"></div>
+
+  <!-- Context photo — wireImages() injects here -->
   <div class="context-img-slot">
     <div class="ctx-fallback"></div>
   </div>
+
+  <!-- Summary paragraph — pipeline fills body_summary -->
   <div class="body-copy">
-    Em <strong>[DATA]</strong>, <strong>[PESSOA / ÓRGÃO]</strong>
-    decidiu <span class="hl">[decisão central]</span>.
-    O impacto vai direto em <strong>[QUEM É AFETADO]</strong> —
-    e a maioria não sabia que isso estava sendo planejado.
+    O impacto vai direto em <strong>[QUEM É AFETADO]</strong>.
+    <span class="hl">[Por que isso importa — uma frase]</span>
   </div>
 </div>
 
 
 <!-- ══════════════════════════════════════════════
      SLIDE 3 — FONTES
+     Pipeline fills: source_1, source_2, source_3, verify_note, handle
 ══════════════════════════════════════════════ -->
 <div class="slide slide-sources">
   <div class="sources-head">Fontes</div>
-  <div class="source-item"><strong>[Veículo]</strong> — [Título da matéria], [Mês Ano]</div>
-  <div class="source-item"><strong>[Veículo]</strong> — [Título da matéria], [Mês Ano]</div>
-  <div class="source-item"><strong>[Documento oficial]</strong> — [Nome do doc], [Ano]</div>
+
+  <div class="source-row">
+    <span class="source-num">1</span>
+    <span class="source-text"><strong>[Veículo]</strong> — [Título da matéria], [Mês Ano]</span>
+  </div>
+  <div class="source-row">
+    <span class="source-num">2</span>
+    <span class="source-text"><strong>[Veículo]</strong> — [Título da matéria], [Mês Ano]</span>
+  </div>
+  <div class="source-row">
+    <span class="source-num">3</span>
+    <span class="source-text"><strong>[Documento oficial]</strong> — [Nome do documento], [Ano]</span>
+  </div>
+
+  <!-- Verification stamp — pipeline fills verify_note -->
+  <div class="verify-stamp">
+    <div class="verify-label">Como verificamos</div>
+    <div class="verify-text">
+      Cruzamos [N] fontes independentes. Todos os dados foram confirmados por ao menos duas publicações jornalísticas.
+    </div>
+  </div>
   <div class="source-footer">via @HANDLE_PLACEHOLDER · fair use / pesquisa própria</div>
 </div>
 
