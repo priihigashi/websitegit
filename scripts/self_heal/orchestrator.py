@@ -85,6 +85,9 @@ OPENAI_MODEL = "gpt-4o"
 
 PRIORITY_ORDER = {"P0-CRITICAL": 0, "P1-HIGH": 1, "P2-MED": 2, "P3-LOW": 3, "USER-ONLY": 99}
 
+# Loaded by main() at the start of every cycle from NONNEGOTIABLES.md
+NONNEGOTIABLES_TEXT: str = ""
+
 # ── INIT ────────────────────────────────────────────────────────────────────
 def log(msg: str) -> None:
     print(f"[{dt.datetime.utcnow().isoformat(timespec='seconds')}Z] {msg}", flush=True)
@@ -316,14 +319,25 @@ def backup_file_to_drive(creds: Credentials, gh: Github, path: str, task_id: str
 # ── AI PATCH GENERATION ─────────────────────────────────────────────────────
 PATCH_SYSTEM_PROMPT = """You are a senior Python engineer maintaining a content pipeline at oak-park-ai-hub.
 
-Constraints (NON-NEGOTIABLE):
-1. Modify ONLY the section needed to fix the described bug.
-2. Do not rewrite or refactor unrelated code.
-3. Preserve all existing function signatures, imports, and side-effect ordering.
-4. If a fix requires more than ~80 changed lines or affects 3+ functions, REFUSE
-   and reply with REFUSE: <reason>.
-5. If the bug cannot be fixed without touching another file, REFUSE and explain.
-6. Output ONLY valid JSON with this schema:
+CONSTRAINTS (NON-NEGOTIABLE — read repo NONNEGOTIABLES.md before reasoning):
+1. APPEND-ONLY DOCTRINE (NN-S2): Working scripts are NEVER deleted or rewritten
+   from scratch. Edit only the section that must change. Preserve all other
+   existing functions, imports, comments, and side-effect ordering verbatim.
+2. NO MASS DELETIONS: If your patch removes more than 20 lines from the
+   original file (counted as net deletion), REFUSE.
+3. SIZE LIMIT: If the fix requires more than ~80 changed lines or affects
+   3+ functions, REFUSE.
+4. NO CROSS-FILE FIXES: If the bug cannot be fixed without touching another
+   file, REFUSE and explain in the reason.
+5. NO LABEL LEAKAGE (NN-S4): If your patch adds any of these strings to
+   user-rendered output (carousel slide text, reel captions, briefs):
+   "one should say", "the narrator says", "[INSERT", "{{", "TODO:",
+   "PLACEHOLDER", "XXX", "Slide N:", "Hook:", "CTA:", "Body:" —
+   that is a critical bug. REFUSE the patch.
+6. PRESERVE COMMENTS AND DOCSTRINGS that document existing behavior. New
+   comments may be added but old ones must not be removed unless they are
+   describing the exact code being changed.
+7. Output ONLY valid JSON with this schema:
    {
      "decision": "PATCH" | "REFUSE",
      "reason": "short explanation",
@@ -333,16 +347,45 @@ Constraints (NON-NEGOTIABLE):
    }
 """
 
+# Strings that must not appear in user-rendered output. Used by guard checks below
+# AND injected into the system prompt above (NN-S4).
+LABEL_LEAK_PATTERNS = [
+    "one should say", "the narrator says", "[INSERT", "{{",
+    "TODO:", "PLACEHOLDER", "XXX",
+    "Slide 1:", "Slide 2:", "Slide 3:", "Slide 4:", "Slide 5:",
+    "Hook:", "CTA:", "Body:",
+]
+
+def patch_violates_nonnegotiables(before: str, after: str) -> tuple[bool, str]:
+    """Return (violated, reason). Used to reject patches before they ship."""
+    before_lines = before.splitlines()
+    after_lines  = after.splitlines()
+    # NN-S2: net deletion limit
+    net_delete = max(0, len(before_lines) - len(after_lines))
+    if net_delete > 20:
+        return True, f"NN-S2 violation: net deletion of {net_delete} lines (> 20)"
+    # NN-S4: no label-leak strings introduced
+    for pat in LABEL_LEAK_PATTERNS:
+        if pat in after and pat not in before:
+            return True, f"NN-S4 violation: introduced label-leak string {pat!r}"
+    return False, ""
+
 def request_patch_claude(client: anthropic.Anthropic, task: dict,
                          file_path: str, file_content: str,
                          error_log: str = "") -> dict:
-    user = f"""TASK ID: {task.get('ID')}
+    nn = (NONNEGOTIABLES_TEXT[:8000] if NONNEGOTIABLES_TEXT else "(not loaded)")
+    user = f"""REPO NON-NEGOTIABLES (read first, comply absolutely):
+```
+{nn}
+```
+
+TASK ID: {task.get('ID')}
 TITLE: {task.get('Title')}
 DESCRIPTION: {task.get('Description')}
 TARGET FILE: {file_path}
 VERIFICATION METHOD: {task.get('Verification Method')}
 
-CURRENT FILE CONTENT (verbatim):
+CURRENT FILE CONTENT (verbatim — do not delete or restructure unrelated code):
 ```
 {file_content[:50000]}
 ```
@@ -376,13 +419,19 @@ def request_patch_openai_primary(client: OpenAI, task: dict,
                                   file_path: str, file_content: str,
                                   error_log: str = "") -> dict:
     """OpenAI as primary patch generator (fallback when Claude is unavailable)."""
-    user = f"""TASK ID: {task.get('ID')}
+    nn = (NONNEGOTIABLES_TEXT[:8000] if NONNEGOTIABLES_TEXT else "(not loaded)")
+    user = f"""REPO NON-NEGOTIABLES (read first, comply absolutely):
+```
+{nn}
+```
+
+TASK ID: {task.get('ID')}
 TITLE: {task.get('Title')}
 DESCRIPTION: {task.get('Description')}
 TARGET FILE: {file_path}
 VERIFICATION METHOD: {task.get('Verification Method')}
 
-CURRENT FILE CONTENT (verbatim):
+CURRENT FILE CONTENT (verbatim — do not delete or restructure unrelated code):
 ```
 {file_content[:50000]}
 ```
@@ -660,6 +709,19 @@ def main() -> None:
     if maybe_pause(ws):
         return
 
+    # NN-S5: read NONNEGOTIABLES.md as the FIRST action of every cycle.
+    # This text gets injected into every patch-generation prompt so both
+    # Claude and OpenAI see the live rules, not a stale snapshot.
+    global NONNEGOTIABLES_TEXT
+    NONNEGOTIABLES_TEXT = ""
+    try:
+        repo_for_nn = gh.get_repo(f"{REPO_OWNER}/{REPO_NAME}")
+        nn_obj = repo_for_nn.get_contents("NONNEGOTIABLES.md", ref=DEFAULT_BRANCH)
+        NONNEGOTIABLES_TEXT = base64.b64decode(nn_obj.content).decode("utf-8", "replace")
+        log(f"NONNEGOTIABLES.md loaded ({len(NONNEGOTIABLES_TEXT)} chars)")
+    except Exception as e:
+        log(f"WARN: could not load NONNEGOTIABLES.md ({e}); proceeding with embedded rules only")
+
     rows = read_queue(ws)
     if queue_is_done(rows):
         url = write_final_report(creds, gh, rows)
@@ -766,6 +828,13 @@ def main() -> None:
 
         if not new_content:
             error_log = "no patch content"
+            continue
+
+        # NN-S2 / NN-S4 guard: reject patches that violate the rules.
+        violated, reason = patch_violates_nonnegotiables(before, new_content)
+        if violated:
+            log(f"REJECTED by non-negotiables guard: {reason}")
+            error_log = f"NON-NEGOTIABLES VIOLATION: {reason}"
             continue
 
         if dry:
