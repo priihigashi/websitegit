@@ -297,6 +297,61 @@ def wait_for_run(gh: Github, run_id: int, timeout_s: int = 1500) -> str:
         time.sleep(15)
     return "timeout"
 
+# ── VERIFICATION TIMEOUT HELPER (added 2026-05-03 — NN-S2 append-only) ──────
+# Prior behavior: verify-bug step waited up to 900s for child workflow to
+# complete, then treated timeout/failure/unknown identically. This allowed
+# the orchestrator to hang silently when the very workflow being fixed is
+# itself broken (chicken-and-egg).
+#
+# New behavior:
+#   - Per-task timeout via the optional "Verification Timeout" sheet column,
+#     default 600s (10 min). Read from task dict; falls back to 600.
+#   - On timeout, the child run is CANCELLED via GitHub API so it doesn't
+#     keep burning runner minutes.
+#   - Verification result classified as one of:
+#       confirmed_by_failure  — child workflow ran and failed (bug present)
+#       confirmed_by_timeout  — child workflow hung past timeout (bug present, treat as confirmed)
+#       not_reproduced        — child workflow succeeded (bug already fixed)
+#       not_confirmed         — could not dispatch / no Affected Workflow / dry run
+
+def _cancel_workflow_run(gh: Github, run_id: int) -> bool:
+    """Best-effort cancel. Returns True on 202 Accepted, False otherwise."""
+    try:
+        repo = gh.get_repo(f"{REPO_OWNER}/{REPO_NAME}")
+        run = repo.get_workflow_run(run_id)
+        run.cancel()
+        return True
+    except Exception as e:
+        log(f"  cancel run {run_id} failed (non-fatal): {e}")
+        return False
+
+
+def classify_verification(bug_status: str) -> str:
+    """Map raw wait_for_run result to a verification outcome label."""
+    if bug_status == "success":
+        return "not_reproduced"
+    if bug_status == "failure":
+        return "confirmed_by_failure"
+    if bug_status == "timeout":
+        return "confirmed_by_timeout"
+    return "not_confirmed"
+
+
+def _read_task_timeout_s(task: dict, default: int = 600) -> int:
+    """Read 'Verification Timeout' (seconds) from a task row; default 600."""
+    raw = (task.get("Verification Timeout") or "").strip()
+    if not raw:
+        return default
+    try:
+        n = int(raw)
+        if 60 <= n <= 1500:
+            return n
+        return default
+    except (TypeError, ValueError):
+        return default
+
+
+
 # ── BACKUPS ─────────────────────────────────────────────────────────────────
 def backup_file_to_drive(creds: Credentials, gh: Github, path: str, task_id: str) -> str:
     """Copy current file content to Drive Backups folder. Return Drive file ID."""
@@ -891,21 +946,34 @@ def main() -> None:
 
     # Verify bug still present (best effort: trigger affected workflow)
     # Skipped during dry_run to keep test cycles fast.
+    # 2026-05-03 patch: per-task verification_timeout_s, classified outcomes,
+    # auto-cancel child run on timeout. Does NOT change merge/approval logic.
     aw = (task.get("Affected Workflow") or "").strip()
     bug_status = "unknown"
+    verify_outcome = "not_confirmed"
+    verify_timeout_s = _read_task_timeout_s(task, default=600)
     if not dry and aw and aw != "n/a":
         run_id = trigger_workflow(gh, aw)
         if run_id:
-            bug_status = wait_for_run(gh, run_id, timeout_s=900)
-            log(f"verify run {run_id}: {bug_status}")
-            if bug_status == "success":
+            log(f"verify-bug: dispatched {aw} run {run_id}, timeout={verify_timeout_s}s")
+            bug_status = wait_for_run(gh, run_id, timeout_s=verify_timeout_s)
+            verify_outcome = classify_verification(bug_status)
+            if bug_status == "timeout":
+                cancelled = _cancel_workflow_run(gh, run_id)
+                log(f"verify-bug: TIMEOUT after {verify_timeout_s}s — child run cancel={cancelled}")
+            log(f"verify-bug: run {run_id} status={bug_status} outcome={verify_outcome}")
+            if verify_outcome == "not_reproduced":
                 update_queue_row(ws, task_id, Status="DONE",
-                                 **{"Last Result": "ALREADY_FIXED"})
+                                 **{"Last Result": "ALREADY_FIXED — verification: not_reproduced"})
                 log("Bug not reproducing — marking DONE")
                 _bump_pause_counter(ws)
                 return
+            # confirmed_by_failure or confirmed_by_timeout → fall through to patch
+            # not_confirmed → fall through too (best-effort, may have dispatch issue)
     elif dry:
         log("DRY RUN — skipping bug-verification dispatch to save time")
+        verify_outcome = "skipped_dry_run"
+    log(f"verify-bug: outcome={verify_outcome}")
 
     # Pull file content
     path = (task.get("Target File") or "").strip()
