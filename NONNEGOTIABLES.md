@@ -667,3 +667,67 @@ NN-S9 — DO NOT ADD UNVERIFIED PRODUCTS / APIS
 ═══════════════════════════════════════════════════════════════════════
 END OF 2026-05-03 NN-S7..S9 APPEND
 ═══════════════════════════════════════════════════════════════════════
+
+
+═══════════════════════════════════════════════════════════════════════
+SELF-HEAL BOT RULES — appended 2026-05-03 (NN-S10 image cascade lock)
+═══════════════════════════════════════════════════════════════════════
+
+NN-S10 — IMAGE CASCADE ORDER IS LOCKED FOR OPC NICHE
+  Background: code-level audit on 2026-05-03 found carousel_builder.py
+  was running AI image generation BEFORE real photos, contradicting
+  IMAGE_QUALITY_RULES.md and producing hallucinated/cartoonish images
+  for realistic construction content. Fixed via SH-033/SH-038/SH-039.
+
+  Locked cascade order (OPC niche only):
+    1. photo_matcher.match_opc_photo()  — real OPC project photos from
+                                          the 📸 Photo Catalog tab
+    2. image_library                    — previously enhanced reuse
+    3. fetch_wikimedia()                — CC photos (institutions, events)
+    4. fetch_pexels()                   — royalty-free stock
+    5. fetch_pixabay()                  — royalty-free stock backup
+    6. NB2 / Seedream4.5 / Seedream5.0 / Gemini / SDXL  — AI fallback
+                                          (flag fix_type=regenerate)
+    7. NO DALL-E for OPC                — produces cartoonish output;
+                                          if all of (1)-(6) fail, return
+                                          empty path and use typographic
+                                          slide template instead.
+
+  News/Brazil niche keeps AI-first per the existing comment in
+  carousel_builder.py L1596-1599 (real-photo search returns generic
+  stock for political topics). DALL-E is allowed there.
+
+  Vision validator gates EVERY tier. _vision_accept must reject:
+    - hallucination markers (extra fingers, garbled text in image,
+      impossible geometry, crowd in solo-tip context)
+    - wrong subject (query says kitchen, image shows bathroom)
+    - cartoonish style on realistic-content niches
+    - watermarks
+    - landscape orientation in portrait slot
+
+  Any patch that reverses cascade order (puts AI before real photos for
+  OPC) MUST be rejected by the self-heal guard. Add tier_order_lock
+  to patch_violates_nonnegotiables() in orchestrator.py.
+
+NN-S11 — TEXT NEVER CROPS, ALWAYS RESIZES
+  Background: opc_tip_base.css uses fixed font-size:128px on headline
+  inside a 1080x1350 container with overflow:hidden. Long headlines
+  get clipped at the bottom edge instead of resizing.
+
+  Required behavior (all slide CSS):
+    - Every text-bearing CSS rule uses font-size: clamp(min, vw, max)
+      OR is paired with a JS auto-shrink loop in export_slides.js.
+    - Container overflow:hidden is ALLOWED only when JS auto-shrink
+      runs first.
+    - Outer safe-zone margin >= 60px on all 4 sides of every slide
+      (currently inconsistent; cover has 108px L/R but other slides
+      touch the edges).
+    - line-height >= 0.95 on display fonts, >= 1.3 on body copy.
+
+  Any patch that adds a fixed font-size > 24px without clamp() and
+  without a corresponding auto-shrink hook is rejected by the
+  self-heal guard.
+
+═══════════════════════════════════════════════════════════════════════
+END OF 2026-05-03 NN-S10/S11 APPEND
+═══════════════════════════════════════════════════════════════════════
