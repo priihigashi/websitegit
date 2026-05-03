@@ -312,3 +312,111 @@ def mark_quota_cleared(service: str, error_type: str) -> bool:
     del state[key]
     _qa_save_state(state)
     return True
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# CROSS-RUN PERSISTENCE — added 2026-05-03
+# ─────────────────────────────────────────────────────────────────────────
+# Why: GitHub Actions /tmp is wiped between runs. To make the 24h throttle
+# truly hold across runs, persist state to the Self-Heal Queue spreadsheet
+# at a reserved range (cells P2:Q50). Each row = one (service, type) record:
+#   col P = JSON-serialized record key
+#   col Q = JSON-serialized record value
+#
+# Falls back to /tmp silently if SHEETS_TOKEN is not set or the API call fails.
+# ─────────────────────────────────────────────────────────────────────────
+
+_QA_SHEETS_ID  = os.environ.get("QUOTA_ALERT_SHEET_ID",
+                                  "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
+_QA_SHEETS_TAB = os.environ.get("QUOTA_ALERT_SHEET_TAB", "🔧 Self-Heal Queue")
+_QA_SHEETS_RANGE = f"'{_QA_SHEETS_TAB}'!P2:Q50"
+
+
+def _qa_get_oauth_token() -> Optional[str]:
+    """Mirror capture_pipeline._get_creds — manual refresh, no scope override."""
+    raw = os.environ.get("SHEETS_TOKEN", "")
+    if not raw:
+        return None
+    try:
+        import json as _j, urllib.request, urllib.parse
+        td = _j.loads(raw)
+        data = urllib.parse.urlencode({
+            "client_id": td["client_id"],
+            "client_secret": td["client_secret"],
+            "refresh_token": td["refresh_token"],
+            "grant_type": "refresh_token",
+        }).encode()
+        resp = _j.loads(urllib.request.urlopen(
+            urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+            timeout=10,
+        ).read())
+        return resp.get("access_token")
+    except Exception as e:
+        print(f"  WARNING quota-state OAuth refresh failed (falling back to /tmp): {e}")
+        return None
+
+
+def _qa_load_state_sheets() -> Optional[dict]:
+    """Read state from Sheets. Returns None on any failure (caller falls back to /tmp)."""
+    tok = _qa_get_oauth_token()
+    if not tok:
+        return None
+    try:
+        import urllib.request, urllib.parse, json as _j
+        url = (f"https://sheets.googleapis.com/v4/spreadsheets/{_QA_SHEETS_ID}"
+               f"/values/{urllib.parse.quote(_QA_SHEETS_RANGE)}?majorDimension=ROWS")
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {tok}"})
+        resp = _j.loads(urllib.request.urlopen(req, timeout=10).read())
+        rows = resp.get("values", [])
+        out = {}
+        for row in rows:
+            if len(row) < 2: continue
+            try:
+                out[row[0]] = _j.loads(row[1])
+            except Exception:
+                continue
+        return out
+    except Exception as e:
+        print(f"  WARNING quota-state Sheets read failed (falling back to /tmp): {e}")
+        return None
+
+
+def _qa_save_state_sheets(state: dict) -> bool:
+    """Write state to Sheets. Returns True on success."""
+    tok = _qa_get_oauth_token()
+    if not tok:
+        return False
+    try:
+        import urllib.request, urllib.parse, json as _j
+        rows = [[k, _j.dumps(v)] for k, v in list(state.items())[:49]]
+        # pad to clear any leftover rows
+        while len(rows) < 49:
+            rows.append(["", ""])
+        body = _j.dumps({"values": rows}).encode()
+        url = (f"https://sheets.googleapis.com/v4/spreadsheets/{_QA_SHEETS_ID}"
+               f"/values/{urllib.parse.quote(_QA_SHEETS_RANGE)}?valueInputOption=RAW")
+        req = urllib.request.Request(url, data=body, method="PUT", headers={
+            "Authorization": f"Bearer {tok}",
+            "Content-Type": "application/json",
+        })
+        urllib.request.urlopen(req, timeout=10).read()
+        return True
+    except Exception as e:
+        print(f"  WARNING quota-state Sheets write failed: {e}")
+        return False
+
+
+# Wrap the existing /tmp helpers so callers automatically prefer Sheets.
+_qa_load_state_local  = _qa_load_state
+_qa_save_state_local  = _qa_save_state
+
+def _qa_load_state(*_a, **_k) -> dict:
+    cloud = _qa_load_state_sheets()
+    if cloud is not None:
+        return cloud
+    return _qa_load_state_local()
+
+def _qa_save_state(state: dict) -> None:
+    if _qa_save_state_sheets(state):
+        return
+    _qa_save_state_local(state)
