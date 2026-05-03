@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Brazil — Single Character + Object Cover · FORMAT-COVER-1CHAR-OBJ-BR</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Roboto+Condensed:wght@400;700;900&family=Anton&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* FORMAT-COVER-1CHAR-OBJ-BR
+   Single subject cutout on left + bold black headline on right
+   Brand canário gold bg + navy blob bottom (echoes Brazilian flag)
+   Use for: a single character story where subject holds/interacts with an object
+   PRODUCTION: rembg cutout PNG (subject + object together) injected via .person-img
+*/
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#C9A84C;
+  --blob:#1A2060;
+  --ink:#0D0B08;
+  --cream:#F0EBE3;
+  --W:1080px;--H:1350px;--P:60px;
+}
+body{background:#111;display:flex;justify-content:center;padding:24px;font-family:'Archivo Black',sans-serif}
+.slide{
+  width:var(--W);height:var(--H);background:var(--bg);
+  position:relative;overflow:hidden;
+  flex-shrink:0;
+}
+/* Paper canvas texture */
+.slide::before{
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(45deg,transparent 0,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);
+}
+/* Navy blob bottom-center — echoes flag composition */
+.flag-blob{
+  position:absolute;bottom:-180px;left:50%;transform:translateX(-50%);
+  width:1300px;height:560px;border-radius:50%;
+  background:var(--blob);z-index:1;
+}
+
+/* Logo top-left */
+.logo{
+  position:absolute;top:38px;left:50px;z-index:5;
+  width:64px;height:64px;border-radius:50%;
+  background:var(--ink);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.logo span{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:16px;font-weight:900;color:var(--cream);
+  line-height:1;letter-spacing:.02em;
+}
+
+/* Counter pill top-right */
+.counter{
+  position:absolute;top:38px;right:42px;z-index:5;
+  background:rgba(15,11,8,0.85);
+  color:var(--cream);
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:22px;font-weight:700;
+  padding:10px 22px;border-radius:30px;
+}
+
+/* Headline (right side) */
+.headline{
+  position:absolute;top:120px;right:50px;
+  width:600px;z-index:5;
+  font-family:'Archivo Black','Anton',sans-serif;
+  font-size:62px;line-height:1.04;letter-spacing:-0.01em;
+  color:var(--ink);text-transform:uppercase;
+  text-align:left;
+}
+
+/* Cutout person photo block — left side, full-height bleed */
+.person-wrap{
+  position:absolute;left:-30px;bottom:0;
+  width:680px;height:1280px;z-index:3;
+  display:flex;align-items:flex-end;justify-content:center;
+}
+.person-img{
+  height:96%;width:auto;max-width:100%;
+  object-fit:contain;object-position:bottom center;
+  filter:url(#duotone-bw);
+}
+
+/* Photo credit bottom-left */
+.photo-credit{
+  position:absolute;bottom:30px;left:60px;z-index:5;
+  font-family:'Space Mono',monospace;font-size:14px;
+  color:rgba(13,11,8,0.75);letter-spacing:.05em;
+}
+</style>
+</head>
+<body>
+
+<!-- B&W high-contrast filter for the cutout subject (newspaper editorial look) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="duotone-bw" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values=".299 .587 .114 0 0  .299 .587 .114 0 0  .299 .587 .114 0 0  0 0 0 1 0"/>
+    <feComponentTransfer>
+      <feFuncR type="linear" slope="1.35" intercept="-0.18"/>
+      <feFuncG type="linear" slope="1.35" intercept="-0.18"/>
+      <feFuncB type="linear" slope="1.35" intercept="-0.18"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
+
+<div class="slide">
+  <div class="flag-blob"></div>
+  <div class="logo"><span>In</span><span>Br</span></div>
+  <div class="counter">1/10</div>
+
+  <div class="person-wrap">
+    <img class="person-img" src="resources/two_char_demo/person1_cutout.png" alt="">
+  </div>
+
+  <div class="headline">
+    Rejeição de Messias no STF é alerta sobre plano da extrema direita para dominar Senado
+  </div>
+
+  <div class="photo-credit">Foto: Agência Brasil / InBr</div>
+</div>
+</body>
+</html>

@@ -1,22 +1,22 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Brazil — Two Character Cover · FORMAT-COVER-2CHAR-BR</title>
+<title>USA — Two Character Cover · FORMAT-COVER-2CHAR-US</title>
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Roboto+Condensed:wght@400;700;900&family=Anton&display=swap" rel="stylesheet">
 <style>
-/* FORMAT-COVER-2CHAR-BR — Brazil cover for stories with TWO main characters
-   Brick red bg + mint duotone photo of two people side-by-side
-   Headline wraps around the photo (above + below)
-   Inspired by InBr (Zema/empresa fraude editorial cover)
+/* FORMAT-COVER-2CHAR-US — USA mirror of two-character cover
+   Navy bg + cream headline + black block holding two cutouts
+   Heads extend above block (text does NOT overlap heads — generous margins).
+   Uses same rembg cutout pipeline as Brazil version.
 */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#A52929;
-  --bg-deep:#7A1E1E;
+  --bg:#0D1B3E;
+  --bg-deep:#0A1432;
   --ink:#0A0A0A;
-  --mint:#D6E8AC;
-  --mint-mid:#B5D08A;
+  --cream:#F0EBE3;
+  --cream-mid:#E8D8B5;
   --money:#D8C49A;
   --W:1080px;--H:1350px;--P:60px;
 }
@@ -26,34 +26,33 @@ body{background:#111;display:flex;justify-content:center;padding:24px;font-famil
   position:relative;overflow:hidden;padding:var(--P);
   flex-shrink:0;display:flex;flex-direction:column;
 }
-/* Canvas / paper texture overlay */
 .slide::before{
   content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
   background-image:
-    repeating-linear-gradient(45deg,transparent 0,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px),
-    repeating-linear-gradient(-45deg,transparent 0,transparent 3px,rgba(255,255,255,0.02) 3px,rgba(255,255,255,0.02) 6px);
+    repeating-linear-gradient(45deg,transparent 0,transparent 2px,rgba(255,255,255,0.025) 2px,rgba(255,255,255,0.025) 4px),
+    repeating-linear-gradient(-45deg,transparent 0,transparent 3px,rgba(0,0,0,0.04) 3px,rgba(0,0,0,0.04) 6px);
 }
 .slide::after{
   content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
-  background:radial-gradient(circle at 30% 50%,transparent 60%,rgba(0,0,0,0.18) 100%);
+  background:radial-gradient(circle at 30% 50%,transparent 60%,rgba(0,0,0,0.22) 100%);
 }
 .slide>*{position:relative;z-index:3}
 
-/* Counter pill top-right */
 .counter{
   position:absolute;top:34px;right:40px;z-index:5;
-  background:rgba(15,10,8,0.88);
-  color:var(--mint);
+  background:rgba(240,235,227,0.15);
+  color:var(--cream);
   font-family:'Roboto Condensed',sans-serif;
   font-size:22px;font-weight:700;
   padding:10px 22px;border-radius:30px;
+  border:1px solid rgba(240,235,227,0.25);
 }
 
-/* Money / 200 reais torn paper accents */
+/* Dollar/legal-pad accents in corners (USA equivalent of 200 reais) */
 .money-corner{
   position:absolute;z-index:2;background:var(--money);
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 4px 18px rgba(0,0,0,0.18);
+  box-shadow:0 4px 18px rgba(0,0,0,0.25);
 }
 .money-tr{
   top:-30px;right:-60px;width:300px;height:200px;
@@ -77,42 +76,29 @@ body{background:#111;display:flex;justify-content:center;padding:24px;font-famil
   letter-spacing:.18em;transform:rotate(22deg);
 }
 
-/* Headline (mint, chunky display) */
 .headline{
   font-family:'Archivo Black','Anton',sans-serif;
   font-size:108px;font-weight:400;
   line-height:0.94;letter-spacing:-0.01em;
-  color:var(--mint);
-  text-transform:none;
-  flex-shrink:0;
+  color:var(--cream);
+  text-transform:none;flex-shrink:0;
 }
 .headline .underline{
   text-decoration:underline;
-  text-decoration-thickness:6px;
-  text-underline-offset:8px;
+  text-decoration-thickness:6px;text-underline-offset:8px;
 }
 .headline-top{margin-top:24px;margin-bottom:24px;z-index:5}
 .headline-bot{margin-top:24px;margin-bottom:24px;z-index:5}
 
-/* Inline black pill (e.g. "de") */
 .inline-pill{
   display:inline-block;
-  background:var(--ink);
-  color:var(--mint);
-  border-radius:60px;
-  padding:0 32px 6px;
-  margin:0 4px;
-  font-family:inherit;
-  font-size:80px;
-  vertical-align:middle;
-  line-height:1.05;
+  background:var(--ink);color:var(--cream);
+  border-radius:60px;padding:0 32px 6px;margin:0 4px;
+  font-family:inherit;font-size:80px;
+  vertical-align:middle;line-height:1.05;
 }
 
-/* PHOTO ZONE — three-layer composition:
-   (1) Black block sits BEHIND, sized so its top edge falls BELOW head tops.
-   (2) Two cutout PNGs sit IN FRONT of the block, full-height of the zone — heads
-       extend above block top edge into the gap between headline and block.
-   (3) Headlines have generous margin so they do NOT overlap the heads. */
+/* Photo zone (same architecture as Brazil two-char) */
 .photo-zone{
   width:700px;height:620px;
   margin:50px auto 50px;
@@ -122,42 +108,33 @@ body{background:#111;display:flex;justify-content:center;padding:24px;font-famil
 }
 .black-block{
   position:absolute;
-  top:170px;left:0;right:0;bottom:0;     /* top:170px = head clearance above block */
+  top:170px;left:0;right:0;bottom:0;
   background:var(--ink);
   border-radius:6px;
   box-shadow:0 14px 40px rgba(0,0,0,0.55),
              inset 0 0 0 1px rgba(0,0,0,0.85);
   z-index:1;
 }
-/* (legacy block kept hidden — replaced by .photo-zone above) */
-.photo-block{
-  display:none;
-}
 .person-img{
   position:relative;z-index:2;
   height:100%;width:auto;max-width:55%;
   object-fit:contain;object-position:bottom center;
-  filter:url(#duotone-twochar);
+  filter:url(#duotone-twochar-us);
 }
 .person-img.person-1{transform:translateX(6%)}
 .person-img.person-2{transform:translateX(-6%)}
 
-/* CTA pill bottom-right */
 .cta-pill{
   position:absolute;bottom:54px;right:54px;z-index:5;
-  background:var(--ink);
-  color:var(--mint);
+  background:var(--ink);color:var(--cream);
   font-family:'Roboto Condensed',sans-serif;
   font-size:21px;font-weight:700;
-  letter-spacing:.14em;
-  text-transform:uppercase;
-  padding:18px 36px;
-  border-radius:60px;
+  letter-spacing:.14em;text-transform:uppercase;
+  padding:18px 36px;border-radius:60px;
   display:flex;align-items:center;gap:20px;
 }
 .cta-pill .arrow{font-size:24px;line-height:1}
 
-/* InBr logo stack bottom-left */
 .logo-stack{
   position:absolute;bottom:54px;left:54px;z-index:5;
   display:flex;flex-direction:column;gap:14px;
@@ -169,27 +146,21 @@ body{background:#111;display:flex;justify-content:center;padding:24px;font-famil
 }
 .logo-circle span{
   font-family:'Roboto Condensed',sans-serif;
-  font-size:16px;font-weight:900;
-  color:var(--mint);
+  font-size:16px;font-weight:900;color:var(--cream);
   line-height:1;letter-spacing:.02em;
 }
 </style>
 </head>
 <body>
 
-<!-- Duotone SVG filter: shadow #0A0A0A obsidian → highlight #9BC077 sage, with contrast boost -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <filter id="duotone-twochar" color-interpolation-filters="sRGB">
+  <filter id="duotone-twochar-us" color-interpolation-filters="sRGB">
     <feColorMatrix type="matrix" values=".299 .587 .114 0 0  .299 .587 .114 0 0  .299 .587 .114 0 0  0 0 0 1 0"/>
+    <feComponentTransfer><feFuncR type="linear" slope="1.4" intercept="-0.2"/><feFuncG type="linear" slope="1.4" intercept="-0.2"/><feFuncB type="linear" slope="1.4" intercept="-0.2"/></feComponentTransfer>
     <feComponentTransfer>
-      <feFuncR type="linear" slope="1.4" intercept="-0.2"/>
-      <feFuncG type="linear" slope="1.4" intercept="-0.2"/>
-      <feFuncB type="linear" slope="1.4" intercept="-0.2"/>
-    </feComponentTransfer>
-    <feComponentTransfer>
-      <feFuncR type="table" tableValues="0.039 0.608"/>
-      <feFuncG type="table" tableValues="0.039 0.753"/>
-      <feFuncB type="table" tableValues="0.039 0.467"/>
+      <feFuncR type="table" tableValues="0.039 0.910"/>
+      <feFuncG type="table" tableValues="0.039 0.847"/>
+      <feFuncB type="table" tableValues="0.039 0.706"/>
     </feComponentTransfer>
   </filter>
 </svg>
@@ -199,16 +170,16 @@ body{background:#111;display:flex;justify-content:center;padding:24px;font-famil
   <div class="counter">1/10</div>
 
   <div class="money-corner money-tr">
-    <div class="money-tr-text">200<small>REAIS</small></div>
+    <div class="money-tr-text">$1B<small>FUNDS</small></div>
   </div>
   <div class="money-corner money-bl">
-    <div class="money-bl-text">REPÚBLICA</div>
+    <div class="money-bl-text">TREASURY</div>
   </div>
 
   <div class="headline headline-top">
-    <span class="underline"><strong>Governo Zema</strong></span><br>
-    <span class="underline">fez compras</span><br>
-    <span class="underline">milionárias</span><span class="inline-pill">de</span>
+    <span class="underline"><strong>Senate Probe</strong></span><br>
+    <span class="underline">found millions</span><br>
+    <span class="underline">funneled</span><span class="inline-pill">to</span>
   </div>
 
   <div class="photo-zone">
@@ -218,17 +189,17 @@ body{background:#111;display:flex;justify-content:center;padding:24px;font-famil
   </div>
 
   <div class="headline headline-bot">
-    empresa<br>
-    suspeita de<br>
-    <span class="underline">fraude</span>
+    shell<br>
+    company<br>
+    <span class="underline">tied to fraud</span>
   </div>
 
   <div class="logo-stack">
-    <div class="logo-circle"><span>In</span><span>Br</span></div>
+    <div class="logo-circle"><span>In</span><span>US</span></div>
   </div>
 
   <div class="cta-pill">
-    ENTENDA POR QUE ISSO É GRAVE
+    UNDERSTAND WHY THIS MATTERS
     <span class="arrow">→</span>
   </div>
 
