@@ -3122,11 +3122,45 @@ SOURCES (list from transcript + research findings):
 
 STATUS: DRAFT — text ready, art needed"""
 
-    msg = client.messages.create(
-        model="claude-opus-4-6", max_tokens=3000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return msg.content[0].text
+    # 2026-05-03: append-only OpenAI fallback (NN-S2 / NN-S8). Claude stays primary.
+    # If Anthropic returns 400 (credit) or 401 (auth), fall back to OpenAI gpt-4o
+    # using the same prompt. Same pattern as scripts/self_heal/orchestrator.py.
+    try:
+        msg = client.messages.create(
+            model="claude-opus-4-6", max_tokens=3000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return msg.content[0].text
+    except anthropic.BadRequestError as _claude_err_credit:
+        print(f"  generate_content_brief: Claude 400 ({_claude_err_credit}); falling back to OpenAI")
+    except anthropic.AuthenticationError as _claude_err_auth:
+        print(f"  generate_content_brief: Claude 401 ({_claude_err_auth}); falling back to OpenAI")
+
+    # OpenAI fallback path
+    import os as _os, urllib.request as _urlreq, urllib.error as _urlerr
+    _oai_key = _os.environ.get("OPENAI_API_KEY", "")
+    if not _oai_key:
+        return f"SOURCE: {url}\nNOTES: {notes or 'None'}\n\nTRANSCRIPT:\n{transcript}\n\n[Brief generation skipped: Claude credit error and no OPENAI_API_KEY fallback set]"
+    try:
+        _payload = json.dumps({
+            "model": "gpt-4o",
+            "max_tokens": 3000,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        _req = _urlreq.Request(
+            "https://api.openai.com/v1/chat/completions",
+            data=_payload,
+            headers={
+                "Authorization": f"Bearer {_oai_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        with _urlreq.urlopen(_req, timeout=120) as _resp:
+            _data = json.loads(_resp.read().decode("utf-8"))
+        return _data["choices"][0]["message"]["content"]
+    except Exception as _oai_err:
+        print(f"  generate_content_brief: OpenAI fallback also failed ({_oai_err}); returning transcript only")
+        return f"SOURCE: {url}\nNOTES: {notes or 'None'}\n\nTRANSCRIPT:\n{transcript}\n\n[Both Claude and OpenAI brief generation failed]"
 
 
 def translate_to_pt(text: str) -> str:
