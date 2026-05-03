@@ -452,6 +452,7 @@ def request_patch_claude(client: anthropic.Anthropic, task: dict,
                          file_path: str, file_content: str,
                          error_log: str = "") -> dict:
     nn = (NONNEGOTIABLES_TEXT[:8000] if NONNEGOTIABLES_TEXT else "(not loaded)")
+    report = (DETAILED_REPORT_TEXT[:15000] if DETAILED_REPORT_TEXT else "(not loaded)")
     user = f"""REPO NON-NEGOTIABLES (read first, comply absolutely):
 ```
 {nn}
@@ -500,6 +501,7 @@ def request_patch_openai_primary(client: OpenAI, task: dict,
                                   error_log: str = "") -> dict:
     """OpenAI as primary patch generator (fallback when Claude is unavailable)."""
     nn = (NONNEGOTIABLES_TEXT[:8000] if NONNEGOTIABLES_TEXT else "(not loaded)")
+    report = (DETAILED_REPORT_TEXT[:15000] if DETAILED_REPORT_TEXT else "(not loaded)")
     user = f"""REPO NON-NEGOTIABLES (read first, comply absolutely):
 ```
 {nn}
