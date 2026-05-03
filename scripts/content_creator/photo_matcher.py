@@ -1,3 +1,4 @@
+
 """
 photo_matcher.py — Match OPC carousel topics to real jobsite photos.
 
@@ -25,9 +26,13 @@ def _get_token():
         return ""
     try:
         data = json.loads(raw)
-        return data.get("access_token") or data.get("token", "")
+        if 'token' in data:  # Adjusted to reflect standard OAuth token structure
+            return data['token']
+        if 'access_token' in data:
+            return data['access_token']
     except Exception:
-        return raw.strip()
+        pass
+    return ""
 
 
 def _read_catalog(token):
