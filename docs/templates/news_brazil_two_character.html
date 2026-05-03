@@ -91,8 +91,8 @@ body{background:#111;display:flex;justify-content:center;padding:24px;font-famil
   text-decoration-thickness:6px;
   text-underline-offset:8px;
 }
-.headline-top{margin-top:24px;margin-bottom:24px}
-.headline-bot{margin-top:24px;margin-bottom:24px}
+.headline-top{margin-top:24px;margin-bottom:24px;z-index:5}
+.headline-bot{margin-top:24px;margin-bottom:24px;z-index:5}
 
 /* Inline black pill (e.g. "de") */
 .inline-pill{
@@ -117,9 +117,10 @@ body{background:#111;display:flex;justify-content:center;padding:24px;font-famil
    if local fails. Cutout PNGs cached to Drive keyed by source-URL hash. */
 .photo-block{
   background:var(--ink);
-  width:680px;height:560px;
-  margin:-40px auto 30px;
+  width:700px;height:440px;            /* shorter — wide rectangle, less black above */
+  margin:-40px auto 24px;
   position:relative;
+  z-index:1;                            /* text layer paints ABOVE this */
   border-radius:6px;
   box-shadow:0 14px 40px rgba(0,0,0,0.5),
              inset 0 0 0 1px rgba(0,0,0,0.85);
@@ -128,8 +129,8 @@ body{background:#111;display:flex;justify-content:center;padding:24px;font-famil
   display:flex;align-items:flex-end;justify-content:center;gap:0;
 }
 .person-img{
-  height:104%;            /* slightly oversized so heads peek above top edge */
-  width:auto;max-width:52%;
+  height:135%;                          /* heads pin near top of block */
+  width:auto;max-width:55%;
   object-fit:contain;object-position:bottom center;
   filter:url(#duotone-twochar);
   margin-bottom:-2%;
