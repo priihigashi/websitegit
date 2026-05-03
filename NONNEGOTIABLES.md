@@ -533,3 +533,70 @@ _(items confirmed implemented — moved from PENDING)_
 
 - **SCRIPT / CODE EDITING RULE — NON-NEGOTIABLE** (from repo CLAUDE.md, 2026-05-03)
   Never rewrite a working script from scratch. Only change what is strictly necessary. Before any edit: read the full file, list what you're changing and why. Good things already in the script must be p
+
+
+═══════════════════════════════════════════════════════════════════════
+SELF-HEAL BOT RULES — appended 2026-05-03
+═══════════════════════════════════════════════════════════════════════
+
+These rules apply to the pipeline_self_heal.yml bot AND to any human or
+AI session that touches the repo. They are non-negotiable. The bot
+reads this file at the start of every cycle and refuses any action
+that would violate them.
+
+NN-S1 — APPEND-ONLY DOCTRINE FOR DOCS
+  - Google Docs are NEVER overwritten. New information ALWAYS goes at
+    the bottom in a new dated block: "NOTE — YYYY-MM-DD HH:MM UTC".
+  - Prior NOTE blocks are NEVER edited or deleted. If a prior decision
+    was wrong, write a new NOTE that supersedes it; the old text stays.
+  - This applies to: HANDOFF docs, story docs (EP001 format), Fixing Log
+    Docs, master plan docs, _CHECKLIST.md, every CAROUSEL_FOLDER_STANDARD
+    story doc, this file (NONNEGOTIABLES.md).
+
+NN-S2 — APPEND-ONLY DOCTRINE FOR SCRIPTS / WORKFLOWS
+  - Working scripts are NEVER deleted or rewritten from scratch.
+  - Only the section that needs to change may be edited. If a fix would
+    require deleting a working function, the bot REFUSES the patch and
+    marks the task NEEDS-REVIEW.
+  - This was historically violated when "fixing storytelling" caused
+    internal label leakage into carousels. The new rule prevents that
+    class of bug.
+
+NN-S3 — BACKUP BEFORE ANY ALTER
+  - Before editing ANY file (script, workflow, doc, sheet schema), the
+    bot copies the current version to:
+      - Drive: /PIPELINE FIX/Backups/  (for repo files)
+      - Drive: copy_file API           (for Google Docs)
+  - Backup filename: BACKUP_<task_id>_<original_path>_<utc-iso>
+  - Backup confirmation must appear in the Fixing Log Doc before the
+    bot proceeds with the edit.
+  - Git tag self-heal-baseline-2026-05-03 is the absolute rollback
+    anchor for the repo. Never delete or move that tag.
+
+NN-S4 — NO SILENT CARROUSEL LABEL LEAKAGE
+  - If carousel slide text contains any of: "one should say", "the
+    narrator says", "[INSERT", "{{", "TODO:", "PLACEHOLDER", "XXX",
+    "Slide N:", "Hook:", "CTA:", "Body:" — that is a build failure.
+    The bot must mark the build red and the carousel must NOT ship.
+  - This rule was added because a prior storytelling-fix attempt
+    introduced internal labels into the rendered output. SH-020
+    (carousel storytelling guardrail) implements the detector.
+
+NN-S5 — READ THIS FILE BEFORE EVERY CYCLE
+  - The self-heal orchestrator reads NONNEGOTIABLES.md as the FIRST
+    action of every cycle (before reading the queue, before any patch).
+  - If a proposed patch would violate any NN-* rule, the patch is
+    rejected and the task is marked NEEDS-REVIEW with the rule ID.
+  - Any human session continuing this work must also re-read this file
+    before starting (per CLAUDE.md SCRIPT / CODE EDITING RULE — already
+    in effect, restated here for emphasis).
+
+NN-S6 — NEW NON-NEGOTIABLES APPEND HERE
+  - Any new non-negotiable discovered during work goes at the BOTTOM
+    of this file with a date-stamped header. Never insert in the middle.
+    Never delete an old rule even if it is superseded. Mark superseded
+    rules as such in a follow-up NOTE; do not erase them.
+
+═══════════════════════════════════════════════════════════════════════
+END OF 2026-05-03 APPEND
+═══════════════════════════════════════════════════════════════════════
