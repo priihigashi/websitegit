@@ -837,6 +837,89 @@ def write_final_report(creds: Credentials, gh: Github, rows: list[dict]) -> str:
     ).execute()
     return doc["webViewLink"]
 
+# ── QUEUE INTEGRITY GUARD (SH-045 — added 2026-05-03) ───────────────────────
+# Why: prior queue history accumulated 10 duplicate SH IDs (SH-032×2,
+# SH-033×3, SH-034×3, SH-035-040×2, SH-042×2). update_queue_row() returns
+# the FIRST matching row in column A, while pick_task() returns rows by
+# priority ordering — so the bot can pick a task from row 46 but write its
+# status update to row 36 of the same ID. Silent state corruption.
+#
+# Behavior:
+#   - Scan column A (ID) of all PENDING/IN-PROGRESS/NEEDS-REVIEW rows.
+#   - If any ID appears more than once, log each duplicate with its row
+#     numbers and email Priscila with the full duplicate list.
+#   - Return False so main() halts BEFORE pick_task() and BEFORE any
+#     queue row is touched.
+#   - Renumbering is NOT auto-performed — Priscila resolves manually.
+
+def preflight_queue_integrity(rows: list[dict]) -> tuple[bool, dict]:
+    """Return (ok, info). ok=False means halt cycle. info has duplicate details."""
+    id_to_rows = {}
+    # rows is a list of dicts coming from read_queue(); reconstruct row numbers
+    # by enumerating in order. Sheet header is row 1, so first data row = row 2.
+    for idx, r in enumerate(rows, start=2):
+        rid = (r.get("ID") or "").strip()
+        if not rid:
+            continue
+        id_to_rows.setdefault(rid, []).append(idx)
+    dups = {rid: row_nums for rid, row_nums in id_to_rows.items() if len(row_nums) > 1}
+    info = {
+        "total_rows": len(rows),
+        "unique_ids": len(id_to_rows),
+        "duplicate_count": len(dups),
+        "duplicates": dups,
+    }
+    return (len(dups) == 0), info
+
+
+def emit_queue_integrity_alert(info: dict) -> None:
+    """Log + email when duplicates detected."""
+    dups = info.get("duplicates", {})
+    log("=" * 60)
+    log(f"QUEUE INTEGRITY GUARD: HALTED — {len(dups)} duplicate ID(s) found")
+    log(f"  Total rows scanned: {info.get('total_rows')}")
+    log(f"  Unique IDs:         {info.get('unique_ids')}")
+    log("  Duplicate detail:")
+    for rid, row_nums in sorted(dups.items()):
+        log(f"    {rid:8s} appears in rows {row_nums}")
+    log("=" * 60)
+    log("Halting cycle. No task selected, no rows updated, no patches generated.")
+    log("Action required: manually renumber duplicate rows in the queue, then re-run.")
+
+    # Build email body
+    body_lines = [
+        "<h2>Self-Heal cycle HALTED — queue integrity violation</h2>",
+        f"<p>Found <b>{len(dups)} duplicate SH ID(s)</b> in the active queue. "
+        "The orchestrator refused to proceed because <code>update_queue_row()</code> "
+        "would silently write to the wrong row.</p>",
+        f"<p>Total rows scanned: <b>{info.get('total_rows')}</b><br>"
+        f"Unique IDs: <b>{info.get('unique_ids')}</b><br>"
+        f"Duplicates: <b>{len(dups)}</b></p>",
+        "<h3>Duplicate detail</h3>",
+        "<ul>",
+    ]
+    for rid, row_nums in sorted(dups.items()):
+        body_lines.append(f"  <li><code>{rid}</code> appears in rows {row_nums}</li>")
+    body_lines.append("</ul>")
+    body_lines.append(
+        "<p><b>Required action:</b> open the 🔧 Self-Heal Queue tab and renumber "
+        "duplicate rows so every ID is unique. Then trigger the workflow again. "
+        "The orchestrator will not run another cycle until the queue is clean.</p>"
+    )
+    body_lines.append(
+        f'<p><a href="https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit#gid=372065888">'
+        "Open the Self-Heal Queue tab</a></p>"
+    )
+    try:
+        send_email(
+            "[Self-Heal] HALTED — duplicate SH IDs in queue",
+            "\n".join(body_lines),
+        )
+        log("Queue-integrity alert email sent.")
+    except Exception as e:
+        log(f"WARN: queue-integrity alert email failed (non-fatal): {e}")
+
+
 # ── MAIN ────────────────────────────────────────────────────────────────────
 def main() -> None:
     creds = get_creds()
@@ -923,6 +1006,13 @@ def main() -> None:
         log(f"WARN: could not load detailed REPORT ({e}); proceeding without it")
 
     rows = read_queue(ws)
+
+    # SH-045: queue integrity guard. Halt cycle BEFORE pick_task if duplicates exist.
+    _qi_ok, _qi_info = preflight_queue_integrity(rows)
+    if not _qi_ok:
+        emit_queue_integrity_alert(_qi_info)
+        return
+
     if queue_is_done(rows):
         url = write_final_report(creds, gh, rows)
         log(f"FINAL report: {url}")
