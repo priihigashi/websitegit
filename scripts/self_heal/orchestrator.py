@@ -371,6 +371,45 @@ Produce a patch per the constraints. Output JSON ONLY.
     except json.JSONDecodeError as e:
         return {"decision": "REFUSE", "reason": f"Claude returned non-JSON: {e}", "risk": "HIGH"}
 
+
+def request_patch_openai_primary(client: OpenAI, task: dict,
+                                  file_path: str, file_content: str,
+                                  error_log: str = "") -> dict:
+    """OpenAI as primary patch generator (fallback when Claude is unavailable)."""
+    user = f"""TASK ID: {task.get('ID')}
+TITLE: {task.get('Title')}
+DESCRIPTION: {task.get('Description')}
+TARGET FILE: {file_path}
+VERIFICATION METHOD: {task.get('Verification Method')}
+
+CURRENT FILE CONTENT (verbatim):
+```
+{file_content[:50000]}
+```
+
+PRIOR ATTEMPT ERROR LOG (empty if first attempt):
+```
+{error_log[:6000]}
+```
+
+Produce a patch per the constraints. Output JSON ONLY.
+"""
+    resp = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {"role": "system", "content": PATCH_SYSTEM_PROMPT},
+            {"role": "user",   "content": user},
+        ],
+        response_format={"type": "json_object"},
+        max_tokens=6000,
+    )
+    text = resp.choices[0].message.content.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        return {"decision": "REFUSE", "reason": f"OpenAI returned non-JSON: {e}", "risk": "HIGH"}
+
+
 def request_patch_openai(client: OpenAI, task: dict,
                           file_path: str, file_content: str,
                           claude_patch: dict, error_log: str = "") -> dict:
@@ -691,7 +730,15 @@ def main() -> None:
 
     for attempt in range(1, 4):
         log(f"=== Attempt {attempt}/3 ===")
-        claude_patch = request_patch_claude(cl, task, path, before, error_log)
+        # Try Claude first; if it's broke (credit / auth) fall back to OpenAI as primary.
+        try:
+            claude_patch = request_patch_claude(cl, task, path, before, error_log)
+        except anthropic.BadRequestError as e:
+            log(f"Claude API error ({e}); falling back to OpenAI as primary")
+            claude_patch = request_patch_openai_primary(oa, task, path, before, error_log)
+        except anthropic.AuthenticationError as e:
+            log(f"Claude AUTH error ({e}); falling back to OpenAI as primary")
+            claude_patch = request_patch_openai_primary(oa, task, path, before, error_log)
         if claude_patch.get("decision") == "REFUSE":
             log(f"Claude REFUSED: {claude_patch.get('reason')}")
             update_queue_row(ws, task_id, Status="NEEDS-REVIEW",
