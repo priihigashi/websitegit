@@ -80,7 +80,7 @@ BASELINE_TAG       = "self-heal-baseline-2026-05-03"
 PAUSE_THRESHOLD    = 36  # 36 cycles * 2h = 72h = 3 days
 PAUSE_REMIND_HOURS = 24  # re-email every 24h until acked
 
-CLAUDE_MODEL = "claude-opus-4-7"
+CLAUDE_MODEL = "claude-sonnet-4-5"  # Sonnet cheaper than Opus for patch generation
 OPENAI_MODEL = "gpt-4o"
 
 PRIORITY_ORDER = {"P0-CRITICAL": 0, "P1-HIGH": 1, "P2-MED": 2, "P3-LOW": 3, "USER-ONLY": 99}
@@ -344,7 +344,7 @@ VERIFICATION METHOD: {task.get('Verification Method')}
 
 CURRENT FILE CONTENT (verbatim):
 ```
-{file_content[:120000]}
+{file_content[:50000]}
 ```
 
 PRIOR ATTEMPT ERROR LOG (empty if first attempt):
@@ -356,7 +356,7 @@ Produce a patch per the constraints. Output JSON ONLY.
 """
     resp = client.messages.create(
         model=CLAUDE_MODEL,
-        max_tokens=8000,
+        max_tokens=6000,
         system=PATCH_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user}],
     )
@@ -384,11 +384,11 @@ PROPOSED PATCH (from Claude):
 - decision: {claude_patch.get('decision')}
 - risk: {claude_patch.get('risk')}
 - diff_summary: {claude_patch.get('diff_summary')}
-- new_file_content (snippet): {(claude_patch.get('new_file_content') or '')[:8000]}
+- new_file_content (snippet): {(claude_patch.get('new_file_content') or '')[:6000]}
 
 ORIGINAL FILE CONTENT (full, for context):
 ```
-{file_content[:80000]}
+{file_content[:50000]}
 ```
 
 PRIOR ERROR LOG:
@@ -644,9 +644,10 @@ def main() -> None:
                      **{"Last Attempt": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"})
 
     # Verify bug still present (best effort: trigger affected workflow)
+    # Skipped during dry_run to keep test cycles fast.
     aw = (task.get("Affected Workflow") or "").strip()
     bug_status = "unknown"
-    if aw and aw != "n/a":
+    if not dry and aw and aw != "n/a":
         run_id = trigger_workflow(gh, aw)
         if run_id:
             bug_status = wait_for_run(gh, run_id, timeout_s=900)
@@ -657,6 +658,8 @@ def main() -> None:
                 log("Bug not reproducing — marking DONE")
                 _bump_pause_counter(ws)
                 return
+    elif dry:
+        log("DRY RUN — skipping bug-verification dispatch to save time")
 
     # Pull file content
     path = (task.get("Target File") or "").strip()
