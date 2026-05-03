@@ -42,11 +42,12 @@ from datetime import datetime, timezone
 import sys as __sys, pathlib as __pl
 __sys.path.insert(0, str(__pl.Path(__file__).parent))
 try:
-    from _quota_errors import classify_error, short_sheet_message, send_quota_alert_email
+    from _quota_errors import classify_error, short_sheet_message, send_quota_alert_email, mark_quota_cleared
 except Exception:
     def classify_error(t):        return None
     def short_sheet_message(c, url=""): return "⚠️ Pipeline failed"
     def send_quota_alert_email(*a, **kw): pass
+    def mark_quota_cleared(service, error_type): return False
 
 SHEET_ID  = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 QUEUE_TAB = "📲 Capture Queue"
@@ -362,4 +363,20 @@ def main():
 
 
 if __name__ == "__main__":
+    # 2026-05-03: at the top of every run, fire any pending all-clear emails
+    # for APIs that previously failed and have since stopped failing.
+    # Cheap to call; returns False quickly if nothing to clear.
+    for _svc, _typ in [
+        ("Anthropic", "quota_exceeded"),
+        ("OpenAI", "quota_exceeded"),
+        ("OpenAI", "rate_limit"),
+        ("Apify", "quota_exceeded"),
+        ("Apify", "auth_failed"),
+        ("Anthropic", "rate_limit"),
+        ("Gemini", "quota_exceeded"),
+        ("Pexels", "rate_limit"),
+    ]:
+        try: mark_quota_cleared(_svc, _typ)
+        except Exception: pass
+
     main()
