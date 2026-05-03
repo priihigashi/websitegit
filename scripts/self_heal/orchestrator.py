@@ -370,6 +370,70 @@ def patch_violates_nonnegotiables(before: str, after: str) -> tuple[bool, str]:
             return True, f"NN-S4 violation: introduced label-leak string {pat!r}"
     return False, ""
 
+
+def _tolerant_json_loads(text: str, source_label: str = "AI") -> dict:
+    """Parse AI output as JSON, tolerating common formatting quirks.
+
+    Real-world failure cases this handles:
+    - Literal newlines/tabs inside string fields (JSON-spec invalid but common
+      from LLMs returning full-file content). Fix: strict=False.
+    - Trailing junk after the JSON object. Fix: try strict, then strict=False,
+      then locate first {...} block via regex bracket matching.
+    - Wrapping ```json fences. Already stripped at call site, but double-safe.
+    """
+    import json as _j
+    if text.startswith("```"):
+        text = text.split("```", 2)[-1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.rsplit("```", 1)[0]
+    text = text.strip()
+    # 1. strict
+    try:
+        return _j.loads(text)
+    except _j.JSONDecodeError:
+        pass
+    # 2. lenient (allows control chars in strings)
+    try:
+        return _j.loads(text, strict=False)
+    except _j.JSONDecodeError:
+        pass
+    # 3. last resort: extract first balanced {...} block
+    start = text.find("{")
+    if start >= 0:
+        depth = 0
+        in_string = False
+        escape = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == "\"":
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    candidate = text[start:i+1]
+                    try:
+                        return _j.loads(candidate, strict=False)
+                    except _j.JSONDecodeError:
+                        break
+    return {
+        "decision": "REFUSE",
+        "reason": f"{source_label} returned non-JSON output (after 3 parse strategies)",
+        "risk": "HIGH",
+    }
+
+
 def request_patch_claude(client: anthropic.Anthropic, task: dict,
                          file_path: str, file_content: str,
                          error_log: str = "") -> dict:
@@ -409,10 +473,7 @@ Produce a patch per the constraints. Output JSON ONLY.
         if text.startswith("json"):
             text = text[4:]
         text = text.rsplit("```", 1)[0].strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        return {"decision": "REFUSE", "reason": f"Claude returned non-JSON: {e}", "risk": "HIGH"}
+    return _tolerant_json_loads(text, source_label="Claude")
 
 
 def request_patch_openai_primary(client: OpenAI, task: dict,
@@ -453,10 +514,7 @@ Produce a patch per the constraints. Output JSON ONLY.
         max_tokens=6000,
     )
     text = resp.choices[0].message.content.strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        return {"decision": "REFUSE", "reason": f"OpenAI returned non-JSON: {e}", "risk": "HIGH"}
+    return _tolerant_json_loads(text, source_label="OpenAI")
 
 
 def request_patch_openai(client: OpenAI, task: dict,
