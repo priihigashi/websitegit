@@ -94,15 +94,28 @@ def fail(msg: str, code: int = 1) -> None:
     sys.exit(code)
 
 def get_creds() -> Credentials:
-    token_json = os.environ.get("SHEETS_TOKEN")
-    if not token_json:
+    """Mirrors capture_pipeline._get_creds — manual refresh, no scope override."""
+    import urllib.request, urllib.parse
+    raw = os.environ.get("SHEETS_TOKEN", "")
+    if not raw:
         fail("SHEETS_TOKEN env var missing")
-    info = json.loads(token_json)
-    return Credentials.from_authorized_user_info(info, scopes=[
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-        "https://www.googleapis.com/auth/documents",
-    ])
+    td = json.loads(raw)
+    data = urllib.parse.urlencode({
+        "client_id": td["client_id"],
+        "client_secret": td["client_secret"],
+        "refresh_token": td["refresh_token"],
+        "grant_type": "refresh_token",
+    }).encode()
+    resp = json.loads(urllib.request.urlopen(
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
+    ).read())
+    return Credentials(
+        token=resp["access_token"],
+        refresh_token=td["refresh_token"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=td["client_id"],
+        client_secret=td["client_secret"],
+    )
 
 def gh_client() -> Github:
     token = os.environ.get("GH_TOKEN")
