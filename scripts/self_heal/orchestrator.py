@@ -87,6 +87,7 @@ PRIORITY_ORDER = {"P0-CRITICAL": 0, "P1-HIGH": 1, "P2-MED": 2, "P3-LOW": 3, "USE
 
 # Loaded by main() at the start of every cycle from NONNEGOTIABLES.md
 NONNEGOTIABLES_TEXT: str = ""
+DETAILED_REPORT_TEXT: str = ""
 
 # ── INIT ────────────────────────────────────────────────────────────────────
 def log(msg: str) -> None:
@@ -456,6 +457,11 @@ def request_patch_claude(client: anthropic.Anthropic, task: dict,
 {nn}
 ```
 
+LATEST DETAILED REPORT (read this — it has the current state, recent fixes, and queue context):
+```
+{report}
+```
+
 TASK ID: {task.get('ID')}
 TITLE: {task.get('Title')}
 DESCRIPTION: {task.get('Description')}
@@ -497,6 +503,11 @@ def request_patch_openai_primary(client: OpenAI, task: dict,
     user = f"""REPO NON-NEGOTIABLES (read first, comply absolutely):
 ```
 {nn}
+```
+
+LATEST DETAILED REPORT (read this — it has the current state, recent fixes, and queue context):
+```
+{report}
 ```
 
 TASK ID: {task.get('ID')}
@@ -783,8 +794,9 @@ def main() -> None:
     # NN-S5: read NONNEGOTIABLES.md as the FIRST action of every cycle.
     # This text gets injected into every patch-generation prompt so both
     # Claude and OpenAI see the live rules, not a stale snapshot.
-    global NONNEGOTIABLES_TEXT
+    global NONNEGOTIABLES_TEXT, DETAILED_REPORT_TEXT
     NONNEGOTIABLES_TEXT = ""
+    DETAILED_REPORT_TEXT = ""
     try:
         repo_for_nn = gh.get_repo(f"{REPO_OWNER}/{REPO_NAME}")
         nn_obj = repo_for_nn.get_contents("NONNEGOTIABLES.md", ref=DEFAULT_BRANCH)
@@ -792,6 +804,66 @@ def main() -> None:
         log(f"NONNEGOTIABLES.md loaded ({len(NONNEGOTIABLES_TEXT)} chars)")
     except Exception as e:
         log(f"WARN: could not load NONNEGOTIABLES.md ({e}); proceeding with embedded rules only")
+
+    # ─────────────────────────────────────────────────────────────
+    # Read the latest detailed REPORT from the PIPELINE FIX folder
+    # so the bot knows the current state, recent fixes, and queue
+    # context. Append-only — falls through silently if not available.
+    # Folder: 1FHPkx8VA6c-Wmy6hI3uX_weSPwJPBp3z (PIPELINE FIX root)
+    # ─────────────────────────────────────────────────────────────
+    DETAILED_REPORT_TEXT = ""
+    try:
+        import urllib.request as _ur, urllib.parse as _up, json as _j
+        # Get OAuth token for Drive
+        _raw = os.environ.get("SHEETS_TOKEN", "")
+        if _raw:
+            _td = _j.loads(_raw)
+            _data = _up.urlencode({
+                "client_id": _td["client_id"],
+                "client_secret": _td["client_secret"],
+                "refresh_token": _td["refresh_token"],
+                "grant_type": "refresh_token",
+            }).encode()
+            _resp = _j.loads(_ur.urlopen(
+                _ur.Request("https://oauth2.googleapis.com/token", data=_data),
+                timeout=10,
+            ).read())
+            _tok = _resp.get("access_token", "")
+            if _tok:
+                # List REPORT_*.md files in PIPELINE FIX folder, newest first
+                _PIPELINE_FIX_FOLDER = "1FHPkx8VA6c-Wmy6hI3uX_weSPwJPBp3z"
+                _q = (f"\'{_PIPELINE_FIX_FOLDER}\' in parents and "
+                      f"name contains \'REPORT_\' and "
+                      f"(mimeType = \'text/markdown\' or mimeType = \'text/plain\') and "
+                      f"trashed = false")
+                _list_url = (
+                    f"https://www.googleapis.com/drive/v3/files?"
+                    f"q={_up.quote(_q)}&"
+                    f"orderBy=modifiedTime+desc&"
+                    f"pageSize=5&"
+                    f"fields=files(id,name,modifiedTime,mimeType)&"
+                    f"supportsAllDrives=true&includeItemsFromAllDrives=true"
+                )
+                _list_req = _ur.Request(_list_url, headers={"Authorization": f"Bearer {_tok}"})
+                _list_resp = _j.loads(_ur.urlopen(_list_req, timeout=10).read())
+                _files = _list_resp.get("files", [])
+                if _files:
+                    _latest = _files[0]
+                    _file_id = _latest["id"]
+                    _name = _latest["name"]
+                    # Download content
+                    _dl_url = (f"https://www.googleapis.com/drive/v3/files/{_file_id}"
+                               f"?alt=media&supportsAllDrives=true")
+                    _dl_req = _ur.Request(_dl_url, headers={"Authorization": f"Bearer {_tok}"})
+                    DETAILED_REPORT_TEXT = _ur.urlopen(_dl_req, timeout=15).read().decode("utf-8", "replace")
+                    # Cap at 30k chars to control prompt size
+                    if len(DETAILED_REPORT_TEXT) > 30000:
+                        DETAILED_REPORT_TEXT = DETAILED_REPORT_TEXT[:30000] + "\n\n[truncated at 30k chars]"
+                    log(f"REPORT loaded: '{_name}' ({len(DETAILED_REPORT_TEXT)} chars)")
+                else:
+                    log("No REPORT_*.md files found in PIPELINE FIX folder")
+    except Exception as e:
+        log(f"WARN: could not load detailed REPORT ({e}); proceeding without it")
 
     rows = read_queue(ws)
     if queue_is_done(rows):
