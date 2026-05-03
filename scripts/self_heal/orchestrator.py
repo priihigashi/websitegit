@@ -427,9 +427,14 @@ def _tolerant_json_loads(text: str, source_label: str = "AI") -> dict:
                         return _j.loads(candidate, strict=False)
                     except _j.JSONDecodeError:
                         break
+    # Log the actual content for debugging — first 800 chars + last 400 chars
+    log(f"  [parse-fail] {source_label} returned (len={len(text)} chars):")
+    log(f"  [parse-fail] HEAD: {text[:800]!r}")
+    if len(text) > 1200:
+        log(f"  [parse-fail] TAIL: {text[-400:]!r}")
     return {
         "decision": "REFUSE",
-        "reason": f"{source_label} returned non-JSON output (after 3 parse strategies)",
+        "reason": f"{source_label} returned non-JSON output (after 3 parse strategies); see job log for snippet",
         "risk": "HIGH",
     }
 
