@@ -600,3 +600,70 @@ NN-S6 — NEW NON-NEGOTIABLES APPEND HERE
 ═══════════════════════════════════════════════════════════════════════
 END OF 2026-05-03 APPEND
 ═══════════════════════════════════════════════════════════════════════
+
+
+═══════════════════════════════════════════════════════════════════════
+SELF-HEAL BOT RULES — appended 2026-05-03 (NN-S7 wiring audit)
+═══════════════════════════════════════════════════════════════════════
+
+NN-S7 — WIRING AUDIT BEFORE A FLOW IS "DEPLOYED"
+  Background: prior failures came from product-to-key mismatches (e.g. a
+  NanoBanana flow referencing OPENAI_API_KEY, secret names that did not
+  match what the workflow expected, "fixes in chat" that never reached
+  the actual wiring). To prevent recurrence:
+
+  Every flow (workflow file + script) MUST register a row in the
+  Wiring Audit sheet tab BEFORE it is considered deployed. Required
+  columns:
+    - workflow_file:       which .yml uses this
+    - step_name:           which step calls the API
+    - tool_or_api_used:    e.g. "Anthropic Claude API", "NanoBanana 2"
+    - required_key_name:   the conceptual name (e.g. "Anthropic key")
+    - secret_name_in_repo: the exact GitHub Actions secret name
+    - secret_exists:       Y/N (verified against repo Settings)
+    - last_successful_run: timestamp of last green run for this flow
+    - cascade_fallback:    name of the fallback path if this fails
+
+  Enforcement:
+  - The self-heal bot REFUSES to mark any new SH-* task as "DONE"
+    until the new flow has its row in the Wiring Audit tab with
+    secret_exists=Y.
+  - A nightly cron audits all rows. Any row where secret_exists=N OR
+    last_successful_run > 7 days ago triggers an email to Priscila
+    listing the broken flows, the keys involved, and where to fix.
+
+NN-S8 — CASCADE-OR-EXPLICIT-NOPE
+  Every external-dependency flow must EITHER document a cascade of at
+  least 2 alternatives, OR explicitly note "no cascade available" with
+  a written reason. Flows without either are considered NEEDS-REVIEW.
+
+  Examples (correct as of 2026-05-03):
+  - Patch generation:   Claude → OpenAI → Gemini-if-key → NEEDS-CREDITS
+  - Image gen:          NanoBanana → Replicate → Pexels → CSS-card fallback
+  - Posting:            Buffer (no cascade — Buffer IS the cascade
+                        because it fans out to multiple platforms)
+  - Scraping:           YouTube Data API → Apify Instagram → Apify YouTube
+  - Translation:        Claude Haiku → OpenAI → Google Translate
+
+NN-S9 — DO NOT ADD UNVERIFIED PRODUCTS / APIS
+  When implementing a new flow, do NOT assume an API exists or works.
+  Verify FIRST that:
+  (a) the API endpoint resolves with the expected key,
+  (b) the documented features are actually available on the user's
+      account tier,
+  (c) the secret is wired and the workflow can read it.
+  If any of (a)(b)(c) fails, the flow is documented as "blocked on
+  external dependency" — never silently skipped.
+
+  Specific reminders for current planning:
+  - TikTok Content Posting API requires manual developer approval
+    that Priscila has not yet completed. Do NOT add TikTok publishing
+    to any flow until that approval lands.
+  - NanoBanana 2 uses its own API key — NOT the OpenAI key. Confirm
+    the secret name before any flow references it.
+  - Buffer is the live posting layer. Do not bypass Buffer with
+    direct platform API calls unless Priscila explicitly requests it.
+
+═══════════════════════════════════════════════════════════════════════
+END OF 2026-05-03 NN-S7..S9 APPEND
+═══════════════════════════════════════════════════════════════════════
