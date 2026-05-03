@@ -146,7 +146,25 @@ def open_queue(creds: Credentials) -> gspread.Worksheet:
     return sh.worksheet(QUEUE_TAB)
 
 def read_queue(ws: gspread.Worksheet) -> list[dict]:
-    rows = ws.get_all_records()
+    # 2026-05-03: explicit expected_headers so gspread ignores stray non-header cells
+    # in row 1 beyond column M (e.g. cell N1 holds the pause counter, not a header).
+    expected_headers = [
+        "ID", "Priority", "Title", "Type", "Target File", "Description",
+        "Verification Method", "Affected Workflow", "Status", "Attempts",
+        "Last Attempt", "Last Result", "Fix Log Link",
+    ]
+    try:
+        rows = ws.get_all_records(expected_headers=expected_headers)
+    except Exception:
+        # Fallback: read raw cell matrix and zip to headers manually
+        all_values = ws.get_all_values()
+        if len(all_values) < 2:
+            return []
+        headers_row = all_values[0][:len(expected_headers)]
+        rows = []
+        for raw in all_values[1:]:
+            padded = (raw + [""] * len(expected_headers))[:len(expected_headers)]
+            rows.append(dict(zip(expected_headers, padded)))
     return rows
 
 def update_queue_row(ws: gspread.Worksheet, task_id: str, **fields: Any) -> None:
