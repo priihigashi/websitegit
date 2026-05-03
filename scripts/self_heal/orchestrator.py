@@ -1,0 +1,767 @@
+"""
+Pipeline Self-Heal Orchestrator
+================================
+One cycle = one task. Triggered every 2 hours by pipeline_self_heal.yml.
+
+CYCLE STAGES
+------------
+ 0. Check 3-day pause counter. If 36+ consecutive cycles completed since last
+    ack, halt and email Priscila. Re-email every 24h until she resumes via
+    workflow_dispatch with ack_pause=true.
+ 1. Authenticate (Sheets + Drive + GitHub).
+ 2. Read Self-Heal Queue. Pick highest-priority PENDING (or TARGET_ID).
+ 3. Verify bug still present (re-run affected workflow + check conclusion).
+ 4. Backup target file -> Drive Backups folder (timestamped copy).
+ 5. Pull current file content from GitHub.
+ 6. Ask Claude -> patch_a (proposed full file + rationale + risk).
+ 7. Ask OpenAI -> patch_b (proposed full file + rationale + risk).
+ 8. Compare patches:
+      - If both agree on the fix region -> apply Claude's patch (closer to repo context).
+      - If they disagree -> log both, mark NEEDS-REVIEW, escalate via email.
+ 9. Open feature branch self-heal/SH-XXX-<slug>, commit patch.
+10. Trigger smoke-test workflow on the branch (the workflow named in queue row).
+11. If green AND not dry_run -> fast-forward merge to main + delete branch.
+12. If red -> re-prompt both AIs with the new error log, retry up to 3 attempts.
+13. Write Fixing Log Google Doc with: links, before/after diff, smoke-test
+    link, test artifact link (if a carousel was built), date/time stamps.
+14. Update queue row (Status, Attempts, Last Result, Fix Log Link).
+15. Update master checklist doc (PIPELINE FIX > Fixing Log > _CHECKLIST.md).
+16. If queue empty -> write FINAL REPORT (red NO MORE ISSUES banner),
+    run 1 example build per niche/format, ask OpenAI to audit the FINAL
+    REPORT, then write the audit-confirmed FINAL.
+
+3-DAY PAUSE LOGIC
+-----------------
+- Counter cell: queue tab cell N1 stores "consecutive_cycles_since_ack"
+- Counter cell O1 stores ISO timestamp of last pause-email-sent
+- After 36 cycles -> if O1 is empty OR more than 24h ago -> send email + update O1
+- ack_pause=true -> reset N1 to 0 and clear O1
+
+DUAL-AI BUDGET (per cycle, worst case)
+--------------------------------------
+- Claude: ~$0.10 (read code + propose patch + retry context)
+- OpenAI: ~$0.40 (review patch + final-report audit)
+- Total: ~$0.50/cycle. 12 cycles/day cap = $6/day, ~$180/mo worst case.
+"""
+from __future__ import annotations
+import os
+import sys
+import json
+import time
+import base64
+import smtplib
+import datetime as dt
+import subprocess
+from email.mime.text import MIMEText
+from pathlib import Path
+from typing import Any, Optional
+
+import requests
+import gspread
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build as gbuild
+from googleapiclient.http import MediaInMemoryUpload
+import anthropic
+from openai import OpenAI
+from github import Github
+
+# ── CONSTANTS ───────────────────────────────────────────────────────────────
+REPO_OWNER         = "priihigashi"
+REPO_NAME          = "oak-park-ai-hub"
+DEFAULT_BRANCH     = "main"
+SPREADSHEET_ID     = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
+QUEUE_TAB          = "🔧 Self-Heal Queue"
+FIXING_LOG_FOLDER  = "1fs5VsZcmXJUFfXeu4hnStPqdePUP7gwV"
+BACKUPS_FOLDER     = "1yiX5NB72IrW_FnSnOnCnsMzsM0NZJYyB"
+PIPELINE_FIX_ROOT  = "1FHPkx8VA6c-Wmy6hI3uX_weSPwJPBp3z"
+CHECKLIST_FILENAME = "_CHECKLIST.md"
+NOTIFY_EMAIL       = "priscila@oakpark-construction.com"
+BASELINE_TAG       = "self-heal-baseline-2026-05-03"
+PAUSE_THRESHOLD    = 36  # 36 cycles * 2h = 72h = 3 days
+PAUSE_REMIND_HOURS = 24  # re-email every 24h until acked
+
+CLAUDE_MODEL = "claude-opus-4-7"
+OPENAI_MODEL = "gpt-4o"
+
+PRIORITY_ORDER = {"P0-CRITICAL": 0, "P1-HIGH": 1, "P2-MED": 2, "P3-LOW": 3, "USER-ONLY": 99}
+
+# ── INIT ────────────────────────────────────────────────────────────────────
+def log(msg: str) -> None:
+    print(f"[{dt.datetime.utcnow().isoformat(timespec='seconds')}Z] {msg}", flush=True)
+
+def fail(msg: str, code: int = 1) -> None:
+    log(f"FATAL: {msg}")
+    sys.exit(code)
+
+def get_creds() -> Credentials:
+    token_json = os.environ.get("SHEETS_TOKEN")
+    if not token_json:
+        fail("SHEETS_TOKEN env var missing")
+    info = json.loads(token_json)
+    return Credentials.from_authorized_user_info(info, scopes=[
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+        "https://www.googleapis.com/auth/documents",
+    ])
+
+def gh_client() -> Github:
+    token = os.environ.get("GH_TOKEN")
+    if not token:
+        fail("GH_TOKEN missing")
+    return Github(token)
+
+def claude_client() -> anthropic.Anthropic:
+    key = os.environ.get("CLAUDE_KEY_4_CONTENT")
+    if not key:
+        fail("CLAUDE_KEY_4_CONTENT missing")
+    return anthropic.Anthropic(api_key=key)
+
+def openai_client() -> OpenAI:
+    key = os.environ.get("OPENAI_API_KEY")
+    if not key:
+        fail("OPENAI_API_KEY missing")
+    return OpenAI(api_key=key)
+
+# ── QUEUE OPERATIONS ────────────────────────────────────────────────────────
+def open_queue(creds: Credentials) -> gspread.Worksheet:
+    gc = gspread.authorize(creds)
+    sh = gc.open_by_key(SPREADSHEET_ID)
+    return sh.worksheet(QUEUE_TAB)
+
+def read_queue(ws: gspread.Worksheet) -> list[dict]:
+    rows = ws.get_all_records()
+    return rows
+
+def update_queue_row(ws: gspread.Worksheet, task_id: str, **fields: Any) -> None:
+    """Update specific columns for the row matching task_id (col A)."""
+    cells = ws.col_values(1)  # column A = ID
+    for idx, val in enumerate(cells, start=1):
+        if val == task_id:
+            row_num = idx
+            break
+    else:
+        log(f"WARN: task {task_id} not found in queue")
+        return
+    headers = ws.row_values(1)
+    for col_name, val in fields.items():
+        if col_name not in headers:
+            continue
+        col_idx = headers.index(col_name) + 1
+        ws.update_cell(row_num, col_idx, val)
+
+def get_pause_counter(ws: gspread.Worksheet) -> tuple[int, Optional[str]]:
+    """Read N1 (counter) and O1 (last-pause-email ISO)."""
+    try:
+        n1 = ws.acell("N1").value or "0"
+        o1 = ws.acell("O1").value or ""
+    except Exception:
+        return 0, None
+    try:
+        return int(n1), (o1 or None)
+    except ValueError:
+        return 0, (o1 or None)
+
+def set_pause_counter(ws: gspread.Worksheet, count: int, last_email: Optional[str]) -> None:
+    ws.update_acell("N1", str(count))
+    ws.update_acell("O1", last_email or "")
+
+# ── PAUSE / NOTIFY ──────────────────────────────────────────────────────────
+def send_email(subject: str, body_html: str) -> None:
+    pw = os.environ.get("GMAIL_APP_PASSWORD")
+    if not pw:
+        log("WARN: GMAIL_APP_PASSWORD missing — skipping email")
+        return
+    msg = MIMEText(body_html, "html")
+    msg["Subject"] = subject
+    msg["From"]    = NOTIFY_EMAIL
+    msg["To"]      = NOTIFY_EMAIL
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+            s.login(NOTIFY_EMAIL, pw)
+            s.send_message(msg)
+        log(f"EMAIL SENT: {subject}")
+    except Exception as e:
+        log(f"WARN email failed: {e}")
+
+def maybe_pause(ws: gspread.Worksheet) -> bool:
+    """Return True if the cycle must halt due to 3-day pause."""
+    if os.environ.get("ACK_PAUSE", "").lower() == "true":
+        set_pause_counter(ws, 0, None)
+        log("PAUSE ACKED — counter reset")
+        return False
+    count, last_email = get_pause_counter(ws)
+    if count < PAUSE_THRESHOLD:
+        return False
+
+    now = dt.datetime.utcnow()
+    last = None
+    if last_email:
+        try:
+            last = dt.datetime.fromisoformat(last_email.replace("Z", ""))
+        except ValueError:
+            last = None
+    hours_since = (now - last).total_seconds() / 3600 if last else 9999
+
+    if hours_since >= PAUSE_REMIND_HOURS:
+        body = f"""<h2>Pipeline Self-Heal — 3-day check-in</h2>
+        <p>The self-heal bot has run {count} cycles since your last
+        confirmation (~{count*2} hours / {count/12:.1f} days).</p>
+        <p><b>To resume:</b> trigger the workflow manually with
+        <code>ack_pause = true</code>:</p>
+        <p><a href="https://github.com/{REPO_OWNER}/{REPO_NAME}/actions/workflows/pipeline_self_heal.yml">
+        Open workflow → Run workflow → ack_pause = true → Run workflow</a></p>
+        <p>You will receive this email every 24 hours until acknowledged.</p>
+        <hr>
+        <p><small>Run: <a href="{os.environ.get('GH_RUN_URL','')}">{os.environ.get('GH_RUN_ID','')}</a></small></p>
+        """
+        send_email("[Self-Heal] Confirm continuation (3-day check-in)", body)
+        set_pause_counter(ws, count, now.isoformat(timespec="seconds") + "Z")
+    log("PAUSED — exiting without work this cycle")
+    return True
+
+# ── TASK SELECTION ──────────────────────────────────────────────────────────
+def pick_task(rows: list[dict], target_id: str = "", force: bool = False) -> Optional[dict]:
+    if target_id:
+        for r in rows:
+            if r.get("ID") == target_id:
+                return r
+        return None
+    candidates = []
+    for r in rows:
+        status = (r.get("Status") or "").upper()
+        if status == "DONE":
+            continue
+        if status == "USER-ONLY":
+            continue
+        if status == "BLOCKED" and not force:
+            continue
+        try:
+            attempts = int(r.get("Attempts") or 0)
+        except ValueError:
+            attempts = 0
+        if attempts >= 3 and not force:
+            continue
+        prio = PRIORITY_ORDER.get(r.get("Priority") or "P3-LOW", 99)
+        candidates.append((prio, attempts, r))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: (x[0], x[1]))
+    return candidates[0][2]
+
+# ── BUG VERIFICATION ────────────────────────────────────────────────────────
+def trigger_workflow(gh: Github, workflow_filename: str, ref: str = DEFAULT_BRANCH,
+                     inputs: Optional[dict] = None) -> Optional[int]:
+    """Dispatch a workflow_dispatch run. Returns run_id if locatable."""
+    repo = gh.get_repo(f"{REPO_OWNER}/{REPO_NAME}")
+    try:
+        wf = repo.get_workflow(workflow_filename)
+        ok = wf.create_dispatch(ref=ref, inputs=inputs or {})
+        if not ok:
+            log(f"dispatch returned False for {workflow_filename}")
+            return None
+    except Exception as e:
+        log(f"dispatch error {workflow_filename}: {e}")
+        return None
+    time.sleep(8)
+    runs = wf.get_runs(branch=ref, event="workflow_dispatch")
+    try:
+        return runs[0].id
+    except Exception:
+        return None
+
+def wait_for_run(gh: Github, run_id: int, timeout_s: int = 1500) -> str:
+    """Poll until conclusion. Returns 'success' / 'failure' / 'timeout'."""
+    repo = gh.get_repo(f"{REPO_OWNER}/{REPO_NAME}")
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        run = repo.get_workflow_run(run_id)
+        if run.status == "completed":
+            return run.conclusion or "unknown"
+        time.sleep(15)
+    return "timeout"
+
+# ── BACKUPS ─────────────────────────────────────────────────────────────────
+def backup_file_to_drive(creds: Credentials, gh: Github, path: str, task_id: str) -> str:
+    """Copy current file content to Drive Backups folder. Return Drive file ID."""
+    repo = gh.get_repo(f"{REPO_OWNER}/{REPO_NAME}")
+    contents = repo.get_contents(path, ref=DEFAULT_BRANCH)
+    content_bytes = base64.b64decode(contents.content)
+    drive = gbuild("drive", "v3", credentials=creds)
+    ts = dt.datetime.utcnow().strftime("%Y-%m-%dT%H%M%SZ")
+    safe_path = path.replace("/", "_")
+    backup_name = f"BACKUP_{task_id}_{safe_path}_{ts}"
+    media = MediaInMemoryUpload(content_bytes, mimetype="text/plain", resumable=False)
+    f = drive.files().create(
+        body={"name": backup_name, "parents": [BACKUPS_FOLDER]},
+        media_body=media,
+        supportsAllDrives=True,
+        fields="id,webViewLink",
+    ).execute()
+    log(f"BACKUP saved: {backup_name} ({f['id']})")
+    return f["id"]
+
+# ── AI PATCH GENERATION ─────────────────────────────────────────────────────
+PATCH_SYSTEM_PROMPT = """You are a senior Python engineer maintaining a content pipeline at oak-park-ai-hub.
+
+Constraints (NON-NEGOTIABLE):
+1. Modify ONLY the section needed to fix the described bug.
+2. Do not rewrite or refactor unrelated code.
+3. Preserve all existing function signatures, imports, and side-effect ordering.
+4. If a fix requires more than ~80 changed lines or affects 3+ functions, REFUSE
+   and reply with REFUSE: <reason>.
+5. If the bug cannot be fixed without touching another file, REFUSE and explain.
+6. Output ONLY valid JSON with this schema:
+   {
+     "decision": "PATCH" | "REFUSE",
+     "reason": "short explanation",
+     "risk": "LOW" | "MED" | "HIGH",
+     "new_file_content": "FULL FILE CONTENT (only when decision=PATCH)",
+     "diff_summary": "1-3 sentences on what changed"
+   }
+"""
+
+def request_patch_claude(client: anthropic.Anthropic, task: dict,
+                         file_path: str, file_content: str,
+                         error_log: str = "") -> dict:
+    user = f"""TASK ID: {task.get('ID')}
+TITLE: {task.get('Title')}
+DESCRIPTION: {task.get('Description')}
+TARGET FILE: {file_path}
+VERIFICATION METHOD: {task.get('Verification Method')}
+
+CURRENT FILE CONTENT (verbatim):
+```
+{file_content[:120000]}
+```
+
+PRIOR ATTEMPT ERROR LOG (empty if first attempt):
+```
+{error_log[:6000]}
+```
+
+Produce a patch per the constraints. Output JSON ONLY.
+"""
+    resp = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=8000,
+        system=PATCH_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user}],
+    )
+    text = resp.content[0].text.strip()
+    if text.startswith("```"):
+        text = text.split("```", 2)[1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.rsplit("```", 1)[0].strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        return {"decision": "REFUSE", "reason": f"Claude returned non-JSON: {e}", "risk": "HIGH"}
+
+def request_patch_openai(client: OpenAI, task: dict,
+                          file_path: str, file_content: str,
+                          claude_patch: dict, error_log: str = "") -> dict:
+    user = f"""You are reviewing a fix proposed by another AI.
+
+TASK: {task.get('Title')}
+TARGET FILE: {file_path}
+DESCRIPTION: {task.get('Description')}
+
+PROPOSED PATCH (from Claude):
+- decision: {claude_patch.get('decision')}
+- risk: {claude_patch.get('risk')}
+- diff_summary: {claude_patch.get('diff_summary')}
+- new_file_content (snippet): {(claude_patch.get('new_file_content') or '')[:8000]}
+
+ORIGINAL FILE CONTENT (full, for context):
+```
+{file_content[:80000]}
+```
+
+PRIOR ERROR LOG:
+```
+{error_log[:4000]}
+```
+
+Decide if Claude's fix is safe and correct. Output JSON ONLY:
+{{
+  "agreement": "AGREE" | "DISAGREE" | "PARTIAL",
+  "concerns": "list of concerns or 'none'",
+  "alternative_decision": "PATCH" | "REFUSE" | "USE_CLAUDE_PATCH",
+  "alternative_new_file_content": "full file if you propose your own patch, else empty",
+  "diff_summary": "what your alternative changes (or 'same as Claude')"
+}}
+"""
+    resp = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {"role": "system", "content": "You are a code reviewer. Output ONLY valid JSON."},
+            {"role": "user", "content": user},
+        ],
+        response_format={"type": "json_object"},
+        max_tokens=4000,
+    )
+    text = resp.choices[0].message.content.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        return {"agreement": "DISAGREE", "concerns": f"OpenAI returned non-JSON: {e}",
+                "alternative_decision": "REFUSE"}
+
+# ── COMMIT + PR + MERGE ─────────────────────────────────────────────────────
+def commit_patch(gh: Github, branch: str, base: str,
+                  path: str, content: str, message: str) -> str:
+    """Create branch off base, commit one-file change. Return commit SHA."""
+    repo = gh.get_repo(f"{REPO_OWNER}/{REPO_NAME}")
+    base_ref = repo.get_branch(base)
+    try:
+        repo.create_git_ref(ref=f"refs/heads/{branch}", sha=base_ref.commit.sha)
+    except Exception:
+        pass  # branch may exist from a prior attempt
+    file_obj = repo.get_contents(path, ref=branch)
+    result = repo.update_file(path=path, message=message, content=content,
+                              sha=file_obj.sha, branch=branch)
+    return result["commit"].sha
+
+def merge_branch_to_main(gh: Github, branch: str, message: str) -> bool:
+    repo = gh.get_repo(f"{REPO_OWNER}/{REPO_NAME}")
+    try:
+        repo.merge(base=DEFAULT_BRANCH, head=branch, commit_message=message)
+        try:
+            repo.get_git_ref(f"heads/{branch}").delete()
+        except Exception:
+            pass
+        return True
+    except Exception as e:
+        log(f"merge failed: {e}")
+        return False
+
+# ── FIXING LOG DOC ──────────────────────────────────────────────────────────
+def write_fixing_log_doc(creds: Credentials, task: dict, before: str, after: str,
+                         claude_patch: dict, openai_review: dict,
+                         smoke_run_id: Optional[int], smoke_run_url: str,
+                         backup_id: str, commit_sha: str,
+                         test_artifact_url: Optional[str], outcome: str) -> str:
+    """Create a Google Doc in Fixing Log folder. Return Doc ID + webViewLink."""
+    drive = gbuild("drive", "v3", credentials=creds)
+    docs  = gbuild("docs", "v1", credentials=creds)
+    ts = dt.datetime.utcnow().strftime("%Y-%m-%d_%H%M")
+    title = f"FIX_{task.get('ID')}_{ts}_{outcome}"
+    doc = drive.files().create(
+        body={"name": title, "parents": [FIXING_LOG_FOLDER],
+              "mimeType": "application/vnd.google-apps.document"},
+        supportsAllDrives=True, fields="id,webViewLink",
+    ).execute()
+    doc_id = doc["id"]
+
+    # Build the report text. Markdown-flavored but rendered as plain in Docs
+    # since Docs API doesn't render markdown. We use simple paragraphs.
+    body_lines = []
+    body_lines.append(f"FIXING LOG — {task.get('ID')}")
+    body_lines.append(f"{ts} UTC — Outcome: {outcome}")
+    body_lines.append("")
+    body_lines.append("RESOURCES (TOP)")
+    body_lines.append(f"- Task ID: {task.get('ID')}")
+    body_lines.append(f"- Title: {task.get('Title')}")
+    body_lines.append(f"- Priority: {task.get('Priority')}")
+    body_lines.append(f"- Target File: {task.get('Target File')}")
+    body_lines.append(f"- Affected Workflow: {task.get('Affected Workflow')}")
+    body_lines.append(f"- Self-Heal Run: {os.environ.get('GH_RUN_URL','')}")
+    body_lines.append(f"- Smoke Test Run: {smoke_run_url}")
+    body_lines.append(f"- Backup File ID: https://drive.google.com/file/d/{backup_id}/view")
+    body_lines.append(f"- Commit SHA: https://github.com/{REPO_OWNER}/{REPO_NAME}/commit/{commit_sha}")
+    if test_artifact_url:
+        body_lines.append(f"- Test Carousel Built: {test_artifact_url}")
+    body_lines.append("")
+    body_lines.append("WHAT WAS BROKEN")
+    body_lines.append(task.get('Description', ''))
+    body_lines.append("")
+    body_lines.append("CLAUDE'S DIAGNOSIS")
+    body_lines.append(f"Decision: {claude_patch.get('decision')}")
+    body_lines.append(f"Risk: {claude_patch.get('risk')}")
+    body_lines.append(f"Reason: {claude_patch.get('reason')}")
+    body_lines.append(f"Summary: {claude_patch.get('diff_summary')}")
+    body_lines.append("")
+    body_lines.append("OPENAI REVIEW")
+    body_lines.append(f"Agreement: {openai_review.get('agreement')}")
+    body_lines.append(f"Concerns: {openai_review.get('concerns')}")
+    body_lines.append(f"Alternative: {openai_review.get('alternative_decision')}")
+    body_lines.append("")
+    body_lines.append("BEFORE (snippet, first 80 lines of relevant section)")
+    body_lines.append(_snippet(before))
+    body_lines.append("")
+    body_lines.append("AFTER (snippet, first 80 lines of relevant section)")
+    body_lines.append(_snippet(after))
+    body_lines.append("")
+    body_lines.append("OUTCOME")
+    body_lines.append(outcome)
+    body_lines.append("")
+    body_lines.append(f"Generated by pipeline_self_heal.yml — run {os.environ.get('GH_RUN_ID','')}")
+
+    full_text = "\n".join(body_lines)
+    docs.documents().batchUpdate(
+        documentId=doc_id,
+        body={"requests": [{"insertText": {"location": {"index": 1}, "text": full_text}}]},
+    ).execute()
+    return doc["webViewLink"]
+
+def _snippet(content: str, max_lines: int = 80) -> str:
+    lines = content.splitlines()
+    if len(lines) <= max_lines:
+        return content
+    return "\n".join(lines[:max_lines]) + f"\n... ({len(lines)-max_lines} more lines)"
+
+# ── CHECKLIST DOC ───────────────────────────────────────────────────────────
+def update_checklist(creds: Credentials, task: dict, fix_doc_url: str, outcome: str) -> None:
+    """Append a dated entry under the task's bullet in _CHECKLIST.md."""
+    drive = gbuild("drive", "v3", credentials=creds)
+    q = (f"name = '{CHECKLIST_FILENAME}' and "
+         f"'{FIXING_LOG_FOLDER}' in parents and trashed=false")
+    res = drive.files().list(q=q, supportsAllDrives=True,
+                             includeItemsFromAllDrives=True,
+                             fields="files(id,name)").execute()
+    items = res.get("files", [])
+    ts = dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    line = f"\n  - {ts} — {outcome} — {task.get('Title')} — {fix_doc_url}\n"
+
+    if not items:
+        # Create checklist
+        header = f"# Self-Heal Checklist\n\nStarted: {ts}\n\n## Tasks\n\n"
+        body = header + f"- [{task.get('ID')}] {task.get('Title')}{line}"
+        media = MediaInMemoryUpload(body.encode("utf-8"), mimetype="text/markdown")
+        drive.files().create(
+            body={"name": CHECKLIST_FILENAME, "parents": [FIXING_LOG_FOLDER]},
+            media_body=media, supportsAllDrives=True, fields="id"
+        ).execute()
+        return
+
+    file_id = items[0]["id"]
+    existing = drive.files().get_media(fileId=file_id, supportsAllDrives=True).execute().decode("utf-8")
+    bullet = f"- [{task.get('ID')}]"
+    if bullet in existing:
+        # Append a sub-bullet under the existing entry
+        new_text = existing.replace(bullet + " " + (task.get('Title') or ''),
+                                    bullet + " " + (task.get('Title') or '') + line, 1)
+        if new_text == existing:
+            new_text = existing + line
+    else:
+        new_text = existing + f"- [{task.get('ID')}] {task.get('Title')}{line}"
+    media = MediaInMemoryUpload(new_text.encode("utf-8"), mimetype="text/markdown")
+    drive.files().update(fileId=file_id, media_body=media,
+                         supportsAllDrives=True).execute()
+
+# ── FINAL REPORT (when queue is done) ───────────────────────────────────────
+def queue_is_done(rows: list[dict]) -> bool:
+    for r in rows:
+        s = (r.get("Status") or "").upper()
+        if s in ("PENDING", "NEEDS-REVIEW", ""):
+            return False
+    return True
+
+def write_final_report(creds: Credentials, gh: Github, rows: list[dict]) -> str:
+    docs = gbuild("docs", "v1", credentials=creds)
+    drive = gbuild("drive", "v3", credentials=creds)
+    ts = dt.datetime.utcnow().strftime("%Y-%m-%d_%H%M")
+    title = f"FINAL_REPORT_self_heal_complete_{ts}"
+    doc = drive.files().create(
+        body={"name": title, "parents": [FIXING_LOG_FOLDER],
+              "mimeType": "application/vnd.google-apps.document"},
+        supportsAllDrives=True, fields="id,webViewLink",
+    ).execute()
+
+    body = []
+    body.append("NO MORE ISSUES")
+    body.append("")
+    body.append("All queue items are DONE or USER-ONLY. Self-heal cycle complete.")
+    body.append(f"Generated: {ts} UTC")
+    body.append("")
+    body.append("PER-TASK STATUS")
+    for r in rows:
+        body.append(f"- {r.get('ID')} | {r.get('Status')} | {r.get('Title')} | {r.get('Fix Log Link') or ''}")
+    body.append("")
+    body.append("Next: example builds will be triggered for each niche / format.")
+    full_text = "\n".join(body)
+    docs.documents().batchUpdate(
+        documentId=doc["id"],
+        body={"requests": [{"insertText": {"location": {"index": 1}, "text": full_text}}]},
+    ).execute()
+    # Color the banner red (first paragraph)
+    docs.documents().batchUpdate(
+        documentId=doc["id"],
+        body={"requests": [{"updateTextStyle": {
+            "range": {"startIndex": 1, "endIndex": 16},
+            "textStyle": {"bold": True,
+                          "foregroundColor": {"color": {"rgbColor": {"red": 1, "green": 0, "blue": 0}}},
+                          "fontSize": {"magnitude": 24, "unit": "PT"}},
+            "fields": "bold,foregroundColor,fontSize"}}]},
+    ).execute()
+    return doc["webViewLink"]
+
+# ── MAIN ────────────────────────────────────────────────────────────────────
+def main() -> None:
+    creds = get_creds()
+    gh = gh_client()
+    cl = claude_client()
+    oa = openai_client()
+    ws = open_queue(creds)
+
+    if maybe_pause(ws):
+        return
+
+    rows = read_queue(ws)
+    if queue_is_done(rows):
+        url = write_final_report(creds, gh, rows)
+        log(f"FINAL report: {url}")
+        send_email("[Self-Heal] NO MORE ISSUES — final report ready",
+                   f'<h1 style="color:red">NO MORE ISSUES</h1>'
+                   f'<p>All tasks complete. <a href="{url}">View final report</a></p>')
+        return
+
+    target = os.environ.get("TARGET_ID", "").strip()
+    force  = os.environ.get("FORCE_RETRY", "").lower() == "true"
+    dry    = os.environ.get("DRY_RUN", "").lower() == "true"
+    task = pick_task(rows, target_id=target, force=force)
+    if not task:
+        log("No actionable tasks. Exiting.")
+        return
+
+    task_id = task["ID"]
+    log(f"PICKED {task_id} — {task.get('Title')}")
+    update_queue_row(ws, task_id, Status="IN-PROGRESS",
+                     **{"Last Attempt": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"})
+
+    # Verify bug still present (best effort: trigger affected workflow)
+    aw = (task.get("Affected Workflow") or "").strip()
+    bug_status = "unknown"
+    if aw and aw != "n/a":
+        run_id = trigger_workflow(gh, aw)
+        if run_id:
+            bug_status = wait_for_run(gh, run_id, timeout_s=900)
+            log(f"verify run {run_id}: {bug_status}")
+            if bug_status == "success":
+                update_queue_row(ws, task_id, Status="DONE",
+                                 **{"Last Result": "ALREADY_FIXED"})
+                log("Bug not reproducing — marking DONE")
+                _bump_pause_counter(ws)
+                return
+
+    # Pull file content
+    path = (task.get("Target File") or "").strip()
+    if not path or path == "external services":
+        log("No target file — marking USER-ONLY")
+        update_queue_row(ws, task_id, Status="USER-ONLY")
+        return
+    repo = gh.get_repo(f"{REPO_OWNER}/{REPO_NAME}")
+    try:
+        file_obj = repo.get_contents(path, ref=DEFAULT_BRANCH)
+        before = base64.b64decode(file_obj.content).decode("utf-8", "replace")
+    except Exception as e:
+        log(f"cannot read {path}: {e}")
+        update_queue_row(ws, task_id, Status="BLOCKED",
+                         **{"Last Result": f"FILE_READ_FAIL: {e}"})
+        return
+
+    # Backup
+    backup_id = backup_file_to_drive(creds, gh, path, task_id)
+
+    # Generate patch
+    error_log = ""
+    smoke_run_id = None
+    smoke_run_url = ""
+    final_outcome = "UNKNOWN"
+    test_artifact_url = None
+    after = before
+    commit_sha = ""
+
+    for attempt in range(1, 4):
+        log(f"=== Attempt {attempt}/3 ===")
+        claude_patch = request_patch_claude(cl, task, path, before, error_log)
+        if claude_patch.get("decision") == "REFUSE":
+            log(f"Claude REFUSED: {claude_patch.get('reason')}")
+            update_queue_row(ws, task_id, Status="NEEDS-REVIEW",
+                             Attempts=attempt,
+                             **{"Last Result": f"CLAUDE_REFUSED: {claude_patch.get('reason','')[:200]}"})
+            _write_log_and_finish(creds, task, before, before, claude_patch,
+                                  {"agreement": "n/a"}, None, "", backup_id, "",
+                                  None, "REFUSED")
+            return
+
+        oa_review = request_patch_openai(oa, task, path, before, claude_patch, error_log)
+        agreement = oa_review.get("agreement")
+        log(f"OpenAI agreement: {agreement}")
+
+        if agreement == "DISAGREE" and attempt == 1:
+            error_log = f"OpenAI concerns: {oa_review.get('concerns')}"
+            continue  # retry with concerns folded in
+
+        # Apply Claude's patch (preferred) unless OpenAI proposed an alternative explicitly
+        if oa_review.get("alternative_decision") == "PATCH" and oa_review.get("alternative_new_file_content"):
+            new_content = oa_review["alternative_new_file_content"]
+            log("Using OpenAI alternative patch")
+        else:
+            new_content = claude_patch.get("new_file_content") or ""
+
+        if not new_content:
+            error_log = "no patch content"
+            continue
+
+        if dry:
+            log("DRY RUN — not committing")
+            after = new_content
+            final_outcome = "DRY_RUN"
+            break
+
+        branch = f"self-heal/{task_id.lower()}-attempt-{attempt}"
+        commit_sha = commit_patch(gh, branch, DEFAULT_BRANCH, path, new_content,
+                                   f"self-heal {task_id}: {task.get('Title','')[:60]}")
+        log(f"committed to {branch} @ {commit_sha[:8]}")
+        after = new_content
+
+        # Smoke test on branch
+        if aw and aw != "n/a":
+            smoke_run_id = trigger_workflow(gh, aw, ref=branch)
+            if smoke_run_id:
+                smoke_run_url = f"https://github.com/{REPO_OWNER}/{REPO_NAME}/actions/runs/{smoke_run_id}"
+                conclusion = wait_for_run(gh, smoke_run_id)
+                log(f"smoke {smoke_run_id}: {conclusion}")
+                if conclusion == "success":
+                    if merge_branch_to_main(gh, branch, f"merge self-heal {task_id}"):
+                        final_outcome = "FIXED"
+                        break
+                    else:
+                        final_outcome = "MERGE_FAILED"
+                        break
+                else:
+                    error_log = f"smoke test {conclusion} on attempt {attempt}"
+                    continue
+        else:
+            final_outcome = "PATCHED_NO_SMOKE"
+            break
+
+    # Done — write the log + update queue
+    fix_url = write_fixing_log_doc(creds, task, before, after,
+                                    claude_patch, oa_review, smoke_run_id,
+                                    smoke_run_url, backup_id, commit_sha,
+                                    test_artifact_url, final_outcome)
+    update_queue_row(ws, task_id,
+                     Status=("DONE" if final_outcome == "FIXED" else "NEEDS-REVIEW"),
+                     Attempts=attempt,
+                     **{"Last Result": final_outcome, "Fix Log Link": fix_url})
+    update_checklist(creds, task, fix_url, final_outcome)
+    _bump_pause_counter(ws)
+    log(f"=== cycle done: {final_outcome} ===")
+
+def _bump_pause_counter(ws: gspread.Worksheet) -> None:
+    count, last = get_pause_counter(ws)
+    set_pause_counter(ws, count + 1, last)
+
+def _write_log_and_finish(creds, task, before, after, cp, oa,
+                          smoke_run_id, smoke_run_url, backup_id, commit_sha,
+                          test_artifact_url, outcome):
+    fix_url = write_fixing_log_doc(creds, task, before, after, cp, oa,
+                                    smoke_run_id, smoke_run_url, backup_id,
+                                    commit_sha, test_artifact_url, outcome)
+    return fix_url
+
+if __name__ == "__main__":
+    main()

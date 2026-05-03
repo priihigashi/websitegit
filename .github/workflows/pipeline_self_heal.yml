@@ -1,0 +1,106 @@
+name: Pipeline Self-Heal
+
+# ─── PURPOSE ───────────────────────────────────────────────────────────────
+# Runs every 2 hours. Picks ONE pending task from the 🔧 Self-Heal Queue tab,
+# verifies the bug is still present, asks Claude AND OpenAI to propose patches
+# (dual-AI consensus), backs up the file, applies the fix, smoke-tests it,
+# auto-merges if green (recoverable via tag self-heal-baseline-*),
+# writes a Fixing Log Google Doc to PIPELINE FIX > Fixing Log,
+# and updates the queue.
+#
+# 3-DAY PAUSE: After 36 successful cycles (72h), the orchestrator pauses
+# and emails Priscila. Re-emails every 24h until she replies via
+# workflow_dispatch with ack_pause=true.
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    - cron: "0 */2 * * *"  # every 2 hours, on the hour
+  workflow_dispatch:
+    inputs:
+      target_id:
+        description: "Specific task ID to work on (e.g. SH-007). Blank = pick by priority."
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Plan only — do not commit, do not merge"
+        required: false
+        default: false
+        type: boolean
+      force_retry:
+        description: "Retry a task even if marked BLOCKED"
+        required: false
+        default: false
+        type: boolean
+      ack_pause:
+        description: "Acknowledge the 3-day pause and resume self-healing"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: pipeline-self-heal
+  cancel-in-progress: false
+
+jobs:
+  self-heal:
+    name: "Self-heal one task"
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install --quiet \
+            anthropic==0.39.0 \
+            openai==1.54.0 \
+            gspread==6.1.4 \
+            google-auth==2.35.0 \
+            google-auth-oauthlib==1.2.1 \
+            google-api-python-client==2.149.0 \
+            requests==2.32.3 \
+            python-dotenv==1.0.1 \
+            PyGithub==2.4.0
+
+      - name: Configure git
+        run: |
+          git config user.name  "self-heal-bot"
+          git config user.email "self-heal-bot@oakpark-construction.com"
+
+      - name: Run self-heal orchestrator
+        env:
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
+          OPENAI_API_KEY:       ${{ secrets.OPENAI_API_KEY }}
+          SHEETS_TOKEN:         ${{ secrets.SHEETS_TOKEN }}
+          GH_TOKEN:             ${{ secrets.GITHUB_TOKEN }}
+          GMAIL_APP_PASSWORD:   ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          TARGET_ID:            ${{ inputs.target_id }}
+          DRY_RUN:              ${{ inputs.dry_run }}
+          FORCE_RETRY:          ${{ inputs.force_retry }}
+          ACK_PAUSE:            ${{ inputs.ack_pause }}
+          GH_RUN_ID:            ${{ github.run_id }}
+          GH_RUN_URL:           ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python scripts/self_heal/orchestrator.py
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Self-heal cycle failed. See Fixing Log in Drive."
