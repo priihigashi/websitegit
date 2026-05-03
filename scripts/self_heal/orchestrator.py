@@ -398,6 +398,14 @@ def _tolerant_json_loads(text: str, source_label: str = "AI") -> dict:
         return _j.loads(text, strict=False)
     except _j.JSONDecodeError:
         pass
+    # 2.5. sanitize: replace ALL ASCII control chars (except \n \r \t) with spaces.
+    # Some LLM responses contain literal \x07 (BEL) etc. that break even strict=False.
+    import re as _re
+    sanitized = _re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", " ", text)
+    try:
+        return _j.loads(sanitized, strict=False)
+    except _j.JSONDecodeError:
+        pass
     # 3. last resort: extract first balanced {...} block
     start = text.find("{")
     if start >= 0:
