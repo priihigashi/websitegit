@@ -108,37 +108,46 @@ body{background:#111;display:flex;justify-content:center;padding:24px;font-famil
   line-height:1.05;
 }
 
-/* Photo block — solid black rectangle / card BEHIND the two characters
-   PRODUCTION: pipeline replaces .photo bg-image with a transparent PNG composite
-   of the two subjects (cut out via remove.bg, side-by-side). The black rectangle
-   stays visible AROUND the cutouts — they read as silhouettes on the black card.
-   DEMO: regular photo + heavy radial vignette + edge fades to pure black so the
-   surrounding area inside the block looks fully black. */
+/* Photo block — solid black card holding TWO separate person cutouts side-by-side
+   Each .person-slot has its own photo + radial vignette so the bg fades to pure
+   black, leaving each subject reading as an isolated cutout on the black card.
+   PRODUCTION: pipeline replaces each .person-photo bg-image with a transparent
+   PNG (subject already cut out via remove.bg). */
 .photo-block{
   background:var(--ink);
   width:680px;height:560px;
-  margin:-40px auto 30px;            /* negative top margin lets heads peek above */
+  margin:-40px auto 30px;
   position:relative;
   border-radius:6px;
   box-shadow:0 14px 40px rgba(0,0,0,0.5),
              inset 0 0 0 1px rgba(0,0,0,0.85);
   flex-shrink:0;
   overflow:hidden;
+  display:flex;
 }
-.photo-block .photo{
+.person-slot{
+  flex:1;position:relative;overflow:hidden;
+}
+.person-photo{
   position:absolute;inset:0;
-  background-size:cover;background-position:center 30%;
+  background-size:cover;
   width:100%;height:100%;
   filter:url(#duotone-twochar);
 }
-/* Vignette to simulate cutouts on solid black — corners and edges go to pure ink */
-.photo-block::after{
+.person-1 .person-photo{background-position:center 18%}
+.person-2 .person-photo{background-position:center 22%}
+/* Per-person vignette to fade each subject's bg to solid ink (fake cutout) */
+.person-slot::after{
   content:'';position:absolute;inset:0;z-index:2;pointer-events:none;
   background:
-    radial-gradient(ellipse 55% 70% at 50% 45%,transparent 25%,rgba(10,10,10,0.7) 65%,var(--ink) 92%),
-    linear-gradient(to bottom,rgba(10,10,10,0.55) 0%,transparent 15%,transparent 78%,var(--ink) 100%),
-    linear-gradient(to right,rgba(10,10,10,0.55) 0%,transparent 10%,transparent 90%,rgba(10,10,10,0.55) 100%);
+    radial-gradient(ellipse 70% 80% at 50% 38%,transparent 22%,rgba(10,10,10,0.75) 65%,var(--ink) 95%);
 }
+/* Soft seam between the two subjects so they don't look like one photo */
+.person-1::before,.person-2::before{
+  content:'';position:absolute;top:0;bottom:0;width:40px;z-index:3;pointer-events:none;
+}
+.person-1::before{right:0;background:linear-gradient(to right,transparent,var(--ink))}
+.person-2::before{left:0;background:linear-gradient(to left,transparent,var(--ink))}
 
 /* CTA pill bottom-right */
 .cta-pill{
@@ -210,7 +219,12 @@ body{background:#111;display:flex;justify-content:center;padding:24px;font-famil
   </div>
 
   <div class="photo-block">
-    <div class="photo bg-placeholder" style="background-image:url('https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=680&h=560&fit=crop&crop=faces')"></div>
+    <div class="person-slot person-1">
+      <div class="person-photo" style="background-image:url('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=560&fit=crop&crop=faces')"></div>
+    </div>
+    <div class="person-slot person-2">
+      <div class="person-photo" style="background-image:url('https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=400&h=560&fit=crop&crop=faces')"></div>
+    </div>
   </div>
 
   <div class="headline headline-bot">
