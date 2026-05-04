@@ -303,6 +303,26 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
+<!-- OPC 4-Card Project / Product Grid -->
+<div class="tpl-card" id="card_opc_four_card_grid">
+  <div class="tpl-meta">
+    <div class="tpl-name">OPC — 4-Card Project / Product Grid</div>
+    <div class="tpl-format">FORMATOPC_06 · OPC · LEGACY · Project / Product Comparison Grid</div>
+    <div class="tpl-category">OPC · standalone · project photos, product picks, material shortlist, design choices</div>
+    <div class="tpl-when">OPC adaptation of the 4-stat breakdown grid. Two standalone modes in one file: slide 1 uses four project photos/details; slide 2 uses four product/material recommendation cards, like tile, stone, wood, and hardware. Each rectangle has its own photo slot plus title, short description, and category badge. Use when a topic needs four visible options, project decisions, product recommendations, or material comparisons. EN.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('opc_four_card_grid')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_opc_four_card_grid" src="opc_four_card_grid.html" scrolling="no" onload="initViewer('opc_four_card_grid')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('opc_four_card_grid')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_opc_four_card_grid">slide 1 / 2</div>
+  </div>
+</div>
+
 <!-- OPC Progress Media Story -->
 <div class="tpl-card" id="card_opc_progress_media">
   <div class="tpl-meta">
@@ -838,6 +858,7 @@ const IMG = {
   news_brazil_biography:{},
   news_usa_biography:   {},
   opc_material_profile:  {},
+  opc_four_card_grid:    { ctx: ['kitchen_cabinets','quartz_countertop','backsplash_tile','wood_floor','porcelain_tile','stone_slab','walnut_wood','brass_hardware'] },
   opc_progress_media:    { bg: ['kitchen_progress','framing_opc','drywall_hang'] },
   news_brazil_network:  {},
   news_usa_network:     {},

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OPC — 4-Card Project / Product Grid — Standalone</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ob:#080808;
+  --panel:#13130e;
+  --cream:#F0EBE3;
+  --lime:#CBCC10;
+  --lime2:#E4E66A;
+  --muted:rgba(240,235,227,.58);
+  --rule:rgba(203,204,16,.22);
+  --W:1080px;
+  --H:1350px;
+}
+body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}
+.slide{
+  width:var(--W);height:var(--H);
+  background:
+    radial-gradient(circle at 74% 12%, rgba(203,204,16,.08), transparent 28%),
+    linear-gradient(180deg,#0B0B0B 0%,#050505 100%);
+  color:var(--cream);
+  padding:88px 96px;
+  position:relative;overflow:hidden;
+  display:flex;flex-direction:column;
+  flex-shrink:0;
+}
+.slide::before{
+  content:"";position:absolute;inset:34px;
+  border:1px solid rgba(203,204,16,.18);
+  pointer-events:none;
+}
+.corner{position:absolute;width:26px;height:26px;border-color:var(--lime);opacity:.72}
+.c1{top:34px;left:34px;border-top:2px solid;border-left:2px solid}
+.c2{top:34px;right:34px;border-top:2px solid;border-right:2px solid}
+.c3{bottom:34px;left:34px;border-bottom:2px solid;border-left:2px solid}
+.c4{bottom:34px;right:34px;border-bottom:2px solid;border-right:2px solid}
+.eyebrow{
+  font-family:'JetBrains Mono',monospace;
+  font-size:18px;font-weight:700;
+  letter-spacing:.22em;text-transform:uppercase;
+  color:var(--muted);
+  margin-bottom:26px;
+}
+.headline{
+  font-family:'Playfair Display',serif;
+  font-size:76px;font-weight:900;
+  line-height:.96;letter-spacing:-.01em;
+  max-width:850px;margin-bottom:10px;
+}
+.headline em{font-style:italic;color:var(--lime2)}
+.subhead{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:26px;line-height:1.25;color:var(--muted);
+  max-width:760px;margin-bottom:34px;
+}
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:22px;
+  flex:1;
+  min-height:0;
+}
+.card{
+  background:linear-gradient(180deg,rgba(203,204,16,.045),rgba(203,204,16,.015)),var(--panel);
+  border:1px solid var(--rule);
+  min-height:0;
+  padding:20px;
+  display:flex;
+  flex-direction:column;
+  position:relative;
+  overflow:hidden;
+}
+.media{
+  height:185px;
+  border:1px solid rgba(203,204,16,.22);
+  background:
+    repeating-linear-gradient(45deg,rgba(203,204,16,.08) 0 8px,transparent 8px 18px),
+    #090909;
+  margin-bottom:18px;
+  overflow:hidden;
+}
+.media img{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(.2) contrast(1.04) brightness(.76)}
+.media .context-img-slot,.media .context-img-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+.placeholder-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:14px;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;
+  color:rgba(203,204,16,.62);
+}
+.num{
+  font-family:'Playfair Display',serif;
+  font-size:58px;font-weight:900;
+  color:var(--lime2);
+  line-height:.9;
+  margin-bottom:8px;
+}
+.card-title{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:31px;font-weight:700;
+  line-height:1.04;
+  text-transform:uppercase;
+  color:var(--cream);
+  margin-bottom:8px;
+}
+.card-copy{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:21px;line-height:1.22;color:rgba(240,235,227,.7);
+}
+.badge{
+  position:absolute;right:16px;top:16px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:12px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;
+  color:#090909;background:var(--lime);
+  padding:5px 8px;
+}
+.foot{
+  display:flex;justify-content:space-between;align-items:flex-end;
+  padding-top:26px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:14px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:rgba(240,235,227,.42);
+}
+.swipe{color:var(--lime);font-size:18px}
+.slide.product .media{height:170px}
+.slide.product .card-title{font-size:30px}
+.slide.product .card-copy{font-size:20px}
+</style>
+</head>
+<body>
+
+<div class="slide project">
+  <span class="corner c1"></span><span class="corner c2"></span><span class="corner c3"></span><span class="corner c4"></span>
+  <div class="eyebrow">Project breakdown · OPC</div>
+  <div class="headline">What changed <em>the look?</em></div>
+  <div class="subhead">Use this when one project has four visible choices, upgrades, problems, or decisions that need photos.</div>
+  <div class="grid">
+    <div class="card">
+      <div class="badge">Photo</div>
+      <div class="media"><div class="context-img-slot context-img-placeholder"><div class="placeholder-label">Project photo 1</div></div></div>
+      <div class="num">01</div>
+      <div class="card-title">Cabinet profile</div>
+      <div class="card-copy">Show the door style, finish, hardware line, or custom detail that changed the room.</div>
+    </div>
+    <div class="card">
+      <div class="badge">Photo</div>
+      <div class="media"><div class="context-img-slot context-img-placeholder"><div class="placeholder-label">Project photo 2</div></div></div>
+      <div class="num">02</div>
+      <div class="card-title">Counter surface</div>
+      <div class="card-copy">Use for stone, quartz, waterfall edges, seam placement, or installation constraints.</div>
+    </div>
+    <div class="card">
+      <div class="badge">Photo</div>
+      <div class="media"><div class="context-img-slot context-img-placeholder"><div class="placeholder-label">Project photo 3</div></div></div>
+      <div class="num">03</div>
+      <div class="card-title">Tile direction</div>
+      <div class="card-copy">Call out layout, grout color, scale, moisture zone, or the pattern choice.</div>
+    </div>
+    <div class="card">
+      <div class="badge">Photo</div>
+      <div class="media"><div class="context-img-slot context-img-placeholder"><div class="placeholder-label">Project photo 4</div></div></div>
+      <div class="num">04</div>
+      <div class="card-title">Finish detail</div>
+      <div class="card-copy">Use for lighting, trim, open shelving, flooring transition, or final punch detail.</div>
+    </div>
+  </div>
+  <div class="foot"><span>Oak Park Construction · CBC1263425</span><span class="swipe">Swipe →</span></div>
+</div>
+
+<div class="slide product">
+  <span class="corner c1"></span><span class="corner c2"></span><span class="corner c3"></span><span class="corner c4"></span>
+  <div class="eyebrow">Material shortlist · OPC</div>
+  <div class="headline">Four options <em>we would compare.</em></div>
+  <div class="subhead">Use this when OPC recommends products, materials, finishes, or service options for a topic.</div>
+  <div class="grid">
+    <div class="card">
+      <div class="badge">Tile</div>
+      <div class="media"><div class="context-img-slot context-img-placeholder"><div class="placeholder-label">Tile photo</div></div></div>
+      <div class="num">01</div>
+      <div class="card-title">Porcelain tile</div>
+      <div class="card-copy">Best for wet zones, heavy traffic, easy cleaning, and consistent sizing.</div>
+    </div>
+    <div class="card">
+      <div class="badge">Stone</div>
+      <div class="media"><div class="context-img-slot context-img-placeholder"><div class="placeholder-label">Stone photo</div></div></div>
+      <div class="num">02</div>
+      <div class="card-title">Quartz or stone</div>
+      <div class="card-copy">Best for counters, island impact, durability, and resale-friendly finishes.</div>
+    </div>
+    <div class="card">
+      <div class="badge">Wood</div>
+      <div class="media"><div class="context-img-slot context-img-placeholder"><div class="placeholder-label">Wood photo</div></div></div>
+      <div class="num">03</div>
+      <div class="card-title">Wood tone</div>
+      <div class="card-copy">Use for warmth, shelves, vanities, floors, beams, or cabinet contrast.</div>
+    </div>
+    <div class="card">
+      <div class="badge">Metal</div>
+      <div class="media"><div class="context-img-slot context-img-placeholder"><div class="placeholder-label">Hardware photo</div></div></div>
+      <div class="num">04</div>
+      <div class="card-title">Hardware finish</div>
+      <div class="card-copy">Small choice, big effect: pulls, faucet, lighting, hinges, and trim color.</div>
+    </div>
+  </div>
+  <div class="foot"><span>Oak Park Construction · CBC1263425</span><span class="swipe">Swipe →</span></div>
+</div>
+
+</body>
+</html>

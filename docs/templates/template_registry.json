@@ -261,6 +261,20 @@
       "pipeline_notes": "OPC adaptation of the biography grid. Not person-based; fields describe fit, durability, install notes, cost range, and style fit."
     },
     {
+      "id": "opc_four_card_grid",
+      "gallery_name": "OPC — 4-Card Project / Product Grid",
+      "status": "LEGACY",
+      "format_family": "FORMATOPC",
+      "style_code": "FORMATOPC_06",
+      "style_name": "4-Card Project / Product Grid",
+      "niche": "opc",
+      "kind": "standalone",
+      "file": "opc_four_card_grid.html",
+      "variants": 2,
+      "use_when": "A standalone OPC slide when a topic needs four visible options, project decisions, product recommendations, material comparisons, or design choices.",
+      "pipeline_notes": "Two modes in one template: project photo/detail cards and product/material recommendation cards. Each card has its own topic-aware image slot plus title, description, and category badge."
+    },
+    {
       "id": "opc_progress_media",
       "gallery_name": "OPC — Progress Media Story",
       "status": "LEGACY",
