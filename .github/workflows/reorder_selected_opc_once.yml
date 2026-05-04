@@ -1,0 +1,102 @@
+name: Reorder selected OPC gallery once
+
+on:
+  push:
+    paths:
+      - '.github/workflows/reorder_selected_opc_once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  reorder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reorder OPC blocks in selected.html
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/templates/selected.html')
+          text = path.read_text(encoding='utf-8')
+
+          if 'ROW 1 — Full Carousel Formats · OPC' in text and 'ROW 2 — Standalone Slides · OPC' in text:
+              print('selected.html already appears reordered; no content changes needed')
+          else:
+              old_row1_banner = '<div class="section-banner">ROW 1 — Full Carousel Formats</div>'
+              old_row2_banner = '<div class="section-banner">ROW 2 — Standalone Slides · Mix &amp; Match into Any Carousel</div>'
+              row1_banner_pos = text.index(old_row1_banner)
+              row1_comment_start = text.rfind('<!-- ═════════', 0, row1_banner_pos)
+
+              opc_full_start = text.index('<!-- ═══ OPC ═══ -->', row1_banner_pos)
+              opc_full_end_marker = '</div><!-- /group-cards OPC -->'
+              opc_full_end = text.index(opc_full_end_marker, opc_full_start) + len(opc_full_end_marker)
+
+              row2_comment_start = text.index('<!-- ═════════', opc_full_end)
+              opc_standalone_start = text.index('<!-- ═══ OPC STANDALONES ═══ -->', row2_comment_start)
+
+              # The next section after OPC standalones starts the News standalone area.
+              next_standalone_candidates = [
+                  text.find('<!-- ═══ BRAZIL STANDALONES', opc_standalone_start),
+                  text.find('<!-- ═══ BRAZIL — STANDALONES', opc_standalone_start),
+                  text.find('<!-- ═══ NEWS', opc_standalone_start),
+                  text.find('<!-- ═══ BRAZIL', opc_standalone_start),
+              ]
+              next_standalone_candidates = [i for i in next_standalone_candidates if i != -1]
+              if not next_standalone_candidates:
+                  raise RuntimeError('Could not find the next standalone/news section after OPC standalones')
+              news_standalone_start = min(next_standalone_candidates)
+
+              before = text[:row1_comment_start].rstrip() + '\n\n'
+              opc_full_block = text[opc_full_start:opc_full_end].strip() + '\n\n'
+              news_full_block = text[opc_full_end:row2_comment_start].strip() + '\n\n'
+              opc_standalone_block = text[opc_standalone_start:news_standalone_start].strip() + '\n\n'
+              news_standalone_block = text[news_standalone_start:].lstrip()
+
+              row1_opc = '''<!-- ═══════════════════════════════════════════════════════
+     ROW 1 — FULL CAROUSEL FORMATS · OPC
+     Multi-slide OPC sets that define a format end-to-end.
+     ═══════════════════════════════════════════════════════ -->
+<div class="section-banner">ROW 1 — Full Carousel Formats · OPC</div>
+
+'''
+              row2_opc = '''<!-- ═══════════════════════════════════════════════════════
+     ROW 2 — STANDALONE SLIDES · OPC
+     Individual reusable OPC slides — mix & match into any OPC carousel.
+     ═══════════════════════════════════════════════════════ -->
+<div class="section-banner">ROW 2 — Standalone Slides · OPC</div>
+
+'''
+              row1_news = '''<!-- ═══════════════════════════════════════════════════════
+     ROW 1 — FULL CAROUSEL FORMATS · NEWS
+     Multi-slide Brazil + USA news sets that define a format end-to-end.
+     ═══════════════════════════════════════════════════════ -->
+<div class="section-banner">ROW 1 — Full Carousel Formats · News</div>
+
+'''
+              row2_news = '''<!-- ═══════════════════════════════════════════════════════
+     ROW 2 — STANDALONE SLIDES · NEWS
+     Individual reusable Brazil + USA news slides — mix & match into any news carousel.
+     ═══════════════════════════════════════════════════════ -->
+<div class="section-banner">ROW 2 — Standalone Slides · News</div>
+
+'''
+
+              new_text = before + row1_opc + opc_full_block + row2_opc + opc_standalone_block + row1_news + news_full_block + row2_news + news_standalone_block
+              path.write_text(new_text, encoding='utf-8')
+              print('Reordered selected.html: OPC full + OPC standalone now appear before News sections')
+          PY
+      - name: Remove one-time workflow and commit
+        run: |
+          rm -f .github/workflows/reorder_selected_opc_once.yml
+          git config user.name "ChatGPT"
+          git config user.email "actions@github.com"
+          git add docs/templates/selected.html .github/workflows/reorder_selected_opc_once.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Reorder selected template gallery by OPC then News"
+            git push
+          fi
