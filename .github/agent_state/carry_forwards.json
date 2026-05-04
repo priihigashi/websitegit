@@ -1,12 +1,1 @@
-[
-  {
-    "task": "Verify duotone effect on live gallery",
-    "context": "Face must be clearly visible in two tones (not a flat rectangle). wireImages fix was pushed as commit 789c0d9 but was never visually verified.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Upload updated duotone HTML files to Drive",
-    "context": "Files include news_brazil_duotone.html, news_usa_duotone.html, opc_duotone.html.",
-    "auto_actionable": true
-  }
-]
+[]
