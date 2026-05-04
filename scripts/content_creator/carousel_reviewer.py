@@ -106,7 +106,7 @@ def check_html_placeholders(html_path: str) -> list[str]:
         )
 
     # Generic safe-margin check for swipe indicators across all templates.
-    if "WIPE →" in html or "WIPE &#8594;" in html:
+    if re.search(r"(?<!S)WIPE\s*(?:→|&#8594;)", html):
         issues.append("Swipe label typo/clipping artifact detected ('WIPE →').")
     for m in re.finditer(r"\.swipe[^{]*\{([\s\S]*?)\}", html):
         block = m.group(1)
@@ -208,7 +208,7 @@ def check_html_placeholders(html_path: str) -> list[str]:
                     "OPC hook miss: cover subtitle has no number, $, %, or urgency word — too weak to stop scroll."
                 )
         # Swipe text integrity + no clipping-prone typo patterns.
-        if "WIPE →" in html:
+        if re.search(r"(?<!S)WIPE\s*→", html):
             issues.append("OPC swipe label typo/clipping artifact detected ('WIPE →').")
         swipe_count = html.count("SWIPE →") + html.count("SWIPE &#8594;")
         if swipe_count < 4:

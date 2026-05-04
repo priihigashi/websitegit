@@ -363,6 +363,15 @@ def _caption_fallback(topic, niche):
     }
 
 
+def _fallback_source_handle(niche):
+    """Brand-safe footer fallback; never let placeholder handles reach rendered HTML."""
+    if niche == "brazil":
+        return "@InBrasil"
+    if niche == "usa":
+        return "@InUS"
+    return "@oakparkconstruction"
+
+
 def _default_context_query(slide, topic, niche):
     """Safe fallback query for context-image slots."""
     h_pt = (slide.get("heading_pt") or "").strip()
@@ -1022,7 +1031,9 @@ def process_one_topic(topic_entry, run_date, drive):
         media_paths["clips"] = clips
 
     _raw_handle = content.get("source_handle", "")
-    handle_arg = (f"@{_raw_handle}" if _raw_handle and not _raw_handle.startswith("@") else _raw_handle) or "@HANDLE_PLACEHOLDER"
+    handle_arg = (f"@{_raw_handle}" if _raw_handle and not _raw_handle.startswith("@") else _raw_handle)
+    if not handle_arg or "PLACEHOLDER" in handle_arg.upper():
+        handle_arg = _fallback_source_handle(niche)
     html_path = build_html(content, niche, slug, str(work), handle=handle_arg, media_paths=media_paths)
     if not html_path:
         print("  FAILED: HTML build")
