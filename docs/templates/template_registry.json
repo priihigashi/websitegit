@@ -275,6 +275,20 @@
       "pipeline_notes": "OPC adaptation of the FORMAT-020 video-frame slide. Media frame accepts a progress photo/video; lower description area has extra space for what is happening, why it matters, what changed, and what comes next."
     },
     {
+      "id": "opc_duotone",
+      "gallery_name": "OPC — Duotone Statement",
+      "status": "LEGACY",
+      "format_family": "FORMATOPC",
+      "style_code": "FORMATOPC_04",
+      "style_name": "Duotone Statement",
+      "niche": "opc",
+      "kind": "cover",
+      "file": "opc_duotone.html",
+      "variants": 3,
+      "use_when": "Legacy OPC duotone reference.",
+      "pipeline_notes": "Photo filter softened: darker shadow base, quieter lime/yellow highlights, and subtle photo-frame separation from the olive background."
+    },
+    {
       "id": "news_brazil_cover_base",
       "gallery_name": "Brazil — Base 1",
       "status": "LEGACY",
@@ -413,20 +427,6 @@
       "variants": 3,
       "use_when": "Legacy duotone statement/reference.",
       "pipeline_notes": "Duotone winner lock-in still pending; do not use as active until decided."
-    },
-    {
-      "id": "opc_duotone",
-      "gallery_name": "OPC — Duotone Statement",
-      "status": "LEGACY",
-      "format_family": "FORMATOPC",
-      "style_code": "FORMATOPC_04",
-      "style_name": "Duotone Statement",
-      "niche": "opc",
-      "kind": "cover",
-      "file": "opc_duotone.html",
-      "variants": 3,
-      "use_when": "Legacy OPC duotone reference.",
-      "pipeline_notes": "Keep as gallery reference."
     }
   ]
 }
