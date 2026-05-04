@@ -999,7 +999,9 @@ def process_one_topic(topic_entry, run_date, drive):
     if clips:
         media_paths["clips"] = clips
 
-    html_path = build_html(content, niche, slug, str(work), media_paths=media_paths)
+    _raw_handle = content.get("source_handle", "")
+    handle_arg = (f"@{_raw_handle}" if _raw_handle and not _raw_handle.startswith("@") else _raw_handle) or "@HANDLE_PLACEHOLDER"
+    html_path = build_html(content, niche, slug, str(work), handle=handle_arg, media_paths=media_paths)
     if not html_path:
         print("  FAILED: HTML build")
         return None
@@ -1204,7 +1206,7 @@ def process_one_topic(topic_entry, run_date, drive):
                 alt_content["_template_key"] = alt_key
                 alt_work = work / f"_{alt_key}"
                 alt_work.mkdir(parents=True, exist_ok=True)
-                alt_html = build_html(alt_content, niche, slug, str(alt_work), media_paths=media_paths)
+                alt_html = build_html(alt_content, niche, slug, str(alt_work), handle=handle_arg, media_paths=media_paths)
                 if not alt_html:
                     print(f"  {alt_key}/ HTML build failed — skipping subfolder")
                     continue

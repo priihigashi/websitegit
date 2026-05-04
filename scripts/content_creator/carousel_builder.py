@@ -346,7 +346,7 @@ Language: {lang}
 
 Return ONLY a JSON object with these fields:
 {{
-  "headline": "3-4 word cover headline (ALL CAPS, punchy)",
+  "headline": "3-4 word cover headline (ALL CAPS, punchy) — prefer a number, cost, or named risk when possible. GOOD: '3 COSTLY MISTAKES', '$20K TRAP', 'AVOID THIS COST'. BAD: 'THINGS TO KNOW', 'TIPS AND TRICKS', 'WHAT TO DO'.",
   "accent_word": "1 word from headline to highlight in accent color",
   "subhead": "1 sentence under the headline — MUST contain at least one of: a specific number, a dollar amount, or a named consequence/fear. BANNED: generic phrases like 'what to look for', 'things you should know', 'tips for'. Good: '$20K mistake most homeowners make before signing' | '3 red flags contractors hope you miss'",
   "slide2_headline": "3-4 word headline for slide 2",
@@ -385,16 +385,19 @@ Return ONLY a JSON object with these fields:
   }},
   "slides": [
     {{
-      "visual_hint": "context-image or none — use context-image when this slide benefits from a construction or materials photo",
-      "context_image_query": "Pexels/Wikimedia search term for THIS SLIDE'S SPECIFIC CLAIM — must include: material or action + location context. MINIMUM 4 words. GOOD: 'concrete driveway residential pour south florida', 'bathroom tile frameless shower door installation', 'shiplap wood accent wall interior residential'. BAD (banned): 'construction work', 'house', 'renovation', 'contractor', 'kitchen', 'bathroom', 'home improvement' — these are too generic and return unrelated images. The query must match what this specific slide is about, not the overall topic."
+      "slide": 2,
+      "visual_hint": "context-image or none — use context-image when slide2_stat references something visual (a material, a process, a specific product)",
+      "context_image_query": "Pexels/Wikimedia search for the STAT on SLIDE 2 (slide2_stat field) — must show the material or process the number is about. MINIMUM 4 words. GOOD: 'concrete driveway residential pour south florida', 'bathroom tile frameless shower door installation', 'shiplap wood accent wall interior residential'. BAD (banned): 'construction work', 'house', 'renovation', 'contractor', 'kitchen', 'bathroom', 'home improvement'. Must be specific to the stat subject, not the overall topic."
     }},
     {{
-      "visual_hint": "context-image or none",
-      "context_image_query": "Specific query matching SLIDE 3 content — different subject from slide 2. Must include material/action + location. GOOD: 'roof shingles GAF installation aerial residential', 'framing wood stud wall addition oak park illinois'. BAD: 'construction', 'building', 'outdoor work'."
+      "slide": 3,
+      "visual_hint": "context-image or none — use context-image for at least 1 of the 3 list items in slide3_items",
+      "context_image_query": "Pexels/Wikimedia search for the LIST items on SLIDE 3 (slide3_items field) — different subject from slide 2 query. Must include material/action + location. GOOD: 'roof shingles GAF installation aerial residential', 'framing wood stud wall addition oak park illinois'. BAD: 'construction', 'building', 'outdoor work'. Query MUST differ from slide 2 query."
     }},
     {{
-      "visual_hint": "context-image or none",
-      "context_image_query": "Specific query matching SLIDE 4 tip content — show the solution or tool being described. GOOD: 'contractor measuring kitchen cabinet installation south florida', 'outdoor kitchen pergola concrete patio residential'. BAD: 'contractor', 'renovation', 'home project'."
+      "slide": 4,
+      "visual_hint": "context-image or none — use context-image when slide4_body describes a specific tool, material, or technique",
+      "context_image_query": "Pexels/Wikimedia search for the TIP on SLIDE 4 (slide4_body field) — show the solution or tool being described. Different subject from slides 2 and 3. GOOD: 'contractor measuring kitchen cabinet installation south florida', 'outdoor kitchen pergola concrete patio residential'. BAD: 'contractor', 'renovation', 'home project'. Query MUST differ from both slide 2 and slide 3 queries."
     }}
   ],
   "clip_suggestions": [

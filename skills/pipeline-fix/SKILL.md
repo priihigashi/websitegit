@@ -53,6 +53,7 @@ WHAT TO CARRY FORWARD (find and continue):
 - Carousel Design Feedback Log:      https://docs.google.com/document/d/1zonzZNmW5wdDmtJxzozyqaBpf1i6KX068vEyhJ2qb_4/edit  (APPEND ONLY — change log)
 - Gallery quick-link doc:            https://docs.google.com/document/d/1xHU5NQZMYtDIVM93LIlZUDkz0biBKTxvQzaMaPnEows/edit
 - PIPELINE INVENTORY (fix history):  https://docs.google.com/document/d/1yPsSqh24ioXU3cwwnkwH0oeSUsenTDvqESrIXfJ066A/edit
+- BRAIN cascade backup (portable handoff for non-Claude AIs — Codex/OpenAI/etc.): https://docs.google.com/document/d/1YIUt8yULACQ0ebd0PYtws27osT-vESJBqSuVy2T-d-Y/edit
 - Fix Report — OPC full audit:       https://docs.google.com/document/d/1d7AxdhpP6C93iOlM0Wwn1e93TIuQa3HukeliLjYcLjE/edit
 - Fix Report — general pipeline:     https://docs.google.com/document/d/1J-jn4NrQXu_if8T9_Bz4wyzZ-zQqx7gE33CbiQ-KcTw/edit
 - Fix Report — Dados vs Opinião:     https://docs.google.com/document/d/1TUzpI_zeOG0Vndc7vZ5wu7ZCM0E2Tj5kbiZ9bJCvUrU/edit
@@ -160,10 +161,9 @@ WORKING ✅
 - Reviewer false positives — 3 false-positive checks fixed (commits b41a051, 00832a2, 03f3df0) ✅
 - Template gallery — wired.html, index.html, selected.html all working ✅
 - Cream variant contrast — FIX applied in opc_tip_base.css ✅
+- Photo catalog 401 — photo_matcher.py now refreshes SHEETS_TOKEN refresh credential into a live access token (commit 2193698, verified 158 catalog rows live) ✅
 
 BROKEN / QUALITY ISSUES ❌
-- Photo catalog 401 Unauthorized — photo_matcher.py uses wrong credential (service account instead of SHEETS_TOKEN OAuth) → real OPC project photos never load, DALL-E generates generic images instead
-  File: scripts/content_creator/photo_matcher.py
 - Per-slide image queries — Haiku emits one query for whole carousel, not per-slide → all slides get same generic image
   File: scripts/content_creator/carousel_builder.py → build_content_brief() Haiku prompt
 - @HANDLE_PLACEHOLDER — visible in final PNGs when NanoBanana/Seedream fail; 2 retries added but base issue unresolved for live posts
@@ -195,21 +195,19 @@ IN PROGRESS 🔄
 - Building selected.html — News Standalone added; OPC Progress/Illustrated/Cutout still pending
 
 PENDING ⏳ (priority order — top = most impactful)
-1. Fix photo_matcher.py 401 — swap service account for SHEETS_TOKEN OAuth so real OPC photos load
-   File: scripts/content_creator/photo_matcher.py
-2. Fix per-slide image queries — Haiku prompt in build_content_brief() must emit context_image_query per slide
-   File: scripts/content_creator/carousel_builder.py
-3. Fix @HANDLE_PLACEHOLDER — Dados ou Agenda: main.py build_html() call missing handle arg; content["source_handle"] is computed but never passed (silently ships @HANDLE_PLACEHOLDER on every Dados PNG)
+1. Fix per-slide image queries — Haiku prompt in build_content_brief() OPC block must require unique context_image_query per slide
+   File: scripts/content_creator/carousel_builder.py — line ~438
+2. Fix @HANDLE_PLACEHOLDER — Dados ou Agenda: main.py build_html() call missing handle arg; content["source_handle"] is computed but never passed (silently ships @HANDLE_PLACEHOLDER on every Dados PNG)
    File: scripts/content_creator/main.py — build_html() call in process_one_topic() ~line 1002
    NOTE: OPC templates hardcode @oakparkconstruction in HTML directly, don't use param. Brazil/USA use the param. Investigate which series shows placeholder in prod PNGs first.
-4. Fix cover hook — OPC Haiku prompt must require: number OR dollar figure OR named consequence in hook
+3. Fix cover hook — OPC Haiku prompt must require: number OR dollar figure OR named consequence in hook
    File: scripts/content_creator/carousel_builder.py — add rule to hook field same as subhead (lines ~345-355)
-5. Add build history dedup — write one row to Build History tab (Ideas & Inbox) after each build, check last 30 days before picking topic
+4. Add build history dedup — write one row to Build History tab (Ideas & Inbox) after each build, check last 30 days before picking topic
    File: scripts/content_creator/main.py
-6. Complete template walkthrough (opc_progress → illustrated → cutout → News templates) → update selected.html
-7. Fix opc_progress.html — add .before-slot/.after-slot split panel
-8. Fix news_brazil_shared.html + news_usa_shared.html — add sticker slot HTML on cover slide
-9. Queue hygiene — 946 blank rows in Inspiration Library, 11 foreign TotW misfires
+5. Complete template walkthrough (opc_progress → illustrated → cutout → News templates) → update selected.html
+6. Fix opc_progress.html — add .before-slot/.after-slot split panel
+7. Fix news_brazil_shared.html + news_usa_shared.html — add sticker slot HTML on cover slide
+8. Queue hygiene — 946 blank rows in Inspiration Library, 11 foreign TotW misfires
 
 BLOCKED 🚫
 - Approval → Buffer flow — untested, needs approval_handler.py Gmail trigger confirmed working first
@@ -398,6 +396,12 @@ Both are mirrors — same class structure, same slot names, only `:root` variabl
 ---
 
 ## SESSION NOTES
+
+### 2026-05-04
+- FIXED photo_matcher.py SHEETS_TOKEN refresh (commit 2193698). Replaced `_get_token()` which returned the empty `access_token` field from the refresh credential JSON. Now mirrors `main.py::get_oauth_token()` — POSTs to oauth2.googleapis.com/token with refresh_token grant + caches with 60s buffer.
+- Verified live: 158 catalog rows read, real Drive URLs returned (e.g. IMG_4493.jpeg from Walnut Slab Kitchen Marble Waterfall project).
+- Status flip: BROKEN photo_matcher 401 → DONE. Real OPC jobsite photos will now load on next content_creator.yml run instead of falling through to DALL-E.
+- Next: PENDING #1 — per-slide context_image_query rule in OPC Haiku prompt (carousel_builder.py ~line 438). Same one-line addition pattern as the subhead constraint that already exists on line ~351.
 
 ### 2026-05-02
 - REBUILT news_brazil_standalone.html — faithful InBr recreation (yellow bg, blue circle blob, B&W person, Barlow Condensed 900, 3 slides). CSS-variable architecture, pipeline-compatible sticker-slot + context-img-slot.
