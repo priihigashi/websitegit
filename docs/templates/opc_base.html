@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  OPC — Cover · Base 1
+  OPC adaptation of the news Cover Base layout (Brazil/USA Base 1).
+  Same architecture: corner brackets, dim bg photo, halftone+dark overlay,
+  sticker portrait card top-right, italic-accent headline, person pill
+  bottom-left, swipe right.
+
+  Brand difference vs news bases:
+    Brazil → --ca: #C9A84C (canário gold)
+    USA    → --ca: #CC1F2D (signal red)
+    OPC    → --ca: #CBCC10 (lime)
+
+  Display font also differs — Anton (OPC) instead of Playfair Display
+  (news editorial). Italic accent word uses Barlow 700 italic so the
+  emphasis pattern survives without a serif.
+
+  Pipeline injection contract:
+    [data-slot="bg"]            → background photo (production: grayscale + brightness via CSS)
+    [data-slot="sticker"]       → sticker-card photo (project detail / Mike / material sample)
+    [data-slot="stamp-text"]    → top-right stamp ("TIP · #001", "RED FLAG · #003", etc.)
+    [data-slot="tag"]            → eyebrow ("OPC / TIP #001", "OPC / RED FLAG #003")
+    [data-slot="headline"]      → 2-line question with italic accent word
+    [data-slot="hook"]           → subhead/promise
+    [data-slot="byline"]         → bottom-left pill ("MIKE · OPC FOUNDER", "OAK PARK · LIC CBC1263425")
+    [data-slot="cta"]             → bottom-right swipe text ("SAVE THE TIP →", "READ THE BREAKDOWN →")
+-->
+<head>
+<meta charset="UTF-8">
+<title>OPC — Cover · Base 1</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;700&family=Barlow:ital,wght@1,700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ob: #0A0A0A;          /* obsidian */
+  --pa: #F0EBE3;          /* parchment */
+  --ca: #CBCC10;          /* OPC lime — the brand accent knob */
+  --gr: rgba(240,235,227,0.45);
+  --rule: rgba(240,235,227,0.12);
+  --W: 1080px;
+  --H: 1350px;
+  --P: 108px;
+}
+body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}
+.slide{
+  width:var(--W);height:var(--H);
+  background:var(--ob);color:var(--pa);
+  padding:var(--P);
+  position:relative;overflow:hidden;
+  flex-shrink:0;display:flex;flex-direction:column;
+}
+
+/* ── Corner brackets (OPC signature) ── */
+.corner{position:absolute;width:28px;height:28px;z-index:10}
+.corner.tl{top:64px;left:64px;border-top:2px solid rgba(203,204,16,.6);border-left:2px solid rgba(203,204,16,.6)}
+.corner.tr{top:64px;right:64px;border-top:2px solid rgba(203,204,16,.6);border-right:2px solid rgba(203,204,16,.6)}
+.corner.bl{bottom:64px;left:64px;border-bottom:2px solid rgba(203,204,16,.6);border-left:2px solid rgba(203,204,16,.6)}
+.corner.br{bottom:64px;right:64px;border-bottom:2px solid rgba(203,204,16,.6);border-right:2px solid rgba(203,204,16,.6)}
+
+/* ── Background photo ── */
+.bg-photo{position:absolute;inset:0;background-size:cover;background-position:center 35%;z-index:1;filter:grayscale(1) contrast(1.1) brightness(.55)}
+.bg-photo::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,10,.18) 0%,rgba(10,10,10,.78) 100%)}
+.bg-placeholder{position:absolute;inset:0;z-index:1;background:linear-gradient(135deg,#1c1c1c 0%,#2a2a2a 40%,#141414 100%)}
+.bg-placeholder::after{content:'[ BACKGROUND PHOTO ]';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'JetBrains Mono',monospace;font-size:18px;color:rgba(255,255,255,0.12);letter-spacing:.12em}
+
+/* ── Halftone + dark overlay (depth) ── */
+.halftone{position:absolute;inset:0;z-index:2;pointer-events:none;background-image:radial-gradient(circle,rgba(10,10,10,.55) 1px,transparent 1px);background-size:6px 6px}
+.dark-overlay{position:absolute;inset:0;z-index:2;pointer-events:none;background:rgba(10,10,10,.52)}
+
+/* All text content above layers */
+.slide > *:not(.bg-photo):not(.bg-placeholder):not(.halftone):not(.dark-overlay):not(.corner):not(.swipe):not(.footer-handle):not(.sticker-slot):not(.person-pill):not(.stamp-badge){position:relative;z-index:3}
+
+/* ── Sticker slot — portrait card top-right ── */
+.sticker-slot{
+  position:absolute;
+  right:7%;top:14%;
+  width:310px;height:410px;
+  z-index:4;
+  border:3px solid var(--ca);
+  border-radius:2px;overflow:hidden;
+  box-shadow:0 8px 40px rgba(0,0,0,.7);
+}
+.sticker-slot img{
+  width:100%;height:100%;
+  object-fit:cover;object-position:center;
+  filter:grayscale(1) contrast(1.18) brightness(.85);
+}
+.sticker-placeholder{
+  width:100%;height:100%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(203,204,16,.04);
+  flex-direction:column;gap:12px;
+}
+.sticker-placeholder .ini{
+  font-family:'Anton',sans-serif;
+  font-size:96px;font-weight:400;
+  color:var(--ca);line-height:1;letter-spacing:-.02em;
+}
+.sticker-placeholder .iname{
+  font-family:'JetBrains Mono',monospace;
+  font-size:13px;color:var(--gr);
+  text-transform:uppercase;letter-spacing:.14em;
+  text-align:center;padding:0 12px;
+}
+
+/* ── Stamp badge — series + episode marker ── */
+.stamp-badge{
+  position:absolute;
+  right:calc(7% - 4px);top:calc(14% - 22px);
+  z-index:9;
+  background:var(--ca);color:var(--ob);
+  font-family:'JetBrains Mono',monospace;
+  font-size:18px;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;
+  padding:6px 14px;
+  border:2px solid var(--ob);
+  transform:rotate(-1.5deg);
+}
+
+/* ── Typography ── */
+.tag{
+  font-family:'JetBrains Mono',monospace;
+  font-size:22px;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;
+  color:var(--gr);
+  margin-bottom:32px;
+}
+.cover-hl{
+  font-family:'Anton',sans-serif;
+  font-size:128px;font-weight:400;
+  line-height:.92;letter-spacing:-.01em;
+  text-transform:uppercase;
+  margin-bottom:24px;
+  max-width:52%;
+}
+/* italic accent word — Barlow keeps OPC's editorial italic voice without serif */
+.cover-hl em{
+  font-family:'Barlow',sans-serif;
+  font-style:italic;
+  font-weight:700;
+  color:var(--ca);
+  letter-spacing:-.02em;
+}
+.cover-hook{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:32px;font-weight:400;
+  color:var(--gr);line-height:1.4;
+  margin-bottom:32px;
+  max-width:52%;
+}
+
+/* ── Bottom elements ── */
+.person-pill{
+  position:absolute;
+  bottom:var(--P);left:var(--P);
+  z-index:10;
+  border:1px solid var(--ca);
+  padding:7px 16px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:18px;letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--pa);
+  background:rgba(10,10,10,.55);
+}
+.person-pill em{color:var(--gr);font-style:normal}
+.swipe{
+  font-family:'JetBrains Mono',monospace;
+  font-size:20px;color:var(--gr);
+  position:absolute;bottom:var(--P);right:var(--P);
+  z-index:10;letter-spacing:.1em;
+  text-transform:uppercase;
+}
+</style>
+</head>
+<body>
+
+<div class="slide slide-cover">
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
+
+  <!-- LAYER: bg photo (pipeline injects via data-slot="bg") -->
+  <div class="bg-photo" data-slot="bg" style="background-image:url('resources/base_demo/bg_kitchen_walnut.jpg')"></div>
+  <div class="halftone"></div>
+  <div class="dark-overlay"></div>
+
+  <!-- LAYER: sticker portrait card (pipeline injects via data-slot="sticker") -->
+  <div class="sticker-slot">
+    <img data-slot="sticker" src="resources/base_demo/sticker_kitchen_oak.jpg" alt="OPC project detail">
+  </div>
+  <div class="stamp-badge" data-slot="stamp-text">TIP · #001</div>
+
+  <!-- Cover text — constrained to left 52% (sticker is right) -->
+  <div class="tag" data-slot="tag">OPC / TIP #001</div>
+  <div class="cover-hl" data-slot="headline">What's <em>hiding</em><br>in this wall?</div>
+  <div class="cover-hook" data-slot="hook">5 things contractors don't tell you about what goes behind the drywall.</div>
+
+  <!-- Bottom bar -->
+  <div class="person-pill" data-slot="byline">MIKE · <em>OPC FOUNDER</em></div>
+  <div class="swipe" data-slot="cta">SAVE THE TIP →</div>
+</div>
+
+</body>
+</html>
