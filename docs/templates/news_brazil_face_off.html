@@ -8,7 +8,7 @@
 /* FORMAT-COVER-FACEOFF-BR — 3 variants for stories with 2 characters in dispute
    V1 — Original full-body face-off (sepia bg, two cutouts facing each other, center headline)
    V2 — V1 + faded grain/texture overlay ON TOP of characters so headline reads stronger
-   V3 — Half-body equal-height face-off ("battle" framing, both subjects same scale)
+   V3 — Huge cropped face-off ("split-face battle" framing, both subjects same scale)
 */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -68,15 +68,14 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
   filter:url(#duotone-bw-faceoff);
 }
 
-/* V3 half-body cutouts — equal height, anchored to OPPOSITE edges
-   Each bust pushed far enough off-canvas that only ~half the face shows,
-   leaving a clear gap in the middle for the headline. */
+/* V3 huge cropped faces — only the inner half of each face shows.
+   The center stays open for the headline, so the text separates both people. */
 .bust-left,.bust-right{
-  position:absolute;height:520px;z-index:3;
-  bottom:240px;
+  position:absolute;height:980px;z-index:3;
+  bottom:120px;
 }
-.bust-left{left:-340px}
-.bust-right{right:-340px;transform:scaleX(-1)}
+.bust-left{left:-435px}
+.bust-right{right:-435px;transform:scaleX(-1)}
 .bust-img{
   height:100%;width:auto;
   object-fit:contain;object-position:bottom center;
@@ -193,7 +192,7 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
 <div class="slide v3">
   <div class="bg-photo" style="background-image:url('https://images.unsplash.com/photo-1518639192441-8fce0a366e2e?w=1080&h=1350&fit=crop')"></div>
   <div class="bg-overlay"></div>
-  <div class="variant-badge">V3 · HALF-BODY · BATTLE</div>
+  <div class="variant-badge">V3 · HUGE FACE-OFF</div>
   <div class="logo-top"><div class="logo-circle"><span>In</span><span>Br</span></div></div>
   <div class="counter">1/10</div>
   <div class="bust-left"><img class="bust-img" src="resources/two_char_demo/person1_cutout_bust.png" alt=""></div>

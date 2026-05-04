@@ -8,7 +8,7 @@
 /* FORMAT-COVER-FACEOFF-US — 3 variants
    V1 — Original full-body face-off (steel-blue bg, two cutouts facing each other)
    V2 — V1 + faded grain texture overlay on top of cutouts (headline more readable)
-   V3 — Half-body equal-height "battle" framing
+   V3 — Huge cropped face-off "split-face battle" framing
 */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -65,10 +65,11 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
   filter:url(#duotone-bw-us);
 }
 
-/* V3 half-body cutouts — anchored to OPPOSITE edges, clear gap for headline */
-.bust-left,.bust-right{position:absolute;height:520px;z-index:3;bottom:240px}
-.bust-left{left:-340px}
-.bust-right{right:-340px;transform:scaleX(-1)}
+/* V3 huge cropped faces — only the inner half of each face shows.
+   The center stays open for the headline, so the text separates both people. */
+.bust-left,.bust-right{position:absolute;height:980px;z-index:3;bottom:120px}
+.bust-left{left:-435px}
+.bust-right{right:-435px;transform:scaleX(-1)}
 .bust-img{
   height:100%;width:auto;
   object-fit:contain;object-position:bottom center;
@@ -175,7 +176,7 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
 <div class="slide v3">
   <div class="bg-photo" style="background-image:url('https://images.unsplash.com/photo-1518306727298-4c17e1bf6e4d?w=1080&h=1350&fit=crop')"></div>
   <div class="bg-overlay"></div>
-  <div class="variant-badge">V3 · HALF-BODY · BATTLE</div>
+  <div class="variant-badge">V3 · HUGE FACE-OFF</div>
   <div class="logo-top"><div class="logo-circle"><span>In</span><span>US</span></div></div>
   <div class="counter">1/10</div>
   <div class="bust-left"><img class="bust-img" src="resources/two_char_demo/person1_cutout_bust.png" alt=""></div>

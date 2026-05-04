@@ -9,7 +9,7 @@
    Bright gold background · duotone portrait · claim + quote · attribution
    V1: shadow #1A2060 navy → highlight #E8CC7A gold (current/classic)
    V2: shadow #0A0A0A black → highlight #F0EBE3 cream (newspaper/Folha)
-   V3: shadow #2D0F3D deep purple → highlight #F0EBE3 cream (moody luxe)
+   V3: shadow #0A0A0A obsidian → highlight #9BC077 sage (from Two Character Cover)
 */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -64,7 +64,7 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
 .slide.v1 .photo{filter:url(#duotone-brazil-v1)}
 .slide.v2 .photo-wrap{background:#0A0A0A}
 .slide.v2 .photo{filter:url(#duotone-brazil-v2)}
-.slide.v3 .photo-wrap{background:#2D0F3D}
+.slide.v3 .photo-wrap{background:#0A0A0A}
 .slide.v3 .photo{filter:url(#duotone-brazil-v3)}
 
 .quote-block{
@@ -134,11 +134,11 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
     <feComponentTransfer><feFuncR type="linear" slope="1.4" intercept="-0.2"/><feFuncG type="linear" slope="1.4" intercept="-0.2"/><feFuncB type="linear" slope="1.4" intercept="-0.2"/></feComponentTransfer>
     <feComponentTransfer><feFuncR type="table" tableValues="0.039 0.941"/><feFuncG type="table" tableValues="0.039 0.922"/><feFuncB type="table" tableValues="0.039 0.890"/></feComponentTransfer>
   </filter>
-  <!-- V3: Deep purple #2D0F3D → Cream #F0EBE3 (moody luxe) -->
+  <!-- V3: Two Character Cover duotone — Obsidian #0A0A0A → Sage #9BC077 -->
   <filter id="duotone-brazil-v3" color-interpolation-filters="sRGB">
     <feColorMatrix type="matrix" values=".299 .587 .114 0 0  .299 .587 .114 0 0  .299 .587 .114 0 0  0 0 0 1 0"/>
     <feComponentTransfer><feFuncR type="linear" slope="1.4" intercept="-0.2"/><feFuncG type="linear" slope="1.4" intercept="-0.2"/><feFuncB type="linear" slope="1.4" intercept="-0.2"/></feComponentTransfer>
-    <feComponentTransfer><feFuncR type="table" tableValues="0.176 0.941"/><feFuncG type="table" tableValues="0.059 0.922"/><feFuncB type="table" tableValues="0.239 0.890"/></feComponentTransfer>
+    <feComponentTransfer><feFuncR type="table" tableValues="0.039 0.608"/><feFuncG type="table" tableValues="0.039 0.753"/><feFuncB type="table" tableValues="0.039 0.467"/></feComponentTransfer>
   </filter>
 </svg>
 
@@ -183,7 +183,7 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
 </div>
 
 <div class="slide v3">
-  <div class="variant-badge">V3 · PURPLE → CREAM</div>
+  <div class="variant-badge">V3 · TWO-CHAR SAGE</div>
   <div class="claim">
     <strong>[Nome do Personagem]</strong> não age sozinho. <u><strong>Ele representa algo maior do que si mesmo.</strong></u> A questão não é o candidato — é o projeto por trás.
   </div>
