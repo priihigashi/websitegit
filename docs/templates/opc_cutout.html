@@ -1,5 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
+<!--
+  OPC Cutout template — FORMAT-014.
+  "Cutout" = subject (person/product/finished room) with the background removed,
+  floating on top of OPC's brand background. The cutout look comes from drop-shadow
+  + isolation against a solid/dim brand bg, NOT from a rectangular photo with a frame.
+
+  Pipeline injection contract:
+    [data-slot="cover-cutout"]  → cover slide hero image (right-side floating subject)
+    [data-slot="artifact"]      → slide 3 (slide-list) hero artifact above the list
+
+  Production flow:
+    1. photo_matcher.py picks an OPC catalog photo for the topic
+    2. NanoBanana 2 runs background-removal (transparent PNG output)
+    3. Carousel builder injects the transparent PNG into the data-slot
+    4. CSS drop-shadow + brand bg sells the floating effect
+
+  This gallery demo uses raw JPEGs (rectangular) for visual reference only.
+  The real cutout effect requires the bg-removal pass.
+-->
 <head>
 <meta charset="UTF-8">
 <title>OPC — Cutout — oak-park-cutout</title>
@@ -74,7 +93,8 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 .slide-stat { overflow:hidden; }
 
 /* ---- Numbered list ---- */
-.list { margin-top:12px; padding-bottom:80px; }
+/* padding-bottom must clear bottom HUD lane (arrow + slide-logo + corner) */
+.list { margin-top:12px; padding-bottom:140px; }
 .list-item {
   display:flex; gap:36px; align-items:baseline; margin-bottom:28px;
   padding-bottom:22px; border-bottom:1px solid var(--c-rule);
@@ -234,8 +254,8 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 /* ---- OPC context-image panel for middle slides ---- */
 .context-img-slot {
   width:100%;
-  min-height:420px;
-  max-height:520px;
+  min-height:360px;
+  max-height:440px;
   margin:28px 0 18px;
   border:2px solid var(--c-brk);
   border-radius:10px;
@@ -305,6 +325,10 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   max-width:860px;
   margin-top:16px;
 }
+
+/* Stat slide bottom-HUD clearance */
+.slide-stat .project-note { margin-bottom:120px; }
+.slide-stat .stat-label { margin-bottom:8px; }
 
 /* =========================================================== */
 /* ============ VARIANT 1 — OBSIDIAN (primary dark) =========== */
@@ -436,16 +460,18 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
     <div class="headline">RED <span class="accent">FLAGS</span> IN YOUR CONTRACTOR CONTRACT</div>
     <div class="body-text">5 signs the contract you're about to sign is protecting THEM, not you.</div>
   </div>
+  <!-- LAYER: cutout subject (pipeline injects via data-slot="cover-cutout"; production runs through NanoBanana 2 background-removal first) -->
+  <img class="cut-cover-float" data-slot="cover-cutout" src="resources/cutout_demo/cover_outdoor_bar.jpg" alt="OPC project — premium build">
   <div class="arrow">SWIPE &#8594;</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
 
 <div class="slide slide-stat v1 cut-shell">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-  <div class="tag">The Real Number</div>
-  <div class="headline">THE <span class="accent">RISK</span></div>
+  <div class="tag">The Risk</div>
   <div class="stat-big">1 in 3</div>
   <div class="stat-label">Oak Park homeowners report disputes linked to vague contract language</div>
+  <div class="project-note">What you are seeing here: the share of homeowners who hit contract trouble — most could have avoided it.</div>
   <div class="arrow">SWIPE &#8594;</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
@@ -453,7 +479,11 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 <div class="slide slide-list v1 cut-shell">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">What To Know</div>
-  <div class="cut-artifact"><div class="cut-artifact-empty">MATERIAL PHOTO</div></div>
+  <!-- LAYER: cutout artifact (pipeline injects via data-slot="artifact"; production runs through NanoBanana 2 background-removal first) -->
+  <div class="cut-artifact">
+    <img class="cut-artifact-img" data-slot="artifact" src="resources/cutout_demo/artifact_bathroom_tub.jpg" alt="OPC project detail">
+    <div class="cut-artifact-label">From a recent OPC build</div>
+  </div>
   <div class="list">
     <div class="list-item"><span class="list-num">01</span><div><div class="list-text">NO PAYMENT SCHEDULE</div><div class="list-sub">Milestone payments protect you. Lump sums don't.</div></div></div>
     <div class="list-item"><span class="list-num">02</span><div><div class="list-text">NO LIEN WAIVER CLAUSE</div><div class="list-sub">Without it, subcontractors can lien your home.</div></div></div>
@@ -497,16 +527,18 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
     <div class="headline">RED <span class="accent">FLAGS</span> IN YOUR CONTRACTOR CONTRACT</div>
     <div class="body-text">5 signs the contract you're about to sign is protecting THEM, not you.</div>
   </div>
+  <!-- LAYER: cutout subject (pipeline injects via data-slot="cover-cutout"; production runs through NanoBanana 2 background-removal first) -->
+  <img class="cut-cover-float" data-slot="cover-cutout" src="resources/cutout_demo/cover_outdoor_bar.jpg" alt="OPC project — premium build">
   <div class="arrow">SWIPE &#8594;</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
 
 <div class="slide slide-stat v2 cut-shell">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-  <div class="tag">The Real Number</div>
-  <div class="headline">THE <span class="accent">RISK</span></div>
+  <div class="tag">The Risk</div>
   <div class="stat-big">1 in 3</div>
   <div class="stat-label">Oak Park homeowners report disputes linked to vague contract language</div>
+  <div class="project-note">What you are seeing here: the share of homeowners who hit contract trouble — most could have avoided it.</div>
   <div class="arrow">SWIPE &#8594;</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
@@ -514,7 +546,11 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 <div class="slide slide-list v2 cut-shell">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">What To Know</div>
-  <div class="cut-artifact"><div class="cut-artifact-empty">MATERIAL PHOTO</div></div>
+  <!-- LAYER: cutout artifact (pipeline injects via data-slot="artifact"; production runs through NanoBanana 2 background-removal first) -->
+  <div class="cut-artifact">
+    <img class="cut-artifact-img" data-slot="artifact" src="resources/cutout_demo/artifact_bathroom_tub.jpg" alt="OPC project detail">
+    <div class="cut-artifact-label">From a recent OPC build</div>
+  </div>
   <div class="list">
     <div class="list-item"><span class="list-num">01</span><div><div class="list-text">NO PAYMENT SCHEDULE</div><div class="list-sub">Milestone payments protect you. Lump sums don't.</div></div></div>
     <div class="list-item"><span class="list-num">02</span><div><div class="list-text">NO LIEN WAIVER CLAUSE</div><div class="list-sub">Without it, subcontractors can lien your home.</div></div></div>
@@ -558,16 +594,18 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
     <div class="headline">RED <span class="accent">FLAGS</span> IN YOUR CONTRACTOR CONTRACT</div>
     <div class="body-text">5 signs the contract you're about to sign is protecting THEM, not you.</div>
   </div>
+  <!-- LAYER: cutout subject (pipeline injects via data-slot="cover-cutout"; production runs through NanoBanana 2 background-removal first) -->
+  <img class="cut-cover-float" data-slot="cover-cutout" src="resources/cutout_demo/cover_outdoor_bar.jpg" alt="OPC project — premium build">
   <div class="arrow">SWIPE &#8594;</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
 
 <div class="slide slide-stat v3 cut-shell">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-  <div class="tag">The Real Number</div>
-  <div class="headline">THE <span class="accent">RISK</span></div>
+  <div class="tag">The Risk</div>
   <div class="stat-big">1 in 3</div>
   <div class="stat-label">Oak Park homeowners report disputes linked to vague contract language</div>
+  <div class="project-note">What you are seeing here: the share of homeowners who hit contract trouble — most could have avoided it.</div>
   <div class="arrow">SWIPE &#8594;</div>
   <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
@@ -575,7 +613,11 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 <div class="slide slide-list v3 cut-shell">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">What To Know</div>
-  <div class="cut-artifact"><div class="cut-artifact-empty">MATERIAL PHOTO</div></div>
+  <!-- LAYER: cutout artifact (pipeline injects via data-slot="artifact"; production runs through NanoBanana 2 background-removal first) -->
+  <div class="cut-artifact">
+    <img class="cut-artifact-img" data-slot="artifact" src="resources/cutout_demo/artifact_bathroom_tub.jpg" alt="OPC project detail">
+    <div class="cut-artifact-label">From a recent OPC build</div>
+  </div>
   <div class="list">
     <div class="list-item"><span class="list-num">01</span><div><div class="list-text">NO PAYMENT SCHEDULE</div><div class="list-sub">Milestone payments protect you. Lump sums don't.</div></div></div>
     <div class="list-item"><span class="list-num">02</span><div><div class="list-text">NO LIEN WAIVER CLAUSE</div><div class="list-sub">Without it, subcontractors can lien your home.</div></div></div>
