@@ -33,13 +33,13 @@ body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}
 }
 .net-label{
   font-family:'JetBrains Mono',monospace;
-  font-size:16px;font-weight:700;
+  font-size:18px;font-weight:700;
   letter-spacing:.2em;text-transform:uppercase;
   color:var(--ca);margin-bottom:16px;
 }
 .net-headline{
   font-family:'Playfair Display',serif;
-  font-size:72px;font-weight:900;
+  font-size:80px;font-weight:900;
   line-height:.92;letter-spacing:-.015em;
   margin-bottom:28px;
 }
@@ -52,39 +52,40 @@ body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}
 }
 .diagram svg{position:absolute;top:0;left:0;z-index:1}
 .node{
-  position:absolute;width:160px;
+  position:absolute;width:180px;
   display:flex;flex-direction:column;align-items:center;
   text-align:center;z-index:2;
 }
 .node-circle{
-  width:100px;height:100px;border-radius:50%;
+  width:116px;height:116px;border-radius:50%;
   background:#1A0D0D;border:2px solid var(--ca);
   display:flex;align-items:center;justify-content:center;
-  margin:0 auto 8px;
+  margin:-8px auto 10px;
   box-shadow:0 0 0 1px rgba(204,31,45,.12),0 4px 24px rgba(0,0,0,.6);
 }
 .node-init{
   font-family:'Playfair Display',serif;
-  font-size:28px;font-weight:700;color:var(--ca);line-height:1;
+  font-size:34px;font-weight:700;color:var(--ca);line-height:1;
 }
 .node-name{
   font-family:'Roboto Condensed',sans-serif;
-  font-size:15px;font-weight:700;color:var(--pa);
-  line-height:1.2;max-width:150px;
+  font-size:18px;font-weight:700;color:var(--pa);
+  line-height:1.2;max-width:170px;
 }
 .node-role{
   font-family:'JetBrains Mono',monospace;
-  font-size:11px;color:var(--dim);
+  font-size:13px;color:var(--dim);
   letter-spacing:.1em;text-transform:uppercase;
-  max-width:150px;margin-top:4px;
+  max-width:170px;margin-top:5px;
 }
 .node-center .node-circle{
-  width:130px;height:130px;border-width:3px;
+  width:144px;height:144px;border-width:3px;
+  margin:-14px auto 10px;
   background:#200A0A;
   box-shadow:0 0 40px rgba(204,31,45,.18),0 4px 24px rgba(0,0,0,.8);
 }
-.node-center .node-init{font-size:40px}
-.node-center .node-name{font-size:14px;color:var(--gr)}
+.node-center .node-init{font-size:50px}
+.node-center .node-name{font-size:18px;color:var(--gr)}
 </style>
 </head>
 <body>
@@ -103,8 +104,8 @@ body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}
             <path d="M0,1 L9,5 L0,9 Z" fill="#CC1F2D" fill-opacity="0.6"/>
           </marker>
         </defs>
-        <g stroke="#CC1F2D" stroke-width="1.2" stroke-dasharray="7,6"
-           stroke-opacity="0.4" marker-end="url(#arr)">
+        <g stroke="#CC1F2D" stroke-width="1.6" stroke-dasharray="7,6"
+           stroke-opacity="0.5" marker-end="url(#arr)">
           <line x1="420" y1="355" x2="420" y2="170"/>
           <line x1="466" y1="374" x2="597" y2="243"/>
           <line x1="485" y1="420" x2="670" y2="420"/>
