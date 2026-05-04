@@ -13,8 +13,6 @@ import os
 import re
 import urllib.request
 import json
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
 
 
 SHEET_ID    = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
@@ -23,18 +21,14 @@ MIN_QUALITY = 4
 
 
 def _get_token():
-    raw = os.getenv("SHEETS_TOKEN_JSON", "")
+    raw = os.environ.get("SHEETS_TOKEN", "")
     if not raw:
         return ""
     try:
-        creds_data = json.loads(raw)
-        creds = Credentials.from_authorized_user_info(creds_data)
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        return creds.token
-    except Exception as e:
-        print(f"Error obtaining token: {e}")
-        return ""
+        data = json.loads(raw)
+        return data.get("refresh_token", "")
+    except Exception:
+        return raw.strip()
 
 
 def _read_catalog(token):
@@ -162,3 +156,4 @@ def match_before_after_pair(topic):
     if before_url or after_url:
         print(f"  photo_matcher: before/after pair found (scores: before={best_before}, after={best_after})")
     return before_url, after_url
+
