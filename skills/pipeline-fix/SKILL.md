@@ -164,12 +164,7 @@ WORKING ✅
 - Photo catalog 401 — photo_matcher.py now refreshes SHEETS_TOKEN refresh credential into a live access token (commit 2193698, verified 158 catalog rows live) ✅
 
 BROKEN / QUALITY ISSUES ❌
-- Per-slide image queries — Haiku emits one query for whole carousel, not per-slide → all slides get same generic image
-  File: scripts/content_creator/carousel_builder.py → build_content_brief() Haiku prompt
-- @HANDLE_PLACEHOLDER — visible in final PNGs when NanoBanana/Seedream fail; 2 retries added but base issue unresolved for live posts
-  File: carousel_builder.py — cover slide HTML generation
-- Cover hook weak — no number, no pain point (e.g. "What to look for before you sign anything" — nobody stops scrolling for this)
-  File: carousel_builder.py — OPC Haiku prompt for cover hook
+(none remaining from previous audit — see DONE list)
 
 UNTESTED 🟡
 - approval_handler.py — Gmail reply detection → Buffer scheduling
@@ -194,20 +189,18 @@ IN PROGRESS 🔄
 - Template walkthrough: Tip ✅ → Standalone Brazil/USA ✅ → next: opc_progress, opc_illustrated, opc_cutout, then remaining News series templates
 - Building selected.html — News Standalone added; OPC Progress/Illustrated/Cutout still pending
 
+DONE THIS SESSION ✅
+- Per-slide image queries — slides[] array now has explicit slide: 2/3/4 with per-field context (commit 0798878)
+- @HANDLE_PLACEHOLDER — main.py now extracts source_handle from content and passes to both build_html() calls (commit 0798878)
+- Cover hook — headline field now requires number/cost/risk same as subhead (commit 0798878)
+
 PENDING ⏳ (priority order — top = most impactful)
-1. Fix per-slide image queries — Haiku prompt in build_content_brief() OPC block must require unique context_image_query per slide
-   File: scripts/content_creator/carousel_builder.py — line ~438
-2. Fix @HANDLE_PLACEHOLDER — Dados ou Agenda: main.py build_html() call missing handle arg; content["source_handle"] is computed but never passed (silently ships @HANDLE_PLACEHOLDER on every Dados PNG)
-   File: scripts/content_creator/main.py — build_html() call in process_one_topic() ~line 1002
-   NOTE: OPC templates hardcode @oakparkconstruction in HTML directly, don't use param. Brazil/USA use the param. Investigate which series shows placeholder in prod PNGs first.
-3. Fix cover hook — OPC Haiku prompt must require: number OR dollar figure OR named consequence in hook
-   File: scripts/content_creator/carousel_builder.py — add rule to hook field same as subhead (lines ~345-355)
-4. Add build history dedup — write one row to Build History tab (Ideas & Inbox) after each build, check last 30 days before picking topic
+1. Add build history dedup — write one row to Build History tab (Ideas & Inbox) after each build, check last 30 days before picking topic
    File: scripts/content_creator/main.py
-5. Complete template walkthrough (opc_progress → illustrated → cutout → News templates) → update selected.html
-6. Fix opc_progress.html — add .before-slot/.after-slot split panel
-7. Fix news_brazil_shared.html + news_usa_shared.html — add sticker slot HTML on cover slide
-8. Queue hygiene — 946 blank rows in Inspiration Library, 11 foreign TotW misfires
+2. Complete template walkthrough (opc_progress → illustrated → cutout → News templates) → update selected.html
+3. Fix opc_progress.html — add .before-slot/.after-slot split panel
+4. Fix news_brazil_shared.html + news_usa_shared.html — add sticker slot HTML on cover slide
+5. Queue hygiene — 946 blank rows in Inspiration Library, 11 foreign TotW misfires
 
 BLOCKED 🚫
 - Approval → Buffer flow — untested, needs approval_handler.py Gmail trigger confirmed working first
