@@ -275,6 +275,20 @@
       "pipeline_notes": "Two modes in one template: project photo/detail cards and product/material recommendation cards. Each card has its own topic-aware image slot plus title, description, and category badge."
     },
     {
+      "id": "opc_item_spotlight",
+      "gallery_name": "OPC — Item Spotlight",
+      "status": "LEGACY",
+      "format_family": "FORMATOPC",
+      "style_code": "FORMATOPC_07",
+      "style_name": "Product / Material / Style Spotlight",
+      "niche": "opc",
+      "kind": "standalone",
+      "file": "opc_item_spotlight.html",
+      "variants": 1,
+      "use_when": "A standalone OPC explainer slide for one specific product, material, finish, design style, service detail, or construction technique.",
+      "pipeline_notes": "OPC adaptation of the small-profile info slide. Not ideal for project progress because the image is intentionally small; use it when the text explains one item and the photo supports the explanation."
+    },
+    {
       "id": "opc_progress_media",
       "gallery_name": "OPC — Progress Media Story",
       "status": "LEGACY",
