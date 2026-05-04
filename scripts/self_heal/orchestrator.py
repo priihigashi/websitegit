@@ -270,6 +270,13 @@ def pick_task(rows: list[dict], target_id: str = "", force: bool = False) -> Opt
             continue
         if status == "BLOCKED" and not force:
             continue
+        # 2026-05-03 (SH-046 lesson): pause NEEDS-REVIEW / NEEDS-CREDITS rows
+        # so a single stuck task does not block the every-2h pipeline. Bypass
+        # only when force_retry=true (workflow_dispatch input).
+        if status == "NEEDS-REVIEW" and not force:
+            continue
+        if status == "NEEDS-CREDITS" and not force:
+            continue
         try:
             attempts = int(r.get("Attempts") or 0)
         except ValueError:
