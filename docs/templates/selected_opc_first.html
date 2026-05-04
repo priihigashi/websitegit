@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chosen Templates — OPC First</title>
+<style>
+  body{background:#0D0D0D;color:#F0EBE3;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:32px;line-height:1.5}
+  .status{max-width:760px;margin:0 auto;background:#111;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:24px}
+  code{color:#CBCC10}
+</style>
+</head>
+<body>
+<div class="status">
+  <h1>Loading OPC-first selected templates…</h1>
+  <p>This view preserves the existing <code>selected.html</code> content and only reorders the visual sections in the browser.</p>
+</div>
+<script>
+(async function(){
+  const response = await fetch('selected.html', {cache:'no-store'});
+  if (!response.ok) throw new Error('Could not load selected.html');
+  const html = await response.text();
+
+  const oldRow1Banner = '<div class="section-banner">ROW 1 — Full Carousel Formats</div>';
+  const row1BannerPos = html.indexOf(oldRow1Banner);
+  if (row1BannerPos === -1) throw new Error('Could not find Row 1 banner');
+  const row1CommentStart = html.lastIndexOf('<!-- ═════════', row1BannerPos);
+
+  const opcFullStart = html.indexOf('<!-- ═══ OPC ═══ -->', row1BannerPos);
+  if (opcFullStart === -1) throw new Error('Could not find OPC full section');
+  const opcFullEndMarker = '</div><!-- /group-cards OPC -->';
+  const opcFullEnd = html.indexOf(opcFullEndMarker, opcFullStart) + opcFullEndMarker.length;
+  if (opcFullEnd < opcFullEndMarker.length) throw new Error('Could not find OPC full section end');
+
+  const row2CommentStart = html.indexOf('<!-- ═════════', opcFullEnd);
+  if (row2CommentStart === -1) throw new Error('Could not find Row 2 comment');
+  const opcStandaloneStart = html.indexOf('<!-- ═══ OPC STANDALONES ═══ -->', row2CommentStart);
+  if (opcStandaloneStart === -1) throw new Error('Could not find OPC standalone section');
+
+  const candidates = [
+    html.indexOf('<!-- ═══ BRAZIL STANDALONES', opcStandaloneStart),
+    html.indexOf('<!-- ═══ BRAZIL — STANDALONES', opcStandaloneStart),
+    html.indexOf('<!-- ═══ NEWS', opcStandaloneStart),
+    html.indexOf('<!-- ═══ BRAZIL', opcStandaloneStart)
+  ].filter(i => i !== -1);
+  if (!candidates.length) throw new Error('Could not find the News standalone section');
+  const newsStandaloneStart = Math.min(...candidates);
+
+  const before = html.slice(0, row1CommentStart).trimEnd() + '\n\n';
+  const opcFullBlock = html.slice(opcFullStart, opcFullEnd).trim() + '\n\n';
+  const newsFullBlock = html.slice(opcFullEnd, row2CommentStart).trim() + '\n\n';
+  const opcStandaloneBlock = html.slice(opcStandaloneStart, newsStandaloneStart).trim() + '\n\n';
+  const newsStandaloneBlock = html.slice(newsStandaloneStart).trimStart();
+
+  const row1Opc = `<!-- ═══════════════════════════════════════════════════════
+     ROW 1 — FULL CAROUSEL FORMATS · OPC
+     Multi-slide OPC sets that define a format end-to-end.
+     ═══════════════════════════════════════════════════════ -->
+<div class="section-banner">ROW 1 — Full Carousel Formats · OPC</div>
+
+`;
+  const row2Opc = `<!-- ═══════════════════════════════════════════════════════
+     ROW 2 — STANDALONE SLIDES · OPC
+     Individual reusable OPC slides — mix & match into any OPC carousel.
+     ═══════════════════════════════════════════════════════ -->
+<div class="section-banner">ROW 2 — Standalone Slides · OPC</div>
+
+`;
+  const row1News = `<!-- ═══════════════════════════════════════════════════════
+     ROW 1 — FULL CAROUSEL FORMATS · NEWS
+     Multi-slide Brazil + USA news sets that define a format end-to-end.
+     ═══════════════════════════════════════════════════════ -->
+<div class="section-banner">ROW 1 — Full Carousel Formats · News</div>
+
+`;
+  const row2News = `<!-- ═══════════════════════════════════════════════════════
+     ROW 2 — STANDALONE SLIDES · NEWS
+     Individual reusable Brazil + USA news slides — mix & match into any news carousel.
+     ═══════════════════════════════════════════════════════ -->
+<div class="section-banner">ROW 2 — Standalone Slides · News</div>
+
+`;
+
+  const reordered = before + row1Opc + opcFullBlock + row2Opc + opcStandaloneBlock + row1News + newsFullBlock + row2News + newsStandaloneBlock;
+  document.open();
+  document.write(reordered);
+  document.close();
+})().catch(err => {
+  document.body.innerHTML = '<div class="status"><h1>Could not render OPC-first view</h1><p>' + err.message + '</p><p>The original selected page is unchanged.</p></div>';
+});
+</script>
+</body>
+</html>
