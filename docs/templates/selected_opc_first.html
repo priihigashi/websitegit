@@ -81,7 +81,48 @@
 
 `;
 
-  const reordered = before + row1Opc + opcFullBlock + row2Opc + opcStandaloneBlock + row1News + newsFullBlock + row2News + newsStandaloneBlock;
+  const responsiveGalleryPatch = `
+/* OPC-first gallery responsive preview patch — page only, carousel sources remain 1080x1350 */
+html,body{max-width:100%;overflow-x:hidden}
+.page-nav,.gallery-top,.section-banner,.group-header{padding-left:clamp(16px,4vw,40px)!important;padding-right:clamp(16px,4vw,40px)!important}
+.page-nav{flex-wrap:wrap}
+.group-cards{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),500px));justify-content:center;gap:clamp(20px,4vw,40px);padding:0 clamp(16px,4vw,40px) 48px!important;width:100%}
+.tpl-card{width:100%!important;max-width:500px!important;min-width:0!important;overflow:hidden}
+.viewer-row{display:grid!important;grid-template-columns:40px minmax(0,360px) 40px;justify-content:center;align-items:center;width:100%;gap:10px}
+.slide-frame-outer{width:min(360px,calc(100vw - 140px))!important;max-width:100%!important;height:450px;overflow:hidden}
+.slide-frame-outer iframe{width:1080px!important;height:1350px!important;transform-origin:top left!important}
+@media (max-width:520px){
+  body{padding:0!important}
+  .tpl-card{padding:18px!important}
+  .viewer-row{grid-template-columns:32px minmax(0,1fr) 32px;gap:6px}
+  .arrow-btn{width:32px!important;height:52px!important;font-size:18px!important}
+  .slide-frame-outer{width:min(360px,calc(100vw - 96px))!important}
+}
+`;
+
+  const responsiveRuntimePatch = `
+<script>
+(function(){
+  function fitPreviewFrames(){
+    document.querySelectorAll('.slide-frame-outer').forEach(function(frame){
+      var width = frame.getBoundingClientRect().width || 360;
+      frame.style.height = (width * 1.25) + 'px';
+      var iframe = frame.querySelector('iframe');
+      if (iframe) iframe.style.transform = 'scale(' + (width / 1080) + ')';
+    });
+  }
+  window.addEventListener('resize', fitPreviewFrames);
+  window.addEventListener('load', fitPreviewFrames);
+  setTimeout(fitPreviewFrames, 50);
+  setTimeout(fitPreviewFrames, 300);
+  setTimeout(fitPreviewFrames, 1000);
+})();
+<\/script>
+`;
+
+  let reordered = before + row1Opc + opcFullBlock + row2Opc + opcStandaloneBlock + row1News + newsFullBlock + row2News + newsStandaloneBlock;
+  reordered = reordered.replace('</style>', responsiveGalleryPatch + '\n</style>');
+  reordered = reordered.replace('</body>', responsiveRuntimePatch + '\n</body>');
   document.open();
   document.write(reordered);
   document.close();
