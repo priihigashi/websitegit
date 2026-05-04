@@ -11,7 +11,9 @@ Column layout (1-indexed, matches photo_catalog_cloud.py):
 """
 import os
 import re
+import time
 import urllib.request
+import urllib.parse
 import json
 
 
@@ -20,15 +22,37 @@ CATALOG_TAB = "📸 Photo Catalog"
 MIN_QUALITY = 4
 
 
+_token_cache = {}
+
 def _get_token():
+    """Refresh SHEETS_TOKEN refresh credential into a live access token.
+
+    SHEETS_TOKEN is the refresh credential JSON (client_id/client_secret/refresh_token),
+    not a live access token. The previous version returned the empty access_token field
+    and silently dropped every catalog read, sending the pipeline to DALL-E fallback.
+    """
+    if _token_cache.get("t") and time.time() < _token_cache.get("exp", 0):
+        return _token_cache["t"]
     raw = os.environ.get("SHEETS_TOKEN", "")
     if not raw:
         return ""
     try:
-        data = json.loads(raw)
-        return data.get("refresh_token", "")
-    except Exception:
-        return raw.strip()
+        td = json.loads(raw)
+        data = urllib.parse.urlencode({
+            "client_id": td["client_id"],
+            "client_secret": td["client_secret"],
+            "refresh_token": td["refresh_token"],
+            "grant_type": "refresh_token",
+        }).encode()
+        resp = json.loads(urllib.request.urlopen(
+            urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+            timeout=10).read())
+        _token_cache["t"] = resp["access_token"]
+        _token_cache["exp"] = time.time() + resp.get("expires_in", 3500) - 60
+        return resp["access_token"]
+    except Exception as e:
+        print(f"  photo_matcher: SHEETS_TOKEN refresh failed — {e}")
+        return ""
 
 
 def _read_catalog(token):
@@ -156,4 +180,3 @@ def match_before_after_pair(topic):
     if before_url or after_url:
         print(f"  photo_matcher: before/after pair found (scores: before={best_before}, after={best_after})")
     return before_url, after_url
-
