@@ -15,6 +15,11 @@ import pytz
 
 ET = pytz.timezone("America/New_York")
 APPROVAL_REMINDER_SUBJECT = "⏰ Content approvals pending"
+APPROVAL_REMINDER_SUBJECTS = {
+    "opc": "⏰ OPC content approvals pending",
+    "news": "⏰ News content approvals pending",
+    "other": "⏰ Other content approvals pending",
+}
 
 SHEET_ID = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
 CATALOG_TAB = "📸 Project Content Catalog"
@@ -724,7 +729,16 @@ def _get_pending_posts():
     return pending
 
 
-def _send_approval_reminder(stale_posts):
+def _approval_group(niche):
+    n = (niche or "").lower()
+    if n == "opc":
+        return "opc"
+    if n in {"brazil", "usa"}:
+        return "news"
+    return "other"
+
+
+def _send_approval_reminder(stale_posts, group="other"):
     """Nudge email for posts that have been pending approval for >24h."""
     if not stale_posts:
         return
@@ -736,9 +750,10 @@ def _send_approval_reminder(stale_posts):
             f"- {p['topic'][:80]} ({p['niche'].upper()})\n  Drive: {p['static_link']}"
         )
     count = len(stale_posts)
-    subject = APPROVAL_REMINDER_SUBJECT
+    subject = APPROVAL_REMINDER_SUBJECTS.get(group, APPROVAL_REMINDER_SUBJECTS["other"])
+    group_label = group.upper() if group != "news" else "NEWS"
     body = (
-        f"{count} post(s) are currently waiting for your approval.\n\n"
+        f"{count} {group_label} post(s) are currently waiting for your approval.\n\n"
         "The following posts are waiting for your approval:\n\n"
         + "\n\n".join(lines)
         + "\n\nReply 'black approved', 'cream approved', or 'skip' to the original preview email."
@@ -746,7 +761,7 @@ def _send_approval_reminder(stale_posts):
     # Keep only one active reminder thread in inbox: archive older reminders first.
     try:
         token, _ = get_gmail_token()
-        q = urllib.parse.quote(f'subject:"{APPROVAL_REMINDER_SUBJECT}" in:inbox')
+        q = urllib.parse.quote(f'subject:"{subject}" in:inbox')
         url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages?q={q}&maxResults=200"
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
         msgs = json.loads(urllib.request.urlopen(req).read()).get("messages", [])
@@ -771,30 +786,44 @@ def _send_approval_reminder(stale_posts):
              "-f", f"body={body}"],
             check=False, capture_output=True, timeout=30,
         )
-        print(f"  Approval reminder sent: {count} stale post(s)")
+        print(f"  Approval reminder sent: {count} stale {group_label} post(s)")
     except Exception as exc:
         print(f"  Approval reminder failed (non-fatal): {exc}")
 
 
 def _check_stale_reminders(pending):
-    # Send max once per 24h even if workflow runs hourly.
-    try:
-        token, _ = get_gmail_token()
-        q = urllib.parse.quote(f'subject:"{APPROVAL_REMINDER_SUBJECT}" newer_than:1d')
-        req = urllib.request.Request(
-            f"https://gmail.googleapis.com/gmail/v1/users/me/messages?q={q}&maxResults=1",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        existing = json.loads(urllib.request.urlopen(req).read()).get("messages", [])
-        if existing:
-            print("  Approval reminder already sent in last 24h — skipping duplicate")
-            return
-    except Exception as exc:
-        print(f"  Reminder dedupe check failed (continuing): {exc}")
+    # Send max once per 24h per approval group even if workflow runs hourly.
     today = datetime.now(ET).strftime("%Y-%m-%d")
     stale = [p for p in pending if p.get("date_created") and p["date_created"] < today]
-    if stale:
-        _send_approval_reminder(stale)
+    if not stale:
+        return
+
+    groups = {}
+    for post in stale:
+        groups.setdefault(_approval_group(post.get("niche")), []).append(post)
+
+    try:
+        token, _ = get_gmail_token()
+    except Exception as exc:
+        token = None
+        print(f"  Reminder dedupe token failed (continuing): {exc}")
+
+    for group, posts in groups.items():
+        subject = APPROVAL_REMINDER_SUBJECTS.get(group, APPROVAL_REMINDER_SUBJECTS["other"])
+        if token:
+            try:
+                q = urllib.parse.quote(f'subject:"{subject}" newer_than:1d')
+                req = urllib.request.Request(
+                    f"https://gmail.googleapis.com/gmail/v1/users/me/messages?q={q}&maxResults=1",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                existing = json.loads(urllib.request.urlopen(req).read()).get("messages", [])
+                if existing:
+                    print(f"  {group.upper()} approval reminder already sent in last 24h — skipping duplicate")
+                    continue
+            except Exception as exc:
+                print(f"  {group.upper()} reminder dedupe check failed (continuing): {exc}")
+        _send_approval_reminder(posts, group)
 
 
 def process_replies():

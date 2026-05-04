@@ -6,6 +6,8 @@ Creates nested automation sub-labels and Gmail filters that:
   - Route automation self-emails to nested labels (some skip inbox immediately)
   - Skip-inbox for sales/subscription junk (Google Ads reps, Tasty Lunchboxes, Freepik, Zapier)
   - Label ✅ 4AM Content Ready + star it
+  - Label + star bulk Content approvals pending summaries
+  - Split future approval summaries into OPC vs News labels
   - Label Google security alerts
 
 Idempotent: skips labels that already exist, skips filters whose criteria already exist.
@@ -29,6 +31,8 @@ SUB_LABELS_TO_CREATE = [
     "🤖 Automation/Daily Digests",
     "🤖 Automation/Notifications",
     "🤖 Automation/Pending Approval",
+    "🤖 Automation/Pending Approval/OPC",
+    "🤖 Automation/Pending Approval/News",
 ]
 
 
@@ -113,6 +117,8 @@ def main():
     LID_DIGESTS = existing["🤖 Automation/Daily Digests"]
     LID_NOTIFS = existing["🤖 Automation/Notifications"]
     LID_PENDING_APPROVAL = existing["🤖 Automation/Pending Approval"]
+    LID_PENDING_OPC = existing["🤖 Automation/Pending Approval/OPC"]
+    LID_PENDING_NEWS = existing["🤖 Automation/Pending Approval/News"]
     LID_AUTO_ERRORS = existing.get("🚨 Automation Errors")
     LID_4AM = existing.get("Reports/4AM Agent")
     LID_GADS_HELP = existing.get("google ads help")
@@ -172,13 +178,38 @@ def main():
         "Calendar Optimized → 🤖 Automation/Daily Digests",
     )
 
-    # 4b) Approval nudges — route to pending-approval label and skip inbox
+    # 4b) Bulk approval summaries — route to pending-approval label + star.
+    # Keep individual [REVIEW] preview emails untouched in Inbox; only the summary
+    # thread gets the "needs my answer" treatment.
+    ensure_filter(
+        gmail,
+        {"from": "priscila@oakpark-construction.com", "subject": "Content approvals pending"},
+        {"addLabelIds": [LID_PENDING_APPROVAL, "STARRED", "IMPORTANT"]},
+        existing_filters,
+        "Content approvals pending → 🤖 Automation/Pending Approval + ⭐",
+    )
+    ensure_filter(
+        gmail,
+        {"from": "priscila@oakpark-construction.com", "subject": "OPC content approvals pending"},
+        {"addLabelIds": [LID_PENDING_OPC, "STARRED", "IMPORTANT"]},
+        existing_filters,
+        "OPC content approvals pending → 🤖 Automation/Pending Approval/OPC + ⭐",
+    )
+    ensure_filter(
+        gmail,
+        {"from": "priscila@oakpark-construction.com", "subject": "News content approvals pending"},
+        {"addLabelIds": [LID_PENDING_NEWS, "STARRED", "IMPORTANT"]},
+        existing_filters,
+        "News content approvals pending → 🤖 Automation/Pending Approval/News + ⭐",
+    )
+
+    # 4c) Older approval nudge subject — route to pending-approval label + star
     ensure_filter(
         gmail,
         {"from": "priscila@oakpark-construction.com", "query": "subject:(waiting for your approval)"},
-        {"addLabelIds": [LID_PENDING_APPROVAL], "removeLabelIds": ["INBOX"]},
+        {"addLabelIds": [LID_PENDING_APPROVAL, "STARRED", "IMPORTANT"]},
         existing_filters,
-        "approval reminder → 🤖 Automation/Pending Approval, skip inbox",
+        "approval reminder → 🤖 Automation/Pending Approval + ⭐",
     )
 
     # 5) 4AM Agent FAILED / ran OK — route to Notifications (not ✅ Content Ready emails)
