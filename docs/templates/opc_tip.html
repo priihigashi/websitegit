@@ -61,9 +61,9 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 
 /* ---- Big-number row (stat slide) ---- */
 .stat-big {
-  font-family:'Anton', sans-serif; font-size:clamp(2rem, 33vw, 360px); line-height:0.85;
-  color:#CBCC10; margin-top:auto; margin-bottom:30px; letter-spacing:-0.03em;
-  overflow:hidden; max-width:100%;
+  font-family:'Anton', sans-serif; font-size:clamp(140px, 29vw, 322px); line-height:0.92;
+  color:#CBCC10; margin-top:210px; margin-bottom:34px; letter-spacing:-0.025em;
+  overflow:visible; max-width:100%;
 }
 .stat-label {
   font-family:'JetBrains Mono', monospace; font-size:24px; font-weight:700;
@@ -74,23 +74,23 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 .slide-stat { overflow:hidden; }
 
 /* ---- Numbered list ---- */
-/* padding-bottom must clear bottom HUD lane (arrow + slide-logo + corner) */
-.list { margin-top:12px; padding-bottom:140px; }
+/* Keep list content clear of the bottom brand/HUD lane. */
+.list { margin-top:8px; padding-bottom:172px; }
 .list-item {
-  display:flex; gap:36px; align-items:baseline; margin-bottom:28px;
-  padding-bottom:22px; border-bottom:1px solid var(--c-rule);
+  display:flex; gap:32px; align-items:baseline; margin-bottom:18px;
+  padding-bottom:18px; border-bottom:1px solid var(--c-rule);
 }
 .list-item:last-child { border-bottom:none; }
 .list-num {
-  font-family:'Anton', sans-serif; font-size:72px; color:#CBCC10;
+  font-family:'Anton', sans-serif; font-size:66px; color:#CBCC10;
   line-height:1; min-width:90px; letter-spacing:-0.02em;
 }
 .list-text {
-  font-family:'Roboto Condensed', sans-serif; font-size:36px; font-weight:700;
+  font-family:'Roboto Condensed', sans-serif; font-size:32px; font-weight:700;
   color:var(--c-head); line-height:1.15; flex:1;
 }
 .list-sub {
-  font-family:'Roboto Condensed', sans-serif; font-size:22px; font-weight:400;
+  font-family:'Roboto Condensed', sans-serif; font-size:20px; font-weight:400;
   color:var(--c-body); margin-top:6px; line-height:1.3;
 }
 
@@ -182,7 +182,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 
 /* ---- Arrow indicator (every slide except last) ---- */
 .arrow {
-  position:absolute; bottom:88px; right:108px; z-index:10;
+  position:absolute; bottom:70px; right:108px; z-index:10;
   font-family:'Anton', sans-serif; font-size:32px; color:#CBCC10;
   letter-spacing:0.1em;
 }
@@ -218,9 +218,10 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 
 /* ---- Slide logo (bottom corner) ---- */
 .slide-logo {
-  position:absolute; bottom:72px; left:108px;
-  font-family:'Anton', sans-serif; font-size:20px; letter-spacing:0.2em;
+  position:absolute; bottom:70px; left:108px;
+  font-family:'Anton', sans-serif; font-size:16px; letter-spacing:0.14em;
   color:var(--c-tag); text-transform:uppercase; z-index:10;
+  max-width:430px; line-height:1.1;
 }
 
 .slide-cover .slide-logo {
@@ -235,9 +236,9 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 /* ---- OPC context-image panel for middle slides ---- */
 .context-img-slot {
   width:100%;
-  min-height:360px;
-  max-height:440px;
-  margin:28px 0 18px;
+  min-height:300px;
+  max-height:360px;
+  margin:20px 0 14px;
   border:2px solid var(--c-brk);
   border-radius:10px;
   overflow:hidden;
@@ -307,9 +308,10 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   margin-top:16px;
 }
 
-/* Stat slide bottom-HUD clearance */
-.slide-stat .project-note { margin-bottom:120px; }
-.slide-stat .stat-label { margin-bottom:8px; }
+/* Stat slide: use the upper canvas instead of leaving a dead top gap. */
+.slide-stat .tag { margin-bottom:0; }
+.slide-stat .project-note { margin-bottom:150px; max-width:760px; }
+.slide-stat .stat-label { margin-bottom:8px; max-width:760px; }
 
 /* =========================================================== */
 /* ============ VARIANT 1 — OBSIDIAN (primary dark) =========== */
@@ -380,7 +382,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   <div class="headline">WHY YOUR ROOF <span class="accent">FAILS</span> EARLY</div>
   <div class="body-text">Most Oak Park homeowners miss these 3 mistakes — and they cost $12K on average.</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-stat v1">
@@ -390,7 +392,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   <div class="stat-label">Average cost of premature roof replacement when flashing is skipped</div>
   <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-list v1">
@@ -404,7 +406,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
     <div class="list-item"><span class="list-num">03</span><div><div class="list-text">NO DRIP EDGE</div><div class="list-sub">Without drip edge, water wicks under the first shingle row.</div></div></div>
   </div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-tip v1">
@@ -415,7 +417,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   <div class="context-img-slot context-img-placeholder" data-query="drip edge roofing eave detail"><div class="ctx-placeholder-inner"><div class="ctx-placeholder-icon">&#9632;</div><div class="ctx-placeholder-label">TIP IN ACTION IMAGE</div></div></div>
   <div class="tip-explain">Install ice-and-water shield on the first 3 feet and all valleys. Costs $300 extra. Saves $12,000.</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-sources v1">
@@ -443,7 +445,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   <div class="headline">WHY YOUR ROOF <span class="accent">FAILS</span> EARLY</div>
   <div class="body-text">Most Oak Park homeowners miss these 3 mistakes — and they cost $12K on average.</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-stat v2">
@@ -453,7 +455,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   <div class="stat-label">Average cost of premature roof replacement when flashing is skipped</div>
   <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-list v2">
@@ -467,7 +469,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
     <div class="list-item"><span class="list-num">03</span><div><div class="list-text">NO DRIP EDGE</div><div class="list-sub">Without drip edge, water wicks under the first shingle row.</div></div></div>
   </div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-tip v2">
@@ -478,7 +480,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   <div class="context-img-slot context-img-placeholder" data-query="drip edge roofing eave detail"><div class="ctx-placeholder-inner"><div class="ctx-placeholder-icon">&#9632;</div><div class="ctx-placeholder-label">TIP IN ACTION IMAGE</div></div></div>
   <div class="tip-explain">Install ice-and-water shield on the first 3 feet and all valleys. Costs $300 extra. Saves $12,000.</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-sources v2">
@@ -506,7 +508,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   <div class="headline">WHY YOUR ROOF <span class="accent">FAILS</span> EARLY</div>
   <div class="body-text">Most Oak Park homeowners miss these 3 mistakes — and they cost $12K on average.</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-stat v3">
@@ -516,7 +518,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   <div class="stat-label">Average cost of premature roof replacement when flashing is skipped</div>
   <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-list v3">
@@ -530,7 +532,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
     <div class="list-item"><span class="list-num">03</span><div><div class="list-text">NO DRIP EDGE</div><div class="list-sub">Without drip edge, water wicks under the first shingle row.</div></div></div>
   </div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-tip v3">
@@ -541,7 +543,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   <div class="context-img-slot context-img-placeholder" data-query="drip edge roofing eave detail"><div class="ctx-placeholder-inner"><div class="ctx-placeholder-icon">&#9632;</div><div class="ctx-placeholder-label">TIP IN ACTION IMAGE</div></div></div>
   <div class="tip-explain">Install ice-and-water shield on the first 3 feet and all valleys. Costs $300 extra. Saves $12,000.</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-sources v3">

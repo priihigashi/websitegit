@@ -2322,7 +2322,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
   <div class="headline">{hl_html}</div>
   <div class="body-text">{content["subhead"]}</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-stat {v_class}">
@@ -2332,7 +2332,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
   <div class="stat-label">{content.get("slide2_label", "")}</div>
   <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-list {v_class}">
@@ -2343,7 +2343,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
   <div class="list">
 {items_html}  </div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-tip {v_class}">
@@ -2354,7 +2354,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
   {_opc_context_slot(4, "TIP IN ACTION IMAGE")}
   <div class="tip-explain">{content.get("slide4_body", "")}</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-sources {v_class}">
@@ -2445,7 +2445,7 @@ def _build_opc_progress_html(content, slug, work_dir, media_paths=None):
   <div class="headline">{project_name}</div>
   <div class="prog-address">{project_address}</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-stage {v_class}">
@@ -2455,7 +2455,7 @@ def _build_opc_progress_html(content, slug, work_dir, media_paths=None):
   <div class="prog-date">{stage_date}</div>
   {_prog_img("stage", "STAGE PHOTO")}
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-done {v_class}">
@@ -2465,7 +2465,7 @@ def _build_opc_progress_html(content, slug, work_dir, media_paths=None):
   <div class="prog-caption">{whats_done_caption}</div>
   <div class="prog-body">{whats_done}</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-next {v_class}">
@@ -2475,7 +2475,7 @@ def _build_opc_progress_html(content, slug, work_dir, media_paths=None):
   <div class="prog-caption">{whats_next_caption}</div>
   <div class="prog-body">{whats_next}</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-credits {v_class}">
@@ -2625,7 +2625,7 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
   <div class="headline">{hl_html}</div>
   <div class="body-text">{content.get("subhead","")}</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-stat {v_class} ill-shell">
@@ -2634,7 +2634,7 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
   <div class="stat-big">{content.get("slide2_stat", "—")}</div>
   <div class="stat-label">{content.get("slide2_label", "")}</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-list {v_class} ill-shell">
@@ -2644,7 +2644,7 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
   <div class="list">
 {items_html}  </div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-tip {v_class} ill-shell">
@@ -2655,7 +2655,7 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
   {img_panel(slide4_img, "DETAIL IMAGE")}
   <div class="tip-explain">{content.get("slide4_body", "")}</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-sources {v_class} ill-shell">
@@ -2830,7 +2830,7 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
     <div class="body-text">{content.get("subhead","")}</div>
   </div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-stat {v_class} cut-shell">
@@ -2839,7 +2839,7 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
   <div class="stat-big">{content.get("slide2_stat", "—")}</div>
   <div class="stat-label">{content.get("slide2_label", "")}</div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-list {v_class} cut-shell">
@@ -2849,7 +2849,7 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
   <div class="list">
 {items_html}  </div>
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-tip {v_class} cut-shell">
@@ -2858,7 +2858,7 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
   <div class="tip-label"><span class="tip-arrow">&#9658;</span> The Pro Move</div>
   {slide4_inner}
   <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park · CBC1263425</div>
+  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
 </div>
 
 <div class="slide slide-sources {v_class} cut-shell">
