@@ -2325,7 +2325,6 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
 <div class="slide slide-stat {v_class}">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">The Real Number</div>
-  <div class="headline">{s2_html}</div>
   <div class="stat-big">{content.get("slide2_stat", "—")}</div>
   <div class="stat-label">{content.get("slide2_label", "")}</div>
   <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
@@ -2629,7 +2628,6 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
 <div class="slide slide-stat {v_class} ill-shell">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">The Real Number</div>
-  <div class="headline">{s2_html}</div>
   <div class="stat-big">{content.get("slide2_stat", "—")}</div>
   <div class="stat-label">{content.get("slide2_label", "")}</div>
   <div class="arrow">SWIPE &#8594;</div>
@@ -2835,7 +2833,6 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
 <div class="slide slide-stat {v_class} cut-shell">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">The Real Number</div>
-  <div class="headline">{s2_html}</div>
   <div class="stat-big">{content.get("slide2_stat", "—")}</div>
   <div class="stat-label">{content.get("slide2_label", "")}</div>
   <div class="arrow">SWIPE &#8594;</div>

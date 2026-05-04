@@ -74,7 +74,8 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 .slide-stat { overflow:hidden; }
 
 /* ---- Numbered list ---- */
-.list { margin-top:12px; padding-bottom:80px; }
+/* padding-bottom must clear bottom HUD lane (arrow + slide-logo + corner) */
+.list { margin-top:12px; padding-bottom:140px; }
 .list-item {
   display:flex; gap:36px; align-items:baseline; margin-bottom:28px;
   padding-bottom:22px; border-bottom:1px solid var(--c-rule);
@@ -234,8 +235,8 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 /* ---- OPC context-image panel for middle slides ---- */
 .context-img-slot {
   width:100%;
-  min-height:420px;
-  max-height:520px;
+  min-height:360px;
+  max-height:440px;
   margin:28px 0 18px;
   border:2px solid var(--c-brk);
   border-radius:10px;
@@ -305,6 +306,10 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   max-width:860px;
   margin-top:16px;
 }
+
+/* Stat slide bottom-HUD clearance */
+.slide-stat .project-note { margin-bottom:120px; }
+.slide-stat .stat-label { margin-bottom:8px; }
 
 /* =========================================================== */
 /* ============ VARIANT 1 — OBSIDIAN (primary dark) =========== */
@@ -381,7 +386,6 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 <div class="slide slide-stat v1">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">The Real Number</div>
-  <div class="headline">THE REAL <span class="accent">NUMBER</span></div>
   <div class="stat-big">$12K</div>
   <div class="stat-label">Average cost of premature roof replacement when flashing is skipped</div>
   <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
@@ -445,7 +449,6 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 <div class="slide slide-stat v2">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">The Real Number</div>
-  <div class="headline">THE REAL <span class="accent">NUMBER</span></div>
   <div class="stat-big">$12K</div>
   <div class="stat-label">Average cost of premature roof replacement when flashing is skipped</div>
   <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
@@ -509,7 +512,6 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 <div class="slide slide-stat v3">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="tag">The Real Number</div>
-  <div class="headline">THE REAL <span class="accent">NUMBER</span></div>
   <div class="stat-big">$12K</div>
   <div class="stat-label">Average cost of premature roof replacement when flashing is skipped</div>
   <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
