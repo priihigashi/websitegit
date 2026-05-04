@@ -44,9 +44,10 @@ def _get_token():
             "refresh_token": td["refresh_token"],
             "grant_type": "refresh_token",
         }).encode()
-        resp = json.loads(urllib.request.urlopen(
-            urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
-            timeout=10).read())
+        req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
+        with urllib.request.urlopen(req, timeout=10) as response:
+            resp_data = response.read()
+        resp = json.loads(resp_data)
         _token_cache["t"] = resp["access_token"]
         _token_cache["exp"] = time.time() + resp.get("expires_in", 3500) - 60
         return resp["access_token"]
@@ -60,7 +61,7 @@ def _read_catalog(token):
     enc = urllib.parse.quote(f"'{CATALOG_TAB}'!A:J", safe="!:'")
     url = (f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}"
            f"/values/{enc}?majorDimension=ROWS")
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token} "})
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
     resp = json.loads(urllib.request.urlopen(req, timeout=10).read())
     rows = resp.get("values", [])
     if not rows:
@@ -180,4 +181,3 @@ def match_before_after_pair(topic):
     if before_url or after_url:
         print(f"  photo_matcher: before/after pair found (scores: before={best_before}, after={best_after})")
     return before_url, after_url
-
