@@ -261,6 +261,20 @@
       "pipeline_notes": "OPC adaptation of the biography grid. Not person-based; fields describe fit, durability, install notes, cost range, and style fit."
     },
     {
+      "id": "opc_progress_media",
+      "gallery_name": "OPC — Progress Media Story",
+      "status": "LEGACY",
+      "format_family": "FORMATOPC",
+      "style_code": "FORMATOPC_05",
+      "style_name": "Progress Photo / Video Story",
+      "niche": "opc",
+      "kind": "standalone",
+      "file": "opc_progress_media.html",
+      "variants": 1,
+      "use_when": "A reusable OPC cover or mid-slide for progress videos, before/during/after photos, jobsite proof, installation stages, inspection moments, or field updates.",
+      "pipeline_notes": "OPC adaptation of the FORMAT-020 video-frame slide. Media frame accepts a progress photo/video; lower description area has extra space for what is happening, why it matters, what changed, and what comes next."
+    },
+    {
       "id": "news_brazil_cover_base",
       "gallery_name": "Brazil — Base 1",
       "status": "LEGACY",

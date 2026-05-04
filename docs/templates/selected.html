@@ -303,6 +303,26 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
+<!-- OPC Progress Media Story -->
+<div class="tpl-card" id="card_opc_progress_media">
+  <div class="tpl-meta">
+    <div class="tpl-name">OPC — Progress Media Story</div>
+    <div class="tpl-format">FORMATOPC_05 · OPC · LEGACY · Progress Photo / Video</div>
+    <div class="tpl-category">OPC · standalone · reusable cover or mid-slide for progress photos/videos</div>
+    <div class="tpl-when">OPC adaptation of the FORMAT-020 video-frame slide. Not person-based. Use for progress videos, before/during/after photos, jobsite proof, inspection moments, installation stages, or quick field updates. Larger lower description area explains what is happening, why it matters, what changed, and what comes next. Can be used once as a cover or repeated multiple times as mid-carousel evidence slides. EN.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('opc_progress_media')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_opc_progress_media" src="opc_progress_media.html" scrolling="no" onload="initViewer('opc_progress_media')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('opc_progress_media')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_opc_progress_media">slide 1 / 1</div>
+  </div>
+</div>
+
 <!-- OPC Base 1 — Cover -->
 <div class="tpl-card" id="card_opc_base">
   <div class="tpl-meta">
@@ -827,6 +847,7 @@ const IMG = {
   news_brazil_biography:{},
   news_usa_biography:   {},
   opc_material_profile:  {},
+  opc_progress_media:    { bg: ['kitchen_progress','framing_opc','drywall_hang'] },
   news_brazil_network:  {},
   news_usa_network:     {},
   news_brazil_duotone:  { photo_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=920&h=540&fit=crop&crop=face' },
