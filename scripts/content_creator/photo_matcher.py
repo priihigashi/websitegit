@@ -13,6 +13,8 @@ import os
 import re
 import urllib.request
 import json
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 
 
 SHEET_ID    = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
@@ -21,18 +23,18 @@ MIN_QUALITY = 4
 
 
 def _get_token():
-    raw = os.environ.get("SHEETS_TOKEN", "")
+    raw = os.getenv("SHEETS_TOKEN_JSON", "")
     if not raw:
         return ""
     try:
-        data = json.loads(raw)
-        if 'token' in data:  # Adjusted to reflect standard OAuth token structure
-            return data['token']
-        if 'access_token' in data:
-            return data['access_token']
-    except Exception:
-        pass
-    return ""
+        creds_data = json.loads(raw)
+        creds = Credentials.from_authorized_user_info(creds_data)
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        return creds.token
+    except Exception as e:
+        print(f"Error obtaining token: {e}")
+        return ""
 
 
 def _read_catalog(token):
