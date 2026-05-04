@@ -70,24 +70,35 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
   filter:url(#duotone-bw);
 }
 
-/* V2 — Vignette overlay */
+/* V2 — Vignette overlay (sits ABOVE the person at z:4 so darkening lays on top of cutout too) */
 .vignette{
   position:absolute;inset:0;z-index:4;pointer-events:none;
   background:
-    radial-gradient(ellipse 80% 90% at 50% 45%,transparent 35%,rgba(0,0,0,0.42) 100%),
-    linear-gradient(to bottom,rgba(0,0,0,0.18) 0%,transparent 25%,transparent 75%,rgba(0,0,0,0.22) 100%);
+    radial-gradient(ellipse 80% 90% at 50% 45%,transparent 35%,rgba(0,0,0,0.50) 100%),
+    linear-gradient(to bottom,rgba(0,0,0,0.20) 0%,transparent 22%,transparent 78%,rgba(0,0,0,0.28) 100%);
+}
+/* V2 light-grain pass on top — makes the vignette feel textured even on dark cutout pixels */
+.vignette-grain{
+  position:absolute;inset:0;z-index:5;pointer-events:none;
+  opacity:0.10;mix-blend-mode:screen;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='2.4' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
 }
 
-/* V3 — Paper texture overlay */
+/* V3 — Paper texture overlay (overlay + screen blend so it shows on BOTH light bg AND dark cutout) */
 .paper-texture{
   position:absolute;inset:0;z-index:4;pointer-events:none;
-  opacity:0.55;mix-blend-mode:multiply;
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='800'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.18 0 0 0 0 0.13 0 0 0 0 0.06 0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  opacity:0.42;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='800'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.55 0 0 0 0 0.45 0 0 0 0 0.30 0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
 }
 .paper-grain{
   position:absolute;inset:0;z-index:5;pointer-events:none;
-  opacity:0.18;mix-blend-mode:overlay;
+  opacity:0.18;mix-blend-mode:screen;
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='2.2' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+}
+.paper-warm{
+  position:absolute;inset:0;z-index:5;pointer-events:none;
+  opacity:0.22;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='800'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.22 0 0 0 0 0.10 0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
 }
 
 .photo-credit{
@@ -123,6 +134,7 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
   <div class="counter">1/10</div>
   <div class="person-wrap"><img class="person-img" src="resources/two_char_demo/person1_cutout.png" alt=""></div>
   <div class="vignette"></div>
+  <div class="vignette-grain"></div>
   <div class="headline">Rejeição de Messias no STF é alerta sobre plano da extrema direita para dominar Senado</div>
   <div class="photo-credit">Foto: Agência Brasil / InBr</div>
 </div>
@@ -134,6 +146,7 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
   <div class="counter">1/10</div>
   <div class="person-wrap"><img class="person-img" src="resources/two_char_demo/person1_cutout.png" alt=""></div>
   <div class="paper-texture"></div>
+  <div class="paper-warm"></div>
   <div class="paper-grain"></div>
   <div class="headline">Rejeição de Messias no STF é alerta sobre plano da extrema direita para dominar Senado</div>
   <div class="photo-credit">Foto: Agência Brasil / InBr</div>

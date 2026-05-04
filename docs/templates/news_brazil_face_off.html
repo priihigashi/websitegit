@@ -68,13 +68,15 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
   filter:url(#duotone-bw-faceoff);
 }
 
-/* V3 half-body cutouts — equal height, half each side, "battle" feel */
+/* V3 half-body cutouts — equal height, anchored to OPPOSITE edges
+   Each bust pushed far enough off-canvas that only ~half the face shows,
+   leaving a clear gap in the middle for the headline. */
 .bust-left,.bust-right{
-  position:absolute;height:760px;z-index:3;
-  bottom:200px;
+  position:absolute;height:520px;z-index:3;
+  bottom:240px;
 }
-.bust-left{left:-150px}
-.bust-right{right:-150px;transform:scaleX(-1)}
+.bust-left{left:-340px}
+.bust-right{right:-340px;transform:scaleX(-1)}
 .bust-img{
   height:100%;width:auto;
   object-fit:contain;object-position:bottom center;

@@ -65,9 +65,10 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
   filter:url(#duotone-bw-us);
 }
 
-.bust-left,.bust-right{position:absolute;height:760px;z-index:3;bottom:200px}
-.bust-left{left:-150px}
-.bust-right{right:-150px;transform:scaleX(-1)}
+/* V3 half-body cutouts — anchored to OPPOSITE edges, clear gap for headline */
+.bust-left,.bust-right{position:absolute;height:520px;z-index:3;bottom:240px}
+.bust-left{left:-340px}
+.bust-right{right:-340px;transform:scaleX(-1)}
 .bust-img{
   height:100%;width:auto;
   object-fit:contain;object-position:bottom center;
