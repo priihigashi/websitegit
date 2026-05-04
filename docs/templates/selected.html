@@ -283,6 +283,26 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
+<!-- OPC Material / Product Profile -->
+<div class="tpl-card" id="card_opc_material_profile">
+  <div class="tpl-meta">
+    <div class="tpl-name">OPC — Material / Product Profile</div>
+    <div class="tpl-format">FORMAT02_05 · OPC · STANDALONE · Material / Service / Technique</div>
+    <div class="tpl-category">OPC · standalone · product, material, service, design style, or technique info slide</div>
+    <div class="tpl-when">OPC adaptation of the biography/fact-grid slide. Not person-based. Use for a product, material, finish, construction technique, design style, or service category. Grid fields: Best For, Not Ideal For, Durability, Install Notes, Cost Range, Style Fit. Bottom pills show decision factors like Moisture, Maintenance, Lead Time, Warranty, Resale. EN.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('opc_material_profile')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_opc_material_profile" src="opc_material_profile.html" scrolling="no" onload="initViewer('opc_material_profile')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('opc_material_profile')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_opc_material_profile">slide 1 / 1</div>
+  </div>
+</div>
+
 <!-- OPC Base 1 — Cover -->
 <div class="tpl-card" id="card_opc_base">
   <div class="tpl-meta">
@@ -806,6 +826,7 @@ const IMG = {
   },
   news_brazil_biography:{},
   news_usa_biography:   {},
+  opc_material_profile:  {},
   news_brazil_network:  {},
   news_usa_network:     {},
   news_brazil_duotone:  { photo_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=920&h=540&fit=crop&crop=face' },

@@ -219,6 +219,20 @@
       "pipeline_notes": "Pending approval in gallery; keep out of active selection."
     },
     {
+      "id": "opc_material_profile",
+      "gallery_name": "OPC — Material / Product Profile",
+      "status": "LEGACY",
+      "format_family": "FORMAT02",
+      "style_code": "FORMAT02_05",
+      "style_name": "Material / Product / Service Profile",
+      "niche": "opc",
+      "kind": "standalone",
+      "file": "opc_material_profile.html",
+      "variants": 1,
+      "use_when": "A standalone OPC explainer slide for a product, material, finish, service, design style, or construction technique.",
+      "pipeline_notes": "OPC adaptation of the biography grid. Not person-based; fields describe fit, durability, install notes, cost range, and style fit."
+    },
+    {
       "id": "news_brazil_cover_base",
       "status": "LEGACY",
       "niche": "brazil",

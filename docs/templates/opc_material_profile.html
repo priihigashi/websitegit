@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OPC — Material / Product Profile — Standalone</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* OPC standalone profile slide.
+   Adapted from the biography grid for products, materials, services,
+   design styles, and construction techniques. */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ob:#0A0A0A;
+  --pa:#F0EBE3;
+  --li:#CBCC10;
+  --li2:#E4E66A;
+  --gr:rgba(240,235,227,.46);
+  --rule:rgba(203,204,16,.18);
+  --W:1080px;
+  --H:1350px;
+  --P:96px;
+}
+body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}
+.slide{
+  width:var(--W);height:var(--H);
+  background:
+    radial-gradient(circle at 82% 12%, rgba(203,204,16,.08), transparent 28%),
+    linear-gradient(180deg,#0C0C0C 0%,#050505 100%);
+  color:var(--pa);
+  padding:var(--P);
+  position:relative;overflow:hidden;
+  flex-shrink:0;display:flex;flex-direction:column;
+}
+.slide::before{
+  content:"";position:absolute;inset:28px;
+  border:1px solid rgba(203,204,16,.16);
+  pointer-events:none;
+}
+.profile-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:18px;font-weight:700;
+  letter-spacing:.22em;text-transform:uppercase;
+  color:var(--li);
+  margin-bottom:22px;
+}
+.profile-headline{
+  font-family:'Playfair Display',serif;
+  font-size:96px;font-weight:900;
+  line-height:.94;letter-spacing:-.01em;
+  margin-bottom:34px;
+}
+.profile-headline em{font-style:italic;color:var(--li2)}
+.profile-rule{display:flex;align-items:center;gap:14px;margin-bottom:42px}
+.profile-rule-line{flex:1;height:1px;background:var(--rule)}
+.profile-rule-gem{width:8px;height:8px;background:var(--li);transform:rotate(45deg);flex-shrink:0}
+.profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:30px 56px;align-content:start}
+.profile-field-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:16px;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;
+  color:var(--li);opacity:.9;margin-bottom:8px;
+}
+.profile-field-value{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:25px;font-weight:400;
+  line-height:1.34;color:var(--pa);
+}
+.profile-tags-wrap{
+  margin-top:auto;
+  padding-top:36px;
+  border-top:1px solid var(--rule);
+}
+.profile-tags-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:14px;font-weight:700;
+  letter-spacing:.2em;text-transform:uppercase;
+  color:var(--gr);margin-bottom:16px;
+}
+.profile-tags{display:flex;flex-wrap:wrap;gap:10px}
+.profile-pill{
+  font-family:'Roboto Condensed',sans-serif;
+  font-size:20px;font-weight:700;
+  color:var(--pa);
+  border:1px solid rgba(203,204,16,.38);
+  padding:7px 18px;border-radius:2px;
+  background:rgba(203,204,16,.04);
+}
+.license{
+  position:absolute;right:96px;bottom:58px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:13px;letter-spacing:.13em;
+  color:rgba(240,235,227,.32);
+}
+</style>
+</head>
+<body>
+
+<div class="slide">
+  <div class="profile-label">MATERIAL PROFILE · OPC</div>
+  <div class="profile-headline">What is<br><em class="profile-name">this material?</em></div>
+  <div class="profile-rule">
+    <div class="profile-rule-line"></div>
+    <div class="profile-rule-gem"></div>
+    <div class="profile-rule-line"></div>
+  </div>
+  <div class="profile-grid">
+    <div class="profile-field">
+      <div class="profile-field-label">BEST FOR</div>
+      <div class="profile-field-value">Where this product or finish makes sense</div>
+    </div>
+    <div class="profile-field">
+      <div class="profile-field-label">NOT IDEAL FOR</div>
+      <div class="profile-field-value">Conditions where it may fail or cost more</div>
+    </div>
+    <div class="profile-field">
+      <div class="profile-field-label">DURABILITY</div>
+      <div class="profile-field-value">Wear, moisture, heat, impact, and maintenance profile</div>
+    </div>
+    <div class="profile-field">
+      <div class="profile-field-label">INSTALL NOTES</div>
+      <div class="profile-field-value">Substrate, prep, lead time, inspection, or trade coordination</div>
+    </div>
+    <div class="profile-field">
+      <div class="profile-field-label">COST RANGE</div>
+      <div class="profile-field-value">Budget tier and what usually changes the price</div>
+    </div>
+    <div class="profile-field">
+      <div class="profile-field-label">STYLE FIT</div>
+      <div class="profile-field-value">Modern, coastal, transitional, luxury, rental-grade, or custom</div>
+    </div>
+  </div>
+  <div class="profile-tags-wrap">
+    <div class="profile-tags-label">◆ DECISION FACTORS</div>
+    <div class="profile-tags">
+      <div class="profile-pill">Moisture</div>
+      <div class="profile-pill">Maintenance</div>
+      <div class="profile-pill">Lead Time</div>
+      <div class="profile-pill">Warranty</div>
+      <div class="profile-pill">Resale</div>
+    </div>
+  </div>
+  <div class="license">CBC1263425</div>
+</div>
+
+</body>
+</html>
