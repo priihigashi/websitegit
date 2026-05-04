@@ -337,8 +337,30 @@ def get_approved_queue_rows():
             "series_override": v(row, "series_override"),
             "fake_news_route": v(row, "fake_news_route") or "B",
             "fake_news_confidence": _safe_float(v(row, "fake_news_confidence"), 0.0),
+            "clips_needed": v(row, "clips_needed"),
         })
     return approved
+
+
+def _caption_fallback(topic, niche):
+    """Deterministic caption fallback so scheduling is never blocked by an empty LLM response."""
+    if niche == "brazil":
+        return {
+            "caption": f"Entenda o contexto por trás de {topic}. Os detalhes estão no carrossel.",
+            "in_post_hashtags": "#InBrasil #politica #brasil #noticias #contexto",
+            "first_comment_hashtags": "#checagem #jornalismo #congresso #stf #governo",
+        }
+    if niche == "usa":
+        return {
+            "caption": f"Here is the context behind {topic}. Swipe through for the breakdown.",
+            "in_post_hashtags": "#InUS #politics #news #factcheck #context",
+            "first_comment_hashtags": "#government #congress #policy #accountability #explainer",
+        }
+    return {
+        "caption": f"Quick homeowner breakdown: {topic}. Save this before your next project conversation.",
+        "in_post_hashtags": "#OakParkConstruction #remodeling #construction #homeimprovement #contractor",
+        "first_comment_hashtags": "#floridacontractor #renovationtips #homerenovation #contractortips #buildsmart",
+    }
 
 
 def _default_context_query(slide, topic, niche):
@@ -1341,6 +1363,9 @@ def process_one_topic(topic_entry, run_date, drive):
         caption_result = generate_caption(topic, niche, _slide_texts)
     except Exception as _cap_err:
         print(f"  Caption generation failed (non-fatal): {_cap_err}")
+    if not caption_result.get("caption"):
+        caption_result = _caption_fallback(topic, niche)
+        print("  Caption fallback used")
     # Save caption.txt alongside PNGs in work_dir
     if caption_result.get("caption"):
         try:

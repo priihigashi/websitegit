@@ -96,6 +96,59 @@ def check_html_placeholders(html_path: str) -> list[str]:
             "Brazil handle not resolved — '@HANDLE_PLACEHOLDER' visible in HTML; "
             "check source_handle field in content JSON (generate_dados_content retry logic)"
         )
+    generic_placeholders = sorted(set(re.findall(
+        r"(?:@[A-Z0-9_]*PLACEHOLDER|[A-Z0-9_]+_PLACEHOLDER|TODO_[A-Z0-9_]+|LOREM_IPSUM)",
+        html
+    )))
+    if generic_placeholders:
+        issues.append(
+            "Placeholder token(s) visible in HTML: " + ", ".join(generic_placeholders[:8])
+        )
+
+    # Generic safe-margin check for swipe indicators across all templates.
+    if "WIPE →" in html or "WIPE &#8594;" in html:
+        issues.append("Swipe label typo/clipping artifact detected ('WIPE →').")
+    for m in re.finditer(r"\.swipe[^{]*\{([\s\S]*?)\}", html):
+        block = m.group(1)
+        m_right = re.search(r"right\s*:\s*(?:var\(--P\)|([0-9]+)px)", block)
+        m_bottom = re.search(r"bottom\s*:\s*(?:var\(--P\)|([0-9]+)px)", block)
+        if m_right and m_right.group(1) and int(m_right.group(1)) < 48:
+            issues.append(f"Swipe indicator too close to right edge ({m_right.group(1)}px).")
+        if m_bottom and m_bottom.group(1) and int(m_bottom.group(1)) < 36:
+            issues.append(f"Swipe indicator too close to bottom edge ({m_bottom.group(1)}px).")
+
+    # Generic hook/overflow checks for generated covers and stat slides.
+    cover_text = ""
+    m_cover = re.search(r'<div class="slide[^"]*(?:cover|s1)[^"]*"[^>]*>([\s\S]*?)(?:<div class="slide|\Z)', html)
+    if m_cover:
+        cover_text = re.sub(r"<[^>]+>", " ", m_cover.group(1))
+        cover_text = re.sub(r"\s+", " ", cover_text).strip()
+        has_hook_signal = (
+            "?" in cover_text
+            or any(c.isdigit() for c in cover_text)
+            or "$" in cover_text
+            or "%" in cover_text
+            or any(w in cover_text.lower() for w in (
+                "why", "how", "who", "what", "decidiu", "quem", "por que", "verdade",
+                "claim", "fact", "warning", "red flag", "mistake", "risk", "dados", "agenda"
+            ))
+        )
+        if cover_text and not has_hook_signal:
+            issues.append("Cover hook weak: no question, number, claim/fact cue, or urgency word detected.")
+    for idx, stat_txt in enumerate(re.findall(r'<[^>]+class="[^"]*stat-big[^"]*"[^>]*>([\s\S]*?)</[^>]+>', html), start=1):
+        clean = re.sub(r"<[^>]+>", "", stat_txt).strip()
+        if len(clean) > 12:
+            issues.append(f"Stat clipping risk: stat-big {idx} is {len(clean)} chars ('{clean[:24]}').")
+    for cls, limit in (
+        ("headline", 70),
+        ("body-text", 180),
+        ("stat-body", 170),
+        ("prog-caption", 95),
+    ):
+        for idx, raw in enumerate(re.findall(rf'<[^>]+class="[^"]*{cls}[^"]*"[^>]*>([\s\S]*?)</[^>]+>', html), start=1):
+            clean = re.sub(r"<[^>]+>", "", raw).strip()
+            if len(clean) > limit:
+                issues.append(f"Text overflow risk: .{cls} #{idx} is {len(clean)} chars (limit {limit}).")
 
     # OPC-specific quality checks (prevent text-only middle slides)
     if "Tip of the Week · Oak Park Construction" in html:
@@ -317,7 +370,7 @@ def _build_drive_service():
     return build("drive", "v3", credentials=creds)
 
 
-def _list_children(drive, folder_id: str, mime: str | None = None):
+def _list_children(drive, folder_id: str, mime=None):
     q = f"'{folder_id}' in parents and trashed=false"
     if mime:
         q += f" and mimeType='{mime}'"

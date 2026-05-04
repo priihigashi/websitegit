@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-05-04",
+  "purpose": "Canonical freeze-audit registry for template status. ACTIVE means approved for current post-blocking pipeline work. LEGACY means gallery/reference only unless Priscila explicitly revives it.",
+  "brand_palettes": {
+    "brazil": {
+      "gold": "#C9A84C",
+      "navy": "#1A2060",
+      "obsidian": "#0A0A0A",
+      "cream": "#F0EBE3"
+    },
+    "usa": {
+      "crimson": "#8B1A1A",
+      "navy": "#0D1B3E",
+      "cream": "#F0EBE3",
+      "obsidian": "#0A0A0A"
+    },
+    "opc": {
+      "obsidian": "#0A0A0A",
+      "lime": "#CBCC10",
+      "cream": "#F0EBE3"
+    }
+  },
+  "active_templates": [
+    "news_brazil_two_character",
+    "news_usa_two_character",
+    "news_brazil_single_object",
+    "news_usa_single_object",
+    "news_brazil_face_off",
+    "news_usa_face_off",
+    "news_brazil_network",
+    "news_usa_network"
+  ],
+  "templates": [
+    {
+      "id": "news_brazil_two_character",
+      "status": "ACTIVE",
+      "niche": "brazil",
+      "kind": "cover",
+      "file": "news_brazil_two_character.html",
+      "variants": 1,
+      "use_when": "Two main characters in the same Brazil political story.",
+      "pipeline_notes": "Requires two rembg cutouts composited into the black block; heads should peek above the block."
+    },
+    {
+      "id": "news_usa_two_character",
+      "status": "ACTIVE",
+      "niche": "usa",
+      "kind": "cover",
+      "file": "news_usa_two_character.html",
+      "variants": 1,
+      "use_when": "Two main characters in the same USA political story.",
+      "pipeline_notes": "USA mirror of two-character cover; requires two rembg cutouts composited into the black block."
+    },
+    {
+      "id": "news_brazil_single_object",
+      "status": "ACTIVE",
+      "niche": "brazil",
+      "kind": "cover",
+      "file": "news_brazil_single_object.html",
+      "variants": 3,
+      "use_when": "One Brazil story subject plus a meaningful object, document, or setting.",
+      "pipeline_notes": "Cutout should include subject and object together. Keep V1 plain, V2 vignette, V3 paper texture."
+    },
+    {
+      "id": "news_usa_single_object",
+      "status": "ACTIVE",
+      "niche": "usa",
+      "kind": "cover",
+      "file": "news_usa_single_object.html",
+      "variants": 3,
+      "use_when": "One USA story subject plus a meaningful object, document, or setting.",
+      "pipeline_notes": "Cutout should include subject and object together. Keep V1 plain, V2 vignette, V3 paper texture."
+    },
+    {
+      "id": "news_brazil_face_off",
+      "status": "ACTIVE",
+      "niche": "brazil",
+      "kind": "cover",
+      "file": "news_brazil_face_off.html",
+      "variants": 3,
+      "use_when": "Brazil dispute, opposition, debate, or conflict between two named figures.",
+      "pipeline_notes": "Needs profile-view subjects facing each other; face detection normalizes bust scale."
+    },
+    {
+      "id": "news_usa_face_off",
+      "status": "ACTIVE",
+      "niche": "usa",
+      "kind": "cover",
+      "file": "news_usa_face_off.html",
+      "variants": 3,
+      "use_when": "USA dispute, opposition, debate, or conflict between two named figures.",
+      "pipeline_notes": "Needs profile-view subjects facing each other; face detection normalizes bust scale."
+    },
+    {
+      "id": "news_brazil_network",
+      "status": "ACTIVE",
+      "niche": "brazil",
+      "kind": "standalone",
+      "file": "news_brazil_network.html",
+      "variants": 1,
+      "use_when": "Brazil network/connections explainer slide.",
+      "pipeline_notes": "Recently resized bigger; keep 840x840 diagram proportions."
+    },
+    {
+      "id": "news_usa_network",
+      "status": "ACTIVE",
+      "niche": "usa",
+      "kind": "standalone",
+      "file": "news_usa_network.html",
+      "variants": 1,
+      "use_when": "USA network/connections explainer slide.",
+      "pipeline_notes": "Recently resized bigger; keep 840x840 diagram proportions."
+    },
+    {
+      "id": "opc_tip",
+      "status": "LEGACY",
+      "niche": "opc",
+      "kind": "full_carousel",
+      "file": "opc_tip.html",
+      "variants": 3,
+      "use_when": "Reference only during freeze audit.",
+      "pipeline_notes": "Do not expand during freeze; only fix post-blocking overflow/caption issues if surfaced by tests."
+    },
+    {
+      "id": "news_brazil_f002",
+      "status": "LEGACY",
+      "niche": "brazil",
+      "kind": "full_carousel",
+      "file": "news_brazil.html",
+      "variants": 1,
+      "use_when": "Reference for FORMAT-002.",
+      "pipeline_notes": "Legacy full-format reference, not part of active cover freeze set."
+    },
+    {
+      "id": "brazil_f020",
+      "status": "LEGACY",
+      "niche": "brazil",
+      "kind": "full_carousel",
+      "file": "who_is.html",
+      "variants": 1,
+      "use_when": "Reference for FORMAT-020.",
+      "pipeline_notes": "Legacy full-format reference, not part of active cover freeze set."
+    },
+    {
+      "id": "usa_f020",
+      "status": "LEGACY",
+      "niche": "usa",
+      "kind": "full_carousel",
+      "file": "who_is_usa.html",
+      "variants": 1,
+      "use_when": "Reference for FORMAT-020.",
+      "pipeline_notes": "Legacy full-format reference, not part of active cover freeze set."
+    },
+    {
+      "id": "news_usa_f002",
+      "status": "LEGACY",
+      "niche": "usa",
+      "kind": "full_carousel",
+      "file": "news_usa_f002.html",
+      "variants": 1,
+      "use_when": "Reference for FORMAT-002.",
+      "pipeline_notes": "Legacy full-format reference, not part of active cover freeze set."
+    },
+    {
+      "id": "opc_statement",
+      "status": "LEGACY",
+      "niche": "opc",
+      "kind": "standalone",
+      "file": "opc_statement.html",
+      "variants": 1,
+      "use_when": "Reference only during freeze audit.",
+      "pipeline_notes": "Pending approval in gallery; keep out of active selection."
+    },
+    {
+      "id": "opc_base",
+      "status": "LEGACY",
+      "niche": "opc",
+      "kind": "cover",
+      "file": "opc_base.html",
+      "variants": 1,
+      "use_when": "Reference only during freeze audit.",
+      "pipeline_notes": "Pending approval in gallery; keep out of active selection."
+    },
+    {
+      "id": "news_brazil_cover_base",
+      "status": "LEGACY",
+      "niche": "brazil",
+      "kind": "cover",
+      "file": "news_brazil_cover_base.html",
+      "variants": 1,
+      "use_when": "Legacy base cover reference.",
+      "pipeline_notes": "Superseded by active cover patterns for freeze work."
+    },
+    {
+      "id": "news_brazil_statement",
+      "status": "LEGACY",
+      "niche": "brazil",
+      "kind": "standalone",
+      "file": "news_brazil_statement.html",
+      "variants": 1,
+      "use_when": "Legacy quote/analysis reference.",
+      "pipeline_notes": "Keep as gallery reference."
+    },
+    {
+      "id": "news_brazil_biography",
+      "status": "LEGACY",
+      "niche": "brazil",
+      "kind": "standalone",
+      "file": "news_brazil_biography.html",
+      "variants": 1,
+      "use_when": "Legacy FORMAT-020 biography reference.",
+      "pipeline_notes": "Keep as gallery reference."
+    },
+    {
+      "id": "news_brazil_standalone",
+      "status": "LEGACY",
+      "niche": "brazil",
+      "kind": "cover",
+      "file": "news_brazil_standalone.html",
+      "variants": 1,
+      "use_when": "Legacy split-screen named-person cover.",
+      "pipeline_notes": "Pending review in gallery; keep out of active selection."
+    },
+    {
+      "id": "news_brazil_duotone",
+      "status": "LEGACY",
+      "niche": "brazil",
+      "kind": "cover",
+      "file": "news_brazil_duotone.html",
+      "variants": 3,
+      "use_when": "Legacy duotone statement/reference.",
+      "pipeline_notes": "Duotone winner lock-in still pending; do not use as active until decided."
+    },
+    {
+      "id": "news_usa_cover_base",
+      "status": "LEGACY",
+      "niche": "usa",
+      "kind": "cover",
+      "file": "news_usa_cover_base.html",
+      "variants": 1,
+      "use_when": "Legacy base cover reference.",
+      "pipeline_notes": "Superseded by active cover patterns for freeze work."
+    },
+    {
+      "id": "news_usa_standalone",
+      "status": "LEGACY",
+      "niche": "usa",
+      "kind": "cover",
+      "file": "news_usa_standalone.html",
+      "variants": 1,
+      "use_when": "Legacy split-screen named-person cover.",
+      "pipeline_notes": "Pending review in gallery; keep out of active selection."
+    },
+    {
+      "id": "news_usa_statement",
+      "status": "LEGACY",
+      "niche": "usa",
+      "kind": "standalone",
+      "file": "news_usa_statement.html",
+      "variants": 1,
+      "use_when": "Legacy quote/analysis reference.",
+      "pipeline_notes": "Keep as gallery reference."
+    },
+    {
+      "id": "news_usa_biography",
+      "status": "LEGACY",
+      "niche": "usa",
+      "kind": "standalone",
+      "file": "news_usa_biography.html",
+      "variants": 1,
+      "use_when": "Legacy FORMAT-020 biography reference.",
+      "pipeline_notes": "Keep as gallery reference."
+    },
+    {
+      "id": "news_usa_duotone",
+      "status": "LEGACY",
+      "niche": "usa",
+      "kind": "cover",
+      "file": "news_usa_duotone.html",
+      "variants": 3,
+      "use_when": "Legacy duotone statement/reference.",
+      "pipeline_notes": "Duotone winner lock-in still pending; do not use as active until decided."
+    },
+    {
+      "id": "opc_duotone",
+      "status": "LEGACY",
+      "niche": "opc",
+      "kind": "cover",
+      "file": "opc_duotone.html",
+      "variants": 3,
+      "use_when": "Legacy OPC duotone reference.",
+      "pipeline_notes": "Keep as gallery reference."
+    }
+  ]
+}
