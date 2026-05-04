@@ -26,7 +26,6 @@ jobs:
               print('selected.html already appears reordered; no content changes needed')
           else:
               old_row1_banner = '<div class="section-banner">ROW 1 — Full Carousel Formats</div>'
-              old_row2_banner = '<div class="section-banner">ROW 2 — Standalone Slides · Mix &amp; Match into Any Carousel</div>'
               row1_banner_pos = text.index(old_row1_banner)
               row1_comment_start = text.rfind('<!-- ═════════', 0, row1_banner_pos)
 
@@ -37,7 +36,6 @@ jobs:
               row2_comment_start = text.index('<!-- ═════════', opc_full_end)
               opc_standalone_start = text.index('<!-- ═══ OPC STANDALONES ═══ -->', row2_comment_start)
 
-              # The next section after OPC standalones starts the News standalone area.
               next_standalone_candidates = [
                   text.find('<!-- ═══ BRAZIL STANDALONES', opc_standalone_start),
                   text.find('<!-- ═══ BRAZIL — STANDALONES', opc_standalone_start),
@@ -100,3 +98,4 @@ jobs:
             git commit -m "Reorder selected template gallery by OPC then News"
             git push
           fi
+# trigger-after-create
