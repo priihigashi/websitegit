@@ -60,7 +60,7 @@ def _read_catalog(token):
     enc = urllib.parse.quote(f"'{CATALOG_TAB}'!A:J", safe="!:'")
     url = (f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}"
            f"/values/{enc}?majorDimension=ROWS")
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token} "})
     resp = json.loads(urllib.request.urlopen(req, timeout=10).read())
     rows = resp.get("values", [])
     if not rows:
@@ -180,3 +180,4 @@ def match_before_after_pair(topic):
     if before_url or after_url:
         print(f"  photo_matcher: before/after pair found (scores: before={best_before}, after={best_after})")
     return before_url, after_url
+
