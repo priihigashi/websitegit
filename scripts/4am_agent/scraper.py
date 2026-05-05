@@ -100,6 +100,87 @@ def _normalise(item, niche, target_type, target_value):
     }
 
 
+def _post_timestamp(item):
+    """Return the post's Unix timestamp (float). Falls back to 0 if unavailable."""
+    ts = item.get("timestamp") or item.get("takenAtTimestamp") or item.get("taken_at") or 0
+    try:
+        return float(ts)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _fetch_inspo_urls():
+    """Return a set of normalized URLs already saved in Inspiration Library column C."""
+    import json, urllib.request, urllib.parse
+    raw = os.environ.get("SHEETS_TOKEN", "")
+    if not raw:
+        return set()
+    try:
+        td = json.loads(raw)
+        data = urllib.parse.urlencode({
+            "client_id": td["client_id"], "client_secret": td["client_secret"],
+            "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
+        }).encode()
+        resp = json.loads(urllib.request.urlopen(
+            urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+        token = resp["access_token"]
+    except Exception as e:
+        print(f"[debunk] _fetch_inspo_urls auth failed: {e}")
+        return set()
+
+    sheet_id = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
+    enc = urllib.parse.quote("'📥 Inspiration Library'!C:C", safe="!:'")
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc}"
+    try:
+        rows = json.loads(urllib.request.urlopen(
+            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})).read()
+        ).get("values", [])
+        return {row[0].strip() for row in rows[1:] if row and row[0].strip()}
+    except Exception as e:
+        print(f"[debunk] _fetch_inspo_urls sheet read failed: {e}")
+        return set()
+
+
+def scrape_debunk_source(username, niche):
+    """Scrape debunk source account — top 1 non-duplicate post from past 7 days.
+    Returns a single normalised item dict, or None if nothing qualifies."""
+    cutoff = datetime.now(et).timestamp() - 7 * 86400
+
+    raw, _, _, _ = scrape_instagram_account(username, niche)
+    if not raw:
+        print(f"[debunk] No posts returned for {username}")
+        return None
+
+    # Filter to posts from past 7 days
+    recent = [item for item in raw if _post_timestamp(item) >= cutoff]
+    if not recent:
+        print(f"[debunk] No posts within 7 days for {username} — using full batch as fallback")
+        recent = raw
+
+    # Sort by engagement score descending
+    recent.sort(key=_extract_score, reverse=True)
+
+    # Dedup against Inspiration Library
+    existing_urls = _fetch_inspo_urls()
+
+    for item in recent:
+        short_code = item.get("shortCode", "")
+        url = item.get("url") or (
+            f"https://www.instagram.com/p/{short_code}/" if short_code else ""
+        )
+        if not url:
+            continue
+        # Skip if shortCode already appears in any saved URL
+        if url in existing_urls or (short_code and any(short_code in u for u in existing_urls)):
+            print(f"[debunk] {short_code} already in Inspiration Library — skipping")
+            continue
+        normalised = _normalise(item, niche, "DEBUNK SOURCE", username)
+        return normalised
+
+    print(f"[debunk] All candidates already in Inspiration Library for {username}")
+    return None
+
+
 def scrape_instagram_account(username, niche):
     """Scrape general posts from an account."""
     raw = _run_actor("apify~instagram-scraper", {
