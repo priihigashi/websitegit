@@ -1030,6 +1030,21 @@ def process_one_topic(topic_entry, run_date, drive):
     # 1. Generate content
     print("  Generating content via Claude Haiku...")
     brief = topic_entry.get("brief", "")
+    # If the brief field is a Google Docs URL, fetch the full doc text so Haiku sees the
+    # actual research content rather than a URL string it cannot open.
+    if brief.startswith("https://docs.google.com/document/") or (
+        brief.startswith("https://") and "docs.google.com" in brief and "/d/" in brief
+    ):
+        try:
+            from topic_picker import fetch_drive_doc_content as _fetch_brief
+            _fetched = _fetch_brief(brief)
+            if _fetched:
+                print(f"  brief: fetched {len(_fetched)} chars from Drive doc ({brief[28:60]}...)")
+                brief = _fetched
+            else:
+                print(f"  brief: Drive doc fetch returned empty — using URL as-is")
+        except Exception as _be:
+            print(f"  brief: fetch failed ({_be}) — using URL as-is")
     # FIX 5: FORMAT-019 brief gate — skip post if no capture brief exists
     if series_override == "DADOS OU AGENDA" and not brief.strip():
         print(f"  SKIP: no capture brief found for {post_id} — FORMAT-019 (Dados ou Agenda?) requires /capture first")
