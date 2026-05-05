@@ -438,7 +438,8 @@ Rules:
 - NEVER promise what OPC does for clients
 - slides[]: emit context-image for at least 2 of the 3 middle slides — never all none
 - slide4_body must describe what is happening in the visual (not generic advice)
-- context_image_query: BANNED words that make queries too generic and WILL fail stock search — never use alone or as the whole query: "construction", "house", "home", "building", "renovation", "contractor", "kitchen", "bathroom", "outdoor", "indoor", "work", "project". Always combine with material type + location (e.g. "oak park illinois", "south florida", "residential") + action verb (installation, pour, framing, remodel). Minimum 4 words per query. A generic query means the pipeline falls back to AI images — avoid this."""
+- context_image_query: BANNED words that make queries too generic and WILL fail stock search — never use alone or as the whole query: "construction", "house", "home", "building", "renovation", "contractor", "kitchen", "bathroom", "outdoor", "indoor", "work", "project". Always combine with material type + location (e.g. "oak park illinois", "south florida", "residential") + action verb (installation, pour, framing, remodel). Minimum 4 words per query. A generic query means the pipeline falls back to AI images — avoid this.
+- context_image_query UNIQUENESS: Each slide's context_image_query MUST describe a DIFFERENT visual subject. Slides 2, 3, and 4 must each have a distinct query. NEVER reuse or rephrase a query from another slide. If you find yourself writing the same query twice, stop and change one of them to show a different material, location, or action."""
 
     for attempt in range(2):
         _prompt = prompt
