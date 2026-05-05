@@ -434,7 +434,7 @@ Rules:
 - Stats MUST use ranges (e.g. "$5K-$15K") not exact averages — safer and more honest
 - Every stat must name its source in slide2_label or on the sources slide
 - Headlines in ALL CAPS
-- Caption hook = first line visible in feed — make it a question or surprising fact
+- Caption hook = first line visible in feed — MUST contain at least one of: a specific number, a dollar amount, or a named consequence/risk. BANNED: generic openers like "Here's what you need to know", "Let's talk about", "Important update", "Things homeowners should know". GOOD: "Most homeowners spend $12K-$20K replacing tile they could have saved." | "3 red flags your contractor won't mention until after you sign." | "This one permit mistake delays your project 6-8 weeks."
 - NEVER promise what OPC does for clients
 - slides[]: emit context-image for at least 2 of the 3 middle slides — never all none
 - slide4_body must describe what is happening in the visual (not generic advice)
