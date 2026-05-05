@@ -4195,6 +4195,10 @@ def main():
     parser.add_argument("--notes", default="")
     parser.add_argument("--credits", action="store_true",
                         help="Fetch creator info via Apify for caption attribution")
+    parser.add_argument("--url2", default="",
+                        help="Optional second URL (companion clip). Transcribed and appended to story.")
+    parser.add_argument("--url2-role", default="companion_clip",
+                        help="Role label for the second URL (e.g. 'show_clip_for_last_slide')")
     args = parser.parse_args()
 
     # Normalize legacy project names → canonical names.
@@ -4381,6 +4385,35 @@ def main():
         else:  # opc (default)
             run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
                     screenshots=_screenshot_paths, debug_info=_debug_info)
+
+    # Optional companion clip (url2) — download + transcribe + append to story artifact
+    if getattr(args, "url2", ""):
+        print(f"\n{'='*50}\nCOMPANION CLIP — {args.url2_role.upper()}\nURL: {args.url2}\n{'='*50}")
+        try:
+            with tempfile.TemporaryDirectory() as tmp2:
+                audio2 = download_audio(args.url2, tmp2, metadata={})
+                transcript2 = transcribe_audio(audio2, args.url2)
+                url2_path = TRANSCRIPTS_DIR / f"{args.story_id}_url2_transcript.txt"
+                url2_content = (
+                    f"COMPANION CLIP\nROLE: {args.url2_role}\nURL: {args.url2}\n"
+                    f"{'='*40}\n{transcript2}"
+                )
+                url2_path.write_text(url2_content, encoding="utf-8")
+                # Append to main story analysis file so builder sees both in one place
+                story_file = TRANSCRIPTS_DIR / f"{args.story_id}_news.txt"
+                if not story_file.exists():
+                    story_file = TRANSCRIPTS_DIR / f"{args.story_id}_analysis.txt"
+                if story_file.exists():
+                    existing = story_file.read_text(encoding="utf-8")
+                    story_file.write_text(
+                        existing + f"\n\n{'='*40}\nCOMPANION CLIP — {args.url2_role.upper()}\n"
+                        f"URL: {args.url2}\n{'='*40}\n{transcript2}",
+                        encoding="utf-8"
+                    )
+                print(f"  Companion transcript saved: {url2_path}")
+                print(f"  Transcript preview: {transcript2[:200]}...")
+        except Exception as e2:
+            print(f"  [url2] FAILED: {e2} — main capture still complete, url2 skipped.")
 
     # Print credits summary if available (only when full creator info was fetched)
     if metadata and metadata.get("creator_handle"):
