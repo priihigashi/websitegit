@@ -82,21 +82,26 @@ def _normalise(item, niche, target_type, target_value):
         f"https://www.instagram.com/p/{item['shortCode']}/"
         if item.get("shortCode") else ""
     )
-    # Auto-tag verification series by target type
+    # Auto-tag by target type
     series_override = ""
+    fake_news_route = ""
     if "VERIFICAMOS" in target_type.upper():
         series_override = "Fact-Checked" if niche.upper() in ("NEWS/WORLD", "NEWS", "USA") else "Verificamos"
+    elif "DEBUNK SOURCE" in target_type.upper():
+        series_override = "Verdade Pela Metade"
+        fake_news_route = "debunk"  # refined to mode_a/mode_b by Haiku classifier (GAP 4)
 
     return {
-        "url":            url,
-        "views":          _extract_views(item),
-        "caption":        (item.get("caption") or item.get("text") or "")[:300],
-        "platform":       "tiktok" if "tiktok" in url.lower() else "instagram",
-        "likes":          item.get("likesCount") or item.get("diggCount") or 0,
-        "niche":          niche,
-        "target_type":    target_type,
-        "target_value":   target_value,
+        "url":             url,
+        "views":           _extract_views(item),
+        "caption":         (item.get("caption") or item.get("text") or "")[:300],
+        "platform":        "tiktok" if "tiktok" in url.lower() else "instagram",
+        "likes":           item.get("likesCount") or item.get("diggCount") or 0,
+        "niche":           niche,
+        "target_type":     target_type,
+        "target_value":    target_value,
         "series_override": series_override,
+        "fake_news_route": fake_news_route,
     }
 
 
