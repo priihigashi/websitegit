@@ -101,6 +101,14 @@ jobs:
         run: |
           python scripts/self_heal/orchestrator.py
 
+      - name: Sync tracker — update Pipeline Fix Master Checklist
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install google-api-python-client google-auth -q
+          python scripts/pipeline_tracker_writer.py sync || echo "tracker sync non-fatal error — continuing"
+
       - name: Notify on failure
         if: failure()
         run: |
