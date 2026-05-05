@@ -403,6 +403,81 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
   </div>
 </div>
 
+<!-- OPC Progress Update / Before & After -->
+<div class="tpl-card" id="card_opc_progress">
+  <div class="tpl-meta">
+    <div class="tpl-name">OPC — Progress Update · Before &amp; After</div>
+    <div class="tpl-format">FORMATOPC_05 · OPC · Progress / Before-After</div>
+    <div class="tpl-category">OPC · full carousel · 5-slide progress + 1 before/after reveal</div>
+    <div class="tpl-when">Project progress series — 5 slides (Cover, Stage, Done, Next, Credits) + 1 split-panel Before &amp; After slide. Use for ongoing renovation updates OR final before/after reveals. Before slot = grayscale (CSS), After slot = full color. Jobsite bg photo + optional Mike sticker. Slides 16–18 = before/after for each variant. 3 color variants. EN.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row">
+      <button class="vbtn" onclick="setVariant('opc_progress',0)" id="vbtn_opc_progress_0">v1 — Dark + Lime</button>
+      <button class="vbtn" onclick="setVariant('opc_progress',5)" id="vbtn_opc_progress_1">v2 — Cream</button>
+      <button class="vbtn" onclick="setVariant('opc_progress',10)" id="vbtn_opc_progress_2">v3 — Obsidian</button>
+    </div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('opc_progress')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_opc_progress" src="opc_progress.html" scrolling="no" onload="initViewer('opc_progress')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('opc_progress')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_opc_progress">slide 1 / 18</div>
+  </div>
+</div>
+
+<!-- OPC Illustrated Tip -->
+<div class="tpl-card" id="card_opc_illustrated">
+  <div class="tpl-meta">
+    <div class="tpl-name">OPC — Illustrated Tip</div>
+    <div class="tpl-format">FORMATOPC_06 · OPC · Illustrated Tip</div>
+    <div class="tpl-category">OPC · full carousel · 5 slides · educational tip with image panel</div>
+    <div class="tpl-when">Educational carousel with a mid-slide illustration panel (.ill-panel) for a product shot, material sample, or detail photo. 5 slides: Cover (bg photo + sticker) → Stat → List (bullet steps) → Tip callout → Sources. Good for Product Tips and technique explanations where one image anchors the concept. 3 color variants. EN.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row">
+      <button class="vbtn" onclick="setVariant('opc_illustrated',0)" id="vbtn_opc_illustrated_0">v1 — Dark + Lime</button>
+      <button class="vbtn" onclick="setVariant('opc_illustrated',5)" id="vbtn_opc_illustrated_1">v2 — Cream</button>
+      <button class="vbtn" onclick="setVariant('opc_illustrated',10)" id="vbtn_opc_illustrated_2">v3 — Obsidian</button>
+    </div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('opc_illustrated')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_opc_illustrated" src="opc_illustrated.html" scrolling="no" onload="initViewer('opc_illustrated')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('opc_illustrated')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_opc_illustrated">slide 1 / 15</div>
+  </div>
+</div>
+
+<!-- OPC Cutout -->
+<div class="tpl-card" id="card_opc_cutout">
+  <div class="tpl-meta">
+    <div class="tpl-name">OPC — Cutout</div>
+    <div class="tpl-format">FORMATOPC_07 · OPC · Cutout</div>
+    <div class="tpl-category">OPC · full carousel · 5 slides · cutout photo emphasis</div>
+    <div class="tpl-when">Same 5-slide structure as Illustrated Tip (Cover → Stat → List → Tip → Sources) but the visual layer uses a cutout/die-cut photo treatment (.cutout-wrap + .cutout-img with drop-shadow) instead of a rectangular panel. Good when the person or product silhouette should "float" without a box frame. Mike cutout photo is the default sticker. 3 color variants. EN.</div>
+  </div>
+  <div class="tpl-viewer-wrap">
+    <div class="variant-row">
+      <button class="vbtn" onclick="setVariant('opc_cutout',0)" id="vbtn_opc_cutout_0">v1 — Dark + Lime</button>
+      <button class="vbtn" onclick="setVariant('opc_cutout',5)" id="vbtn_opc_cutout_1">v2 — Cream</button>
+      <button class="vbtn" onclick="setVariant('opc_cutout',10)" id="vbtn_opc_cutout_2">v3 — Obsidian</button>
+    </div>
+    <div class="viewer-row">
+      <button class="arrow-btn" onclick="prevSlide('opc_cutout')">&#8592;</button>
+      <div class="slide-frame-outer">
+        <iframe id="viewer_opc_cutout" src="opc_cutout.html" scrolling="no" onload="initViewer('opc_cutout')"></iframe>
+      </div>
+      <button class="arrow-btn" onclick="nextSlide('opc_cutout')">&#8594;</button>
+    </div>
+    <div class="slide-counter" id="counter_opc_cutout">slide 1 / 15</div>
+  </div>
+</div>
+
 </div><!-- /group-cards OPC Standalones -->
 
 
@@ -538,7 +613,7 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
     <div class="tpl-name">Brazil — Two Character Face-Off</div>
     <div class="tpl-format">FORMAT02_03 · BR · ACTIVE · Face-Off</div>
     <div class="tpl-category">Brazil News · cover · 2 characters in dispute</div>
-    <div class="tpl-when">Full-bleed contextual background (place / scene / building) with sepia duotone. Two PROFILE cutouts facing each other on left + right edges. V3 uses huge cropped faces with the headline separating both people. Center cream serif headline. Cream bottom strip with italic subhead. InBr badges + topic stamp. Use when story is about a DISPUTE / OPPOSITION / DEBATE between two named figures. PRODUCTION: rembg on profile-view photos + face detection to normalize subject sizes. PT-BR.</div>
+    <div class="tpl-when">Full-bleed contextual background (place / scene / building) with sepia duotone. Single chosen cover: two huge cropped faces on left + right, with the headline separating both people. Center cream serif headline. Cream bottom strip with italic subhead. InBr badges + topic stamp. Use when story is about a DISPUTE / OPPOSITION / DEBATE between two named figures. PRODUCTION: rembg on profile-view photos + face detection to normalize subject sizes + transparent headroom so hair/head is never clipped. PT-BR.</div>
   </div>
   <div class="tpl-viewer-wrap">
     <div class="viewer-row">
@@ -548,7 +623,7 @@ body{background:#0D0D0D;color:#F0EBE3;font-family:'Roboto Condensed',sans-serif;
       </div>
       <button class="arrow-btn" onclick="nextSlide('news_brazil_face_off')">&#8594;</button>
     </div>
-    <div class="slide-counter" id="counter_news_brazil_face_off">slide 1 / 3</div>
+    <div class="slide-counter" id="counter_news_brazil_face_off">slide 1 / 1</div>
   </div>
 </div>
 
