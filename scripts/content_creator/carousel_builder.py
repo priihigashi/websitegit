@@ -1900,7 +1900,8 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                     work_dir=work_dir, save=True, brief=brief,
                 ) or ai_prompt
                 cover_fname = _make_img_filename(search_q, "ai", 1)
-                c, used_prov = _gen_ai_image(fresh_prompt, work_dir, cover_fname)
+                _skip_prov = ["dall-e-3"] if niche == "opc" else []
+                c, used_prov = _gen_ai_image(fresh_prompt, work_dir, cover_fname, skip_providers=_skip_prov)
                 if c and _vision_accept(c, search_q, f"cover/{used_prov}"):
                     _set_cover(c, used_prov, "ai", query=search_q, prompt=fresh_prompt)
             elif ai_prompt:
@@ -2031,7 +2032,8 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 niche=niche, slide_num=i, work_dir=work_dir, save=True, brief=brief,
             ) or ai_prompt
             fname = _make_img_filename(cq, "ai", i)
-            img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname)
+            _skip_prov = ["dall-e-3"] if niche == "opc" else []
+            img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname, skip_providers=_skip_prov)
             if img_path and _vision_accept(img_path, cq, f"slide{i}/{used_prov}"):
                 print(f"  Slide {i}: {used_prov} image for '{cq[:50]}'")
                 _set_slide(i, img_path, used_prov, "ai", query=cq, prompt=fresh_prompt)

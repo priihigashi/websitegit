@@ -1797,9 +1797,13 @@ def main():
             )
             print(f"  WARNING: {msg}")
             _send_alert(msg)
+            _niche_alert_sent = set(s.split("<")[0] for s in shortfall)  # e.g. {"brazil","usa"}
+        else:
+            _niche_alert_sent = set()
     except Exception as e:
         print(f"  Topic picker failed: {e}")
         _send_alert(f"Topic picker crashed: {e}")
+        _niche_alert_sent = set()
 
     # Phase B: Build every Content Queue row where Status=Approved
     print("\n--- Phase B: Reading Content Queue for Approved rows ---")
@@ -1814,7 +1818,9 @@ def main():
         n = (a.get("niche") or "").lower()
         if n in approved_counts:
             approved_counts[n] += 1
-    if approved_counts["brazil"] == 0 or approved_counts["usa"] == 0:
+    # Only send niche gap alert for niches not already covered by Phase A shortfall alert
+    _gap_niches = [n for n in ("brazil", "usa") if approved_counts[n] == 0 and n not in _niche_alert_sent]
+    if _gap_niches:
         _send_alert(
             "Approved queue niche gap: "
             f"opc={approved_counts['opc']}, brazil={approved_counts['brazil']}, usa={approved_counts['usa']}. "
