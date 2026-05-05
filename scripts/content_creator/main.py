@@ -51,10 +51,12 @@ SHORTCUT_FOLDERS = {
     "usa":     {"carousels": "1jPB6TjbV8Bu2k3zeN3uT7EIvspwIrWtQ", "videos": "126K6N9UDOFj_zS-h3e4dD30GwZOviugT"},
 }
 
-SHEET_ID    = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
-INSPO_TAB   = "📥 Inspiration Library"
-QUEUE_TAB   = "📋 Content Queue"
-CATALOG_TAB = "📸 Project Content Catalog"
+SHEET_ID      = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
+INSPO_TAB     = "📥 Inspiration Library"
+QUEUE_TAB     = "📋 Content Queue"
+CATALOG_TAB   = "📸 Project Content Catalog"
+HISTORY_TAB   = "Build History"
+HISTORY_DEDUP_DAYS = 30
 
 ALERT_EMAIL = os.environ.get("ALERT_EMAIL", "priscila@oakpark-construction.com")
 TEMPLATE_ROTATION_MODE = os.environ.get("TEMPLATE_ROTATION_MODE", "weekday").strip().lower()
@@ -790,6 +792,68 @@ def add_catalog_row(post_id, niche, series, topic, static_link, motion_link, tok
     print(f"  Catalog row added: {post_id}")
 
 
+def write_build_history(slug: str, topic: str, niche: str, series: str, drive_url: str, token: str):
+    """Append one row to the Build History tab after a successful build.
+
+    Columns: DATE | SLUG | TOPIC | NICHE | SERIES | DRIVE_URL | STATUS
+    Non-fatal — a failure here must never fail the overall build.
+    """
+    import urllib.request, urllib.parse
+    try:
+        now = datetime.now(ET).strftime("%Y-%m-%d")
+        row = [[now, slug[:60], topic[:100], niche, series[:60], drive_url, "BUILT"]]
+        enc = urllib.parse.quote(f"'{HISTORY_TAB}'!A:G", safe="!:'")
+        url = (
+            f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
+            f":append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS"
+        )
+        payload = json.dumps({"values": row}).encode()
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        )
+        urllib.request.urlopen(req)
+        print(f"  Build History: row added ({slug})")
+    except Exception as e:
+        print(f"  Build History write failed (non-fatal): {e}")
+
+
+def get_recent_built_slugs(token: str, days: int = HISTORY_DEDUP_DAYS) -> set:
+    """Return the set of slugs built in the last `days` days from the Build History tab.
+
+    Used to skip re-building the same topic in the same rolling window.
+    Non-fatal — returns empty set on any error so the pipeline proceeds normally.
+    """
+    import urllib.request, urllib.parse
+    from datetime import timedelta
+    try:
+        cutoff = (datetime.now(ET) - timedelta(days=days)).strftime("%Y-%m-%d")
+        enc = urllib.parse.quote(f"'{HISTORY_TAB}'!A2:G", safe="!:'")
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        data = json.loads(urllib.request.urlopen(req).read())
+        rows = data.get("values", [])
+        recent = set()
+        for row in rows:
+            if len(row) < 2:
+                continue
+            date_str = (row[0] or "").strip()
+            slug_val = (row[1] or "").strip().lower()
+            if date_str >= cutoff and slug_val:
+                recent.add(slug_val)
+        print(f"  Build History: {len(recent)} slug(s) built in last {days}d — will skip duplicates")
+        return recent
+    except Exception as e:
+        print(f"  Build History read failed (non-fatal, proceeding): {e}")
+        return set()
+
+
+def _topic_to_slug(topic: str) -> str:
+    """Convert topic string to the same slug format used in process_one_topic."""
+    slug = topic[:40].lower().replace(" ", "-").replace("'", "").replace('"', '')
+    return "".join(c for c in slug if c.isalnum() or c == "-")
+
+
 def _animate_cover_kling(png_path, prompt, output_dir, variant):
     """Animate cover PNG via Kling AI image-to-video (direct API).
 
@@ -1400,6 +1464,13 @@ def process_one_topic(topic_entry, run_date, drive):
         except Exception as _cap_save_err:
             print(f"  caption.txt save failed (non-fatal): {_cap_save_err}")
 
+    # Record successful build in Build History tab for dedup on next run.
+    # series may be undefined here — re-derive the same way as the catalog row above.
+    _history_series = _series_display_map.get(series_override, series_override) or (
+        "Tip of the Week" if niche == "opc" else ("The Chain" if niche == "usa" else "Quem Decidiu Isso?")
+    )
+    write_build_history(slug, topic, niche, _history_series, folder_link, get_oauth_token())
+
     return {
         "post_id": post_id,
         "topic": topic,
@@ -1695,6 +1766,28 @@ def main():
         )
 
     drive = get_drive_service()
+
+    # Build History dedup — skip any approved topic whose slug was built in the last
+    # HISTORY_DEDUP_DAYS days.  Non-fatal: if the tab read fails, we proceed and build
+    # everything (better to duplicate than to silently drop approved content).
+    _recent_slugs = get_recent_built_slugs(get_oauth_token(), days=HISTORY_DEDUP_DAYS)
+    _deduped_approved = []
+    for _t in approved:
+        _ts = _topic_to_slug(_t.get("topic", ""))
+        if _ts in _recent_slugs:
+            print(f"  DEDUP SKIP: '{_t['topic'][:50]}' built within last {HISTORY_DEDUP_DAYS}d — skipping")
+        else:
+            _deduped_approved.append(_t)
+    if len(_deduped_approved) < len(approved):
+        _send_alert(
+            f"Build History dedup: {len(approved) - len(_deduped_approved)} topic(s) skipped "
+            f"(built in last {HISTORY_DEDUP_DAYS}d). {len(_deduped_approved)} remaining to build."
+        )
+    approved = _deduped_approved
+    if not approved:
+        print("  All Approved topics were deduped — nothing new to build this run")
+        return
+
     results = []
     errors = []
     for topic in approved:
