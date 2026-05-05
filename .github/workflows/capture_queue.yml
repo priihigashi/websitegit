@@ -11,9 +11,11 @@ name: Capture Queue Processor
 # Optional input: max_per_run (default 5)
 
 on:
-  schedule:
-    - cron: "0 11 * * *"   # 6 AM EDT (Mar–Nov)
-    - cron: "0 12 * * *"   # 7 AM EST (Nov–Mar) — DST safety
+  # schedule PAUSED 2026-05-05 — $10/wk budget cap. Opus calls too expensive for daily auto-run.
+  # Re-enable when pipeline is optimized (replace Opus with Haiku/Sonnet in capture_pipeline.py).
+  # schedule:
+  #   - cron: "0 11 * * *"   # 6 AM EDT (Mar–Nov)
+  #   - cron: "0 12 * * *"   # 7 AM EST (Nov–Mar) — DST safety
   workflow_dispatch:
     inputs:
       max_per_run:

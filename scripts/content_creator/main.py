@@ -1721,7 +1721,7 @@ def main():
     # Scored but un-approved rows → CQ Status=Draft (you flip to Approved in sheet to release)
     print("\n--- Phase A: Promoting Inspiration → Content Queue ---")
     try:
-        picks = pick_topics(count_opc=2, count_brazil=1, count_usa=1)
+        picks = pick_topics(count_opc=1, count_brazil=0, count_usa=0)
         pick_counts = {"opc": 0, "brazil": 0, "usa": 0}
         for p in picks or []:
             n = (p.get("niche") or "").lower()
