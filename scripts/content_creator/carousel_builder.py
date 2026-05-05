@@ -329,8 +329,88 @@ def _web_research(topic, lang="en"):
     return "\n".join(summaries[:5]) if summaries else ""
 
 
+def generate_progress_content(topic, brief=""):
+    """Generate OPC Progress post content (project update carousel).
+    Fields map to _build_opc_progress_html: project_name, project_address, stage,
+    stage_date, whats_done/caption, whats_next/caption, project_id, workers.
+    Brief should contain project details when available; Haiku fills gaps creatively."""
+    brief_section = f"\n\nPROJECT BRIEF:\n{brief}" if brief and str(brief).strip() else ""
+    _today = datetime.datetime.utcnow().strftime("%B %d, %Y")
+    prompt = f"""You are writing an Oak Park Construction project-progress Instagram carousel.
+Project/topic: "{topic}"{brief_section}
+
+Mike is a licensed South Florida contractor (CBC1263425). Write as him talking directly to homeowners.
+RULES:
+1. NEVER promise timelines or specific outcomes. NEVER use superlatives.
+2. project_name: ALL CAPS, 3-5 words, punchy (e.g. "WALNUT KITCHEN REMODEL", "MASTER BATH REBUILD")
+3. project_address: if brief has an address use it; otherwise write "South Florida" — never invent an address
+4. stage: current construction phase in ALL CAPS (2-5 words, e.g. "TILE INSTALLATION", "FRAMING COMPLETE")
+5. stage_date: short time marker in ALL CAPS (e.g. "WEEK 3 OF 6", "DAY 12", "PHASE 2 OF 3")
+6. whats_done_caption: ALL CAPS, 2-4 words (e.g. "CONCRETE POURED", "DEMO DONE", "WALLS UP")
+7. whats_done: 2 sentences max. What was completed. Specific, no vague filler.
+8. whats_next_caption: ALL CAPS, 2-4 words (e.g. "TILE GOES IN", "CABINET INSTALL NEXT")
+9. whats_next: 2 sentences max. What comes next and why it matters to the homeowner.
+10. project_id: "PROJECT #OPC-{_today[:4]}-XXX" — replace XXX with a 3-digit random-ish number
+11. workers: list of 1-3 crew members with name + role (if brief has names use them; otherwise use generic roles like "Lead Carpenter" with placeholder name "T. Rivera")
+12. caption: 2-3 sentence Instagram caption. Hook = first line (must mention the stage or a specific task). End with 6-8 hashtags: #oakparkconstruction + material/trade-specific tags. NO generic #construction alone.
+
+Return ONLY a valid JSON object:
+{{
+  "project_name": "ALL CAPS project name",
+  "project_address": "address or 'South Florida'",
+  "stage": "CURRENT STAGE IN CAPS",
+  "stage_date": "WEEK X OF Y or similar",
+  "whats_done": "What was completed — 2 sentences",
+  "whats_done_caption": "ALL CAPS PHOTO CAPTION",
+  "whats_next": "What comes next — 2 sentences",
+  "whats_next_caption": "ALL CAPS PHOTO CAPTION",
+  "project_id": "PROJECT #OPC-YYYY-NNN",
+  "workers": [
+    {{"name": "First Last", "role": "Trade Role"}},
+    {{"name": "First Last", "role": "Trade Role"}}
+  ],
+  "caption": "Instagram caption with hook + hashtags",
+  "cover_visual": {{
+    "option_a": {{"search_query": "Wikimedia Commons search for a CC photo of this construction stage"}},
+    "option_b": {{"prompt": "DALL-E 3 prompt — editorial photo, South Florida residential, this construction stage, no text"}}
+  }},
+  "clip_suggestions": [
+    {{
+      "slide": 1,
+      "youtube_query": "YouTube search for this construction stage timelapse or tutorial",
+      "instagram_query": "lowercase hashtag-friendly phrase for this stage",
+      "pexels_query": "Pexels stock video for this stage — material + action, 4+ words",
+      "pixabay_query": "Different wording same subject as pexels_query",
+      "archive_query": "Public-domain footage phrasing for this trade/stage",
+      "wikimedia_query": "CC-licensed clip for this construction work",
+      "motion_prompt": "5s direction: camera move + mood for cover slide",
+      "motion_renderer": "remotion",
+      "visual_hint": "product-photo"
+    }}
+  ]
+}}"""
+
+    for attempt in range(2):
+        try:
+            resp = _call_claude(prompt, model="claude-haiku-4-5-20251001")
+            raw = resp.strip()
+            if raw.startswith("```"):
+                raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
+            result = json.loads(raw)
+            result["_template_key"] = "progress"
+            return result
+        except Exception as e:
+            if attempt == 0:
+                print(f"  Progress content retry: {e}")
+                continue
+            print(f"  Progress content FAILED: {e}")
+            return None
+
+
 def generate_carousel_content(topic, niche, template_key=None, brief="", model="claude-sonnet-4-6"):
     # Special templates checked BEFORE the generic niche short-circuit
+    if template_key == "progress":
+        return generate_progress_content(topic, brief)
     if template_key == "dados-ou-agenda":
         return generate_dados_content(topic, brief)
     if template_key == "verdade-pela-metade":
