@@ -12,6 +12,12 @@ body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px;font-fami
 .shared-shell{position:relative}
 .shared-bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:.24;filter:grayscale(.08) contrast(1.14) brightness(.9)}
 .shared-shell > *:not(.shared-bg):not(.swipe):not(.footer-handle){position:relative;z-index:2}
+.sticker-slot{position:absolute;right:7%;top:14%;width:280px;height:370px;z-index:4;border:3px solid var(--ac);border-radius:2px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.7)}
+.sticker-slot img{width:100%;height:100%;object-fit:cover;object-position:center top;filter:grayscale(1) contrast(1.15) brightness(.95)}
+.sticker-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(201,168,76,.04);flex-direction:column;gap:12px}
+.sticker-placeholder .ini{font-family:'Fraunces',serif;font-size:76px;font-weight:700;color:var(--ac);line-height:1}
+.sticker-placeholder .iname{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.1em;text-align:center;padding:0 10px}
+.slide-cover .cover-hl,.slide-cover .cover-claim,.slide-cover .cover-en{max-width:56%}
 .tag{font-family:'JetBrains Mono',monospace;font-size:24px;color:var(--mu);margin-bottom:22px;text-transform:uppercase}
 .accent{color:var(--ac)}
 .cover-hl{font-family:'Fraunces',serif;font-size:96px;line-height:1.02;text-transform:uppercase;margin-bottom:18px}
@@ -47,6 +53,8 @@ body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px;font-fami
 
 <div class="slide slide-cover shared-shell">
   <div class="shared-bg" style="background-image:url('');"></div>
+  <!-- Person portrait — pipeline injects via .sticker-slot -->
+  <div class="sticker-slot"><div class="sticker-placeholder"><div class="ini">??</div><div class="iname">Nome do Personagem</div></div></div>
   <div class="tag">Quem decidiu isso?</div>
   <div class="cover-hl">VERIFICAMOS: A PRIVATIZAÇÃO CAUSOU ISSO?</div>
   <div class="cover-en">FACT CHECK: Did privatization cause this?</div>
