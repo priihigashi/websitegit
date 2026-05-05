@@ -180,10 +180,53 @@ def scrape_debunk_source(username, niche):
             print(f"[debunk] {short_code} already in Inspiration Library — skipping")
             continue
         normalised = _normalise(item, niche, "DEBUNK SOURCE", username)
+        # GAP 4: classify caption as mode_a or mode_b via Haiku
+        mode = _classify_debunk_mode(normalised["caption"])
+        normalised["fake_news_route"] = mode
         return normalised
 
     print(f"[debunk] All candidates already in Inspiration Library for {username}")
     return None
+
+
+def _classify_debunk_mode(caption):
+    """Haiku classifier: returns 'mode_a' (wrong attribution) or 'mode_b' (distorted numbers).
+    Uses caption text as the transcript proxy since scraper has no Whisper access."""
+    import json as _json, urllib.request as _req
+    api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("CLAUDE_KEY_4_CONTENT", "")
+    if not api_key:
+        print("[debunk] No ANTHROPIC_API_KEY — defaulting to mode_b")
+        return "mode_b"
+    prompt = (
+        "Given this transcript, classify: "
+        "(A) real fact pinned to wrong person/government, or "
+        "(B) fear/exaggeration with real but distorted numbers. "
+        "Return one word: mode_a or mode_b.\n\n"
+        f"Transcript: {caption[:800]}"
+    )
+    try:
+        body = _json.dumps({
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 10,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        request = _req.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=body,
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+        )
+        resp = _json.loads(_req.urlopen(request, timeout=30).read())
+        text = resp["content"][0]["text"].strip().lower()
+        result = "mode_a" if "mode_a" in text else "mode_b"
+        print(f"[debunk] Haiku classified: {result}")
+        return result
+    except Exception as e:
+        print(f"[debunk] Haiku classify failed: {e} — defaulting mode_b")
+        return "mode_b"
 
 
 def scrape_instagram_account(username, niche):
