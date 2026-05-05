@@ -287,6 +287,14 @@ def main():
         _clear_failure_flags(token, rows)
         rows = _read_queue(token)  # re-read after clearing flags
 
+    # Build set of already-processed URLs (D=TRUE) for dedup check in loop.
+    # Normalise by stripping query params so ?igsh=... variants match each other.
+    _processed_urls: set = set()
+    for _r in rows:
+        _r_pad = _r + [""] * (8 - len(_r))
+        if _r_pad[3].strip().upper() == "TRUE" and _r_pad[1].strip():
+            _processed_urls.add(_r_pad[1].strip().split("?")[0].rstrip("/"))
+
     processed_count = 0
     for i, row in enumerate(rows):
         if processed_count >= MAX_PER_RUN:
@@ -316,6 +324,13 @@ def main():
         # Skip rows that previously failed (⚠️ in F) — clear F cell to retry
         if moved_to.startswith("⚠️"):
             print(f"[capture_queue] Row {sheet_row}: skipping previously-failed row ({url[:50]})")
+            continue
+
+        # Dedup: if this URL was already successfully processed in another row, mark done + skip.
+        _url_norm = url.split("?")[0].rstrip("/")
+        if _url_norm in _processed_urls:
+            print(f"[capture_queue] Row {sheet_row}: duplicate URL already processed — marking TRUE, skipping dispatch.")
+            _batch_update(token, [(f"'{QUEUE_TAB}'!D{sheet_row}", True)])
             continue
 
         print(f"\n[capture_queue] Row {sheet_row}: {url[:70]}")
