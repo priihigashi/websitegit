@@ -421,6 +421,30 @@ def fix_version_folder(
             print(f"    {source_label} accepted — {reason[:120]}")
             return candidate_path, source_label, ""
 
+        # TIER 0 (OPC only) — real jobsite photos, zero AI spend
+        # Checked before library, AI, and stock so we never pay for a real photo we own.
+        if niche == "opc" and not img_path:
+            try:
+                from photo_matcher import match_opc_photo as _opc_pm  # type: ignore
+                _opc_hit = _opc_pm(query or slide_text)
+                if _opc_hit and _opc_hit.get("drive_url"):
+                    _fid_m = re.search(r"/file/d/([a-zA-Z0-9_-]+)", _opc_hit["drive_url"])
+                    if _fid_m:
+                        _opc_bytes = _download_bytes(drive, _fid_m.group(1))
+                        if _opc_bytes:
+                            _opc_dest = local_dir / "resources" / "images" / filename
+                            _opc_dest.parent.mkdir(parents=True, exist_ok=True)
+                            _opc_dest.write_bytes(_opc_bytes)
+                            _acc, _, _ = _accept_or_reject(str(_opc_dest), "opc_catalog")
+                            if _acc:
+                                img_path = _acc
+                                used_provider = "opc_catalog"
+                                source_type = "real_photo"
+                                print(f"    opc_catalog: {_opc_hit.get('filename')} "
+                                      f"(q={_opc_hit.get('quality')})")
+            except Exception as _opc_e:
+                print(f"    photo_matcher TIER 0 (non-fatal): {_opc_e}")
+
         # Step 2: AI cascade FIRST — produces realistic, prompt-specific images
         # (Real-photo search returns generic stock that often doesn't match technical
         # construction prompts and frequently duplicates across slides.)

@@ -710,14 +710,19 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
             except Exception as e:
                 issues.append(f"media_provenance.json parse failed: {e}")
 
-    # ── Auto-fix loop (Goal 1A) ──────────────────────────────────────────────
-    # When FIX_MODE=analyze_and_fix and any [fix_type=regenerate] issue was
-    # flagged, run auto_fixer.auto_fix_drive_folder. It rewrites prompts, skips
-    # the bad provider, re-fetches via cascade, replaces the source image, and
-    # backs up png/ → png_pre_fix_<ts>/ first.
+    # ── Auto-fix loop (Goals 1A + 1B) ───────────────────────────────────────
+    # FIX_MODE=analyze_and_fix → auto_fix_drive_folder handles BOTH:
+    #   Goal 1A: image re-fetch cascade (photo_matcher → library → AI → stock)
+    #   Goal 1B: text review (Claude flags weak hooks/overflows → apply_edits_to_html)
+    # Triggers on image issues ([fix_type=regenerate|wrong-image]) OR text issues.
+    _TEXT_ISSUE_TOKENS = (
+        "hook weak", "hook miss", "overflow risk", "too long", "too short",
+        "OPC hook", "Cover hook", "readability miss",
+    )
     autofix_summary = None
     has_regen = any(("[fix_type=regenerate]" in i or "[fix_type=wrong-image]" in i) for i in issues)
-    if FIX_MODE == "analyze_and_fix" and has_regen and not DRY_RUN:
+    has_text_issues = any(any(t in i for t in _TEXT_ISSUE_TOKENS) for i in issues)
+    if FIX_MODE == "analyze_and_fix" and (has_regen or has_text_issues) and not DRY_RUN:
         try:
             from auto_fixer import auto_fix_drive_folder  # lazy import
             niche_guess = _infer_niche_from_folder(folder_name, input_ref or "")
@@ -851,8 +856,18 @@ def send_review_email(failed_posts: list[dict], all_posts: list[dict]):
         for issue in p["issues"]:
             lines.append(f"       ⚠  {issue}")
 
-        # Append before/after change log if auto-fix ran on this post.
+        # Append text edit log if Goal 1B ran.
         afs = p.get("autofix_summary")
+        if afs and afs.get("text_edits_applied"):
+            n_txt = afs["text_edits_applied"]
+            lines.append(f"       ── text edits applied: {n_txt} ──")
+            for ed in (afs.get("text_edit_log") or []):
+                if ed.get("applied"):
+                    lines.append(
+                        f"         · [{ed.get('severity','?')}] {ed.get('slide','?')}: "
+                        f"'{str(ed.get('original',''))[:40]}' → '{str(ed.get('suggested',''))[:40]}'"
+                    )
+        # Append before/after image change log if Goal 1A ran.
         if afs and afs.get("details"):
             lines.append("       ── auto-fix change log ──")
             for d in afs["details"]:

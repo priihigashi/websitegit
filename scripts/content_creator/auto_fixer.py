@@ -112,6 +112,45 @@ def auto_fix_drive_folder(
             skip_provider_per_slot={},
             backup_pngs=not dry_run,
         )
+
+        # ── Goal 1B — Text review + auto-rewrite ─────────────────────────────
+        # Download cover.html → Claude review → apply edits → re-upload.
+        # Runs after image fixes so both pass in one cycle.
+        # Non-fatal: any exception leaves images fixed, text unfixed.
+        if not dry_run:
+            try:
+                html_file = _find_file(drive, folder["id"], "cover.html")
+                if html_file:
+                    html_bytes = _download_bytes(drive, html_file["id"])
+                    html_text = html_bytes.decode("utf-8", errors="ignore")
+                    text_review = review_carousel_html(html_text, niche, folder.get("name", ""))
+                    text_issues = text_review.get("issues", [])
+                    if text_issues:
+                        new_html, edit_log = apply_edits_to_html(html_text, text_issues)
+                        applied_count = sum(1 for e in edit_log if e.get("applied"))
+                        if applied_count > 0:
+                            import tempfile as _tf
+                            with _tf.NamedTemporaryFile(
+                                suffix=".html", delete=False, mode="w", encoding="utf-8"
+                            ) as _tmp:
+                                _tmp.write(new_html)
+                                _tmp_path = _tmp.name
+                            try:
+                                _upload_file(drive, Path(_tmp_path), folder["id"], "cover.html")
+                            finally:
+                                os.unlink(_tmp_path)
+                            print(f"  Goal 1B: {applied_count} text edit(s) applied to cover.html")
+                        else:
+                            print(
+                                f"  Goal 1B: {len(text_issues)} text issue(s) flagged, "
+                                f"0 auto-applied (need human research or verbatim match)"
+                            )
+                        summary["text_edits_applied"] = applied_count
+                        summary["text_review"] = text_review
+                        summary["text_edit_log"] = edit_log
+            except Exception as _tb_e:
+                print(f"  Goal 1B text review (non-fatal): {_tb_e}")
+
     finally:
         if cleanup:
             import shutil
