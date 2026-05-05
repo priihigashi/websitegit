@@ -416,6 +416,36 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 .v2 .prog-caption { color:#0A0A0A; }
 .v2 .prog-photo-empty { background:repeating-linear-gradient(45deg, rgba(10,10,10,0.04), rgba(10,10,10,0.04) 2px, transparent 2px, transparent 14px); border-style:dashed; color:rgba(10,10,10,0.3); }
 
+/* ---- Before / After split panel (FULL CIRCLE PLAN — Section 2 PRIORITY 4) ---- */
+.slide-before-after .split-panel {
+  display:flex; width:100%; flex:1; gap:6px;
+  margin:20px 0 14px; min-height:600px; max-height:700px;
+}
+.split-panel .before-slot,
+.split-panel .after-slot {
+  flex:1; position:relative; overflow:hidden; border-radius:8px;
+  border:2px solid var(--c-brk); background-size:cover; background-position:center;
+}
+.split-panel .before-slot { filter:grayscale(0.55) brightness(0.82); }
+.split-panel .after-slot  { filter:grayscale(0) brightness(1.0); }
+.split-label {
+  position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
+  font-family:'JetBrains Mono', monospace; font-size:16px; font-weight:700;
+  letter-spacing:0.2em; text-transform:uppercase; color:#CBCC10;
+  background:rgba(0,0,0,0.65); padding:6px 14px; border-radius:4px; white-space:nowrap;
+}
+.before-slot-empty,
+.after-slot-empty {
+  background:repeating-linear-gradient(45deg, rgba(203,204,16,0.04), rgba(203,204,16,0.04) 2px, transparent 2px, transparent 14px);
+  border-style:dashed;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
+  font-family:'JetBrains Mono', monospace; font-size:14px; font-weight:700;
+  letter-spacing:0.18em; color:rgba(203,204,16,0.4); text-transform:uppercase;
+}
+.v2 .split-label { color:#0A0A0A; background:rgba(240,235,227,0.75); }
+.v2 .before-slot-empty,
+.v2 .after-slot-empty { background:repeating-linear-gradient(45deg, rgba(10,10,10,0.04), rgba(10,10,10,0.04) 2px, transparent 2px, transparent 14px); color:rgba(10,10,10,0.3); }
+
 </style>
 </head>
 <body>
@@ -579,6 +609,70 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
     <span class="handle">@oakparkconstruction</span>
     <span class="license">LIC · CBC1263425</span>
   </div>
+</div>
+
+
+<!-- ===================== BEFORE / AFTER SLIDES ===================== -->
+<!-- Sub-series: "Before & After" — final reveal (vs "Progress Update" = ongoing work) -->
+
+<!-- V1 BEFORE/AFTER -->
+<div class="slide slide-before-after v1">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Before &amp; After · Oak Park Construction</div>
+  <div class="headline" style="font-size:88px;line-height:0.95;">THE <span class="accent">REVEAL.</span></div>
+  <div class="split-panel">
+    <div class="before-slot before-slot-empty">
+      <span>BEFORE PHOTO</span>
+      <div class="split-label">ANTES</div>
+    </div>
+    <div class="after-slot after-slot-empty">
+      <span>AFTER PHOTO</span>
+      <div class="split-label">DEPOIS</div>
+    </div>
+  </div>
+  <div class="prog-address">412 Walnut Ave, Oak Park IL</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<!-- V2 BEFORE/AFTER -->
+<div class="slide slide-before-after v2">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Before &amp; After · Oak Park Construction</div>
+  <div class="headline" style="font-size:88px;line-height:0.95;">THE <span class="accent">REVEAL.</span></div>
+  <div class="split-panel">
+    <div class="before-slot before-slot-empty">
+      <span>BEFORE PHOTO</span>
+      <div class="split-label">ANTES</div>
+    </div>
+    <div class="after-slot after-slot-empty">
+      <span>AFTER PHOTO</span>
+      <div class="split-label">DEPOIS</div>
+    </div>
+  </div>
+  <div class="prog-address">412 Walnut Ave, Oak Park IL</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
+</div>
+
+<!-- V3 BEFORE/AFTER -->
+<div class="slide slide-before-after v3">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="tag">Before &amp; After · Oak Park Construction</div>
+  <div class="headline" style="font-size:88px;line-height:0.95;">THE <span class="accent">REVEAL.</span></div>
+  <div class="split-panel">
+    <div class="before-slot before-slot-empty">
+      <span>BEFORE PHOTO</span>
+      <div class="split-label">ANTES</div>
+    </div>
+    <div class="after-slot after-slot-empty">
+      <span>AFTER PHOTO</span>
+      <div class="split-label">DEPOIS</div>
+    </div>
+  </div>
+  <div class="prog-address">412 Walnut Ave, Oak Park IL</div>
+  <div class="arrow">SWIPE &#8594;</div>
+  <div class="slide-logo">Oak Park · CBC1263425</div>
 </div>
 
 </body>
