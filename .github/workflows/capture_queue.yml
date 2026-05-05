@@ -8,20 +8,19 @@ name: Capture Queue Processor
 #   12:00 UTC = 7 AM EST (Nov–Mar) — close enough; run both crons to cover DST
 #
 # Manual trigger: Actions → Capture Queue Processor → Run workflow
-# Optional input: max_per_run (default 5)
+# Optional input: max_per_run (default 2 — budget cap $10/wk)
 
 on:
-  # schedule PAUSED 2026-05-05 — $10/wk budget cap. Opus calls too expensive for daily auto-run.
-  # Re-enable when pipeline is optimized (replace Opus with Haiku/Sonnet in capture_pipeline.py).
-  # schedule:
-  #   - cron: "0 11 * * *"   # 6 AM EDT (Mar–Nov)
-  #   - cron: "0 12 * * *"   # 7 AM EST (Nov–Mar) — DST safety
+  # Re-enabled 2026-05-05 at 2 URLs/day (was 5) — safe now that Opus→Sonnet ($0.30/URL vs $2-4).
+  schedule:
+    - cron: "0 11 * * *"   # 6 AM EDT (Mar–Nov)
+    - cron: "0 12 * * *"   # 7 AM EST (Nov–Mar) — DST safety
   workflow_dispatch:
     inputs:
       max_per_run:
-        description: "Max URLs to process per run (default 5)"
+        description: "Max URLs to process per run (default 2 — budget cap)"
         required: false
-        default: "5"
+        default: "2"
         type: string
       retry_failed:
         description: "Re-process ALL rows marked ⚠️ Pipeline failed (clears flag and retries)"
@@ -86,7 +85,7 @@ jobs:
           PRI_OP_YT_COOKIES:         ${{ secrets.PRI_OP_YT_COOKIES }}
           GITHUB_TOKEN:              ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN:                  ${{ secrets.GITHUB_TOKEN }}
-          QUEUE_MAX_PER_RUN:         ${{ inputs.max_per_run || '5' }}
+          QUEUE_MAX_PER_RUN:         ${{ inputs.max_per_run || '2' }}
           QUEUE_RETRY_FAILED:        ${{ inputs.retry_failed || 'false' }}
           QUEUE_BULK_URLS:           ${{ inputs.bulk_urls || '' }}
         run: python scripts/capture/capture_queue_processor.py
