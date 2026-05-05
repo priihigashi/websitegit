@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "task": "SH-046 review and credit top-up",
+    "context": "Pending Anthropic credit top-up for SH-046, which is currently paused at NEEDS-REVIEW.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Merge SH-007 branch",
+    "context": "SH-007 branch left unmerged due to an AI patch being wrong; needs correction before merging.",
+    "auto_actionable": true
+  }
+]
