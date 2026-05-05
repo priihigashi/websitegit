@@ -2112,15 +2112,44 @@ STATUS: DRAFT — research needed before slides render"""
 
 
 def analyze_opc(transcript: str, url: str, notes: str) -> dict:
+    # Guard: empty or unavailable transcript must NOT trigger a hallucinated brief.
+    # If the transcript is missing or the pipeline sentinel was set, return immediately
+    # so the caller can log TRANSCRIPT UNAVAILABLE instead of inventing content.
+    _tx = (transcript or "").strip()
+    _tx_unavailable = (
+        not _tx
+        or _tx.startswith("[TRANSCRIPT_UNAVAILABLE]")
+        or _tx == "[TRANSCRIPT UNAVAILABLE — NEEDS SOURCE REVIEW]"
+    )
+    if _tx_unavailable:
+        print("  analyze_opc: transcript unavailable — skipping Claude call, returning NEEDS_REVIEW")
+        return {
+            "niche": "Oak Park",
+            "content_type": "Other",
+            "classification": "NEEDS_REVIEW",
+            "summary": "TRANSCRIPT UNAVAILABLE — NEEDS SOURCE REVIEW",
+            "hook": "",
+            "notes": "No transcript or video content was available. Do not generate Oak Park, Illinois or tourism content. Add a real source URL to retry.",
+            "credibility": "UNVERIFIED",
+            "series_override": "",
+            "fake_news_route": "",
+            "fake_news_confidence": "",
+            "additional_niches": [],
+        }
+
     if not CLAUDE_KEY_4_CONTENT:
-        return {"niche": "Oak Park", "classification": "NEEDS_REVIEW", "summary": transcript[:150]}
+        return {"niche": "Oak Park", "classification": "NEEDS_REVIEW", "summary": _tx[:150]}
     import anthropic
     client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
     print("  Claude (claude-sonnet-4-6) classifying...")
-    prompt = f"""Classify this video transcript for Oak Park Construction content pipeline.
+    prompt = f"""You are classifying a video transcript for the Oak Park Construction content pipeline.
+
+IMPORTANT — ENTITY DEFINITION: "Oak Park" in this pipeline means Oak Park Construction, a construction and remodeling company in Pompano Beach / South Florida. It does NOT mean Oak Park, Illinois, the Chicago suburb. Do NOT generate content about Oak Park, Illinois tourism, restaurants, festivals, the CTA, Ernest Hemingway, Frank Lloyd Wright sightseeing, or any community/city content unrelated to construction or remodeling. Frank Lloyd Wright references are allowed ONLY when directly tied to architecture/design/construction education for homeowners.
+
+Classify this video transcript for Oak Park Construction content pipeline.
 URL: {url}
 Notes: {notes or "None"}
-TRANSCRIPT: {transcript}
+TRANSCRIPT: {_tx}
 
 Fake news / misinformation detection: Does this content contain or spread a specific false or misleading claim (viral myth, fabricated statistic, doctored quote, out-of-context clip)? If yes, set fake_news_route to "A" if the source clip of the spreader is available, or "B" if an expert/outlet has already debunked it. If the niche is Brazil or bilingual, use series_override "Verificamos". If the niche is USA, use series_override "Fact-Checked".
 
@@ -3650,7 +3679,48 @@ def create_content_workspace(story_id: str, title: str, transcript: str,
 
 def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_content: str = "", screenshots: list = None, debug_info: str = ""):
     print("\n[OPC] Running classification...")
+
+    # Hard gate: empty or unavailable transcript must never proceed to brief generation.
+    # analyze_opc() returns NEEDS_REVIEW + summary="TRANSCRIPT UNAVAILABLE..." in this case,
+    # but we print a clear message here so the pipeline log is unambiguous.
+    _tx_check = (transcript or "").strip()
+    if not _tx_check or _tx_check.startswith("[TRANSCRIPT_UNAVAILABLE]"):
+        print("  [OPC] TRANSCRIPT UNAVAILABLE — skipping brief/workspace creation. Logging to Inspiration Library only.")
+        sid = args.story_id or f"CNT-{datetime.now().strftime('%Y%m%d%H%M')}"
+        cl = {
+            "niche": "Oak Park",
+            "content_type": "Other",
+            "classification": "NEEDS_REVIEW",
+            "summary": "TRANSCRIPT UNAVAILABLE — NEEDS SOURCE REVIEW",
+            "hook": "",
+            "notes": "No audio/video content was available. No brief was generated. Retry after adding a source.",
+            "credibility": "UNVERIFIED",
+            "series_override": "",
+            "fake_news_route": "",
+            "fake_news_confidence": "",
+            "additional_niches": [],
+        }
+        update_inspiration_library(
+            args.url, transcript, cl,
+            hub_url="", doc_url="",
+            metadata=metadata, user_notes=(args.notes or ""),
+        )
+        print(f"\nOPC CAPTURE DONE\nNiche: Oak Park\nStatus: NEEDS_REVIEW\nSummary: TRANSCRIPT UNAVAILABLE — NEEDS SOURCE REVIEW")
+        return
+
     cl = analyze_opc(transcript, args.url, args.notes or "")
+    # If analyze_opc still returns TRANSCRIPT UNAVAILABLE (e.g. sentinel was embedded in transcript)
+    if "TRANSCRIPT UNAVAILABLE" in (cl.get("summary") or ""):
+        print("  [OPC] analyze_opc returned TRANSCRIPT UNAVAILABLE — skipping brief generation.")
+        sid = args.story_id or f"CNT-{datetime.now().strftime('%Y%m%d%H%M')}"
+        update_inspiration_library(
+            args.url, transcript, cl,
+            hub_url="", doc_url="",
+            metadata=metadata, user_notes=(args.notes or ""),
+        )
+        print(f"\nOPC CAPTURE DONE\nNiche: Oak Park\nStatus: NEEDS_REVIEW\nSummary: TRANSCRIPT UNAVAILABLE — NEEDS SOURCE REVIEW")
+        return
+
     sid = args.story_id or f"CNT-{datetime.now().strftime('%Y%m%d%H%M')}"
 
     # Research notes before writing the brief — facts land IN the doc, not lost
