@@ -148,7 +148,11 @@ def _fetch_inspo_urls():
 
 def scrape_debunk_source(username, niche):
     """Scrape debunk source account — top 1 non-duplicate post from past 7 days.
-    Returns a single normalised item dict, or None if nothing qualifies."""
+    Runs on Tuesdays only. Returns a single normalised item dict, or None."""
+    if datetime.today().weekday() != 1:  # 0=Mon, 1=Tue, ..., 6=Sun
+        print("[debunk] Not Tuesday, skipping")
+        return None
+
     cutoff = datetime.now(et).timestamp() - 7 * 86400
 
     raw, _, _, _ = scrape_instagram_account(username, niche)
