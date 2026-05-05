@@ -12,6 +12,9 @@ Important safety rules:
 - Does NOT rename files or change production routing.
 - Keeps `tip` as a full 5-slide OPC educational carousel until slide-by-slide
   wiring is intentionally built.
+- Treats Oak Park as Oak Park Construction in Pompano Beach / South Florida,
+  not Oak Park, Illinois. Architecture references are allowed only when they
+  support construction/remodel/design education; tourism/community framing is blocked.
 """
 from __future__ import annotations
 
@@ -101,6 +104,32 @@ GENERIC_HOOK_PHRASES = [
     "what to do",
 ]
 
+# Terms that prove the content is about Oak Park Construction / South Florida
+# remodeling, not the Village of Oak Park, Illinois. Keep broad enough for
+# architecture/design inspiration, but require a construction/remodel purpose.
+OPC_CONSTRUCTION_TERMS = [
+    "construction", "contractor", "general contractor", "remodel", "remodeling",
+    "renovation", "homeowner", "homeowners", "bathroom", "kitchen", "addition",
+    "build", "builder", "jobsite", "job site", "project", "permit", "inspection",
+    "code", "material", "tile", "drywall", "cabinet", "countertop", "flooring",
+    "concrete", "waterproof", "layout", "design-build", "south florida",
+    "pompano", "broward", "miami-dade", "palm beach", "oak park construction",
+    "opc", "mike", "michael", "matthew",
+]
+
+# Terms that usually mean the wrong entity: Oak Park, Illinois / tourism / city
+# content. Frank Lloyd Wright can be used as an architecture reference, but if
+# these appear without construction terms, block the item before template choice.
+OAK_PARK_ILLINOIS_OR_TOURISM_TERMS = [
+    "oak park, illinois", "oak park illinois", "chicago suburb", "suburb of chicago",
+    "near chicago", "west of chicago", "cta", "green line", "blue line",
+    "frank lloyd wright", "ernest hemingway", "unity temple", "hemingway",
+    "village of oak park", "oak park arts district", "downtown oak park",
+    "visit oak park", "plan your visit", "hidden gems", "restaurants",
+    "food scene", "festivals", "tourism", "travel", "travel guide", "trip to chicago",
+    "save this for your trip", "tag someone who needs to visit",
+]
+
 
 def load_registry(path: Path = DEFAULT_REGISTRY) -> dict[str, Any]:
     if not path.exists():
@@ -123,6 +152,50 @@ def keyword_hits(text: str, words: list[str]) -> list[str]:
         elif w in text:
             hits.append(word)
     return hits
+
+
+def detect_opc_content_fit(topic: str, brief: str = "") -> dict[str, Any]:
+    """Gate OPC selection before template scoring.
+
+    Oak Park must mean Oak Park Construction (Pompano Beach / South Florida),
+    not Oak Park, Illinois. Architecture references are allowed only when they
+    support construction/remodel/design education.
+    """
+    combined = normalize(f"{topic} {brief}")
+    construction_hits = keyword_hits(combined, OPC_CONSTRUCTION_TERMS)
+    wrong_entity_hits = keyword_hits(combined, OAK_PARK_ILLINOIS_OR_TOURISM_TERMS)
+
+    if wrong_entity_hits and not construction_hits:
+        return {
+            "status": "blocked_needs_reclassification",
+            "is_opc_construction_ready": False,
+            "reason": (
+                "Content appears to treat Oak Park as Oak Park, Illinois / tourism / community content. "
+                "For this pipeline, Oak Park means Oak Park Construction in Pompano Beach / South Florida."
+            ),
+            "construction_hits": construction_hits,
+            "wrong_entity_hits": wrong_entity_hits,
+        }
+
+    if not construction_hits:
+        return {
+            "status": "needs_human_review",
+            "is_opc_construction_ready": False,
+            "reason": (
+                "No strong construction/remodel/homeowner/service/material/project signal was detected. "
+                "Do not select an OPC template until the topic is confirmed as Oak Park Construction content."
+            ),
+            "construction_hits": construction_hits,
+            "wrong_entity_hits": wrong_entity_hits,
+        }
+
+    return {
+        "status": "passed",
+        "is_opc_construction_ready": True,
+        "reason": "Construction/remodel/homeowner OPC signals detected.",
+        "construction_hits": construction_hits,
+        "wrong_entity_hits": wrong_entity_hits,
+    }
 
 
 def classify_story(topic: str, brief: str = "") -> dict[str, Any]:
@@ -237,13 +310,11 @@ def score_templates(story: dict[str, Any], registry: dict[str, Any]) -> list[dic
         score = 0
         reasons: list[str] = []
 
-        # Main signal scoring.
         for idx, preferred_id in enumerate(preferred_order):
             if tid == preferred_id:
                 score += max(1, 5 - min(idx, 4))
         reasons.extend(signal_reasons.get(tid, []))
 
-        # Preference and status weighting, but keep it modest so signals win.
         score += int(template.get("priscila_preference_score") or 0)
         if template.get("registry_kind") == "full_carousel":
             score += 1
@@ -254,12 +325,10 @@ def score_templates(story: dict[str, Any], registry: dict[str, Any]) -> list[dic
         if template.get("wiring_status", "").startswith("gallery_only"):
             reasons.append("gallery-only today; dry-run recommendation only")
 
-        # Penalize progress if no progress signal; it should not be chosen just because it scores high.
         if tid == "opc_progress_media" and "progress" not in story["matches"]:
             score -= 4
             reasons.append("not primary unless real progress/proof media exists")
 
-        # Penalize full tip for very specific standalone jobs, but keep as backup.
         if tid == "opc_tip" and any(k in story["matches"] for k in ["single_item", "comparison", "material", "progress"]):
             score -= 1
             reasons.append("backup full-carousel option, not necessarily the best slide-role match")
@@ -282,6 +351,31 @@ def score_templates(story: dict[str, Any], registry: dict[str, Any]) -> list[dic
 
 
 def build_recommendation(topic: str, brief: str, registry_path: Path = DEFAULT_REGISTRY) -> dict[str, Any]:
+    content_fit = detect_opc_content_fit(topic, brief)
+    if not content_fit["is_opc_construction_ready"]:
+        return {
+            "mode": "dry_run_only",
+            "status": content_fit["status"],
+            "topic": topic,
+            "brief_present": bool(brief.strip()),
+            "opc_content_fit": content_fit,
+            "primary_recommendation": None,
+            "backup_recommendations": [],
+            "do_not_use": [
+                {
+                    "template_id": "all_opc_templates",
+                    "reason": "OPC templates are blocked until the topic is confirmed as Oak Park Construction / South Florida remodeling content."
+                }
+            ],
+            "confidence": "blocked",
+            "safety_notes": [
+                "No rendering performed.",
+                "No production routing changed.",
+                "No filenames renamed.",
+                "Oak Park must mean Oak Park Construction in Pompano Beach / South Florida, not Oak Park, Illinois.",
+            ],
+        }
+
     registry = load_registry(registry_path)
     story = classify_story(topic, brief)
     scored = score_templates(story, registry)
@@ -306,8 +400,10 @@ def build_recommendation(topic: str, brief: str, registry_path: Path = DEFAULT_R
 
     return {
         "mode": "dry_run_only",
+        "status": "passed",
         "topic": topic,
         "brief_present": bool(brief.strip()),
+        "opc_content_fit": content_fit,
         "storytelling_read": {
             "central_tension": story["central_tension"],
             "audience_question": story["audience_question"],
@@ -324,7 +420,7 @@ def build_recommendation(topic: str, brief: str, registry_path: Path = DEFAULT_R
             "No rendering performed.",
             "No production routing changed.",
             "No filenames renamed.",
-            "For OPC, only niche=opc templates were considered.",
+            "For OPC, only niche=opc templates were considered after OPC content-fit passed.",
             "Issue #122 storytelling logic is represented as story read: tension, audience question, proof, payoff, clarity.",
         ],
     }
@@ -343,9 +439,24 @@ def main() -> int:
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
 
-    primary = result["primary_recommendation"]
     print(f"Topic: {result['topic']}")
     print(f"Mode: {result['mode']}")
+    print(f"Status: {result.get('status', 'unknown')}")
+    content_fit = result.get("opc_content_fit", {})
+    print(f"OPC fit: {content_fit.get('status')} — {content_fit.get('reason')}")
+    if content_fit.get("wrong_entity_hits"):
+        print(f"Wrong-entity/tourism hits: {', '.join(content_fit['wrong_entity_hits'])}")
+    if content_fit.get("construction_hits"):
+        print(f"Construction hits: {', '.join(content_fit['construction_hits'])}")
+
+    if result.get("primary_recommendation") is None:
+        print("\nPrimary recommendation: BLOCKED — no OPC template selected.")
+        for item in result.get("do_not_use", []):
+            print(f"- {item['template_id']}: {item['reason']}")
+        print("Safety: dry-run only; no rendering/routing/filename changes.")
+        return 0
+
+    primary = result["primary_recommendation"]
     print("\nStorytelling read:")
     sr = result["storytelling_read"]
     print(f"- Central tension: {sr['central_tension']}")
