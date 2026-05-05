@@ -4,7 +4,7 @@ carousel_builder.py — Generates carousel HTML from template + topic, renders P
 Uses Claude Haiku for content generation, Playwright for rendering.
 Also generates Instagram caption following Priscila's copy rules.
 """
-import datetime, gzip, json, os, re, subprocess, sys, time, urllib.request, urllib.parse
+import base64, datetime, gzip, json, os, re, subprocess, sys, time, urllib.request, urllib.parse
 from pathlib import Path
 import pathlib as _pl
 sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent / "capture"))
@@ -87,7 +87,7 @@ def _claude_with_fallback(prompt, *, max_tokens, timeout=60, context=""):
         except Exception as e:
             print(f"  [carousel_builder] cascade failed ({e}) — trying raw Claude HTTP")
     payload = json.dumps({
-        "model": "claude-haiku-4-5-20251001",
+        "model": "claude-sonnet-4-6",
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
@@ -1142,6 +1142,7 @@ def _remove_background(img_rel_path, work_dir):
     out_path = src.parent / out_name
     out_rel = f"resources/images/{out_name}"
     if out_path.exists() and out_path.stat().st_size > 2000:
+        _ensure_transparent_headroom(out_path)
         return out_rel
     try:
         # Step 1: upload file to Replicate Files API → get a URL the model can access
@@ -1190,6 +1191,7 @@ def _remove_background(img_rel_path, work_dir):
                 if out_url:
                     png_bytes = urllib.request.urlopen(out_url, timeout=20).read()
                     out_path.write_bytes(png_bytes)
+                    _ensure_transparent_headroom(out_path)
                     print(f"  rembg ✅ → {out_name} ({len(png_bytes)//1024}KB)")
                     return out_rel
                 break
@@ -1453,6 +1455,54 @@ def _remove_background_with_replicate(local_abs_path, out_abs_path):
     return False
 
 
+def _ensure_transparent_headroom(image_path, *, top_ratio=0.10, side_ratio=0.035, bottom_ratio=0.02):
+    """Add transparent safety padding when a cutout touches the image edge.
+    This keeps heads/hair from being clipped when templates scale bust cutouts."""
+    try:
+        from PIL import Image
+    except Exception as e:
+        print(f"  Cutout headroom skipped (Pillow unavailable): {e}")
+        return False
+
+    path = Path(image_path)
+    if not path.exists() or path.suffix.lower() != ".png":
+        return False
+    try:
+        with Image.open(path) as img:
+            rgba = img.convert("RGBA")
+            alpha = rgba.getchannel("A")
+            bbox = alpha.getbbox()
+            if not bbox:
+                return False
+
+            width, height = rgba.size
+            left, top, right, bottom = bbox
+            subject_h = max(1, bottom - top)
+            subject_w = max(1, right - left)
+            desired_top = max(40, int(subject_h * top_ratio))
+            desired_side = max(20, int(subject_w * side_ratio))
+            desired_bottom = max(12, int(subject_h * bottom_ratio))
+
+            add_top = max(0, desired_top - top)
+            add_left = max(0, desired_side - left)
+            add_right = max(0, desired_side - (width - right))
+            add_bottom = max(0, desired_bottom - (height - bottom))
+            if not any((add_top, add_left, add_right, add_bottom)):
+                return False
+
+            canvas = Image.new("RGBA", (width + add_left + add_right, height + add_top + add_bottom), (0, 0, 0, 0))
+            canvas.paste(rgba, (add_left, add_top))
+            canvas.save(path)
+            print(
+                "  Cutout headroom added: "
+                f"{path.name} (+{add_top}px top, +{add_left}px left, +{add_right}px right, +{add_bottom}px bottom)"
+            )
+            return True
+    except Exception as e:
+        print(f"  Cutout headroom failed for {path.name} (non-fatal): {e}")
+        return False
+
+
 def _generate_cutouts_for_cutout_template(content, paths, work_dir):
     """Auto-create no-background PNG cutouts for cutout template slides.
     Non-blocking: if all providers fail, template still uses regular images."""
@@ -1473,11 +1523,13 @@ def _generate_cutouts_for_cutout_template(content, paths, work_dir):
             continue
         out_abs = cut_dir / f"slide_{slide_idx}.png"
         if out_abs.exists() and out_abs.stat().st_size > 5000:
+            _ensure_transparent_headroom(out_abs)
             continue
         ok = _remove_background_with_inference_sh(str(src_abs), str(out_abs))
         if not ok:
             ok = _remove_background_with_replicate(str(src_abs), str(out_abs))
         if ok:
+            _ensure_transparent_headroom(out_abs)
             print(f"  Cutout generated: resources/cutouts/slide_{slide_idx}.png")
         else:
             print(f"  Cutout skipped for slide {slide_idx} (providers unavailable or failed)")
