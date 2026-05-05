@@ -13,6 +13,7 @@ Goal 1B of the proactive auto-fixer. The reviewer's job:
        · competitor mention or banned brand
        · tone mismatch (sales-y on OPC, opinion on Brazil)
        · length overrun (cover headline > 42 chars, list item > 34, etc.)
+       · average/generic hook or missing curiosity/payoff arc
   4. Return structured JSON the auto-fixer can apply with str.replace.
 
 This module does NOT touch HTML or rerender. It only PROPOSES the edits.
@@ -63,6 +64,59 @@ COMPETITOR_BANNED_TERMS = [
 ]
 
 
+HOOK_STORYTELLING_REVIEW_RULES = """
+══════════════════════ HOOK + STORYTELLING QUALITY GATE ══════════════════════
+This gate exists because hooks must be very good, not average.
+Do NOT pass a carousel just because it is technically factual.
+
+GENERIC HOOKS TO FLAG:
+- "Here's what you need to know"
+- "Let's talk about"
+- "Important update"
+- "You won't believe this"
+- "Things homeowners should know"
+- "What happened today"
+- "Tips and tricks"
+- "What to do"
+- Any vague cover that does not create a claim, tension, number, risk,
+  consequence, contradiction, or curiosity gap.
+
+GOOD PROFESSIONAL HOOK PATTERNS:
+1. Specific number that demands explanation.
+2. Contradiction / tension.
+3. Consequence hook.
+4. Question with stakes.
+5. Source/receipt hook.
+6. Curiosity gap without deception.
+7. Visual proof / before-after hook.
+
+NICHE-SPECIFIC HOOK STANDARD:
+- OPC hooks must be homeowner-facing: risk, cost, delay, hidden consequence,
+  missing scope, permit/code issue, bad quote comparison, material/process
+  misunderstanding, or what to ask before signing. They must NOT sound salesy,
+  exaggerated, or like OPC promises an outcome.
+- Brazil/USA News hooks must be journalistic and credible: exact claim,
+  contradiction, vote/result, official source/document, legal consequence,
+  institutional tension, missing context, or confirmed vs unproven. They must
+  NOT become "how we verified this" unless the explicit format is a
+  behind-the-scenes/process post.
+
+STORY ARC CHECK:
+The carousel should build a clear reward arc:
+- Cover: strong hook / central tension.
+- Early slides: why this matters and what the viewer is missing.
+- Middle slides: evidence, context, or breakdown.
+- Later slides: reward/payoff — clearest answer, verdict, practical takeaway,
+  or reveal.
+- Final slide: sources/CTA/final clarity.
+
+RESEARCH / PROOF CHECK:
+If a supporting point is weak, unsupported, or unclear, flag it. The fix should
+soften it, remove it, or require more research. Do not allow the carousel to
+fill a slide with a weak claim just because the template needs another point.
+"""
+
+
 def _niche_rules(niche: str) -> str:
     """Return the canonical copy-rules block for a niche."""
     n = (niche or "").lower()
@@ -102,6 +156,8 @@ Preserve everything that's already correct.
 ══════════════════════ MANDATORY COPY RULES ══════════════════════
 {rules}
 
+{HOOK_STORYTELLING_REVIEW_RULES}
+
 ══════════════════════ LENGTH GUARDRAILS ══════════════════════
 - Cover headline: max {LENGTH_GUARDRAILS['cover_headline_max']} chars
 - Cover subhead:  max {LENGTH_GUARDRAILS['cover_subhead_max']} chars
@@ -116,12 +172,14 @@ Preserve everything that's already correct.
 
 ══════════════════════ YOUR JOB ══════════════════════
 For EACH issue you find, decide:
-  · type: one of [factual, unsourced, suspicious, competitor, tone, length, promise]
+  · type: one of [factual, unsourced, suspicious, competitor, tone, length, promise, hook, story_arc, proof_gap]
   · severity: high | med | low
       - high  = factual error, unverified claim presented as fact, banned mention,
                 explicit promise about OPC ("we always", "our guarantee"), opinion
-                framed as fact on Brazil/USA niche.
-      - med   = length overrun, weak source, sales-y tone, missing party affiliation.
+                framed as fact on Brazil/USA niche, misleading/clickbait hook,
+                or a hook that changes the meaning of the source.
+      - med   = length overrun, weak source, sales-y tone, missing party affiliation,
+                generic/average hook, missing payoff, weak story arc, or proof gap.
       - low   = stylistic — caption too long, exclamation overuse.
   · suggested: the minimal edit that fixes the issue. NULL if you cannot fix it
               without external research (then explain in `reason` what to verify).
@@ -134,7 +192,7 @@ Return ONLY valid JSON in this exact shape (no markdown, no commentary):
   "issues": [
     {{
       "slide": <int>,
-      "type": "<one of: factual, unsourced, suspicious, competitor, tone, length, promise>",
+      "type": "<one of: factual, unsourced, suspicious, competitor, tone, length, promise, hook, story_arc, proof_gap>",
       "severity": "<high|med|low>",
       "original": "<the exact substring from the slide that's wrong>",
       "suggested": "<the minimal-edit replacement, or null>",
