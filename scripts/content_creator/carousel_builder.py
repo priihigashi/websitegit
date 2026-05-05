@@ -1730,7 +1730,27 @@ def fetch_all_media(content, niche, work_dir, brief=""):
 
         img_path = ""
         accepted = False
-        # Tier 0 — library-first reuse + scene-preserving enhancement
+
+        # ── TIER 0 (OPC only) — Photo Catalog (real jobsite photos) ─────────
+        # Checked BEFORE any AI or stock spend. Matches by keyword against the
+        # AI description + service type + filename in the 158-row catalog.
+        if niche == "opc" and not accepted:
+            try:
+                from photo_matcher import match_opc_photo as _opc_match_slide  # type: ignore
+                opc_hit = _opc_match_slide(cq)
+                if opc_hit and opc_hit.get("drive_url"):
+                    _img_dir = Path(work_dir) / "resources" / "images"
+                    _img_dir.mkdir(parents=True, exist_ok=True)
+                    _dl = _download_drive_photo(opc_hit["drive_url"], str(_img_dir / fname))
+                    if _dl and _vision_accept(_dl, cq, f"slide{i}/opc_catalog"):
+                        _set_slide(i, _dl, "opc_catalog", "real_photo", query=cq)
+                        accepted = True
+                        print(f"  [photo_matcher] slide{i}: {opc_hit.get('filename')} "
+                              f"({opc_hit.get('service_type')}, q={opc_hit.get('quality')})")
+            except Exception as _opc_e:
+                _log_failure(f"photo_matcher/slide{i}", _opc_e)
+
+        # Tier 1 — library-first reuse + scene-preserving enhancement
         if _IMAGE_LIBRARY_AVAILABLE:
             try:
                 lib_hit = _search_library(cq, niche)
