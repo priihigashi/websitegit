@@ -164,6 +164,17 @@ TEMPLATES = {
             "slides": 9,
             "structure": "cover (hook+credibility badge) → claim → true fact 1 → true fact 2 → what was missing → exaggeration check → verdict (THE KEY SLIDE) → our verdict → CTA",
         },
+        "verdade-pela-metade": {
+            # FORMAT-024 — Weekly fake-news debunk carousel (Tuesdays)
+            # Source account never named in content (internal only)
+            # Two modes: mode_a = wrong attribution, mode_b = distorted numbers
+            # series_override: "VERDADE PELA METADE" (triggers this template)
+            # Requires approval before scheduling (same gate as Verificamos)
+            "series": "Verdade Pela Metade",
+            "tag": "Verdade Pela Metade",
+            "slides": 7,
+            "structure": "cover → o-que-diz → mode-branch (quem-decidiu|numero-real) → contexto → fontes → conclusao → sources",
+        },
     },
     "usa": {
         "fact-checked": {
@@ -322,6 +333,8 @@ def generate_carousel_content(topic, niche, template_key=None, brief="", model="
     # Special templates checked BEFORE the generic niche short-circuit
     if template_key == "dados-ou-agenda":
         return generate_dados_content(topic, brief)
+    if template_key == "verdade-pela-metade":
+        return generate_verdade_content(topic, brief)
     if niche in ("brazil", "usa"):
         return generate_brazil_content(topic, brief, model=model)
     if not template_key:
@@ -710,6 +723,121 @@ IMPORTANT:
             print(f"  Dados JSON parse error (attempt {attempt+1}): {e}")
             continue
     print("  Dados content generation failed after 2 attempts")
+    return None
+
+
+def generate_verdade_content(topic, brief=""):
+    """Generate FORMAT-024 Verdade Pela Metade debunk carousel (7 slides, PT-BR).
+    brief should contain 'MODE: mode_a|mode_b' and optionally 'RESEARCH: {json}'.
+    Source account is NEVER named in content — content is always original."""
+    import re as _re
+
+    # Parse mode and research from brief
+    mode = "mode_b"
+    research_text = ""
+    if brief:
+        m = _re.search(r"MODE:\s*(mode_[ab])", brief, _re.IGNORECASE)
+        if m:
+            mode = m.group(1).lower()
+        r = _re.search(r"RESEARCH:\s*(.+)", brief, _re.DOTALL | _re.IGNORECASE)
+        if r:
+            research_text = r.group(1).strip()
+
+    _today = datetime.datetime.utcnow()
+    _months_pt = ["janeiro","fevereiro","março","abril","maio","junho",
+                  "julho","agosto","setembro","outubro","novembro","dezembro"]
+    today_pt = f"{_today.day:02d} de {_months_pt[_today.month-1]} de {_today.year}"
+
+    mode_branch_instructions = ""
+    if mode == "mode_a":
+        mode_branch_instructions = """slide_mode_heading_pt: "Quem Realmente Decidiu" — who is actually responsible
+slide_mode_heading_en: "Who Actually Decided"
+slide_mode_content: object with keys: responsible_party (name), decision_name (law/vote name), year (string), source_url (URL)"""
+        if research_text:
+            mode_branch_instructions += f"\n\nResearch data (use this — do not invent):\n{research_text[:600]}"
+    else:
+        mode_branch_instructions = """slide_mode_heading_pt: "Número Real vs O Que Disseram" — actual stat vs inflated version
+slide_mode_heading_en: "Real Number vs What They Said"
+slide_mode_content: object with keys: original_stat (what went viral), real_stat (verified number + source), context (1-2 sentences explaining the difference)"""
+
+    prompt = f"""Você é um jornalista brasileiro escrevendo um carrossel Instagram de 7 slides FORMAT-024 "Verdade Pela Metade".
+Este formato desmonta boatos virais em PT-BR com fontes verificadas. Nunca mencione a origem do conteúdo — seja sempre original.
+
+Tópico: "{topic}"
+Data: {today_pt}
+Modo: {mode} — {"Atribuição errada (fato real, pessoa/governo errado)" if mode == "mode_a" else "Números distorcidos (dado real, contexto manipulado)"}
+
+{mode_branch_instructions}
+
+REGRAS OBRIGATÓRIAS:
+1. cover_claim é o gancho — a afirmação viral em 1 frase curta, provocadora. Max 12 palavras.
+2. slide_o_que_diz é o que o boato diz literalmente — cite sem comentar.
+3. slide_mode_* é onde você derruba o boato com dados reais.
+4. contexto explica o que o boato deixa de fora.
+5. conclusao é o veredicto em 1 linha: "O fato é real, mas a responsabilidade é de X."
+6. Fontes: mínimo 2 outlets verificáveis (G1, Agência Brasil, Câmara.gov, Senado.leg, etc.).
+7. Tom: jornalístico, calmo, não acusatório. "Os dados mostram que..."
+8. NUNCA invente números. Se não souber, escreva "dado não disponível".
+
+Retorne SOMENTE um JSON válido com esta estrutura exata:
+{{
+  "cover_pt": "VERDADE PELA METADE — 4-6 palavras (tópico do episódio, ALL CAPS)",
+  "cover_en": "Half-Truth — same topic in English",
+  "cover_accent": "1 palavra do cover_pt para destacar em amarelo",
+  "cover_claim": "A afirmação viral — 1 frase curta e provocadora (max 12 palavras, PT)",
+  "cover_date": "{today_pt}",
+  "person": {{
+    "name": "Nome completo da pessoa que está sendo mal atribuída OU o político/instituição citado no boato",
+    "role": "cargo ou descrição em PT",
+    "image_hint": "nome para busca de foto jornalística"
+  }},
+  "slide_o_que_diz": "O que o boato diz literalmente — 2-3 frases, como se descrevesse o viral",
+  "slide_mode_heading_pt": "título do slide 3 (conforme modo)",
+  "slide_mode_heading_en": "English subtitle for slide 3",
+  "slide_mode_content": {{ "depends_on_mode": "see above" }},
+  "contexto": "O que o boato deixa de fora — 2-3 frases. Este é o contexto crucial que muda tudo.",
+  "fontes": [
+    "Outlet 1 — descrição curta do que confirma",
+    "Outlet 2 — descrição curta"
+  ],
+  "conclusao": "Veredicto em 1 linha. Ex: 'O dado é real — mas a culpa é do governo anterior, não do atual.'",
+  "sources": [
+    "Fonte 1 — url ou nome completo",
+    "Fonte 2 — url ou nome completo"
+  ],
+  "caption": "Legenda Instagram: 2-3 frases. Primeira linha = gancho (visível no feed). Descreve o tópico. Termina com 8-10 hashtags relevantes em PT.",
+  "clip_suggestions": [
+    {{
+      "slide": 1,
+      "person_or_topic": "nome da pessoa ou tema para busca de clipe",
+      "youtube_query": "nome da pessoa + discurso ou pronunciamento",
+      "pexels_query": "parlamento brasileiro ou congresso nacional",
+      "visual_hint": "bio-card"
+    }}
+  ]
+}}"""
+
+    for attempt in range(2):
+        try:
+            response = anthropic_client().messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1800,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = response.content[0].text.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+                raw = raw.strip()
+            result = json.loads(raw)
+            result["_template_key"] = "verdade-pela-metade"
+            result["_mode"] = mode
+            return result
+        except json.JSONDecodeError as e:
+            print(f"  Verdade JSON parse error (attempt {attempt+1}): {e}")
+            continue
+    print("  Verdade content generation failed after 2 attempts")
     return None
 
 
@@ -2280,6 +2408,221 @@ body{background:var(--ob);overflow:hidden}
 """
 
 
+def _build_verdade_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", media_paths=None):
+    """FORMAT-024 Verdade Pela Metade — 7-slide debunk carousel (PT-BR, dark brand)."""
+    def esc(s):
+        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+    mode        = content.get("_mode", "mode_b")
+    cover_pt    = esc(content.get("cover_pt", "VERDADE PELA METADE"))
+    cover_en    = esc(content.get("cover_en", "Half-Truth"))
+    cover_accent = esc(content.get("cover_accent", ""))
+    cover_claim = esc(content.get("cover_claim", ""))
+    cover_date  = esc(content.get("cover_date", ""))
+
+    raw_cover = content.get("cover_pt", "")
+    cover_hl = cover_pt.replace(cover_accent, f'<em>{cover_accent}</em>', 1) if cover_accent and cover_accent in raw_cover else cover_pt
+
+    cover_img = (media_paths or {}).get("cover", "")
+    if cover_img:
+        cover_sticker_el = f'<div class="sticker-slot"><img src="{cover_img}" alt="cover portrait"></div>'
+        cover_sticker_class = "cover-with-sticker"
+        cover_bg_el = (
+            f'<div class="bg-photo" style="background-image:url(\'{cover_img}\');"></div>'
+            f'<div class="halftone"></div>'
+        )
+    else:
+        person = content.get("person", {})
+        pname = esc(person.get("name", ""))
+        pini = "".join(w[0].upper() for w in pname.split() if w)[:2] if pname else ""
+        cover_sticker_el = (
+            f'<div class="sticker-slot sticker-initials">'
+            f'<div class="bio-initials">{pini}</div>'
+            f'<div class="bio-init-name">{pname}</div>'
+            f'</div>'
+        ) if pini else ""
+        cover_sticker_class = "cover-with-sticker" if pini else ""
+        cover_bg_el = ""
+
+    # Slide 3 mode-branch content
+    mode_h_pt = esc(content.get("slide_mode_heading_pt", "Quem Realmente Decidiu" if mode == "mode_a" else "Número Real vs O Que Disseram"))
+    mode_h_en = esc(content.get("slide_mode_heading_en", "Who Actually Decided" if mode == "mode_a" else "Real Number vs What They Said"))
+    mode_content = content.get("slide_mode_content", {})
+    if mode == "mode_a":
+        mode_body_html = f"""
+  <div class="fact-row"><span class="fact-label">Responsável</span><span class="fact-val">{esc(mode_content.get("responsible_party", ""))}</span></div>
+  <div class="fact-row"><span class="fact-label">Decisão</span><span class="fact-val">{esc(mode_content.get("decision_name", ""))}</span></div>
+  <div class="fact-row"><span class="fact-label">Ano</span><span class="fact-val">{esc(str(mode_content.get("year", "")))}</span></div>
+  <div class="source-line">{esc(mode_content.get("source_url", ""))}</div>"""
+    else:
+        mode_body_html = f"""
+  <div class="compare-row viral"><span class="compare-label">Viral</span><span class="compare-val">{esc(mode_content.get("original_stat", ""))}</span></div>
+  <div class="compare-row real"><span class="compare-label">Real</span><span class="compare-val">{esc(mode_content.get("real_stat", ""))}</span></div>
+  <div class="compare-context">{esc(mode_content.get("context", ""))}</div>"""
+
+    fontes_html = "".join(
+        f'<div class="fonte-row">{esc(f)}</div>'
+        for f in content.get("fontes", [])
+    )
+    sources_html = "".join(
+        f'<div class="src-row"><span class="src-num">{i:02d}</span><span>{esc(s)}</span></div>'
+        for i, s in enumerate(content.get("sources", []), 1)
+    )
+
+    slides_html = f"""
+<div class="slide slide-cover slide-motion {cover_sticker_class}">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  {cover_bg_el}
+  {cover_sticker_el}
+  <div class="tag">Verdade Pela Metade</div>
+  <div class="cover-date">{cover_date}</div>
+  <div class="cover-hl">{cover_hl}</div>
+  <div class="cover-claim">"{cover_claim}"</div>
+  <div class="cover-en">{cover_en}</div>
+  <div class="swipe">SEGUE O FIO &#8594;</div>
+  <div class="footer-handle">{handle}</div>
+</div>
+
+<div class="slide slide-o-que-diz">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="slide-tag">O QUE DIZ O BOATO</div>
+  <div class="slide-en">What the rumor claims</div>
+  <div class="slide-body">{esc(content.get("slide_o_que_diz", ""))}</div>
+  <div class="footer-handle">{handle}</div>
+</div>
+
+<div class="slide slide-mode-branch slide-motion">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="slide-tag">{mode_h_pt}</div>
+  <div class="slide-en">{mode_h_en}</div>
+  <div class="mode-content">{mode_body_html}</div>
+  <div class="footer-handle">{handle}</div>
+</div>
+
+<div class="slide slide-contexto">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="slide-tag">CONTEXTO</div>
+  <div class="slide-en">What the narrative leaves out</div>
+  <div class="slide-body">{esc(content.get("contexto", ""))}</div>
+  <div class="footer-handle">{handle}</div>
+</div>
+
+<div class="slide slide-fontes slide-motion">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="slide-tag">FONTES VERIFICADAS</div>
+  <div class="slide-en">Verified outlets</div>
+  <div class="fontes-list">{fontes_html}</div>
+  <div class="footer-handle">{handle}</div>
+</div>
+
+<div class="slide slide-conclusao">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="slide-tag">CONCLUSÃO</div>
+  <div class="slide-en">Verdict</div>
+  <div class="conclusao-text">{esc(content.get("conclusao", ""))}</div>
+  <div class="footer-handle">{handle}</div>
+</div>
+
+<div class="slide slide-sources">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="slide-tag">FONTES</div>
+  <div class="sources-list">{sources_html}</div>
+  <div class="cta">{esc(content.get("cta_pt", "Salva e compartilha."))}</div>
+  <div class="footer-handle">{handle}</div>
+</div>
+"""
+
+    css = """
+<style>
+:root {
+  --bg: #0d0d0d;
+  --accent: #FFE500;
+  --text: #f0f0f0;
+  --muted: #888;
+  --viral-red: #ff3b30;
+  --real-green: #34c759;
+  --slide-w: 1080px;
+  --slide-h: 1350px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #333; font-family: 'Barlow Condensed', 'Impact', sans-serif; }
+.slide {
+  width: var(--slide-w); height: var(--slide-h);
+  background: var(--bg); color: var(--text);
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  padding: 60px 64px; gap: 0;
+}
+.corner { position: absolute; width: 28px; height: 28px; border-color: var(--accent); border-style: solid; }
+.corner.tl { top: 32px; left: 32px; border-width: 3px 0 0 3px; }
+.corner.tr { top: 32px; right: 32px; border-width: 3px 3px 0 0; }
+.corner.bl { bottom: 32px; left: 32px; border-width: 0 0 3px 3px; }
+.corner.br { bottom: 32px; right: 32px; border-width: 0 3px 3px 0; }
+
+/* Cover */
+.bg-photo { position: absolute; inset: 0; background-size: cover; background-position: center; filter: grayscale(1) contrast(1.1); z-index: 0; }
+.halftone { position: absolute; inset: 0; background: repeating-radial-gradient(circle, rgba(0,0,0,.45) 0 2px, transparent 2px 6px); z-index: 1; }
+.sticker-slot { position: absolute; right: 0; bottom: 0; width: 480px; height: 700px; z-index: 2; overflow: hidden; }
+.sticker-slot img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(1); }
+.sticker-initials { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 80px; }
+.bio-initials { width: 110px; height: 130px; background: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 48px; font-weight: 900; color: var(--text); }
+.bio-init-name { font-size: 18px; color: var(--text); margin-top: 8px; text-align: center; }
+.tag, .slide-tag { font-size: 20px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; position: relative; z-index: 3; }
+.cover-date { font-size: 16px; color: var(--muted); margin-bottom: 16px; z-index: 3; position: relative; }
+.cover-hl { font-size: 88px; font-weight: 900; line-height: 0.92; text-transform: uppercase; z-index: 3; position: relative; margin-bottom: 20px; }
+.cover-hl em { font-style: normal; color: var(--accent); }
+.cover-claim { font-size: 32px; font-weight: 600; font-style: italic; color: #ddd; z-index: 3; position: relative; margin-bottom: 12px; line-height: 1.3; }
+.cover-en { font-size: 18px; color: var(--muted); z-index: 3; position: relative; margin-bottom: 24px; }
+.swipe { font-size: 22px; font-weight: 700; letter-spacing: 2px; color: var(--accent); z-index: 3; position: relative; }
+.footer-handle { font-size: 18px; color: var(--muted); margin-top: 16px; z-index: 3; position: relative; }
+
+/* Body slides */
+.slide-en { font-size: 18px; color: var(--muted); margin-bottom: 28px; }
+.slide-body { font-size: 36px; font-weight: 500; line-height: 1.45; color: var(--text); }
+
+/* Mode branch */
+.mode-content { display: flex; flex-direction: column; gap: 20px; }
+.fact-row { display: flex; flex-direction: column; gap: 4px; border-left: 4px solid var(--accent); padding-left: 20px; }
+.fact-label { font-size: 16px; font-weight: 700; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+.fact-val { font-size: 38px; font-weight: 800; }
+.source-line { font-size: 18px; color: var(--muted); margin-top: 8px; }
+.compare-row { display: flex; align-items: center; gap: 24px; padding: 20px; border-radius: 4px; }
+.compare-row.viral { background: rgba(255,59,48,.15); border: 1px solid var(--viral-red); }
+.compare-row.real { background: rgba(52,199,89,.15); border: 1px solid var(--real-green); }
+.compare-label { font-size: 18px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; min-width: 60px; }
+.compare-row.viral .compare-label { color: var(--viral-red); }
+.compare-row.real .compare-label { color: var(--real-green); }
+.compare-val { font-size: 34px; font-weight: 700; }
+.compare-context { font-size: 28px; color: #bbb; line-height: 1.4; margin-top: 12px; }
+
+/* Fontes */
+.fontes-list { display: flex; flex-direction: column; gap: 20px; }
+.fonte-row { font-size: 30px; font-weight: 500; border-left: 4px solid var(--accent); padding-left: 20px; }
+
+/* Conclusão */
+.conclusao-text { font-size: 44px; font-weight: 800; line-height: 1.25; color: var(--text); }
+
+/* Sources */
+.sources-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
+.src-row { font-size: 22px; display: flex; gap: 16px; align-items: flex-start; }
+.src-num { font-weight: 900; color: var(--accent); min-width: 32px; }
+.cta { font-size: 28px; font-weight: 700; color: var(--accent); letter-spacing: 1px; }
+</style>
+"""
+
+    html = f"""<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Verdade Pela Metade — {esc(slug)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,700;0,900;1,700&display=swap" rel="stylesheet">
+{css}
+</head><body>
+{slides_html}
+</body></html>"""
+
+    out = Path(work_dir) / "cover.html"
+    out.write_text(html, encoding="utf-8")
+    return str(out)
+
+
 def build_html(content, niche, topic_slug, work_dir, handle="@HANDLE_PLACEHOLDER", media_paths=None):
     if niche == "opc":
         template_key = content.get("_template_key", "tip")
@@ -2300,6 +2643,8 @@ def build_html(content, niche, topic_slug, work_dir, handle="@HANDLE_PLACEHOLDER
             return _build_news_shared_template_html(
                 content, topic_slug, work_dir, template_key, handle=handle, media_paths=media_paths, niche=niche
             )
+        if template_key == "verdade-pela-metade":
+            return _build_verdade_html(content, topic_slug, work_dir, handle=handle, media_paths=media_paths)
         return _build_brazil_html(content, topic_slug, work_dir, handle=handle, media_paths=media_paths)
     return None
 
@@ -3328,6 +3673,7 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
         "verificamos_clip": "Verificamos",
         "arquivo-aberto": "Arquivo Aberto",
         "a-conta": "A Conta que Ninguém Pagou",
+        "verdade-pela-metade": "Verdade Pela Metade",
     }
     cover_series_tag = _series_tag_map.get(_tkey, "Quem decidiu isso?")
     # cover_claim: the hook claim shown on slide 1 — the opinion/statement being fact-checked

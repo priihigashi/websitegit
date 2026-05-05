@@ -1004,6 +1004,8 @@ def process_one_topic(topic_entry, run_date, drive):
         post_id = f"usa-{_tmpl}-{run_date}-{slug[:20]}"
     elif series_override == "VERIFICAMOS":
         post_id = f"verificamos-{run_date}-{slug[:20]}"
+    elif series_override == "VERDADE PELA METADE":
+        post_id = f"verdade-{run_date}-{slug[:20]}"
     else:
         _tmpl = (topic_entry.get("template_key") or "native").lower()
         post_id = f"brazil-{_tmpl}-{run_date}-{slug[:20]}"
@@ -1059,10 +1061,13 @@ def process_one_topic(topic_entry, run_date, drive):
         return None
     # Verificamos: Route A = clip overlay (verificamos_clip), Route B = debunk carousel (verificamos)
     # Dados ou Agenda: always uses the dados-ou-agenda template (9-slide bias check)
+    # Verdade Pela Metade: FORMAT-024 weekly debunk (Tuesdays)
     if series_override == "VERIFICAMOS":
         template_key = "verificamos_clip" if fake_news_route == "A" else "verificamos"
     elif series_override == "DADOS OU AGENDA":
         template_key = "dados-ou-agenda"
+    elif series_override == "VERDADE PELA METADE":
+        template_key = "verdade-pela-metade"
     elif niche == "opc":
         template_key = _resolve_opc_template(topic_entry, topic, run_date)
     elif niche in ("brazil", "usa"):
@@ -1378,7 +1383,7 @@ def process_one_topic(topic_entry, run_date, drive):
 
     # Flow tracking: Content Queue → Built + Drive path
     # Verificamos + Dados ou Agenda get "Pending Approval" — approval email gate prevents auto-schedule
-    queue_status = "Pending Approval" if series_override in ("VERIFICAMOS", "DADOS OU AGENDA") else "Built"
+    queue_status = "Pending Approval" if series_override in ("VERIFICAMOS", "DADOS OU AGENDA", "VERDADE PELA METADE") else "Built"
     if queue_row:
         write_queue_status(queue_row, status=queue_status, drive_folder_path=folder_link)
 
@@ -1389,6 +1394,7 @@ def process_one_topic(topic_entry, run_date, drive):
         "VERIFICAMOS": "Verificamos",
         "DADOS OU AGENDA": "Dados ou Agenda?",
         "FACT-CHECKED": "Fact-Checked",
+        "VERDADE PELA METADE": "Verdade Pela Metade",
     }
     series = _series_display_map.get(series_override, series_override) or (
         "Tip of the Week" if niche == "opc" else ("The Chain" if niche == "usa" else "Quem Decidiu Isso?")
@@ -1401,6 +1407,8 @@ def process_one_topic(topic_entry, run_date, drive):
         _post_type = "General Tip"  # all auto-built OPC posts are tips; Before & After / Project Showcase set manually
     elif series_override == "VERIFICAMOS" or "verificamos" in _series_lower:
         _post_type = "Fake News"
+    elif series_override == "VERDADE PELA METADE" or "verdade pela metade" in _series_lower:
+        _post_type = "Debunk"
     elif series_override == "DADOS OU AGENDA" or "dados" in _series_lower or "agenda" in _series_lower:
         _post_type = "Bias Check"
     elif "quem" in _series_lower or "decidiu" in _series_lower:
@@ -1524,7 +1532,7 @@ def process_one_topic(topic_entry, run_date, drive):
         "niche": niche,
         "series_override": series_override,
         "fake_news_route": fake_news_route,
-        "requires_approval": series_override in ("VERIFICAMOS", "DADOS OU AGENDA"),
+        "requires_approval": series_override in ("VERIFICAMOS", "DADOS OU AGENDA", "VERDADE PELA METADE"),
         "queue_row_idx": queue_row,
         "version": version,
         "version_folder_id": version_folder_id,

@@ -148,6 +148,13 @@ def insert_queue_row(topic_entry, inspo_status):
     put("date moved to queue", today)
     put("brief / angle", topic_entry.get("brief", ""))
     put("format", series)
+    # Propagate series_override and fake_news_route so pipeline routes correctly
+    _so = topic_entry.get("series_override", "")
+    if _so:
+        put("series_override", _so.upper())
+    _fnr = topic_entry.get("fake_news_route", "")
+    if _fnr:
+        put("fake_news_route", _fnr)
 
     # Append via Sheets API
     enc = urllib.parse.quote(f"'{QUEUE_TAB}'!A:A", safe="!:'")
@@ -300,6 +307,10 @@ def pick_topics(count_opc=2, count_brazil=1, count_usa=1):
         _cn2 = header_map.get("clips needed")
         clips_needed_idx = _cn1 if _cn1 is not None else _cn2
         clips_needed_val = row[clips_needed_idx].strip() if clips_needed_idx is not None and clips_needed_idx < len(row) else ""
+        def _rv(col_name):
+            idx2 = header_map.get(col_name.lower())
+            return row[idx2].strip() if idx2 is not None and idx2 < len(row) else ""
+
         entry = {
             "row_idx": idx,
             "score": score,
@@ -309,6 +320,8 @@ def pick_topics(count_opc=2, count_brazil=1, count_usa=1):
             "inspo_status": inspo_status,
             "url": row[header_map.get("url", 0)] if header_map.get("url") is not None and header_map["url"] < len(row) else "",
             "clips_needed": clips_needed_val,
+            "series_override": _rv("series_override"),
+            "fake_news_route": _rv("fake_news_route"),
         }
         if niche == "opc":
             opc_candidates.append(entry)
