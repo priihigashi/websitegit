@@ -23,10 +23,10 @@ REQUIRED ENV VARS (GitHub Secrets):
   GOOGLE_SA_KEY
   APIFY_API_KEY   ← ADD THIS: https://console.apify.com/account/integrations
 
-APEFY ACTORS USED:
-  Instagram: apify/instagram-reel-scraper
-  TikTok:    clockworks/free-tiktok-scraper
-  YouTube:   streamers/youtube-scraper
+APIFY ACTORS USED:
+  Instagram: apify~instagram-reel-scraper
+  TikTok:    clockworks~free-tiktok-scraper
+  YouTube:   streamers~youtube-scraper
 """
 
 import os
@@ -52,7 +52,7 @@ except ImportError:
 
 OPENAI_API_KEY    = os.getenv("OPENAI_API_KEY", "")
 CLAUDE_KEY_4_CONTENT = os.getenv("CLAUDE_KEY_4_CONTENT", "")
-APEFY_API_KEY     = os.getenv("APIFY_API_KEY", "")
+APIFY_API_KEY     = os.getenv("APIFY_API_KEY", "")
 
 IDEAS_INBOX_ID = os.getenv("IDEAS_INBOX_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
 
@@ -61,9 +61,9 @@ TRANSCRIPTS_DIR.mkdir(exist_ok=True)
 
 # Apify actor IDs — update if Apify changes these
 APIFY_ACTORS = {
-    "instagram": "apify/instagram-reel-scraper",
-    "tiktok":    "clockworks/free-tiktok-scraper",
-    "youtube":   "streamers/youtube-scraper",
+    "instagram": "apify~instagram-reel-scraper",
+    "tiktok":    "clockworks~free-tiktok-scraper",
+    "youtube":   "streamers~youtube-scraper",
 }
 
 APIFY_BASE = "https://api.apify.com/v2"
