@@ -1185,6 +1185,25 @@ def process_one_topic(topic_entry, run_date, drive):
         _send_alert(f"Motion folder empty for '{topic[:40]}' — skipping preview. Check Playwright + record_motion_slides logs.")
         return None
 
+    # Build carousel reel: stitch per-slide MP4s into one continuous 9:16 reel.
+    # Ken Burns fallback fires for any slide that lacks a real MP4.
+    reel_built = False
+    reel_link  = ""
+    png_count = len(list(png_dir.glob("*.png")))
+    if png_count >= 3:
+        _reel_script = Path(__file__).parent / "build_carousel_reel.sh"
+        if _reel_script.exists():
+            try:
+                _reel_proc = subprocess.run(
+                    ["bash", str(_reel_script), slug, str(motion_dir)],
+                    capture_output=True, text=True, timeout=300,
+                )
+                for _line in _reel_proc.stdout.strip().splitlines():
+                    print(f"  {_line}")
+                reel_built = (motion_dir / "carousel_reel.mp4").exists()
+            except Exception as _reel_err:
+                print(f"  [carousel_reel] build failed (non-fatal): {_reel_err}")
+
     # Media presence check (non-blocking) — alert if images/clips are missing
     media_ok, media_issues = _check_media_presence(
         str(png_dir), str(motion_dir), str(work / "resources"), post_id)
@@ -1229,6 +1248,19 @@ def process_one_topic(topic_entry, run_date, drive):
         upload_dir_contents(motion_dir, motion_sub, drive)
     # duplicate non-cover PNGs so motion/ holds the complete sequence
     upload_dir_contents(png_dir, motion_sub, drive, skip_pattern=r"_01_cover")
+    # Look up carousel_reel.mp4 Drive link (uploaded above alongside other motion files)
+    if reel_built:
+        try:
+            _reel_files = drive.files().list(
+                q=f"'{motion_sub}' in parents and name='carousel_reel.mp4' and trashed=false",
+                supportsAllDrives=True, includeItemsFromAllDrives=True,
+                fields="files(id,webViewLink)",
+            ).execute().get("files", [])
+            if _reel_files:
+                reel_link = _reel_files[0].get("webViewLink", "")
+                print(f"  Reel:    {reel_link}")
+        except Exception as _reel_link_err:
+            print(f"  [carousel_reel] Drive link lookup failed (non-fatal): {_reel_link_err}")
     # Video shortcut: point to the cover MP4 file directly so Drive plays it inline.
     # Only created when an actual MP4 exists in the motion folder.
     if sc.get("videos"):
@@ -1503,6 +1535,7 @@ def process_one_topic(topic_entry, run_date, drive):
         "motion_folder_id": motion_sub,
         "static_link": folder_link,
         "motion_link": motion_link,
+        "reel_link": reel_link,
         # cover thumbnails for first-pass preview email
         "cover_urls": cover_urls,
         # reply guide data

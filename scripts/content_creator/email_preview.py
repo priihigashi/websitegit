@@ -147,6 +147,7 @@ def _build_one_carousel_html(post: dict, slides: list[dict]) -> str:
     post_id = post.get("post_id", "")
     static_link = post.get("static_link", "")
     motion_link = post.get("motion_link", "")
+    reel_link   = post.get("reel_link", "")
     folder_id = _extract_folder_id(static_link)
     clip_failures = post.get("clip_failures") or {}
     # FIX 3: caption data
@@ -173,7 +174,7 @@ def _build_one_carousel_html(post: dict, slides: list[dict]) -> str:
           Post ID: <b>{post_id}</b><br/>
           Folder ID: <b>{folder_id}</b><br/>
           Static: <a href="{static_link}" style="color:#CBCC10;">open folder</a> ·
-          Motion: <a href="{motion_link}" style="color:#CBCC10;">open folder</a>
+          Motion: <a href="{motion_link}" style="color:#CBCC10;">open folder</a>{f' · Reel: <a href="{reel_link}" style="color:#CBCC10;">watch</a>' if reel_link else ''}
         </div>
         {''.join(blocks)}
 
