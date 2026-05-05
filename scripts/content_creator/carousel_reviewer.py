@@ -546,6 +546,73 @@ def _vision_check_image(image_bytes: bytes, filename: str, query: str) -> str:
         return "SKIP"
 
 
+def check_resource_images_local(images_dir: str, prov: dict) -> list[str]:
+    """Check local resource images for corruption and vision relevance.
+
+    Runs during the GitHub Actions build while /tmp still exists.
+    Two checks per file:
+      1. Corruption — Pillow im.load() catches truncated/empty/non-image files.
+      2. Relevance — Haiku vision check against the query from media_provenance.json.
+    """
+    if Image is None:
+        return []
+
+    issues = []
+    images_path = Path(images_dir)
+    if not images_path.exists():
+        return []
+
+    # Build filename → (query, slot_label) from provenance
+    query_map: dict = {}
+    cover = prov.get("cover", {})
+    if isinstance(cover, dict) and cover.get("path"):
+        fname = Path(cover["path"]).name
+        query_map[fname] = (cover.get("query", ""), "cover")
+    for slide_key, slide_data in prov.get("slides", {}).items():
+        if isinstance(slide_data, dict) and slide_data.get("path"):
+            fname = Path(slide_data["path"]).name
+            query_map[fname] = (slide_data.get("query", ""), f"slide_{slide_key}")
+
+    vision_checked = 0
+    for img_path in sorted(images_path.iterdir()):
+        if img_path.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+            continue
+
+        # Step 1 — corruption check
+        try:
+            raw = img_path.read_bytes()
+            with Image.open(io.BytesIO(raw)) as im:
+                im.load()  # force full decode — catches truncated / corrupt files
+        except Exception as e:
+            issues.append(
+                f"[fix_type=corrupt-image] {img_path.name}: corrupt or unreadable ({e})"
+            )
+            continue  # no point running vision on a broken file
+
+        # Step 2 — vision relevance (only when provenance query known + API key present)
+        slot_info = query_map.get(img_path.name)
+        if slot_info and ANTHROPIC_KEY:
+            query, slot_label = slot_info
+            if query:
+                verdict = _vision_check_image(raw, img_path.name, query)
+                vision_checked += 1
+                if verdict.upper().startswith("NO"):
+                    issues.append(
+                        f"[fix_type=wrong-image] {slot_label}: '{img_path.name}' does not match "
+                        f"query '{query[:60]}'. Vision: {verdict[:120]}"
+                    )
+
+    if vision_checked:
+        mismatch = sum(1 for i in issues if "[fix_type=wrong-image]" in i)
+        print(f"  Vision relevance (local): checked {vision_checked} image(s), {mismatch} mismatch(es)")
+
+    corrupt = sum(1 for i in issues if "[fix_type=corrupt-image]" in i)
+    if corrupt:
+        print(f"  Image integrity: {corrupt} corrupt file(s) detected in {images_dir}")
+
+    return issues
+
+
 def _check_image_relevance_drive(prov: dict, images_folder_id: str, drive,
                                  max_checks: int = 8) -> list[str]:
     """Download each resource image and verify visual match via Claude Vision.
@@ -721,7 +788,7 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
         "copy incoherent",  # Goal 1B — narrative coherence check
     )
     autofix_summary = None
-    has_regen = any(("[fix_type=regenerate]" in i or "[fix_type=wrong-image]" in i) for i in issues)
+    has_regen = any(("[fix_type=regenerate]" in i or "[fix_type=wrong-image]" in i or "[fix_type=corrupt-image]" in i) for i in issues)
     has_text_issues = any(any(t in i for t in _TEXT_ISSUE_TOKENS) for i in issues)
     if FIX_MODE == "analyze_and_fix" and (has_regen or has_text_issues) and not DRY_RUN:
         try:
@@ -902,12 +969,18 @@ def check_built_post(result: dict) -> dict:
 
     # 4. Provenance check — flag AI-sourced images (real-photo tiers missed)
     prov_path = Path(work_dir_env) / post_id / "resources" / "media_provenance.json"
+    _prov_data: dict = {}
     if prov_path.exists():
         try:
-            prov = json.loads(prov_path.read_text(encoding="utf-8"))
-            all_issues.extend(_check_provenance(prov))
+            _prov_data = json.loads(prov_path.read_text(encoding="utf-8"))
+            all_issues.extend(_check_provenance(_prov_data))
         except Exception as e:
             all_issues.append(f"media_provenance.json read/parse failed: {e}")
+
+    # 4.5. Resource image integrity + vision relevance (local — runs while /tmp exists)
+    images_dir_local = Path(work_dir_env) / post_id / "resources" / "images"
+    if images_dir_local.exists():
+        all_issues.extend(check_resource_images_local(str(images_dir_local), _prov_data))
 
     # 5. Caption check — caption.txt must exist before post can go to Buffer
     caption_path = Path(work_dir_env) / post_id / "caption.txt"
