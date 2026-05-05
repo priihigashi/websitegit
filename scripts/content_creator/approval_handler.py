@@ -121,12 +121,20 @@ def _clean_reply(text):
 
 def parse_approval(reply_text):
     text = reply_text.lower().strip()
+
+    # Model override keywords — detected before action parsing
+    model = "claude-sonnet-4-6"  # default
+    if "use haiku" in text or "with haiku" in text:
+        model = "claude-haiku-4-5-20251001"
+    elif "use opus" in text or "with opus" in text:
+        model = "claude-opus-4-6"
+
     if text.startswith("not good"):
         fb = reply_text[len("not good"):].strip(" -:\n\t")
-        return {"action": "change", "feedback": fb or reply_text, "keyword": "NOT GOOD"}
+        return {"action": "change", "feedback": fb or reply_text, "keyword": "NOT GOOD", "model": model}
     if text.startswith("reject"):
         fb = reply_text[len("reject"):].strip(" -:\n\t")
-        return {"action": "change", "feedback": fb or reply_text, "keyword": "REJECT"}
+        return {"action": "change", "feedback": fb or reply_text, "keyword": "REJECT", "model": model}
 
     if text == "skip":
         return {"action": "skip"}
@@ -141,7 +149,7 @@ def parse_approval(reply_text):
                 return {"action": "approve", "variant": v}
         return {"action": "approve", "variant": "black"}  # no color = default to black
 
-    return {"action": "change", "feedback": reply_text, "keyword": "FEEDBACK"}
+    return {"action": "change", "feedback": reply_text, "keyword": "FEEDBACK", "model": model}
 
 
 def _extract_target_from_subject(subject: str) -> dict:
@@ -432,7 +440,7 @@ def update_catalog(post_id, status, variant=None):
             return
 
 
-def re_render_post(post, feedback):
+def re_render_post(post, feedback, model="claude-sonnet-4-6"):
     """Re-render a post with feedback. Creates v{n+1} folder in same parent as current static folder."""
     import sys, shutil
     from pathlib import Path
@@ -502,7 +510,7 @@ def re_render_post(post, feedback):
     except Exception as _te:
         print(f"  In Production pre-render status update skipped: {_te}")
 
-    content = generate_carousel_content(topic, niche, brief=f"Revision feedback:\n{feedback}")
+    content = generate_carousel_content(topic, niche, brief=f"Revision feedback:\n{feedback}", model=model)
     if not content:
         print(f"  re_render: content generation failed")
         return False
@@ -912,7 +920,7 @@ def process_replies():
             print(f"  Change requested: {feedback[:80]}")
             for post in scoped_posts:
                 try:
-                    if re_render_post(post, feedback):
+                    if re_render_post(post, feedback, model=result.get("model", "claude-sonnet-4-6")):
                         print(f"  Re-render triggered: {post['post_id']}")
                     else:
                         print(f"  Re-render failed: {post['post_id']}")

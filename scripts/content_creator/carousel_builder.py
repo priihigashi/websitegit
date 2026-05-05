@@ -77,17 +77,17 @@ def _vision_accept(local_path, query, label):
         return True
 
 
-def _claude_with_fallback(prompt, *, max_tokens, timeout=60, context=""):
+def _claude_with_fallback(prompt, *, max_tokens, timeout=60, context="", model="claude-sonnet-4-6"):
     """Try the Claude→OpenAI→Gemini cascade; if the shared module is unavailable,
     fall back to the raw HTTP call this script originally used."""
-    if _llm_text_cascade:
+    if _llm_text_cascade and model == "claude-sonnet-4-6":
         try:
-            return _llm_text_cascade(prompt, model_tier="haiku",
+            return _llm_text_cascade(prompt, model_tier="sonnet",
                                      max_tokens=max_tokens, context=context)
         except Exception as e:
             print(f"  [carousel_builder] cascade failed ({e}) — trying raw Claude HTTP")
     payload = json.dumps({
-        "model": "claude-sonnet-4-6",
+        "model": model,
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
@@ -318,12 +318,12 @@ def _web_research(topic, lang="en"):
     return "\n".join(summaries[:5]) if summaries else ""
 
 
-def generate_carousel_content(topic, niche, template_key=None, brief=""):
+def generate_carousel_content(topic, niche, template_key=None, brief="", model="claude-sonnet-4-6"):
     # Special templates checked BEFORE the generic niche short-circuit
     if template_key == "dados-ou-agenda":
         return generate_dados_content(topic, brief)
     if niche in ("brazil", "usa"):
-        return generate_brazil_content(topic, brief)
+        return generate_brazil_content(topic, brief, model=model)
     if not template_key:
         template_key = OPC_TEMPLATE if niche == "opc" else BRAZIL_TEMPLATE
 
@@ -457,7 +457,7 @@ Rules:
         try:
             text = _claude_with_fallback(
                 _prompt, max_tokens=2500, timeout=30,
-                context=f"carousel_builder.opc(attempt {attempt+1})",
+                context=f"carousel_builder.opc(attempt {attempt+1})", model=model,
             )
         except Exception as e:
             print(f"  LLM cascade failed (OPC, attempt {attempt+1}): {e}")
@@ -713,7 +713,7 @@ IMPORTANT:
     return None
 
 
-def generate_brazil_content(topic, brief=""):
+def generate_brazil_content(topic, brief="", model="claude-sonnet-4-6"):
     """Generate structured Brazil news carousel content via Claude Haiku."""
     brief_section = f"\n\nBRIEF / RESEARCH PROVIDED (use this — do not invent facts):\n{brief}" if brief else ""
     prompt = f"""You are writing a Brazil news carousel for Instagram.
@@ -923,7 +923,7 @@ entry, 2-column grid, face crop first, name second, role tag third."""
         try:
             text = _claude_with_fallback(
                 prompt, max_tokens=4000, timeout=60,
-                context=f"carousel_builder.brazil(attempt {attempt+1})",
+                context=f"carousel_builder.brazil(attempt {attempt+1})", model=model,
             )
         except Exception as e:
             print(f"  LLM cascade failed (Brazil, attempt {attempt+1}): {e}")
