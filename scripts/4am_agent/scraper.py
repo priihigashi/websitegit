@@ -183,10 +183,50 @@ def scrape_debunk_source(username, niche):
         # GAP 4: classify caption as mode_a or mode_b via Haiku
         mode = _classify_debunk_mode(normalised["caption"])
         normalised["fake_news_route"] = mode
+        # GAP 5: mode_a only — Sonnet attribution research
+        if mode == "mode_a":
+            normalised["research_brief"] = _research_attribution(normalised["caption"])
         return normalised
 
     print(f"[debunk] All candidates already in Inspiration Library for {username}")
     return None
+
+
+def _research_attribution(caption):
+    """Sonnet call: find who is actually responsible for the claim in the caption.
+    Returns a JSON string with keys: responsible_party, decision_name, year, source_url."""
+    import json as _json, urllib.request as _req
+    api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("CLAUDE_KEY_4_CONTENT", "")
+    if not api_key:
+        print("[debunk] No ANTHROPIC_API_KEY — skipping attribution research")
+        return ""
+    prompt = (
+        f"Given this claim: {caption[:300]}\n\n"
+        "Who is actually responsible? Find the legislation, vote record, or government decision. "
+        "Return JSON with keys: responsible_party, decision_name, year, source_url."
+    )
+    try:
+        body = _json.dumps({
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 400,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        request = _req.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=body,
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+        )
+        resp = _json.loads(_req.urlopen(request, timeout=60).read())
+        result = resp["content"][0]["text"].strip()
+        print(f"[debunk] Sonnet attribution research complete ({len(result)} chars)")
+        return result
+    except Exception as e:
+        print(f"[debunk] Sonnet research failed: {e}")
+        return ""
 
 
 def _classify_debunk_mode(caption):
