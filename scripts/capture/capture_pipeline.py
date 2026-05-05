@@ -72,6 +72,53 @@ except Exception as _routing_err:
 OPENAI_API_KEY     = os.getenv("OPENAI_API_KEY", "")
 CLAUDE_KEY_4_CONTENT  = os.getenv("CLAUDE_KEY_4_CONTENT", "")
 GEMINI_API_KEY     = os.getenv("GEMINI_API_KEY", "")  # fallback transcription tier
+
+def _llm_text(prompt: str, max_tokens: int = 3000, model: str = "claude-sonnet-4-6") -> str:
+    """Call Claude; fall back to OpenAI gpt-4o on credit/auth error. Returns '' on total failure.
+
+    Use this instead of a bare client.messages.create() anywhere a credit error would be fatal.
+    Non-credit Claude errors (malformed request, timeout) are still raised so callers see them.
+    SH-033: wires OpenAI fallback into every analysis function, not just generate_content_brief.
+    """
+    if CLAUDE_KEY_4_CONTENT:
+        try:
+            import anthropic as _ant
+            _resp = _ant.Anthropic(api_key=CLAUDE_KEY_4_CONTENT).messages.create(
+                model=model, max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return _resp.content[0].text
+        except Exception as _ce:
+            _msg = str(_ce)
+            _is_credit_or_auth = (
+                "credit balance is too low" in _msg
+                or "insufficient_quota" in _msg
+                or "401" in _msg
+                or "AuthenticationError" in type(_ce).__name__
+                or "BadRequestError" in type(_ce).__name__
+            )
+            if _is_credit_or_auth:
+                print(f"  _llm_text: Claude credit/auth error → OpenAI fallback ({type(_ce).__name__})")
+            else:
+                raise  # non-credit Claude errors bubble up as before
+    if OPENAI_API_KEY:
+        try:
+            import json as _j, urllib.request as _ur
+            _oai_model = "gpt-4o" if "sonnet" in model else "gpt-4o-mini"
+            _p = _j.dumps({
+                "model": _oai_model, "max_tokens": max_tokens,
+                "messages": [{"role": "user", "content": prompt}],
+            }).encode()
+            _req = _ur.Request(
+                "https://api.openai.com/v1/chat/completions", data=_p,
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+            )
+            with _ur.urlopen(_req, timeout=120) as _r:
+                return _j.loads(_r.read())["choices"][0]["message"]["content"]
+        except Exception as _oe:
+            print(f"  _llm_text: OpenAI also failed ({_oe})")
+    return ""
+
 # FYI: Apify API is used to fetch reel metadata (creator, caption, stats).
 # Key stored in GitHub Secrets as APIFY_API_KEY.
 # Get yours at: https://console.apify.com/account/integrations
@@ -1890,11 +1937,8 @@ QR CODE SOURCES:
   3. [Source name] - [URL]
 
 BOOK READY: YES / NO / NEEDS MORE RESEARCH"""
-    msg = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=4000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return msg.content[0].text
+    text = _llm_text(prompt, max_tokens=4000)
+    return text or f"[PENDING — LLM credits exhausted]\n\nTRANSCRIPT:\n{transcript[:2000]}"
 
 
 def analyze_news(transcript: str, url: str, story_id: str, notes: str, creator_name: str = "") -> str:
@@ -1964,11 +2008,8 @@ STUDY NOTES (3 specific ways to do it better):
   3. [Improvement]
 
 CONTENT READY: YES / NO / NEEDS REFINEMENT"""
-    msg = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=3000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return msg.content[0].text
+    text = _llm_text(prompt, max_tokens=3000)
+    return text or f"[PENDING — LLM credits exhausted]\n\nTRANSCRIPT:\n{transcript[:2000]}"
 
 
 def analyze_bias(transcript: str, url: str, story_id: str, notes: str, creator_name: str = "") -> str:
@@ -2104,11 +2145,8 @@ PRODUCTION NOTES:
 
 STATUS: DRAFT — research needed before slides render"""
 
-    msg = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=4000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return msg.content[0].text
+    text = _llm_text(prompt, max_tokens=4000)
+    return text or f"[PENDING — LLM credits exhausted]\n\nTRANSCRIPT:\n{transcript[:2000]}"
 
 
 def analyze_opc(transcript: str, url: str, notes: str) -> dict:
@@ -2155,30 +2193,16 @@ Fake news / misinformation detection: Does this content contain or spread a spec
 
 Respond with JSON only:
 {{"niche": "Oak Park" or "Brazil" or "UGC" or "News", "content_type": "Talking Head/Expert" or "Project Progress/Before-After" or "Product Tips" or "Other", "classification": "READY" or "NEEDS_REVIEW" or "NOT_RELEVANT", "summary": "one sentence", "hook": "suggested hook for repost or inspiration", "notes": "why classified this way", "credibility": "HIGH" or "MEDIUM" or "LOW" or "UNVERIFIED", "series_override": "Verificamos" or "Fact-Checked" or "", "fake_news_route": "A" or "B" or "", "fake_news_confidence": "high" or "medium" or "low" or "", "additional_niches": [] or ["Brazil"] or ["News"] or ["Brazil", "News"] — list of OTHER niches this content should ALSO be captured for. Rules: (1) if user notes say "both", "bilingual", "brazil and usa", "for both" → include the other niche; (2) if topic is international (foreign elections, global leaders, geopolitics affecting multiple language audiences) → add both "Brazil" and "News"; (3) Brazil-only domestic politics → empty list; (4) USA-only domestic → empty list; (5) construction/OPC → empty list}}"""
-    text = ""
-    last_err = None
-    for attempt in range(1, 4):
-        try:
-            msg = client.messages.create(
-                model="claude-sonnet-4-6", max_tokens=500,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            text = msg.content[0].text
-            break
-        except Exception as e:
-            last_err = e
-            print(f"  WARNING analyze_opc Claude call failed (attempt {attempt}/3): {type(e).__name__}: {e}")
-            if attempt < 3:
-                time.sleep(2 * attempt)
+    text = _llm_text(prompt, max_tokens=500)
     if not text:
-        print("  WARNING analyze_opc: using local fallback classification after repeated Claude/API failures.")
+        print("  WARNING analyze_opc: using local fallback classification (Claude + OpenAI both failed).")
         return {
             "niche": "Oak Park",
             "content_type": "Other",
             "classification": "NEEDS_REVIEW",
             "summary": transcript[:150],
             "hook": "",
-            "notes": f"Claude unavailable: {type(last_err).__name__ if last_err else 'unknown'}",
+            "notes": "Claude + OpenAI both unavailable — check credits",
             "credibility": "UNVERIFIED",
             "series_override": "",
             "fake_news_route": "",
