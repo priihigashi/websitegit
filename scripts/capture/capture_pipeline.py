@@ -4386,7 +4386,7 @@ def main():
             run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
                     screenshots=_screenshot_paths, debug_info=_debug_info)
 
-    # Optional companion clip (url2) — download + transcribe + append to story artifact
+    # Optional companion clip (url2) — download + transcribe + upload to same Drive capture folder
     if getattr(args, "url2", ""):
         print(f"\n{'='*50}\nCOMPANION CLIP — {args.url2_role.upper()}\nURL: {args.url2}\n{'='*50}")
         try:
@@ -4395,7 +4395,10 @@ def main():
                 transcript2 = transcribe_audio(audio2, args.url2)
                 url2_path = TRANSCRIPTS_DIR / f"{args.story_id}_url2_transcript.txt"
                 url2_content = (
-                    f"COMPANION CLIP\nROLE: {args.url2_role}\nURL: {args.url2}\n"
+                    f"STORY: {args.story_id}\n"
+                    f"MAIN URL: {args.url}\nROLE: main_reel\n"
+                    f"{'='*40}\n"
+                    f"COMPANION URL: {args.url2}\nROLE: {args.url2_role}\n"
                     f"{'='*40}\n{transcript2}"
                 )
                 url2_path.write_text(url2_content, encoding="utf-8")
@@ -4412,6 +4415,22 @@ def main():
                     )
                 print(f"  Companion transcript saved: {url2_path}")
                 print(f"  Transcript preview: {transcript2[:200]}...")
+                # Upload to Drive so it persists alongside the main capture brief
+                _drv2 = get_drive_service()
+                if _drv2:
+                    try:
+                        from googleapiclient.http import MediaInMemoryUpload as _MIM2
+                        _capture_folder = get_capture_folder(args.project)
+                        _drv2.files().create(
+                            body={"name": f"{args.story_id}_companion_{args.url2_role}.txt",
+                                  "parents": [_capture_folder]},
+                            media_body=_MIM2(url2_content.encode("utf-8"), mimetype="text/plain"),
+                            supportsAllDrives=True,
+                            fields="id,webViewLink",
+                        ).execute()
+                        print(f"  Companion transcript uploaded to Drive (capture folder: {_capture_folder})")
+                    except Exception as _e_drv2:
+                        print(f"  [url2] Drive upload failed (non-fatal): {_e_drv2}")
         except Exception as e2:
             print(f"  [url2] FAILED: {e2} — main capture still complete, url2 skipped.")
 
