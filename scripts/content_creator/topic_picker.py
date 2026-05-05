@@ -11,7 +11,7 @@ INSPO_TAB = "📥 Inspiration Library"
 QUEUE_TAB = "📋 Content Queue"
 CATALOG_TAB = "📸 Project Content Catalog"
 MIN_SCORE = 8  # Topics below this are not ready — skip regardless of niche
-SKIP_STATUSES = ("posted", "skip", "captured", "built", "error", "not identified")
+SKIP_STATUSES = ("posted", "skip", "captured", "built", "error", "not identified", "needs research")
 
 _token_cache = {}
 

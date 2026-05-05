@@ -339,6 +339,10 @@ def save_scraped_to_inspiration_library(items):
         raw_niche = (item.get("niche") or "").strip().lower()
         niche_val = _NICHE_MAP.get(raw_niche, raw_niche.title())
 
+        # GAP 6: debunk items land as "Needs Research" — Priscila reviews brief before approving
+        is_debunk = series_override == "Verdade Pela Metade"
+        status_val = "Needs Research" if is_debunk else "Captured"
+
         put("date added", today)
         put("platform", item.get("platform", "instagram").capitalize())
         put("url", url)
@@ -346,9 +350,12 @@ def save_scraped_to_inspiration_library(items):
         put("description", item.get("caption", "")[:200])
         put("views", str(item.get("views", "")) if item.get("views") else "")
         put("niche", niche_val)
-        put("status", "Captured")
+        put("status", status_val)
         put("series_override", series_override)
+        put("fake_news_route", item.get("fake_news_route", ""))
         put("fake_news_confidence", "medium")  # scraped via verification hashtag = medium confidence
+        if is_debunk and item.get("research_brief"):
+            put("brief / angle", item["research_brief"][:500])
 
         rows_to_add.append(row)
         existing_urls.add(norm)
