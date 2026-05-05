@@ -718,6 +718,7 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
     _TEXT_ISSUE_TOKENS = (
         "hook weak", "hook miss", "overflow risk", "too long", "too short",
         "OPC hook", "Cover hook", "readability miss",
+        "copy incoherent",  # Goal 1B — narrative coherence check
     )
     autofix_summary = None
     has_regen = any(("[fix_type=regenerate]" in i or "[fix_type=wrong-image]" in i) for i in issues)
@@ -754,6 +755,114 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
         "original_id": original_id,
         "autofix_summary": autofix_summary,
     }
+
+
+# ─── Goal 1B — Text quality checks (Sonnet) ─────────────────────────────────
+
+def _sonnet_score(prompt: str) -> tuple[int, str]:
+    """Call claude-sonnet-4-6, parse a 1-3 score from the reply.
+    Returns (score, reason_text). score=0 means API error/skip."""
+    if not ANTHROPIC_KEY:
+        return 0, "no API key"
+    try:
+        payload = json.dumps({
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 80,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "x-api-key": ANTHROPIC_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+        )
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        text = resp["content"][0]["text"].strip()
+        m = re.search(r"\b([123])\b", text)
+        return (int(m.group(1)) if m else 1), text
+    except Exception as e:
+        return 0, f"error: {e}"
+
+
+def _score_hook_strength(headline: str, subhead: str, niche: str) -> tuple[int, str]:
+    """Check A: score cover hook 1-3 via Sonnet."""
+    if not headline:
+        return 0, "no headline extracted"
+    niche_label = "homeowner tips" if niche == "opc" else "news"
+    prompt = (
+        f"Evaluate this Instagram carousel hook for a {niche_label} account.\n"
+        f"Headline: {headline}\n"
+        f"Subhead: {subhead}\n\n"
+        "Score 1-3:\n"
+        "3 = has a specific number/cost/risk AND creates curiosity\n"
+        "2 = has one of those elements\n"
+        "1 = vague or generic\n\n"
+        "Reply with score (1/2/3) and one sentence why. "
+        "Example: '2 — mentions a cost but no curiosity gap.'"
+    )
+    return _sonnet_score(prompt)
+
+
+def _score_copy_coherence(headlines: list[str]) -> tuple[int, str]:
+    """Check B: score narrative arc of slide headlines 1-3 via Sonnet."""
+    if len(headlines) < 2:
+        return 0, "too few headlines to score"
+    numbered = "\n".join(f"{i+1}. {h}" for i, h in enumerate(headlines) if h)
+    if not numbered.strip():
+        return 0, "no headline text"
+    prompt = (
+        "Do these Instagram carousel slide headlines tell a complete story "
+        "or feel like AI filler?\n\n"
+        f"{numbered}\n\n"
+        "Score 1-3:\n"
+        "3 = clear narrative arc — each headline builds on the last\n"
+        "2 = mostly coherent — minor gaps or repetition\n"
+        "1 = disconnected or filler — could be in any order\n\n"
+        "Reply with score (1/2/3) and one sentence why."
+    )
+    return _sonnet_score(prompt)
+
+
+def check_text_quality(html_path: str, niche: str) -> list[str]:
+    """Goal 1B: run hook strength + copy coherence checks via Claude Sonnet.
+    Returns issue strings; tokens match _TEXT_ISSUE_TOKENS auto-fix gate."""
+    issues = []
+    if not ANTHROPIC_KEY:
+        return issues
+    try:
+        html = Path(html_path).read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return issues
+
+    # Extract cover headline + subhead (first match in document)
+    m_hl = re.search(r'class="[^"]*headline[^"]*"[^>]*>([\s\S]*?)</(?:div|p|h[1-6])', html)
+    m_sh = re.search(r'class="[^"]*subhead[^"]*"[^>]*>([\s\S]*?)</(?:div|p|span|h[1-6])', html)
+    headline = re.sub(r"<[^>]+>", "", m_hl.group(1)).strip() if m_hl else ""
+    subhead  = re.sub(r"<[^>]+>", "", m_sh.group(1)).strip() if m_sh else ""
+
+    # Extract all headlines in document order for coherence check
+    all_headlines = [
+        re.sub(r"<[^>]+>", "", h).strip()
+        for h in re.findall(r'class="[^"]*headline[^"]*"[^>]*>([\s\S]*?)</(?:div|p|h[1-6])', html)
+    ]
+    all_headlines = [h for h in all_headlines if h]
+
+    # Check A — hook strength
+    hook_score, hook_reason = _score_hook_strength(headline, subhead, niche)
+    print(f"  [1B] Hook {hook_score}/3 — {hook_reason[:80]}")
+    if 0 < hook_score < 2:
+        issues.append(f"[hook weak] Cover hook scored {hook_score}/3 — {hook_reason[:120]}")
+
+    # Check B — copy coherence
+    coh_score, coh_reason = _score_copy_coherence(all_headlines)
+    print(f"  [1B] Coherence {coh_score}/3 — {coh_reason[:80]}")
+    if 0 < coh_score < 2:
+        issues.append(f"[copy incoherent] Narrative scored {coh_score}/3 — {coh_reason[:120]}")
+
+    return issues
 
 
 def check_built_post(result: dict) -> dict:
@@ -811,6 +920,16 @@ def check_built_post(result: dict) -> dict:
             "caption.txt missing — no Instagram caption was generated; "
             "post cannot be scheduled to Buffer (check generate_caption() call in main.py)"
         )
+
+    # 6. Goal 1B — hook strength + copy coherence (Sonnet)
+    if ANTHROPIC_KEY:
+        _html_for_text = html_local if html_local.exists() else None
+        if not _html_for_text:
+            for _c in Path(work_dir_env).glob(f"**/{post_id}/cover.html"):
+                _html_for_text = _c
+                break
+        if _html_for_text and Path(_html_for_text).exists():
+            all_issues.extend(check_text_quality(str(_html_for_text), niche))
 
     passed = len(all_issues) == 0
     return {
