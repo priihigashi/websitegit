@@ -163,7 +163,7 @@ def filter_and_normalise(raw, niche, target_type, target_value):
     return passed, rejected
 
 
-INSTAGRAM_TYPES = {"ACCOUNT", "HASHTAG", "KEYWORD", "TOPIC COLLECTING", "HASHTAG — VERIFICAMOS"}
+INSTAGRAM_TYPES = {"ACCOUNT", "HASHTAG", "KEYWORD", "TOPIC COLLECTING", "HASHTAG — VERIFICAMOS", "DEBUNK SOURCE"}
 
 
 def scrape_all_targets(targets):
@@ -201,6 +201,14 @@ def scrape_all_targets(targets):
                             all_results.extend(reel_passed)
                             print(f"[scraper] REELS/{niche}/{value}: "
                                   f"{len(reel_raw)} scraped -> {len(reel_passed)} passed / {reel_rejected} rejected")
+                    elif target_type == "DEBUNK SOURCE":
+                        item = scrape_debunk_source(value, niche)
+                        if item:
+                            total_scraped += 1
+                            all_results.append(item)
+                            print(f"[scraper] DEBUNK SOURCE/{niche}/{value}: 1 candidate queued")
+                        else:
+                            print(f"[scraper] DEBUNK SOURCE/{niche}/{value}: no candidate (skipped or not Tuesday)")
                     else:
                         raw, n, tt, tv = scrape_instagram_hashtag(value, niche, target_type)
                         total_scraped += len(raw)
@@ -211,6 +219,8 @@ def scrape_all_targets(targets):
                               f"{len(raw)} scraped -> {len(passed)} passed / {rejected} rejected")
                 except Exception as e:
                     print(f"[scraper] ERROR on {target_type}/{niche}/{value}: {e}")
+
+    return all_results, total_scraped, total_rejected
 
 
 def scrape_website_articles(url, niche):
@@ -268,5 +278,3 @@ def scrape_website_articles(url, niche):
 
     print(f"[scraper] WEBSITE/{niche}/{url}: {len(articles)} articles found")
     return articles
-
-    return all_results, total_scraped, total_rejected
