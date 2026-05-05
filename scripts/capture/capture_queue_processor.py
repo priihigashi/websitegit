@@ -323,6 +323,24 @@ def main():
 
         pipeline_project = _pipeline_project(project)  # routing.py is the source of truth
 
+        # Build effective notes — always pass column C comment if present.
+        # For OPC, auto-inject context guard so Claude never invents Illinois/tourism facts
+        # even when transcript is empty and column C was left blank.
+        _OPC_GUARD = (
+            "OPC CONTEXT GUARD: Oak Park means Oak Park Construction, a Pompano Beach / "
+            "South Florida construction and remodeling company. Create only construction, "
+            "remodeling, homeowner education, material, project, permit, service, or "
+            "design-build content. If transcript/source content is empty or unavailable, "
+            "do NOT invent general Oak Park, Illinois, Chicago suburb, tourism, restaurant, "
+            "festival, CTA, Hemingway, or travel-guide facts. Return "
+            "TRANSCRIPT UNAVAILABLE / NEEDS SOURCE REVIEW instead. Frank Lloyd Wright may "
+            "be mentioned only as an architecture/design reference when directly tied to "
+            "construction/remodeling education."
+        )
+        effective_notes = comment
+        if pipeline_project == "opc":
+            effective_notes = f"{_OPC_GUARD}\n\n{comment}".strip() if comment else _OPC_GUARD
+
         # Dispatch each URL as a separate capture_pipeline.yml workflow run.
         # Each run gets a fresh GitHub Actions runner IP, avoiding Instagram rate limits.
         try:
@@ -333,12 +351,19 @@ def main():
                 if _k in _dispatch_env:
                     _dispatch_env[_k] = _dispatch_env[_k].strip()
 
-            subprocess.run([
+            _dispatch_cmd = [
                 "gh", "workflow", "run", "capture_pipeline.yml",
                 "--repo", "priihigashi/oak-park-ai-hub",
                 "--field", f"url={url}",
                 "--field", f"project={pipeline_project}",
-            ], check=True, capture_output=True, text=True, timeout=30, env=_dispatch_env)
+            ]
+            if effective_notes:
+                _dispatch_cmd += ["--field", f"notes={effective_notes}"]
+
+            subprocess.run(
+                _dispatch_cmd,
+                check=True, capture_output=True, text=True, timeout=30, env=_dispatch_env,
+            )
             moved_to = _queue_dest(project)
             _write_success(token, sheet_row, 3, moved_to, "")
             print(f"  ✓ DISPATCHED — project={pipeline_project}")
