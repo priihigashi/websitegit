@@ -1824,7 +1824,7 @@ def analyze_book(transcript: str, url: str, story_id: str, notes: str) -> str:  
         return f"[PENDING — CLAUDE_KEY_4_CONTENT required]\n\n{transcript}"
     import anthropic
     client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
-    print("  Claude (claude-opus-4-6) fact-checking...")
+    print("  Claude (claude-sonnet-4-6) fact-checking...")
     prompt = f"""Run capture_crazy_ideas skill for RECEIPTS book.
 
 Story ID: {story_id}
@@ -1891,7 +1891,7 @@ QR CODE SOURCES:
 
 BOOK READY: YES / NO / NEEDS MORE RESEARCH"""
     msg = client.messages.create(
-        model="claude-opus-4-6", max_tokens=4000,
+        model="claude-sonnet-4-6", max_tokens=4000,
         messages=[{"role": "user", "content": prompt}]
     )
     return msg.content[0].text
@@ -1902,7 +1902,7 @@ def analyze_news(transcript: str, url: str, story_id: str, notes: str, creator_n
         return f"[PENDING — CLAUDE_KEY_4_CONTENT required]\n\n{transcript}"
     import anthropic
     client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
-    print("  Claude (claude-opus-4-6) News analysis...")
+    print("  Claude (claude-sonnet-4-6) News analysis...")
     prompt = f"""Analyze this content for the News political/civic page.
 Study the format and identify how to do it better — more examples, more teaching, not just negatives.
 
@@ -1965,7 +1965,7 @@ STUDY NOTES (3 specific ways to do it better):
 
 CONTENT READY: YES / NO / NEEDS REFINEMENT"""
     msg = client.messages.create(
-        model="claude-opus-4-6", max_tokens=3000,
+        model="claude-sonnet-4-6", max_tokens=3000,
         messages=[{"role": "user", "content": prompt}]
     )
     return msg.content[0].text
@@ -1981,7 +1981,7 @@ def analyze_bias(transcript: str, url: str, story_id: str, notes: str, creator_n
         return f"[PENDING — CLAUDE_KEY_4_CONTENT required]\n\n{transcript}"
     import anthropic
     client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
-    print("  Claude (claude-opus-4-6) Bias Check analysis — FORMAT-019...")
+    print("  Claude (claude-sonnet-4-6) Bias Check analysis — FORMAT-019...")
     prompt = f"""Você é um jornalista bilíngue (PT-BR + EN) especializado em análise de mídia e verificação de influenciadores.
 Analise o conteúdo abaixo para produzir um BRIEF FORMATO-019 — "Dados ou Agenda?".
 
@@ -2105,7 +2105,7 @@ PRODUCTION NOTES:
 STATUS: DRAFT — research needed before slides render"""
 
     msg = client.messages.create(
-        model="claude-opus-4-6", max_tokens=4000,
+        model="claude-sonnet-4-6", max_tokens=4000,
         messages=[{"role": "user", "content": prompt}]
     )
     return msg.content[0].text
@@ -3156,7 +3156,7 @@ STATUS: DRAFT — text ready, art needed"""
     # using the same prompt. Same pattern as scripts/self_heal/orchestrator.py.
     try:
         msg = client.messages.create(
-            model="claude-opus-4-6", max_tokens=3000,
+            model="claude-sonnet-4-6", max_tokens=3000,
             messages=[{"role": "user", "content": prompt}]
         )
         return msg.content[0].text
