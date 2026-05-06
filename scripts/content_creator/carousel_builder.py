@@ -2476,13 +2476,15 @@ body{background:var(--ob);overflow:hidden}
 .swipe{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);right:var(--P)}
 /* CLIP FRAME — z-index:1 so it sits BEHIND .slide-content (z-index:2). Text always wins. */
 .clip-frame{position:absolute;top:120px;right:var(--P);width:340px;height:420px;
-            z-index:1;border:3px solid var(--ca);background:#000;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.7);}
+            z-index:1;border:2px solid var(--ca);background:#000;overflow:hidden;
+            border-radius:14px;
+            box-shadow:0 4px 18px rgba(0,0,0,.55),0 12px 48px rgba(0,0,0,.45),0 0 0 1px rgba(203,204,16,.18);}
 .clip-frame-mid{top:auto;bottom:200px;}
 .clip-stamp{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--ca);
             background:var(--ob);padding:6px 12px;position:absolute;top:-1px;right:-1px;
-            border:1px solid var(--ca);z-index:3;letter-spacing:.05em;}
+            border:1px solid var(--ca);z-index:3;letter-spacing:.05em;border-radius:0 14px 0 6px;}
 .clip-video{width:100%;height:100%;object-fit:cover;display:block;}
-.clip-frame-missing{border:3px dashed #ff4444;background:#1a0000;}
+.clip-frame-missing{border:2px dashed #ff4444;background:#1a0000;border-radius:14px;}
 .clip-missing-badge{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   text-align:center;color:#ff6666;font-family:'JetBrains Mono',monospace;font-size:15px;
   line-height:1.5;padding:12px;background:rgba(0,0,0,.7);}
