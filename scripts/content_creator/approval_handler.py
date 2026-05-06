@@ -363,6 +363,64 @@ def schedule_to_buffer(variant, drive_folder_id, caption="", platform="instagram
     return False
 
 
+# ── PIPELINE FAILURE LOGGING ──────────────────────────────────────────────────
+_FAILURES_SHEET_ID = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
+_FAILURES_TAB = "🚨 Pipeline Failures"
+_GHA_RUN_ID = os.environ.get("GITHUB_RUN_ID", "")
+
+
+def _log_pipeline_failure_to_sheet(stage: str, error: str):
+    """Append a row to the Pipeline Failures tab in Ideas & Inbox.
+    Non-fatal: any error here is printed but does not crash the handler."""
+    try:
+        token, _ = get_gmail_token()
+        run_url = (
+            f"https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{_GHA_RUN_ID}"
+            if _GHA_RUN_ID else ""
+        )
+        row = [
+            datetime.utcnow().isoformat() + "Z",
+            "approval_handler.py",
+            _GHA_RUN_ID,
+            stage,
+            str(error)[:500],
+            run_url,
+            "",  # RESOLVED — leave empty (checkbox)
+            "",  # NOTE
+        ]
+        enc = urllib.parse.quote(f"'{_FAILURES_TAB}'", safe="!:'")
+        append_url = (
+            f"https://sheets.googleapis.com/v4/spreadsheets/{_FAILURES_SHEET_ID}"
+            f"/values/{enc}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS"
+        )
+        payload = json.dumps({"values": [row]}).encode()
+        req = urllib.request.Request(
+            append_url, data=payload, method="POST",
+            headers={"Authorization": f"Bearer {token}",
+                     "Content-Type": "application/json"},
+        )
+        urllib.request.urlopen(req, timeout=15).read()
+        print(f"  ❌ Pipeline failure logged [{stage}]: {str(error)[:120]}")
+    except Exception as log_exc:
+        print(f"  (pipeline-failure log write failed: {log_exc})")
+
+
+def _send_failure_alert(subject: str, body: str):
+    """Trigger send_email.yml to alert priscila@oakpark-construction.com."""
+    import subprocess, shutil
+    gh = shutil.which("gh") or os.path.expanduser("~/bin/gh")
+    try:
+        subprocess.run([
+            gh, "workflow", "run", "send_email.yml",
+            "--repo", "priihigashi/oak-park-ai-hub",
+            "-f", "to=priscila@oakpark-construction.com",
+            "-f", f"subject={subject}",
+            "-f", f"body={body}",
+        ], check=False, capture_output=True, timeout=30)
+    except Exception as exc:
+        print(f"  (failure alert send error: {exc})")
+
+
 def copy_to_ready_folder(variant, source_folder_id, niche):
     token, td = get_gmail_token()
     from googleapiclient.discovery import build
@@ -871,8 +929,34 @@ def process_replies():
                     continue
 
                 if BUFFER_KEY:
-                    caption = post.get("topic", "")
-                    schedule_to_buffer(variant, static_folder_id, caption=caption)
+                    _buffer_profile_id = os.environ.get("BUFFER_PROFILE_ID", "")
+                    if not _buffer_profile_id:
+                        _msg = "BUFFER_PROFILE_ID env var not set — Buffer scheduling skipped"
+                        print(f"  ⚠️ {_msg}")
+                        _log_pipeline_failure_to_sheet("buffer_schedule", _msg)
+                        _send_failure_alert(
+                            "⚠️ Buffer scheduling skipped — BUFFER_PROFILE_ID missing",
+                            f"Post {post_id} was approved but could not be scheduled to Buffer "
+                            f"because the BUFFER_PROFILE_ID secret is not set in GitHub Actions. "
+                            f"Add it at github.com/priihigashi/oak-park-ai-hub/settings/secrets/actions.",
+                        )
+                    else:
+                        caption = post.get("topic", "")
+                        try:
+                            _buf_ok = schedule_to_buffer(variant, static_folder_id, caption=caption)
+                            if not _buf_ok:
+                                raise RuntimeError("schedule_to_buffer returned False")
+                            print(f"  Buffer scheduled OK: {post_id} ({variant})")
+                        except Exception as _buf_exc:
+                            _err_str = str(_buf_exc)
+                            _log_pipeline_failure_to_sheet("buffer_schedule", _err_str)
+                            _send_failure_alert(
+                                f"❌ Buffer scheduling failed — {post_id}",
+                                f"Post {post_id} ({variant}) was approved but Buffer scheduling failed.\n"
+                                f"Error: {_err_str}\n"
+                                f"Static folder: https://drive.google.com/drive/folders/{static_folder_id}\n"
+                                f"Run: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{_GHA_RUN_ID}",
+                            )
 
                 copy_to_ready_folder(variant, static_folder_id, niche)
                 update_catalog(post_id, "approved")
