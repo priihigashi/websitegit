@@ -1,12 +1,147 @@
 [
   {
-    "task": "SH-046 review and credit top-up",
-    "context": "Pending Anthropic credit top-up for SH-046, which is currently paused at NEEDS-REVIEW.",
+    "task": "Test approval_handler.py to Buffer flow",
+    "context": "Must happen before leaving 2:30 AM automation running unattended.",
     "auto_actionable": true
   },
   {
-    "task": "Merge SH-007 branch",
-    "context": "SH-007 branch left unmerged due to an AI patch being wrong; needs correction before merging.",
+    "task": "Run content_creator.yml manually (Phase 3)",
+    "context": "Trigger via gh workflow run content_creator.yml and observe email preview.",
+    "auto_actionable": true
+  },
+  {
+    "task": "git push to origin",
+    "context": "This is necessary to ensure that the changes made during the session are saved to the remote repository.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Pipeline Tracker update for new features",
+    "context": "Updating the Pipeline Tracker is important to reflect the latest changes and features implemented during this session.",
+    "auto_actionable": true
+  },
+  {
+    "task": "SKILL.md session notes update",
+    "context": "Updating the session notes is crucial for documenting the changes and progress made during the session for future reference.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Add DEBUNK SOURCE row to Scraping Targets tab",
+    "context": "Activates next Tuesday.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Wire opc_progress/illustrated/cutout in carousel_builder.py",
+    "context": "Section 3 Full Circle Plan.",
+    "auto_actionable": false
+  },
+  {
+    "task": "Test approval_handler.py to Buffer flow before enabling daily automation",
+    "context": "Preparation for daily automation (ARCH FLAG 3).",
+    "auto_actionable": false
+  },
+  {
+    "task": "Capture Queue fix pending",
+    "context": "Root cause of today's failures identified as Instagram GraphQL 403 rate limiting; needs addressing to ensure smooth pipeline operation.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Pipeline automation (8 gaps, start with 1-3, all in scraper.py)",
+    "context": "Addressing automation gaps is critical for streamlining the debunking process.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Add DEBUNK SOURCE to INSTAGRAM_TYPES whitelist in scraper.py",
+    "context": "This is a blocker that prevents the new debunk source from being recognized.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Implement scrape_debunk_source() function in scraper.py",
+    "context": "Necessary for fetching and sorting content from the target account.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Set series_override and fake_news_route in scraper.py _normalise()",
+    "context": "This normalization is essential for categorizing the debunked content correctly.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Build Mode A/B classifier in scraper.py",
+    "context": "Classifying content modes is important for accurate debunking strategies.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Conduct attribution chain research via Sonnet call",
+    "context": "Attribution is crucial for accountability in debunking efforts.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Set up Confidence gate in the content management system",
+    "context": "Ensures that only thoroughly researched content moves to the queue.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Build FORMAT-024 HTML template for 7-slide design",
+    "context": "The template is necessary for presenting the debunked content effectively.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Build CarouselReel Remotion composition",
+    "context": "Plan written, not built; essential for completing the project.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Add transcript + research for Brazil debunk reel",
+    "context": "Needed before building the reel to ensure accuracy and quality.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Run pipeline for Joe Rogan reel (Capture Queue row 153) when ready",
+    "context": "Necessary to trigger processing and finalize the content.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Review two USA reels once pipeline runs complete",
+    "context": "Important to evaluate and ensure they meet quality standards.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Fix carousel builder to actually read capture Drive doc content",
+    "context": "The carousel builder is currently ignoring the research capture spent credits generating, as it does not fetch the actual text from the Google Doc.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Decide whether to upgrade carousel_reviewer.py from Haiku to Sonnet",
+    "context": "The decision on upgrading the model is pending and could affect the performance and costs of the carousel reviewer.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Git conflict resolution for carousel_builder.py",
+    "context": "Must diff carefully and merge before any carousel_builder.py edits.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Wire Credit Blocks into capture_pipeline.yml",
+    "context": "tracker_writer.py credit mode is written but NOT yet called from any workflow.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Implement OpenAI fallback in capture_pipeline.py",
+    "context": "Prevents recurrence of credit depletion silently killing Brazil/USA captures.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Test pipeline_tracker_writer.py sync",
+    "context": "Verify Master Checklist rows update correctly.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Build .before-slot/.after-slot split panel for opc_progress",
+    "context": "Next in the template walkthrough.",
+    "auto_actionable": true
+  },
+  {
+    "task": "Approval handler testing",
+    "context": "Pending further testing and implementation.",
     "auto_actionable": true
   }
 ]
