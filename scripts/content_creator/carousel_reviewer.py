@@ -1084,6 +1084,28 @@ KNOWN_OPC_TEMPLATE_IDS = {
     "opc_item_spotlight", "opc_four_card_grid", "opc_progress_media",
 }
 
+# Phase 6 — these standalones now have production Python builders. If the
+# planner picks any of these AND the renderer falls back to a tip equivalent,
+# something is wrong — the reviewer flags it. Single source of truth for the
+# "is this template wired?" question.
+OPC_PORTED_STANDALONE_IDS = {
+    "opc_material_profile",
+    "opc_four_card_grid",
+    "opc_item_spotlight",
+    "opc_statement",
+    "opc_base",
+    "opc_progress_media",
+    "opc_duotone",
+}
+
+# Image-need expectations per template. Used to flag missing images for
+# templates that *require* a photo (opc_progress_media, opc_duotone, opc_base).
+OPC_TEMPLATES_REQUIRING_IMAGE = {
+    "opc_progress_media",  # Real jobsite proof — required
+    "opc_base",            # Hero bg photo — required for cover treatment
+    "opc_duotone",         # Hero photo — duotone filter target
+}
+
 EXPECTED_ROLE_FOR_SLIDE = {
     1: "cover",
     2: "definition",
@@ -1149,6 +1171,38 @@ def check_slide_plan(content: dict) -> list[str]:
             f"[slide-plan] slide 5: must be opc_tip_sources today "
             f"(got '{seen_template_ids[-1]}'). Only sources renderer wired."
         )
+
+    # Phase 6 — flag cases where the renderer fell back to a tip equivalent for
+    # a template that DOES have a production Python builder. This means the
+    # standalone failed to render for some reason and the user is seeing a tip
+    # instead of the approved design — reviewer must surface this loudly.
+    resolved = plan.get("_resolved_slides") or []
+    fallbacks = plan.get("_fallbacks_used") or []
+    for slide_num, requested, used in fallbacks:
+        if requested in OPC_PORTED_STANDALONE_IDS and used != requested:
+            issues.append(
+                f"[slide-plan] slide {slide_num}: planner picked '{requested}' "
+                f"but renderer fell back to '{used}'. Standalone IS ported "
+                f"(see OPC_PORTED_STANDALONE_IDS) — this is a bug, not a "
+                f"missing-builder case."
+            )
+
+    # Phase 6 — flag image-required templates that have no image.
+    if resolved:
+        media_paths = (content or {}).get("_media_paths") or {}
+        slide_imgs  = (media_paths.get("slides") or {}) if isinstance(media_paths, dict) else {}
+        cover_img   = (media_paths.get("cover") if isinstance(media_paths, dict) else "") or ""
+        for rs in resolved:
+            eid = rs.get("effective_id", "")
+            if eid in OPC_TEMPLATES_REQUIRING_IMAGE:
+                slide_n = rs.get("slide")
+                has_img = bool(slide_imgs.get(slide_n) or slide_imgs.get(str(slide_n)) or cover_img)
+                if not has_img:
+                    issues.append(
+                        f"[slide-plan] slide {slide_n}: template '{eid}' requires "
+                        f"an image but none provided in media_paths "
+                        f"(slides[{slide_n}] or cover)."
+                    )
 
     return issues
 

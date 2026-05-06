@@ -3078,6 +3078,396 @@ def render_opc_tip_sources(content, v_class, *, sources_html, src_accent_style, 
     )
 
 
+# =============================================================================
+# Phase 6 — Standalone OPC slide-component renderers (added 2026-05-06)
+# =============================================================================
+# These port the approved standalone HTML designs in docs/templates/ into
+# Python builders. Each takes (content_or_slide_dict, v_class, **kwargs) and
+# returns a single <div class="slide ..."> block. Per-template CSS lives in
+# opc_standalones.css and is auto-loaded by build_opc_from_slide_plan.
+#
+# Field-resolution rule: each builder accepts EITHER a top-level content dict
+# (legacy) OR a slide-specific subdict at content[<template_id>]. This keeps
+# the Haiku content prompt simple — it can emit one nested object per planned
+# slide instead of flattening everything.
+
+def _opc_field(content, slide_id, key, default=""):
+    """Look up a field for a standalone slide. Tries:
+      content['<slide_id>'][<key>]  → preferred (planner-aware content shape)
+      content[<key>]                → legacy / shared with tip
+      <default>                     → safe default so missing fields never crash
+    Falsy "" is treated as missing so callers can still get the default.
+    """
+    sub = content.get(slide_id) or {}
+    if isinstance(sub, dict):
+        v = sub.get(key)
+        if v not in (None, ""):
+            return v
+    v = content.get(key)
+    if v not in (None, ""):
+        return v
+    return default
+
+
+def _opc_license_code(content):
+    """OPC license stays static unless content overrides it. Single source of truth."""
+    return content.get("license") or "CBC1263425"
+
+
+def _opc_swipe_label(content, default="Swipe →"):
+    """Allow the cta field to override the swipe arrow label on standalone slides."""
+    return content.get("cta") or default
+
+
+def _opc_image_or_placeholder(img_path, placeholder_html):
+    """Return an <img src="..."> if a real image is available, else the placeholder block."""
+    if img_path:
+        return f'<img src="{img_path}" alt="">'
+    return placeholder_html
+
+
+def render_opc_material_profile(content, v_class, *, slide_num, media_paths=None):
+    """opc_material_profile — 6-field material/product/service profile card.
+    Text-only by design (image_need='none')."""
+    SID = "opc_material_profile"
+    label    = _opc_field(content, SID, "label",            "MATERIAL PROFILE · OPC")
+    hl_main  = _opc_field(content, SID, "headline_main",    _opc_field(content, SID, "headline", "What is")) or "What is"
+    hl_em    = _opc_field(content, SID, "headline_italic",  "this material?")
+    f_best   = _opc_field(content, SID, "best_for",         "—")
+    f_not    = _opc_field(content, SID, "not_ideal",        "—")
+    f_dur    = _opc_field(content, SID, "durability",       "—")
+    f_inst   = _opc_field(content, SID, "install_notes",    "—")
+    f_cost   = _opc_field(content, SID, "cost_range",       "—")
+    f_style  = _opc_field(content, SID, "style_fit",        "—")
+    factors  = _opc_field(content, SID, "decision_factors", []) or []
+    if not isinstance(factors, list):
+        factors = [str(factors)]
+    pills_html = "".join(
+        f'<div class="profile-pill">{p}</div>' for p in factors[:8]
+    ) or '<div class="profile-pill">DECIDE</div>'
+
+    return (
+        f'<div class="slide opc-mp {v_class}">\n'
+        f'  <div class="profile-label">{label}</div>\n'
+        f'  <div class="profile-headline">{hl_main}<br><em class="profile-name">{hl_em}</em></div>\n'
+        f'  <div class="profile-rule"><div class="profile-rule-line"></div><div class="profile-rule-gem"></div><div class="profile-rule-line"></div></div>\n'
+        f'  <div class="profile-grid">\n'
+        f'    <div class="profile-field"><div class="profile-field-label">BEST FOR</div><div class="profile-field-value">{f_best}</div></div>\n'
+        f'    <div class="profile-field"><div class="profile-field-label">NOT IDEAL FOR</div><div class="profile-field-value">{f_not}</div></div>\n'
+        f'    <div class="profile-field"><div class="profile-field-label">DURABILITY</div><div class="profile-field-value">{f_dur}</div></div>\n'
+        f'    <div class="profile-field"><div class="profile-field-label">INSTALL NOTES</div><div class="profile-field-value">{f_inst}</div></div>\n'
+        f'    <div class="profile-field"><div class="profile-field-label">COST RANGE</div><div class="profile-field-value">{f_cost}</div></div>\n'
+        f'    <div class="profile-field"><div class="profile-field-label">STYLE FIT</div><div class="profile-field-value">{f_style}</div></div>\n'
+        f'  </div>\n'
+        f'  <div class="profile-tags-wrap">\n'
+        f'    <div class="profile-tags-label">&#9670; DECISION FACTORS</div>\n'
+        f'    <div class="profile-tags">{pills_html}</div>\n'
+        f'  </div>\n'
+        f'  <div class="license">OPC · LIC {_opc_license_code(content)}</div>\n'
+        f'</div>'
+    )
+
+
+def render_opc_four_card_grid(content, v_class, *, slide_num, media_paths=None):
+    """opc_four_card_grid — 4-card comparison grid (compare options/products/decisions)."""
+    SID = "opc_four_card_grid"
+    eyebrow  = _opc_field(content, SID, "eyebrow",         "Project breakdown · OPC")
+    hl_main  = _opc_field(content, SID, "headline_main",   "Four")
+    hl_em    = _opc_field(content, SID, "headline_italic", "options.")
+    subhead  = _opc_field(content, SID, "subhead",         _opc_field(content, SID, "subhead", ""))
+    badges   = _opc_field(content, SID, "badges",          []) or []
+    titles   = _opc_field(content, SID, "card_titles",     []) or []
+    copies   = _opc_field(content, SID, "card_copies",     []) or []
+
+    # Pad lists to length 4 with sensible defaults so the grid always fills.
+    while len(badges) < 4: badges.append("OPTION")
+    while len(titles) < 4: titles.append(f"Option {len(titles)+1}")
+    while len(copies) < 4: copies.append("—")
+
+    # Image lookup: card image keys can live in media_paths["cards"][1..4] or fall back to slide image.
+    card_imgs = ((media_paths or {}).get("cards") or {})
+    cards_html = ""
+    for i in range(4):
+        card_img = card_imgs.get(i+1) or card_imgs.get(str(i+1)) or ""
+        if card_img:
+            media_block = f'<div class="media"><img src="{card_img}" alt="card {i+1}"></div>'
+        else:
+            media_block = f'<div class="media"><div class="placeholder-label">{badges[i]}</div></div>'
+        cards_html += (
+            f'    <div class="card">\n'
+            f'      <div class="badge">{badges[i]}</div>\n'
+            f'      {media_block}\n'
+            f'      <div class="num">{i+1:02d}</div>\n'
+            f'      <div class="card-title">{titles[i]}</div>\n'
+            f'      <div class="card-copy">{copies[i]}</div>\n'
+            f'    </div>\n'
+        )
+
+    return (
+        f'<div class="slide opc-fcg {v_class}">\n'
+        f'  <span class="corner c1"></span><span class="corner c2"></span><span class="corner c3"></span><span class="corner c4"></span>\n'
+        f'  <div class="eyebrow">{eyebrow}</div>\n'
+        f'  <div class="headline">{hl_main} <em>{hl_em}</em></div>\n'
+        f'  <div class="subhead">{subhead}</div>\n'
+        f'  <div class="grid">\n'
+        f'{cards_html}'
+        f'  </div>\n'
+        f'  <div class="foot"><span>Oak Park Construction · {_opc_license_code(content)}</span><span class="swipe">{_opc_swipe_label(content)}</span></div>\n'
+        f'</div>'
+    )
+
+
+def render_opc_item_spotlight(content, v_class, *, slide_num, media_paths=None):
+    """opc_item_spotlight — single item teaching slide with 4 fact bullets."""
+    SID = "opc_item_spotlight"
+    tag       = _opc_field(content, SID, "tag",             "Item spotlight · OPC")
+    category  = _opc_field(content, SID, "category",        "PRODUCT · MATERIAL · TECHNIQUE")
+    hl_main   = _opc_field(content, SID, "headline_main",   "Spotlight on")
+    hl_em     = _opc_field(content, SID, "headline_italic", "this item.")
+    sub       = _opc_field(content, SID, "subhead",         "")
+    fact1_t   = _opc_field(content, SID, "fact_1_title", "Fact one")
+    fact1_d   = _opc_field(content, SID, "fact_1_desc",  "—")
+    fact2_t   = _opc_field(content, SID, "fact_2_title", "Fact two")
+    fact2_d   = _opc_field(content, SID, "fact_2_desc",  "—")
+    fact3_t   = _opc_field(content, SID, "fact_3_title", "Fact three")
+    fact3_d   = _opc_field(content, SID, "fact_3_desc",  "—")
+    fact4_t   = _opc_field(content, SID, "fact_4_title", "Fact four")
+    fact4_d   = _opc_field(content, SID, "fact_4_desc",  "—")
+
+    img_path = ((media_paths or {}).get("slides", {}) or {}).get(slide_num, "") \
+              or (media_paths or {}).get("cover", "")
+    if img_path:
+        thumb = f'<div class="thumb"><img src="{img_path}" alt="{category}"></div>'
+    else:
+        thumb = '<div class="thumb"><div class="placeholder-label">CLOSE-UP<br>OF ITEM</div></div>'
+
+    return (
+        f'<div class="slide opc-is {v_class}">\n'
+        f'  <div class="bg-placeholder"></div>\n'
+        f'  <div class="shade"></div>\n'
+        f'  <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>\n'
+        f'  <div class="content">\n'
+        f'    <div class="tag">{tag}</div>\n'
+        f'    <div class="category">{category}</div>\n'
+        f'    <div class="headline">{hl_main} <em>{hl_em}</em></div>\n'
+        f'    <div class="sub">{sub}</div>\n'
+        f'    <div class="body">\n'
+        f'      {thumb}\n'
+        f'      <ul class="fact-list">\n'
+        f'        <li>{fact1_t}<span>{fact1_d}</span></li>\n'
+        f'        <li>{fact2_t}<span>{fact2_d}</span></li>\n'
+        f'        <li>{fact3_t}<span>{fact3_d}</span></li>\n'
+        f'        <li>{fact4_t}<span>{fact4_d}</span></li>\n'
+        f'      </ul>\n'
+        f'    </div>\n'
+        f'    <div class="bottom"><span>Oak Park Construction · {_opc_license_code(content)}</span><span class="swipe">{_opc_swipe_label(content)}</span></div>\n'
+        f'  </div>\n'
+        f'</div>'
+    )
+
+
+def render_opc_statement(content, v_class, *, slide_num, media_paths=None):
+    """opc_statement — mid-carousel quote slide with B&W person photo (diagonal divider)."""
+    SID = "opc_statement"
+    tag           = _opc_field(content, SID, "tag",            "FROM THE FIELD")
+    quote_opener  = _opc_field(content, SID, "quote_opener",   "Quality is in the framing.")
+    quote_body    = _opc_field(content, SID, "quote_body",     "")
+    attribution   = _opc_field(content, SID, "attribution",    "MIKE · OPC FOUNDER")
+    slide_label   = _opc_field(content, SID, "slide_number",   f"{slide_num} / 5")
+
+    person_img = ((media_paths or {}).get("slides", {}) or {}).get(slide_num, "") \
+                 or (media_paths or {}).get("person") \
+                 or (media_paths or {}).get("cover", "")
+    if person_img:
+        photo_block = f'<img src="{person_img}" alt="{attribution}">'
+    else:
+        photo_block = (
+            '<div class="sticker-placeholder">'
+            'PERSON PHOTO<br>SLOT — B&amp;W FILTER'
+            '</div>'
+        )
+
+    return (
+        f'<div class="slide opc-st {v_class}">\n'
+        f'  <div class="corner tl"></div>\n'
+        f'  <div class="corner bl"></div>\n'
+        f'  <div class="photo-zone sticker-slot">{photo_block}</div>\n'
+        f'  <div class="text-zone">\n'
+        f'    <div class="tag">{tag}</div>\n'
+        f'    <div class="quote-block">\n'
+        f'      <div class="quote-opener">{quote_opener}</div>\n'
+        f'      <div class="quote-body">{quote_body}</div>\n'
+        f'      <div class="quote-attribution"><span class="attribution-dash">&mdash;</span>{attribution}</div>\n'
+        f'    </div>\n'
+        f'    <div class="cover-logo"><span class="logo-top">Oak Park</span>Construction<span class="logo-license">LIC · {_opc_license_code(content)}</span></div>\n'
+        f'  </div>\n'
+        f'  <div class="slide-counter">{slide_label}</div>\n'
+        f'</div>'
+    )
+
+
+def render_opc_base(content, v_class, *, slide_num, media_paths=None):
+    """opc_base — clean cover with bg photo + sticker portrait + 2-line title."""
+    SID = "opc_base"
+    tag        = _opc_field(content, SID, "tag",             "OPC / TIP #001")
+    hl_main    = _opc_field(content, SID, "headline_main",   _opc_field(content, SID, "headline", "What's"))
+    hl_em      = _opc_field(content, SID, "headline_italic", "hiding")
+    cover_hook = _opc_field(content, SID, "cover_hook",      _opc_field(content, SID, "subhead", "")) or ""
+    stamp_text = _opc_field(content, SID, "stamp_text",      "TIP · #001")
+    byline     = _opc_field(content, SID, "byline",          "MIKE · <em>OPC FOUNDER</em>")
+    cta        = _opc_field(content, SID, "cta",             "SAVE THE TIP &#8594;")
+
+    bg_img = (media_paths or {}).get("cover", "")
+    if bg_img:
+        bg_block = f'<div class="bg-photo" style="background-image:url(\'{bg_img}\');"></div>'
+    else:
+        bg_block = '<div class="bg-placeholder"></div>'
+
+    sticker_img = ((media_paths or {}).get("slides", {}) or {}).get(slide_num, "")
+    if sticker_img:
+        sticker_block = f'<img src="{sticker_img}" alt="OPC project detail">'
+    else:
+        # Initials placeholder (2 letters) — surface intent even without a photo.
+        ini_text = (content.get("opc_base_initials") or "OP").upper()[:2]
+        sticker_block = (
+            '<div class="sticker-placeholder">'
+            f'<div class="ini">{ini_text}</div>'
+            '<div class="iname">OAK PARK<br>CONSTRUCTION</div>'
+            '</div>'
+        )
+
+    return (
+        f'<div class="slide opc-bs {v_class}">\n'
+        f'  <div class="corner tl"></div><div class="corner tr"></div>\n'
+        f'  <div class="corner bl"></div><div class="corner br"></div>\n'
+        f'  {bg_block}\n'
+        f'  <div class="halftone"></div>\n'
+        f'  <div class="dark-overlay"></div>\n'
+        f'  <div class="sticker-slot">{sticker_block}</div>\n'
+        f'  <div class="stamp-badge">{stamp_text}</div>\n'
+        f'  <div class="tag">{tag}</div>\n'
+        f'  <div class="cover-hl">{hl_main} <em>{hl_em}</em></div>\n'
+        f'  <div class="cover-hook">{cover_hook}</div>\n'
+        f'  <div class="person-pill">{byline}</div>\n'
+        f'  <div class="swipe">{cta}</div>\n'
+        f'</div>'
+    )
+
+
+def render_opc_progress_media(content, v_class, *, slide_num, media_paths=None):
+    """opc_progress_media — jobsite/progress proof slide with 920×585 media frame."""
+    SID = "opc_progress_media"
+    tag           = _opc_field(content, SID, "tag",             "Project Progress · Field Update")
+    eyebrow       = _opc_field(content, SID, "eyebrow",         "Oak Park Construction")
+    title_main    = _opc_field(content, SID, "title_main",      _opc_field(content, SID, "title", "What changed"))
+    title_em      = _opc_field(content, SID, "title_italic",    "on site?")
+    desc_bold     = _opc_field(content, SID, "description_bold", "")
+    desc_rest     = _opc_field(content, SID, "description_rest", _opc_field(content, SID, "description", ""))
+    pills         = _opc_field(content, SID, "caption_pills",    ["BEFORE", "DURING", "AFTER"]) or []
+    if not isinstance(pills, list):
+        pills = [str(pills)]
+    pills_html = "".join(f'<div class="pill">{p}</div>' for p in pills[:5]) or '<div class="pill">PROGRESS</div>'
+
+    img_path = ((media_paths or {}).get("slides", {}) or {}).get(slide_num, "") \
+              or (media_paths or {}).get("cover", "")
+    if img_path:
+        media_block = f'<img src="{img_path}" alt="progress">'
+    else:
+        media_block = (
+            '<div class="bg-placeholder"></div>'
+            '<div class="fallback">'
+            '<div class="play"></div>'
+            'Progress video or photo<br>before / during / after'
+            '</div>'
+        )
+
+    return (
+        f'<div class="slide opc-pm {v_class}">\n'
+        f'  <div class="noise"></div>\n'
+        f'  <div class="corners"><span></span><span></span><span></span><span></span></div>\n'
+        f'  <div class="tag">{tag}</div>\n'
+        f'  <div class="media-frame">{media_block}</div>\n'
+        f'  <div class="detail-panel">\n'
+        f'    <div class="rule-line"></div>\n'
+        f'    <div class="eyebrow">{eyebrow}</div>\n'
+        f'    <div class="pm-title">{title_main}<em>{title_em}</em></div>\n'
+        f'    <div class="description"><strong>{desc_bold}</strong> {desc_rest}</div>\n'
+        f'    <div class="meta-row">\n'
+        f'      <div class="pill-row">{pills_html}</div>\n'
+        f'      <div class="license">OPC · {_opc_license_code(content)}</div>\n'
+        f'    </div>\n'
+        f'  </div>\n'
+        f'</div>'
+    )
+
+
+# Shared SVG duotone filter block used by opc_duotone. Returned ONCE per page,
+# not per-slide — build_opc_from_slide_plan injects it inside the <body> only
+# when at least one slide uses opc_duotone.
+OPC_DUOTONE_SVG_FILTER = '''<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="duotone-opc-v1">
+      <feColorMatrix type="matrix" values="0.299 0.587 0.114 0 0  0.299 0.587 0.114 0 0  0.299 0.587 0.114 0 0  0 0 0 1 0"/>
+      <feComponentTransfer color-interpolation-filters="sRGB">
+        <feFuncR tableValues="0.027 0.796"/>
+        <feFuncG tableValues="0.051 0.800"/>
+        <feFuncB tableValues="0.133 0.063"/>
+      </feComponentTransfer>
+    </filter>
+  </defs>
+</svg>'''
+
+
+def render_opc_duotone(content, v_class, *, slide_num, media_paths=None):
+    """opc_duotone — bold warning/red-flag opener with duotone-filtered hero photo."""
+    SID = "opc_duotone"
+    claim_main      = _opc_field(content, SID, "claim_main",      "Watch out:")
+    claim_strong    = _opc_field(content, SID, "claim_strong",    "this can cost you")
+    claim_rest      = _opc_field(content, SID, "claim_rest",      "")
+    claim_underline = _opc_field(content, SID, "claim_underline", "")
+    claim_final     = _opc_field(content, SID, "claim_final",     "")
+    quote_text      = _opc_field(content, SID, "quote_text",      "")
+    attribution     = _opc_field(content, SID, "attribution",     "Mike McFolling · GC")
+
+    bg_img = ((media_paths or {}).get("slides", {}) or {}).get(slide_num, "") \
+             or (media_paths or {}).get("cover", "")
+    if bg_img:
+        photo_style = f'background-image:url(\'{bg_img}\');'
+    else:
+        photo_style = 'background:#33330d;'
+
+    underline_block = f'<u><strong>{claim_underline}</strong></u>' if claim_underline else ''
+    final_block     = f' {claim_final}' if claim_final else ''
+
+    return (
+        f'<div class="slide opc-dt {v_class}">\n'
+        f'  <div class="claim">{claim_main} <strong>{claim_strong}</strong> {claim_rest} {underline_block}{final_block}.</div>\n'
+        f'  <div class="photo-wrap"><div class="photo" style="{photo_style}"></div></div>\n'
+        f'  <div class="quote-block">\n'
+        f'    <div class="quote-mark">&ldquo;</div>\n'
+        f'    <div class="quote-text">{quote_text}</div>\n'
+        f'  </div>\n'
+        f'  <div class="attr">\n'
+        f'    <div class="logo-circle"><span>Oak Park<br>Construction</span></div>\n'
+        f'    <div class="attr-name">{attribution}</div>\n'
+        f'  </div>\n'
+        f'</div>'
+    )
+
+
+# Standalone renderers — keyed by template_id. build_opc_from_slide_plan picks
+# from this dict before falling back to STANDALONE_TO_TIP_FALLBACK.
+OPC_STANDALONE_COMPONENT_RENDERERS = {
+    "opc_material_profile": render_opc_material_profile,
+    "opc_four_card_grid":   render_opc_four_card_grid,
+    "opc_item_spotlight":   render_opc_item_spotlight,
+    "opc_statement":        render_opc_statement,
+    "opc_base":             render_opc_base,
+    "opc_progress_media":   render_opc_progress_media,
+    "opc_duotone":          render_opc_duotone,
+}
+
+
 # Map of OPC tip slide-component key → callable. Used by opc_slide_planner +
 # build_opc_from_slide_plan when the planner picks an opc_tip_* component for a slide.
 OPC_TIP_COMPONENT_RENDERERS = {
@@ -3261,20 +3651,51 @@ def build_opc_from_slide_plan(content, slug, work_dir, media_paths=None):
         if last_img else '<div class="bg-photo"></div>'
     )
 
-    # For each slide, resolve template_id (or fallback) → tip component renderer.
-    # Standalone template_ids that aren't yet wired (no Python builder) substitute
-    # their fallback. The "effective" key is what actually renders today.
-    effective_keys = []
+    # Phase 6 — resolve each slide's RENDERER. Three buckets:
+    #   1. Standalone (opc_material_profile, opc_duotone, ...) → use the ported
+    #      Python builder from OPC_STANDALONE_COMPONENT_RENDERERS.
+    #   2. Tip component (opc_tip_cover, opc_tip_stat, ...) → use the tip renderer.
+    #   3. Anything else → fall back to fallback_template_id (must resolve to one
+    #      of the above; reviewer flags otherwise).
+    # Track fallbacks_used so reviewers + email preview can call out when ideal
+    # design substituted for a tip equivalent.
+    resolved_slides = []   # list of dicts: {slide, role, effective_id, kind, fell_back_from}
+    fallbacks_used = []
     for s in slides:
         tid = s.get("template_id", "")
-        if tid in OPC_TIP_COMPONENT_RENDERERS:
-            effective_keys.append(tid)
+        if tid in OPC_STANDALONE_COMPONENT_RENDERERS:
+            resolved_slides.append({"slide": s.get("slide"), "role": s.get("role"),
+                                    "effective_id": tid, "kind": "standalone",
+                                    "fell_back_from": None})
+        elif tid in OPC_TIP_COMPONENT_RENDERERS:
+            resolved_slides.append({"slide": s.get("slide"), "role": s.get("role"),
+                                    "effective_id": tid, "kind": "tip",
+                                    "fell_back_from": None})
         else:
             fb = s.get("fallback_template_id") or "opc_tip_explainer"
-            effective_keys.append(fb)
+            if fb not in OPC_TIP_COMPONENT_RENDERERS and fb not in OPC_STANDALONE_COMPONENT_RENDERERS:
+                fb = "opc_tip_explainer"
+            kind = "standalone" if fb in OPC_STANDALONE_COMPONENT_RENDERERS else "tip"
+            resolved_slides.append({"slide": s.get("slide"), "role": s.get("role"),
+                                    "effective_id": fb, "kind": kind,
+                                    "fell_back_from": tid or "(missing)"})
+            fallbacks_used.append((s.get("slide"), tid, fb))
 
-    def _render_slide_for_variant(eff_key, v_class, s4_accent_style, src_accent_style):
-        """Dispatch to the tip-component renderer for this effective key + variant."""
+    # Stash the resolved plan + media_paths back onto content so the reviewer
+    # can introspect what actually rendered (no need to re-pass kwargs).
+    content.setdefault("_slide_plan", {})["_resolved_slides"] = resolved_slides
+    content["_slide_plan"]["_fallbacks_used"] = fallbacks_used
+    content["_media_paths"] = media_paths or {}
+    needs_duotone_filter = any(r["effective_id"] == "opc_duotone" for r in resolved_slides)
+
+    def _render_slide_for_variant(rs, v_class, s4_accent_style, src_accent_style):
+        """Dispatch to the right renderer based on resolved kind + effective_id."""
+        eff_key = rs["effective_id"]
+        slide_num = rs["slide"]
+        if rs["kind"] == "standalone":
+            renderer = OPC_STANDALONE_COMPONENT_RENDERERS[eff_key]
+            return renderer(content, v_class, slide_num=slide_num, media_paths=media_paths)
+        # Tip components — kwargs differ per slide.
         if eff_key == "opc_tip_cover":
             return render_opc_tip_cover(content, v_class, hl_html=hl_html, bg_photo_el=bg_photo_el)
         if eff_key == "opc_tip_stat":
@@ -3294,13 +3715,12 @@ def build_opc_from_slide_plan(content, slug, work_dir, media_paths=None):
                 content, v_class, sources_html=sources_html,
                 src_accent_style=src_accent_style, sources_bg_el=sources_bg_el, cta=cta,
             )
-        # Should never happen — effective_keys built only from known set above.
         raise ValueError(f"build_opc_from_slide_plan: unknown effective key {eff_key!r}")
 
     def variant_block(v_class, s4_accent_style, src_accent_style):
         rendered = [
-            _render_slide_for_variant(k, v_class, s4_accent_style, src_accent_style)
-            for k in effective_keys
+            _render_slide_for_variant(rs, v_class, s4_accent_style, src_accent_style)
+            for rs in resolved_slides
         ]
         return f"\n<!-- {v_class.upper()} -->\n" + "\n\n".join(rendered) + "\n"
 
@@ -3310,18 +3730,25 @@ def build_opc_from_slide_plan(content, slug, work_dir, media_paths=None):
     html_path = Path(work_dir) / "cover.html"
     with open(Path(__file__).parent / "opc_tip_base.css") as f:
         base_css = f.read()
+    # Phase 6 — load scoped CSS for any standalone slide that ships in this build.
+    standalones_css_path = Path(__file__).parent / "opc_standalones.css"
+    standalones_css = standalones_css_path.read_text() if standalones_css_path.exists() else ""
+    # Inject duotone SVG filter ONCE per page if any slide uses opc_duotone.
+    svg_filter_block = OPC_DUOTONE_SVG_FILTER if needs_duotone_filter else ""
     title_suffix = " · Plan" if plan.get("status") == "passed" else ""
     full_html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>OPC — Smart Plan — {slug}{title_suffix}</title>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&family=JetBrains+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Cormorant+Garamond:wght@300;400;600&family=Barlow:ital,wght@0,400;0,700;1,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 {base_css}
+{standalones_css}
 </style>
 </head>
 <body>
+{svg_filter_block}
 {v2}
 {v3}
 </body>
