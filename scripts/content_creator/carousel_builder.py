@@ -3090,7 +3090,6 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
 </div>
 """
 
-    v1 = variant_block("v1", "#CBCC10", "#CBCC10", "#CBCC10")
     v2 = variant_block("v2", "#0A0A0A", "#CBCC10", "#CBCC10")
     v3 = variant_block("v3", "#F0EBE3", "#F0EBE3", "#F0EBE3")
 
@@ -3110,7 +3109,6 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
 </style>
 </head>
 <body>
-{v1}
 {v2}
 {v3}
 </body>
@@ -3209,7 +3207,6 @@ def _build_opc_progress_html(content, slug, work_dir, media_paths=None):
 </div>
 """
 
-    v1 = variant_block("v1")
     v2 = variant_block("v2")
     v3 = variant_block("v3")
 
@@ -3283,7 +3280,6 @@ def _build_opc_progress_html(content, slug, work_dir, media_paths=None):
 </style>
 </head>
 <body>
-{v1}
 {v2}
 {v3}
 </body>
@@ -3392,7 +3388,6 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
 </div>
 """
 
-    v1 = variant_block("v1")
     v2 = variant_block("v2")
     v3 = variant_block("v3")
 
@@ -3451,7 +3446,6 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
 </style>
 </head>
 <body>
-{v1}
 {v2}
 {v3}
 </body>
@@ -3594,7 +3588,6 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
 </div>
 """
 
-    v1 = variant_block("v1")
     v2 = variant_block("v2")
     v3 = variant_block("v3")
 
@@ -3676,7 +3669,6 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
 </style>
 </head>
 <body>
-{v1}
 {v2}
 {v3}
 </body>

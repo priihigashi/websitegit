@@ -6,7 +6,7 @@ Runs at 2:30 AM ET via GitHub Actions.
 Flow:
   1. Pick 3 topics (2 OPC + 1 Brazil) from Inspiration Library
   2. Generate carousel content via Claude Haiku
-  3. Render 15 PNGs per topic (3 variants × 5 slides) + 3 motion covers
+  3. Render 10 PNGs per topic (2 variants × 5 slides) — OPC; Brazil/USA unchanged + 3 motion covers
   4. Upload to Drive (Marketing > OPC > Templates for OPC, News drive for Brazil)
   5. Email preview to Priscila
   6. Update catalog status to pending_approval
@@ -694,8 +694,8 @@ def record_motion_slides(clip_html_files, output_dir, duration=5):
     """Record each per-slide motion HTML via Playwright → MP4 + GIF.
     clip_html_files: list of (slide_idx, html_path) from build_motion_html().
     Saves canonical names so Ken Burns won't overwrite:
-      slide_idx == 1 (cover): black_01_cover_motion.mp4 + .gif
-      slide_idx >= 2 (middle): black_<NN>_slide_<N>_motion.mp4 + .gif
+      slide_idx == 1 (cover): cream_01_cover_motion.mp4 + .gif
+      slide_idx >= 2 (middle): cream_<NN>_slide_<N>_motion.mp4 + .gif
     Returns list of (slide_idx, mp4_path) — main loop skips these indices when running Ken Burns.
     Falls back silently per slot; Ken Burns is safety net for every other slide.
     """
@@ -709,9 +709,9 @@ def record_motion_slides(clip_html_files, output_dir, duration=5):
     for slide_idx, html_path in clip_html_files:
         nn = f"{slide_idx:02d}"
         base = "cover" if slide_idx == 1 else f"slide_{slide_idx}"
-        webm_path = Path(output_dir) / f"black_{nn}_{base}_motion.webm"
-        mp4_path  = Path(output_dir) / f"black_{nn}_{base}_motion.mp4"
-        gif_path  = Path(output_dir) / f"black_{nn}_{base}_motion.gif"
+        webm_path = Path(output_dir) / f"cream_{nn}_{base}_motion.webm"
+        mp4_path  = Path(output_dir) / f"cream_{nn}_{base}_motion.mp4"
+        gif_path  = Path(output_dir) / f"cream_{nn}_{base}_motion.gif"
         try:
             r = subprocess.run(
                 ["node", str(record_script), html_path, str(webm_path), str(duration)],
@@ -769,7 +769,7 @@ def render_motion_remotion(cover_png_path, clip_path, output_dir, variant,
     if base.endswith("_html"):
         base = base[:-5]
     nn = f"{slide_idx:02d}"
-    # Strip variant_nn_ prefix if already embedded in the filename (avoids "black_01_black_01_cover")
+    # Strip variant_nn_ prefix if already embedded in the filename (avoids "cream_01_cream_01_cover")
     _prefix = f"{variant}_{nn}_"
     if base.startswith(_prefix):
         base = base[len(_prefix):]
@@ -841,7 +841,7 @@ def render_carousel_reel_remotion(png_dir: Path, motion_dir: Path, slug: str,
                                    clips: dict) -> str | None:
     """Tier 1 reel renderer — Remotion CarouselReel composition.
 
-    Sequences all black_NN_*_html.png slides into a single 1080x1920 MP4.
+    Sequences all cream_NN_*_html.png slides into a single 1080x1920 MP4.
     Each slide is letterboxed (4:5 centered, black bars top/bottom) matching
     the layout of build_carousel_reel.sh (FFmpeg tier 2 fallback).
 
@@ -854,7 +854,7 @@ def render_carousel_reel_remotion(png_dir: Path, motion_dir: Path, slug: str,
         print("  CarouselReel: node_modules missing — falling back to FFmpeg")
         return None
 
-    pngs = sorted(png_dir.glob("black_*_html.png"))
+    pngs = sorted(png_dir.glob("cream_*_html.png"))
     if len(pngs) < 3:
         return None
 
@@ -868,8 +868,8 @@ def render_carousel_reel_remotion(png_dir: Path, motion_dir: Path, slug: str,
         shutil.copy2(png, staged_png)
         staged.append(staged_png)
 
-        # Extract slide index from filename (black_01_... → 1)
-        m = re.search(r"black_(\d+)_", png.name)
+        # Extract slide index from filename (cream_01_... → 1)
+        m = re.search(r"cream_(\d+)_", png.name)
         idx = int(m.group(1)) if m else 0
         clip_src = clips.get(idx, "")
         staged_clip = None
@@ -927,8 +927,8 @@ def render_carousel_reel_remotion(png_dir: Path, motion_dir: Path, slug: str,
 def render_motion_cover(cover_png_path, output_dir, variant):
     """Ken Burns ffmpeg zoom on ONE static PNG → MP4 + GIF.
     Output MP4 inherits PNG name so every slide gets its own motion file:
-      black_01_cover_html.png → black_01_cover_motion.mp4
-      black_02_why_html.png   → black_02_why_motion.mp4
+      cream_01_cover_html.png → cream_01_cover_motion.mp4
+      cream_02_why_html.png   → cream_02_why_motion.mp4
     Preview frame (used by email) is written only for slide 01 (cover).
     """
     os.makedirs(output_dir, exist_ok=True)
@@ -1345,12 +1345,12 @@ def process_one_topic(topic_entry, run_date, drive):
                      (clip_suggestions[0] if clip_suggestions else {}))
     cover_motion_prompt = cover_sugg.get("motion_prompt", "")
     cover_renderer_pref = cover_sugg.get("motion_renderer", "remotion")  # default: remotion for cover
-    black_covers = sorted(png_dir.glob("black_01_*_html.png"))
+    cream_covers = sorted(png_dir.glob("cream_01_*_html.png"))
     remotion_cover_done = False
-    if black_covers and cover_renderer_pref == "remotion":
+    if cream_covers and cover_renderer_pref == "remotion":
         remotion_clip = clips.get(1, "")
         r_path = render_motion_remotion(
-            str(black_covers[0]), remotion_clip, str(motion_dir), "black",
+            str(cream_covers[0]), remotion_clip, str(motion_dir), "cream",
             hook_text=(content.get("hook") or "")[:48], slide_idx=1
         )
         if r_path:
@@ -1372,28 +1372,28 @@ def process_one_topic(topic_entry, run_date, drive):
     # KLING_APPROVE=0 can explicitly disable Kling for a specific run if needed.
     kling_disabled = os.environ.get("KLING_APPROVE", "").strip().lower() == "0"
     cover_has_real_clip = bool(clips.get(1))
-    black_covers = sorted(png_dir.glob("black_01_*_html.png"))
-    if black_covers and not remotion_cover_done and not cover_has_real_clip and not kling_disabled:
+    cream_covers = sorted(png_dir.glob("cream_01_*_html.png"))
+    if cream_covers and not remotion_cover_done and not cover_has_real_clip and not kling_disabled:
         anim_prompt = (
             content.get("cover_visual", {}).get("option_b", {}).get("prompt", "")
             or "Subtle cinematic camera movement, documentary editorial style"
         )
         print(f"  Kling: Remotion missed + no real clip — animating cover PNG...")
-        _animate_cover_kling(str(black_covers[0]), anim_prompt, str(motion_dir), "black")
+        _animate_cover_kling(str(cream_covers[0]), anim_prompt, str(motion_dir), "cream")
 
     # 4d. Ken Burns floor for any black slide index that still has no motion MP4.
     # Regression fix: ensure every slide can animate even when clip fetch/record misses.
-    for png in sorted(png_dir.glob("black_*_html.png")):
-        m = re.search(r"black_(\d+)_", png.name)
+    for png in sorted(png_dir.glob("cream_*_html.png")):
+        m = re.search(r"cream_(\d+)_", png.name)
         if not m:
             continue
         slide_idx = int(m.group(1))
         if slide_idx in recorded_indices:
             continue
-        kb_existing = list(motion_dir.glob(f"black_{slide_idx:02d}_*_motion.mp4"))
+        kb_existing = list(motion_dir.glob(f"cream_{slide_idx:02d}_*_motion.mp4"))
         if kb_existing:
             continue
-        render_motion_cover(str(png), str(motion_dir), "black")
+        render_motion_cover(str(png), str(motion_dir), "cream")
         recorded_indices.add(slide_idx)
 
     # Motion completeness guard — never email preview with empty motion folder
