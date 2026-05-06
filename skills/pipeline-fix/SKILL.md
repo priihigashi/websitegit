@@ -43,6 +43,16 @@ WHAT TO CARRY FORWARD (find and continue):
 - Full Circle Plan:   https://docs.google.com/document/d/17B8wc4wWmcBapl_4gduHyMzjYl4R4y_RYuvZae5xRPU/edit
 - Flow Plans Tracker: https://docs.google.com/spreadsheets/d/1fggy918FgPfnMQ-dzGQk2zx9uhi2_-uWXMKGW4MA47k
 
+### ⭐ MASTER PROJECT TRACKER (Pipeline Fix Master Checklist — Done Current Next)
+- Link: https://docs.google.com/spreadsheets/d/1yh9C7KU9OlqCdHNDI9mbZ6ldqLA3bAR3uENXUh37bkQ/edit
+- ID:   1yh9C7KU9OlqCdHNDI9mbZ6ldqLA3bAR3uENXUh37bkQ
+- Location: Marketing > PIPELINE FIX folder (ID: 1FHPkx8VA6c-Wmy6hI3uX_weSPwJPBp3z)
+- Tabs: Master Checklist (71 rows, all tasks) | Credit Blocks | Today Changes | Open P0 — Next | Storytelling Rules | Rollback — Evidence
+- AUTO-SYNC: pipeline_self_heal.yml calls scripts/pipeline_tracker_writer.py sync after every cycle
+- CREDIT LOG: capture_pipeline.yml logs API credit failures to Credit Blocks tab automatically
+- MANUAL UPDATE: python scripts/pipeline_tracker_writer.py done --sh-id SH-XXX --done "..." --evidence "commit abc"
+- READ THIS FIRST when starting a session — it reflects the most current Done/Blocked/Next state across all SH tasks
+
 ### Drive — PIPELINE FIX Folder (source of truth for fix history)
 - PIPELINE FIX folder:               https://drive.google.com/drive/folders/1FHPkx8VA6c-Wmy6hI3uX_weSPwJPBp3z
 - HTML TEMPLATES subfolder:          https://drive.google.com/drive/folders/1PMwIYurzv2GY077hlz7oHr82hNPsY6XI
@@ -168,7 +178,7 @@ BROKEN / QUALITY ISSUES ❌
 
 UNTESTED 🟡
 - approval_handler.py — Gmail reply detection → Buffer scheduling
-- Build history dedup — same topic can repeat across runs (no memory between runs)
+- Build history dedup — BUILT (ef7a018) but not yet triggered in prod
 
 ---
 
@@ -186,24 +196,43 @@ DONE ✅ (this session + prior fix sessions)
 - Template Registry doc updated (appended TEMPLATE 11 + 12 + palette swatch reference, no overwrite)
 
 IN PROGRESS 🔄
-- Template walkthrough: Tip ✅ → Standalone Brazil/USA ✅ → next: opc_progress, opc_illustrated, opc_cutout, then remaining News series templates
-- Building selected.html — News Standalone added; OPC Progress/Illustrated/Cutout still pending
+- OPC template walkthrough: ALL DONE ✅ (Tip + progress_media + progress + illustrated + cutout + statement + material_profile + item_spotlight + four_card_grid + duotone + base — all locked in selected.html)
+- News template walkthrough: standalone Brazil/USA ✅ locked; shared (Verificamos/The Chain) cards + sticker slot ✅; remaining News series templates still to walk through
 
-DONE THIS SESSION ✅
-- Per-slide image queries — slides[] array now has explicit slide: 2/3/4 with per-field context (commit 0798878)
-- @HANDLE_PLACEHOLDER — main.py now extracts source_handle from content and passes to both build_html() calls (commit 0798878)
-- Cover hook — headline field now requires number/cost/risk same as subhead (commit 0798878)
+DONE THIS SESSION ✅ (2026-05-05 session 3)
+- opc_progress, opc_illustrated, opc_cutout added to selected.html (commit 8ab6524). OPC Phase 1 COMPLETE.
+- news_brazil_shared + news_usa_shared sticker-slot CSS + HTML added to cover slide (commit 41fcf4f). ARCH FLAG 1 cleared.
+- reorder_selected_opc_once.yml deleted — was stuck, self-delete step never fired (commit 978cbc2).
+- Fix 3a (Dados ou Agenda handle) — verified ALREADY FIXED in main.py lines 1097-1101 (done in earlier session).
+
+DONE THIS SESSION ✅ (2026-05-05 session 4)
+- generate_progress_content() added to carousel_builder.py + routed in generate_carousel_content() (commit f1da63c). OPC template wiring COMPLETE.
+- Brazil Verificamos + USA The Chain cards added to selected.html ROW 1 Full Formats (commit e6665af). News template walkthrough COMPLETE.
+
+DONE THIS SESSION ✅ (2026-05-05 session 5)
+- SH-016: .clip-frame rounded corners + layered shadows + accent-ring (823754f)
+- SH-055: --margin CSS variable + SLIDE_INSET_PX configurable (e7d7f6b + 2607977)
+- SH-017: yt-dlp max 300s duration filter on all 3 download call sites (c24c000)
+- SH-015: tier_giphy() GIPHY→GIF→MP4 in motion_sources.py SOURCE_CHAIN (5638cbf) — CODE DONE, secret pending
+- SH-020: label-leak checker in carousel_reviewer.py check_html_placeholders() (24ea1ce + af17b74)
+- SH-013: 8th-grade readability rule → OPC_COPY_RULES + BRAZIL_COPY_RULES (967534b + af17b74) — PARTIAL (3 prompt functions still missing, see gaps)
+- SH-028: score_storytelling() Haiku scorer wired into check_built_post() (b21482e) — PARTIAL (Drive review path not wired)
+- SH-011: review_only_folder_id input in content_creator.yml (7cf6834) — PARTIAL (retry job guard missing)
+- SH-041: DALL-E off by default via _USE_DALLE guard (fca9082) — CODE DONE, opt-in undocumented
+- SH-061: brief validation markers [SH-061] ✅/⚠/❌ in main.py (083040f)
+- Master Checklist updated — all 10 rows = Done with commit evidence + gap notes
 
 PENDING ⏳ (priority order — top = most impactful)
-1. Add build history dedup — write one row to Build History tab (Ideas & Inbox) after each build, check last 30 days before picking topic
-   File: scripts/content_creator/main.py
-2. Complete template walkthrough (opc_progress → illustrated → cutout → News templates) → update selected.html
-3. Fix opc_progress.html — add .before-slot/.after-slot split panel
-4. Fix news_brazil_shared.html + news_usa_shared.html — add sticker slot HTML on cover slide
-5. Queue hygiene — 946 blank rows in Inspiration Library, 11 foreign TotW misfires
+1. SH-013 gap: add readability rule inline to generate_progress_content(), generate_dados_content(), generate_verdade_content() — 3 functions build own prompts, bypass OPC/BRAZIL_COPY_RULES. File: scripts/content_creator/carousel_builder.py
+2. SH-028 gap: wire score_storytelling() into check_drive_folder() after cover.html downloaded to /tmp. File: scripts/content_creator/carousel_reviewer.py
+3. SH-015 gap: add GIPHY_API_KEY to GitHub secrets (gh secret set GIPHY_API_KEY --repo priihigashi/oak-park-ai-hub) + add to content_creator.yml env block (both main + retry jobs)
+4. SH-041 gap: add commented USE_DALLE line to content_creator.yml env section so teams know how to opt in
+5. SH-011 gap: add && github.event.inputs.review_only_folder_id == '' to retry job "Retry content creator" step if condition (line ~274 in content_creator.yml)
+6. Test approval_handler.py → Buffer flow (ARCH FLAG 3 — must happen before daily automation is left running)
+7. Run content_creator.yml manually (Phase 3) — trigger one build, observe email preview
 
 BLOCKED 🚫
-- Approval → Buffer flow — untested, needs approval_handler.py Gmail trigger confirmed working first
+- Approval → Buffer flow — untested, needs manual test (reply APPROVE to preview email → confirm Buffer scheduling)
 
 ---
 
@@ -223,10 +252,10 @@ NEVER skip the confirm step.
 
 ## 6. CURRENT FIX PHASE
 
-PHASE 1 — TEMPLATE LOCKDOWN (in progress)
-Walk through every template in wired.html. For each: pick it or skip it. If picked → add to selected.html. Decide main category name. Decide if sub-series needed (usually no — the template IS the identity).
-OPC: Tip of the Week ✅ locked → Progress / Illustrated / Cutout PENDING
-News: all PENDING
+PHASE 1 — TEMPLATE LOCKDOWN (OPC COMPLETE ✅ — News in progress)
+Walk through every template in wired.html. For each: pick it or skip it. If picked → add to selected.html.
+OPC: ALL LOCKED ✅ (Tip + progress_media + progress + illustrated + cutout + statement + material_profile + item_spotlight + four_card_grid + duotone + base)
+News: standalone Brazil/USA ✅ — remaining series templates PENDING
 
 PHASE 2 — WIRE (next after Phase 1)
 For each chosen template in selected.html, confirm the pipeline builder (carousel_builder.py) maps to it correctly. Fix series naming, add missing schema fields.
@@ -390,6 +419,84 @@ Both are mirrors — same class structure, same slot names, only `:root` variabl
 
 ## SESSION NOTES
 
+### 2026-05-05 (session 4 — FORMAT-024 Verdade Pela Metade full build)
+- BUILT: FORMAT-024 Verdade Pela Metade — full 8-gap automation, 8 commits (c4155f5 → 5af0e9d).
+- GAP 1 (c4155f5): "DEBUNK SOURCE" added to INSTAGRAM_TYPES + dispatch branch in scrape_all_targets(). Also fixed pre-existing silent bug: scrape_all_targets() had no return statement — every 4AM run was hitting TypeError on tuple unpack and silently falling back. Fixed.
+- GAP 2 (5a48f91): scrape_debunk_source() — 7-day filter, engagement sort, dedup vs Inspiration Library, returns 1 normalised item.
+- GAP 3 (08e5a0a): _normalise() — DEBUNK SOURCE branch sets series_override="Verdade Pela Metade" + fake_news_route="debunk".
+- GAP 4 (29a5aa9): _classify_debunk_mode() — Haiku call on caption (transcript proxy), returns "mode_a" or "mode_b".
+- GAP 5 (100b413): _research_attribution() — Sonnet call for mode_a only, returns responsible_party/decision_name/year/source_url as research_brief.
+- GAP 6 (df10bda): sheets_writer.py — debunk items land as "Needs Research" (not "Captured"). "needs research" added to SKIP_STATUSES in topic_picker.py so pipeline only picks up "Approved". topic_picker propagates series_override + fake_news_route fields through to Content Queue.
+- GAP 7 (25d903d): Full template — verdade-pela-metade entry in TEMPLATES["brazil"], generate_verdade_content(), _build_verdade_html() (7 slides, dark brand, mode-conditional slide 3), wired into carousel_builder.py + main.py (post_id, template_key, requires_approval, series display map, post_type).
+- GAP 8 (5af0e9d): Tuesday gate in scrape_debunk_source() — weekday() != 1 → return None.
+- Drive IDs confirmed in CLAUDE.md: series 1r6NJ6uoKezptnolgeSfPOeKl2dccEjPd / _TEMPLATE_CAROUSEL 1Tspx9SsfFxJjzh_ZdIC_exQBHe4-p-1K.
+- Source account: INTERNAL ONLY — never named in content, captions, or slide copy.
+- Status flips: FORMAT-024 Verdade Pela Metade → FULLY WIRED (was: not started).
+- Next: Add "DEBUNK SOURCE" row to Scraping Targets tab with source account username to activate. Then test next Tuesday — scrape → Inspiration Library "Needs Research" → approve → carousel builds automatically. Also: wire opc_progress/illustrated/cutout in carousel_builder.py (Section 3 PENDING).
+
+### 2026-05-05 (session 2 — pipeline fix + capture queue)
+- FIXED: OPC Photo Catalog TIER 0 added to mid-slides in carousel_builder.py (commit dad4918). Was only on cover; slides 2/3/4 were skipping the 158-photo catalog and going to AI.
+- FIXED: OPC Photo Catalog TIER 0 added to fix_existing_images.py re-fetch path (commit 4d3cc0b).
+- FIXED: auto_fixer.py Goal 1B text rewrite loop — was imported but never called ("Future expansion"). Now downloads cover.html, calls review_carousel_html() + apply_edits_to_html(), re-uploads (commit 4d3cc0b).
+- FIXED: carousel_reviewer.py auto-fix trigger now fires on text quality issues too, not just image flags (commit 4d3cc0b).
+- FIXED: capture_pipeline.py — added _llm_text() helper with Claude→OpenAI gpt-4o fallback on Anthropic credit/auth error. Replaced 4 bare unprotected Claude calls. Capture no longer crashes fatally when credits are depleted (commit 1bcf1c2).
+- FIXED: /capture skill (capture.md) — default behavior changed to queue-first. No GitHub Actions unless explicitly asked.
+- RESCUED: 8 failed capture URLs added to Capture Queue via one-time grab_capture_fail.py script.
+- DIAGNOSED: 27 Capture Queue rows stuck with D=FALSE. Multiple duplicates (DXKAe4CDrbj x7). Root cause of failures: Instagram 403 rate limiting on burst runs.
+- Status flips: SH-033 OpenAI fallback → DONE. Photo Catalog mid-slides → DONE. Goal 1B text loop → DONE.
+- New IDs: none.
+- Next: Capture Queue cleanup (clean 27 FALSE rows + dedup + add dedup check to processor). Then template walkthrough.
+
+### 2026-05-05 (session 1)
+- FIXED Issue #127 upstream capture bug (2 commits):
+  - fe18cf9: capture_queue_processor.py — column C comment now passed as `notes` to workflow dispatch. For project=opc, OPC CONTEXT GUARD auto-prepended even when column C is blank.
+  - a78bea4: capture_pipeline.py — analyze_opc() now returns TRANSCRIPT UNAVAILABLE early for empty/sentinel transcripts. run_opc() has hard gate before brief generation. OPC entity definition injected into Claude prompt to block IL/tourism hallucination.
+- FIXED FIX 2: context_image_query uniqueness rule added to OPC prompt (commit af5b322, carousel_builder.py line 442). Haiku now explicitly required to use distinct queries for slides 2/3/4.
+- FIXED FIX 4: Caption hook number/dollar/consequence hard rule added (commit 3c7121f, carousel_builder.py line 437). Matches subhead constraint pattern. Banned phrases listed. Good examples included.
+- BUILT Build History dedup (commit ef7a018):
+  - Created Build History tab in Ideas & Inbox (sheetId 459256337). Columns: DATE|SLUG|TOPIC|NICHE|SERIES|DRIVE_URL|STATUS. Row 1 frozen.
+  - main.py: write_build_history() + get_recent_built_slugs() + _topic_to_slug() helpers added after add_catalog_row().
+  - write_build_history() called before return in process_one_topic() (after Drive upload confirmed).
+  - Phase B dedup block: reads recent slugs, skips approved topics already built in last 30 days, sends alert when any skipped.
+- Status flips: PENDING #1 (build dedup) → DONE. PENDING FIX 2 + FIX 4 (from AIOX-dev) → DONE.
+- New IDs: Build History tab sheetId=459256337 in Ideas & Inbox (1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU)
+- Next: PENDING #2 — complete template walkthrough (opc_progress → illustrated → cutout → News). Or run a manual pipeline trigger to test photo_matcher + dedup live.
+
+### 2026-05-05 (session 3)
+- DONE: opc_progress, opc_illustrated, opc_cutout added to selected.html (commit 8ab6524). OPC Phase 1 template lockdown COMPLETE — all 11 OPC templates now in selected.html.
+- DONE: news_brazil_shared + news_usa_shared — .sticker-slot CSS + HTML added to cover slide (commit 41fcf4f). ARCH FLAG 1 cleared. Named-person rule now met for Verificamos + The Chain.
+- DONE: reorder_selected_opc_once.yml deleted (commit 978cbc2). Stuck one-time workflow was failing on every push because self-delete step never completed.
+- VERIFIED: Fix 3a (Dados ou Agenda handle) already fixed in main.py lines 1097-1101 — no code change needed.
+- DONE: Queue hygiene — 1267 blank rows deleted from Inspiration Library (now 554 rows). TotW misfires = stale note, no evidence found in any tab. Capture Queue D=FALSE = 0 (cleared by session 2 fixes).
+- Status flips: PENDING #2 (template walkthrough OPC) → DONE. PENDING #4 (news shared sticker) → DONE. PENDING #5 (queue hygiene) → DONE. Fix 3a → DONE.
+- New IDs: none.
+- Next: Wire opc_progress/illustrated/cutout in carousel_builder.py (Section 3). Then test approval_handler.py → Buffer.
+
+### 2026-05-05 (session 5 — 10 SH tasks batch + gap audit)
+- SHIPPED 10 SH tasks in 10 commits (823754f → 083040f), pushed to main:
+  - SH-016 (823754f): .clip-frame rounded corners, layered shadows, accent-ring in carousel_builder.py inline CSS
+  - SH-055 (e7d7f6b + 2607977): --margin:40px CSS variable in opc_tip_base.css + news_history_base.css; corners use var(--margin); SLIDE_INSET_PX configurable
+  - SH-017 (c24c000): yt-dlp --match-filter duration < 300 added to all 3 download call sites in motion_sources.py
+  - SH-015 (5638cbf): tier_giphy() added to motion_sources.py — GIPHY search → GIF download → ffmpeg GIF→MP4; silently skips if GIPHY_API_KEY unset
+  - SH-020 (24ea1ce + af17b74): label-leak checker _LABEL_PATTERNS in carousel_reviewer.py check_html_placeholders()
+  - SH-013 (967534b + af17b74): Rule 7 (8th-grade readability) → OPC_COPY_RULES; Rule 11 → BRAZIL_COPY_RULES in carousel_builder.py
+  - SH-028 (b21482e): score_storytelling() Haiku scorer 0-100 per slide wired into check_built_post(); adds issue if overall < 60; per-slide table in email
+  - SH-011 (7cf6834): review_only_folder_id input added to content_creator.yml; auto-enables review_only mode; main job condition updated
+  - SH-041 (fca9082): _USE_DALLE guard in image_providers.py — DALL-E off by default, requires USE_DALLE=true
+  - SH-061 (083040f): [SH-061] validation markers in main.py both brief-fetch paths — ✅/⚠/❌ logs + 120-char preview
+- AUDIT GAPS FOUND (documented in Master Checklist Next Action + Notes columns):
+  - SH-013 GAP: Readability rule NOT in generate_progress_content(), generate_dados_content(), generate_verdade_content() — 3 functions build own prompts, bypass OPC/BRAZIL_COPY_RULES entirely
+  - SH-028 GAP: score_storytelling() NOT wired into check_drive_folder() (Drive/manual review path) — only fires on local build path. Fix: call it after cover.html downloaded to /tmp in check_drive_folder()
+  - SH-011 GAP: Retry job "Retry content creator" step + "AI Content Audit" step missing review_only_folder_id == "" guard. Low priority (retry fires only on failure)
+  - SH-015 GAP: GIPHY_API_KEY not in GitHub secrets — tier silently skips every run until secret added. Command: gh secret set GIPHY_API_KEY --repo priihigashi/oak-park-ai-hub
+  - SH-041 GAP: USE_DALLE=true opt-in undocumented in workflow env block — future sessions won't know how to enable
+- STATUS: Master Checklist updated — all 10 SH rows flipped to Done with commit evidence + gap notes
+- Next session top priorities:
+  1. Fix SH-013 gap: add readability rule inline to generate_progress_content, generate_dados_content, generate_verdade_content
+  2. Fix SH-028 gap: wire score_storytelling() into check_drive_folder()
+  3. Add GIPHY_API_KEY to GitHub secrets + document USE_DALLE in workflow env
+  4. Test approval_handler.py → Buffer flow (ARCH FLAG 3 — still untested)
+
 ### 2026-05-04
 - FIXED photo_matcher.py SHEETS_TOKEN refresh (commit 2193698). Replaced `_get_token()` which returned the empty `access_token` field from the refresh credential JSON. Now mirrors `main.py::get_oauth_token()` — POSTs to oauth2.googleapis.com/token with refresh_token grant + caches with 60s buffer.
 - Verified live: 158 catalog rows read, real Drive URLs returned (e.g. IMG_4493.jpeg from Walnut Slab Kitchen Marble Waterfall project).
@@ -411,3 +518,48 @@ Both are mirrors — same class structure, same slot names, only `:root` variabl
 - AIOX-architect review complete: no standalone agent, 3 arch flags (face slot is Section 3 gate, verify photo_matcher secret, test approval handler before automation)
 - AIOX-dev review complete: Fixes 1+2+4 ready to code. Fix 3 needs investigation first. Fix 5 needs Build History tab confirmed. New critical: Dados ou Agenda source_handle silently dropped at main.py build_html() call — added as item 3 in PENDING.
 - Next: walk through opc_progress.html — does it need sub-series? Does before/after split panel need fixing before choosing it? (Section 2 design gap P4)
+
+### 2026-05-06 — SH-025/037/038/039/040/056/057/022/010/029 — full execution + gap audit + gap fixes
+
+INITIAL BUILD (all 10 tasks shipped via subagent, then pushed):
+- SH-025 d33615d — OPC_MATERIAL_REFERENCE dict added to photo_matcher.py
+- SH-037 b54ae8a — audit_stale_catalog_rows() + batch_retag_stale_rows() added
+- SH-038 ba14867 — TIER 0 OPC catalog extended to product-photo slides 2-4
+- SH-039 ced297e — DALL-E blocked for OPC (real-photo only cascade)
+- SH-056 d498319 — _is_ai_art_url() domain guard + _opc_photo_query() rewriter
+- SH-057 ea487b3 + 97cc2f0 — cutout head-crop fixed (overflow:visible + object-position:top center + min-height:110%)
+- SH-040 8ee2fb0 — validate_image_relevance() added to photo_matcher.py
+- SH-022 807c8db — find_supporting_clips() in motion_sources.py + wired into main.py
+- SH-010 1cc20c8 — video-research.yml clips upload to Drive resources/clips/
+- SH-029 f41c8b5 — Buffer failure guard + Pipeline Failures logging in approval_handler.py
+
+GAP AUDIT (read every changed file, found 5 real gaps):
+
+GAP 1 — SH-025: OPC_MATERIAL_REFERENCE was defined but never called anywhere in the image cascade. Dead code.
+FIX (commit 87b4fec): _opc_photo_query() now imports OPC_MATERIAL_REFERENCE and prepends a specific material reference term when topic keyword matches a category (paint, flooring, tile, countertop, lumber, etc.). Stock photo queries for OPC now get specific product context instead of generic topic text.
+
+GAP 2 — SH-040: validate_image_relevance() existed in photo_matcher.py but was never imported or called from carousel_builder.py. _vision_accept() used its own internal _vision_validate. The photo_matcher URL heuristic (_url_looks_watermarked_or_tiny) was completely disconnected from the image cascade.
+FIX (commit 87b4fec): _vision_accept() now imports and calls photo_matcher._url_looks_watermarked_or_tiny on the source URL for early reject before Vision API check.
+
+GAP 3 — SH-056: _is_ai_art_url(local_path) was checking a LOCAL file path (e.g. /tmp/abc.jpg), not the original URL. Domain names like lexica.art would never appear in a local path — the check always passed, doing nothing.
+FIX (commit 87b4fec): Added _fetch_url_cache dict at module level. _fetch_pexels_image and _fetch_pixabay_image register original URLs. _vision_accept checks source_url = _fetch_url_cache.get(local_path, local_path) so _is_ai_art_url sees the actual HTTP source URL.
+
+GAP 4 — SH-037: audit_stale_catalog_rows() was defined but never called from anywhere. Unreachable code.
+FIX (commit 69a2e66): run_weekly_catalog_audit() added to scraper.py; imported and called from 4AM agent main.py before the scraping step, every Sunday (weekday 6). batch_retag_stale_rows() logs stale count only — Vision API retag remains a stub until Vision API key is wired.
+
+GAP 5 — SH-029 BLOCKER: BUFFER_PROFILE_ID secret does NOT exist in GitHub (only BUFFER_API_KEY_EXP04092027 is set). The SH-029 guard added to approval_handler.py checked for BUFFER_PROFILE_ID before scheduling — meaning every APPROVE reply would log "BUFFER_PROFILE_ID missing" and skip Buffer. Approval flow was completely broken.
+FIX (commit b72f320): BUFFER_PROFILE_ID guard removed. schedule_to_buffer() already auto-discovers the Instagram profile from Buffer API /profiles.json — no separate env var needed. The BUFFER_KEY (mapped from BUFFER_API_KEY_EXP04092027 in approval_check.yml) is the only credential needed.
+
+ARCHITECTURE NOTES (for next session):
+- SH-010 clarification: video-research.yml uploads clips to a FIXED Drive folder (ID 1-QRf4xToJf_7cnS5UW7BiDUjd6lXot6o — Resources/Video Creation Flow). This is correct for that pipeline — it's a research tool, not a version-based content pipeline. The version-based resources/clips/ path is in content_creator main.py (SH-022), not in video-research.
+- SH-037 batch_retag: stub is intentional. When VISION_API_KEY is wired, batch_retag_stale_rows() will call Vision API to describe each stale image. No action needed until then.
+- validate_image_relevance() in photo_matcher: this function is now used indirectly — its _url_looks_watermarked_or_tiny helper is called from _vision_accept(). The full function (with Vision API label scoring) is available for any future caller that wants a standalone photo check outside the cascade.
+
+Commits pushed: 87b4fec (carousel_builder 3-in-1), b72f320 (approval_handler), 69a2e66 (scraper + main)
+Tracker: all 10 original tasks + 5 gap-fixed tasks marked Done in Pipeline Fix Master Checklist
+Status flips: ALL 10 SH tasks → DONE ✅. No remaining open items from this batch.
+
+PENDING ⏳ (next session):
+1. Test approval_handler → Buffer end-to-end (reply APPROVE to a preview email, confirm Buffer schedules)
+2. Run content_creator.yml manually — observe email preview, verify all 4 OPC templates render correctly
+3. Next pipeline-fix batch: check for new SH items in Master Checklist tracker

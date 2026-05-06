@@ -161,6 +161,7 @@ jobs:
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
           ALERT_EMAIL: priscila@oakpark-construction.com
           WORK_DIR: /tmp/content_creator_run
+          REVIEW_STRICT: 'true'
         run: |
           # SH-011: review_only_folder_id merges into REVIEW_DRIVE_FOLDERS automatically
           FOLDER_ID="${{ github.event.inputs.review_only_folder_id }}"
@@ -179,7 +180,7 @@ jobs:
           python scripts/content_creator/carousel_reviewer.py
 
       - name: AI Content Audit (3 agents)
-        if: ${{ always() && github.event.inputs.review_only != 'true' }}
+        if: ${{ always() && github.event.inputs.review_only != 'true' && github.event.inputs.review_only_folder_id == '' }}
         env:
           CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           ALERT_EMAIL: priscila@oakpark-construction.com
@@ -277,7 +278,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Retry content creator
-        if: ${{ github.event.inputs.review_only != 'true' }}
+        if: ${{ github.event.inputs.review_only != 'true' && github.event.inputs.review_only_folder_id == '' }}
         working-directory: scripts/content_creator
         run: python main.py
         env:
@@ -298,6 +299,7 @@ jobs:
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
           ALERT_EMAIL: priscila@oakpark-construction.com
           WORK_DIR: /tmp/content_creator_run
+          REVIEW_STRICT: 'true'
         run: |
           # SH-011: review_only_folder_id merges into REVIEW_DRIVE_FOLDERS automatically
           FOLDER_ID="${{ github.event.inputs.review_only_folder_id }}"
@@ -316,7 +318,7 @@ jobs:
           python scripts/content_creator/carousel_reviewer.py
 
       - name: AI Content Audit (3 agents)
-        if: ${{ always() && github.event.inputs.review_only != 'true' }}
+        if: ${{ always() && github.event.inputs.review_only != 'true' && github.event.inputs.review_only_folder_id == '' }}
         env:
           CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           ALERT_EMAIL: priscila@oakpark-construction.com

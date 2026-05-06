@@ -100,9 +100,9 @@
       "niche": "brazil",
       "kind": "cover",
       "file": "news_brazil_face_off.html",
-      "variants": 3,
+      "variants": 1,
       "use_when": "Brazil dispute, opposition, debate, or conflict between two named figures.",
-      "pipeline_notes": "Needs profile-view subjects facing each other; face detection normalizes bust scale."
+      "pipeline_notes": "Needs profile-view subjects facing each other; face detection normalizes bust scale. Cutout pipeline must add transparent headroom so hair/head never touches the PNG edge or gets clipped in the template."
     },
     {
       "id": "news_usa_face_off",
@@ -117,7 +117,7 @@
       "file": "news_usa_face_off.html",
       "variants": 3,
       "use_when": "USA dispute, opposition, debate, or conflict between two named figures.",
-      "pipeline_notes": "Needs profile-view subjects facing each other; face detection normalizes bust scale."
+      "pipeline_notes": "Needs profile-view subjects facing each other; face detection normalizes bust scale. Cutout pipeline must add transparent headroom so hair/head never touches the PNG edge or gets clipped in the template."
     },
     {
       "id": "news_brazil_network",

@@ -40,6 +40,7 @@ SHEETS_TOKEN     = os.environ.get("SHEETS_TOKEN", "")
 ALERT_EMAIL      = os.environ.get("ALERT_EMAIL", "priscila@oakpark-construction.com")
 RUN_RESULTS_JSON = os.environ.get("CONTENT_CREATOR_RUN", "[]")  # JSON array of result dicts
 REVIEW_DRIVE_FOLDERS = os.environ.get("REVIEW_DRIVE_FOLDERS", "").strip()  # CSV folder ids or links
+REVIEW_STRICT = os.environ.get("REVIEW_STRICT", "").strip().lower() in {"1", "true", "yes"}
 
 # FIX_MODE: "analyze_only" (default) = detect + email
 #          "analyze_and_fix"        = detect, auto-fix [fix_type=regenerate] issues,
@@ -739,12 +740,26 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
 
     files = _list_children(drive, folder_id)
     html_file = next((f for f in files if f.get("name") == "cover.html"), None)
+    _tmp_html: Path | None = None
     if html_file:
         try:
             html_text = _download_drive_text(drive, html_file["id"])
             tmp = Path("/tmp") / f"review_{folder_id}.html"
             tmp.write_text(html_text, encoding="utf-8")
+            _tmp_html = tmp
             issues.extend(check_html_placeholders(str(tmp)))
+            # SH-028: storytelling score on Drive path (mirrors check_built_post logic)
+            if ANTHROPIC_KEY:
+                niche_guess = _infer_niche_from_folder(folder_name, input_ref or "")
+                issues.extend(check_text_quality(str(tmp), niche_guess))
+                st_scores = score_storytelling(str(tmp), niche_guess)
+                if st_scores:
+                    overall = st_scores.get("overall", 0)
+                    if overall < 60:
+                        issues.append(
+                            f"[storytelling] Overall quality score {overall}/100 — "
+                            f"{st_scores.get('summary', '')[:100]}"
+                        )
         except Exception as e:
             issues.append(f"Could not inspect cover.html: {e}")
     else:
@@ -1390,7 +1405,10 @@ def main():
     # Always send report (even if all pass — confirms reviewer ran)
     send_review_email(failed, reviewed)
 
-    # Always exit 0 — reviewer is informational, not blocking
+    if failed and REVIEW_STRICT:
+        print("[carousel-reviewer] Strict mode: failing workflow because review issues were found.")
+        sys.exit(1)
+
     print("[carousel-reviewer] Done.")
 
 
@@ -1401,4 +1419,4 @@ if __name__ == "__main__":
         import traceback
         print(f"[carousel-reviewer] Uncaught exception: {e}")
         print(traceback.format_exc())
-        sys.exit(0)  # Always exit 0 — reviewer is informational, not blocking
+        sys.exit(1 if REVIEW_STRICT else 0)

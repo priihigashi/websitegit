@@ -15,6 +15,8 @@ Flow:
   - Pipeline failures → retries or creates issue
   - Email replies → processes approvals/changes
 """
+from __future__ import annotations
+
 import json, os, re, sys, time, subprocess, shutil
 from datetime import datetime
 from pathlib import Path
@@ -79,42 +81,71 @@ TEST_OUTPUT_FOLDER = os.environ.get("TEST_OUTPUT_FOLDER", "").strip()
 
 # SH-048: alert digest — collect all failures, send ONE email at run end
 _PENDING_ALERTS: list[str] = []
+_PIPELINE_FATAL = False
 
 
-def _send_alert(msg: str):
+def _send_alert(msg: str, fatal: bool = False):
     """SH-048: Queue an alert. Flushed as one email at end of run by _flush_alerts().
     Prevents inbox flood when multiple failures happen in the same pipeline run."""
+    global _PIPELINE_FATAL
     print(f"\n🔴 ALERT (queued): {msg}")
     _PENDING_ALERTS.append(msg)
+    if fatal:
+        _PIPELINE_FATAL = True
 
 
 def _flush_alerts():
     """Send all queued alerts as ONE digest email. Call once at the end of main()."""
     if not _PENDING_ALERTS:
         return
+    run_time = datetime.now(ET).strftime('%Y-%m-%d %H:%M ET')
+    subject = f"[content_creator] {len(_PENDING_ALERTS)} pipeline alert(s) — {run_time}"
+    body_lines = [
+        f"Content Creator pipeline encountered {len(_PENDING_ALERTS)} alert(s) in this run:\n",
+    ]
+    for i, alert in enumerate(_PENDING_ALERTS, 1):
+        body_lines.append(f"--- Alert {i} ---\n{alert}\n")
+    body_lines.append(
+        "\nCheck logs: https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/content_creator.yml"
+    )
+    body = "\n".join(body_lines)
+
+    # Route A: gh CLI (GitHub Actions environment)
+    sent = False
     try:
-        run_time = datetime.now(ET).strftime('%Y-%m-%d %H:%M ET')
-        subject = f"[content_creator] {len(_PENDING_ALERTS)} pipeline alert(s) — {run_time}"
-        body_lines = [
-            f"Content Creator pipeline encountered {len(_PENDING_ALERTS)} alert(s) in this run:\n",
-        ]
-        for i, alert in enumerate(_PENDING_ALERTS, 1):
-            body_lines.append(f"--- Alert {i} ---\n{alert}\n")
-        body_lines.append(
-            "\nCheck logs: https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/content_creator.yml"
-        )
-        body = "\n".join(body_lines)
-        subprocess.run(
+        result = subprocess.run(
             ["gh", "workflow", "run", "send_email.yml",
              "--repo", "priihigashi/oak-park-ai-hub",
              "-f", f"to={ALERT_EMAIL}",
              "-f", f"subject={subject}",
              "-f", f"body={body}"],
-            check=False, timeout=30,
+            check=False, timeout=30, capture_output=True,
         )
-        print(f"  Alert digest sent: {len(_PENDING_ALERTS)} alert(s) bundled")
+        if result.returncode == 0:
+            print(f"  Alert digest sent via gh: {len(_PENDING_ALERTS)} alert(s) bundled")
+            sent = True
     except Exception as e:
-        print(f"  (alert digest send itself failed: {e})")
+        print(f"  (gh CLI unavailable: {e})")
+
+    # Route B: smtplib fallback (local or when gh not configured)
+    if not sent:
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            app_pw = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD", "")
+            if app_pw:
+                msg = MIMEText(body)
+                msg["Subject"] = subject
+                msg["From"] = "priscila@oakpark-construction.com"
+                msg["To"] = ALERT_EMAIL
+                with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+                    smtp.login("priscila@oakpark-construction.com", app_pw)
+                    smtp.send_message(msg)
+                print(f"  Alert digest sent via smtplib: {len(_PENDING_ALERTS)} alert(s) bundled")
+            else:
+                print(f"  (smtplib fallback: PRI_OP_GMAIL_APP_PASSWORD not set — alerts logged to stdout only)")
+        except Exception as e:
+            print(f"  (smtplib fallback also failed: {e} — alerts logged to stdout only)")
 
 
 CLIP_THRESHOLD = 8  # Clip Collections count required before building a clips_needed topic
@@ -1978,7 +2009,10 @@ def main():
                 errors.append(err)
 
         if not results:
-            _send_alert("Manual mode rendered zero carousels.\n" + ("\n".join(errors) if errors else "No errors captured."))
+            _send_alert(
+                "Manual mode rendered zero carousels.\n" + ("\n".join(errors) if errors else "No errors captured."),
+                fatal=True,
+            )
             return
 
         try:
@@ -2088,10 +2122,13 @@ def main():
     if not results:
         print("\nNo carousels rendered — exiting without email")
         msg = f"Zero carousels rendered out of {len(approved)} Approved topics.\n\nErrors:\n" + "\n".join(errors) if errors else "Zero carousels rendered — no per-topic errors captured (silent failure)."
-        _send_alert(msg)
+        _send_alert(msg, fatal=True)
         return
     if errors:
-        _send_alert(f"{len(results)}/{len(approved)} carousels rendered — {len(errors)} failures:\n\n" + "\n".join(errors))
+        _send_alert(
+            f"{len(results)}/{len(approved)} carousels rendered — {len(errors)} failures:\n\n" + "\n".join(errors),
+            fatal=True,
+        )
 
     # Phase C: Send preview email → mark each row 'Email Sent'
     print(f"\n--- Phase C: Sending preview email ({len(results)} posts) ---")
@@ -2136,8 +2173,8 @@ if __name__ == "__main__":
         import traceback
         tb = traceback.format_exc()
         print(f"\n🔴 UNCAUGHT: {e}\n{tb}")
-        _send_alert(f"Uncaught crash in main():\n{e}\n\n{tb[-2000:]}")
+        _send_alert(f"Uncaught crash in main():\n{e}\n\n{tb[-2000:]}", fatal=True)
     finally:
         _flush_alerts()  # SH-048: send all queued alerts as one digest email
-        if _PENDING_ALERTS:
+        if _PIPELINE_FATAL:
             sys.exit(1)

@@ -405,7 +405,9 @@ def main():
     if not ANTHROPIC_KEY:
         print("  WARNING: CLAUDE_KEY_4_CONTENT not set — all agents will be SKIPPED")
 
-    print(f"  Auditing {len(results)} post(s)  ×  {len(AGENTS)} agents each...\n")
+    first_niche = results[0].get("niche", "") if results else ""
+    agent_count = len(_agents_for_niche(first_niche))
+    print(f"  Auditing {len(results)} post(s)  ×  {agent_count} agents each...\n")
 
     all_audits = [audit_post(r) for r in results]
 

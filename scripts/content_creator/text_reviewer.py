@@ -221,7 +221,7 @@ Return ONLY valid JSON in this exact shape (no markdown, no commentary):
   "issues": [
     {{
       "slide": <int>,
-      "type": "<one of: factual, unsourced, suspicious, competitor, tone, length, promise, hook, story_arc, proof_gap>",
+      "type": "<one of: factual, unsourced, suspicious, competitor, tone, length, promise, hook, story_arc, proof_gap, readability, internal_label_leakage>",
       "severity": "<high|med|low>",
       "original": "<the exact substring from the slide that's wrong>",
       "suggested": "<the minimal-edit replacement, or null>",
