@@ -132,7 +132,7 @@ def _get_token():
 
 def _read_catalog(token):
     import urllib.parse
-    enc = urllib.parse.quote(f"'{CATALOG_TAB}'!A:J", safe="!:'")
+    enc = urllib.parse.quote(f"'{CATALOG_TAB}'!A:J", safe="!:"")
     url = (f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}"
            f"/values/{enc}?majorDimension=ROWS")
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
@@ -299,7 +299,7 @@ def audit_stale_catalog_rows(sheet_service, spreadsheet_id, tab_name):
 
     try:
         import urllib.parse as _up
-        enc = _up.quote(f"'{tname}'!A:J", safe="!:'")
+        enc = _up.quote(f"'{tname}'!A:J", safe="!:"")
         url = (f"https://sheets.googleapis.com/v4/spreadsheets/{sid}"
                f"/values/{enc}?majorDimension=ROWS")
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
@@ -505,3 +505,4 @@ def validate_image_relevance(image_url: str, query: str, topic: str) -> bool:
         # Vision call failed — non-blocking, accept the image
         print(f"  validate_image_relevance: Vision API error (non-fatal, accepting) — {e}")
         return True
+
