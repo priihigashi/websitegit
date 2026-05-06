@@ -1878,7 +1878,11 @@ def _generate_replicate_sdxl(prompt, work_dir, filename):
 
 
 def _download_drive_photo(drive_url, dest_path):
-    """Download a photo from a Drive viewer URL to dest_path. Returns dest_path or ''."""
+    """Download a photo from a Drive viewer URL to dest_path. Returns dest_path or ''.
+
+    Uses Drive API with OAuth (required for shared drive files). Falls back to
+    anonymous public URL for publicly shared files only.
+    """
     try:
         import re as _re
         m = _re.search(r"/d/([A-Za-z0-9_-]+)", drive_url)
@@ -1887,8 +1891,41 @@ def _download_drive_photo(drive_url, dest_path):
         if not m:
             return ""
         file_id = m.group(1)
+        dest_dir = os.path.dirname(dest_path)
+        if dest_dir:
+            os.makedirs(dest_dir, exist_ok=True)
+
+        # Primary: Drive API with OAuth (works for private shared drive files)
+        _tok_raw = os.environ.get("SHEETS_TOKEN", "")
+        if _tok_raw:
+            try:
+                import json as _json
+                import io as _io
+                from google.oauth2.credentials import Credentials as _Creds
+                from google.auth.transport.requests import Request as _GRequest
+                from googleapiclient.discovery import build as _build
+                from googleapiclient.http import MediaIoBaseDownload as _MediaDL
+                _tok_data = _json.loads(_tok_raw)
+                _creds = _Creds.from_authorized_user_info(_tok_data)
+                if _creds.expired and _creds.refresh_token:
+                    _creds.refresh(_GRequest())
+                _drive_svc = _build("drive", "v3", credentials=_creds)
+                _request = _drive_svc.files().get_media(fileId=file_id, supportsAllDrives=True)
+                _buf = _io.BytesIO()
+                _downloader = _MediaDL(_buf, _request)
+                done = False
+                while not done:
+                    _, done = _downloader.next_chunk()
+                with open(dest_path, "wb") as f:
+                    f.write(_buf.getvalue())
+                if os.path.getsize(dest_path) >= 2000:
+                    return dest_path
+                os.remove(dest_path)
+            except Exception as _api_e:
+                print(f"  _download_drive_photo API error: {_api_e}")
+
+        # Fallback: anonymous URL (only works for publicly shared files)
         download_url = f"https://drive.google.com/uc?id={file_id}&export=download"
-        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         req = urllib.request.Request(download_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=20) as r, open(dest_path, "wb") as f:
             f.write(r.read())
@@ -2472,8 +2509,10 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
     def esc(s):
         return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
-    # Which slide indices get motion: cover(1) + every other middle (3,5,...) — never sources
-    motion_indices = [1] + [i for i in range(3, n_slides + 2, 2)]
+    # Which slide indices get motion: cover + ALL middle slides (never sources).
+    # Regression fix: every-other-slide motion made reels look like "images missing"
+    # because non-recorded middle slides fell back to plain/static variants.
+    motion_indices = [1] + [i for i in range(2, n_slides + 2)]
 
     for slide_idx in motion_indices:
         clip_path = clips.get(slide_idx)
@@ -2970,6 +3009,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
   <div class="tag">The Real Number</div>
   <div class="stat-big">{content.get("slide2_stat", "—")}</div>
   <div class="stat-label">{content.get("slide2_label", "")}</div>
+  {_opc_context_slot(2, "STAT CONTEXT IMAGE")}
   <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
   <div class="arrow">SWIPE &#8594;</div>
   <div class="slide-logo">Oak Park Construction · CBC1263425</div>
