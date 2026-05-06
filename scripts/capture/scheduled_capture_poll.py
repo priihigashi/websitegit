@@ -80,7 +80,8 @@ def _sheets():
         "grant_type": "refresh_token",
     }).encode()
     resp = json.loads(urllib.request.urlopen(
-        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+        timeout=15).read())
     creds = Credentials(
         token=resp["access_token"],
         refresh_token=td["refresh_token"],
