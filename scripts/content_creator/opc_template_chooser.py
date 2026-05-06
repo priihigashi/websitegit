@@ -35,6 +35,9 @@ SIGNALS = {
             "granite", "marble", "floor", "flooring", "cabinet", "cabinets",
             "paint", "finish", "finishes", "fixture", "fixtures", "waterproof",
             "grout", "backsplash", "shower", "drywall", "wood", "concrete",
+            # Structural/concrete components (added 2026-05-06 — Phase 3)
+            "rebar", "formwork", "foundation", "slab", "footing", "stud",
+            "framing", "shingle", "shingles", "siding", "stucco", "insulation",
         ],
         "story_job": "material/product/service explanation",
         "preferred": ["opc_material_profile", "opc_item_spotlight", "opc_tip"],
@@ -108,6 +111,7 @@ GENERIC_HOOK_PHRASES = [
 # remodeling, not the Village of Oak Park, Illinois. Keep broad enough for
 # architecture/design inspiration, but require a construction/remodel purpose.
 OPC_CONSTRUCTION_TERMS = [
+    # Core OPC identity
     "construction", "contractor", "general contractor", "remodel", "remodeling",
     "renovation", "homeowner", "homeowners", "bathroom", "kitchen", "addition",
     "build", "builder", "jobsite", "job site", "project", "permit", "inspection",
@@ -115,6 +119,21 @@ OPC_CONSTRUCTION_TERMS = [
     "concrete", "waterproof", "layout", "design-build", "south florida",
     "pompano", "broward", "miami-dade", "palm beach", "oak park construction",
     "opc", "mike", "michael", "matthew",
+    # Structural / concrete (added 2026-05-06 — Phase 3 verification surfaced gap)
+    "rebar", "formwork", "foundation", "slab", "footing", "structural",
+    "load bearing", "beam", "joist", "header", "framing", "stud", "wall framing",
+    # Roofing / envelope
+    "roof", "roofing", "shingle", "shingles", "fascia", "soffit", "gutter",
+    "siding", "stucco",
+    # Finishing
+    "paint", "painting", "primer", "caulk", "sealant", "grout", "trim",
+    "baseboard", "crown molding", "wainscot",
+    # Systems
+    "plumbing", "electrical", "hvac", "ductwork", "insulation", "vapor barrier",
+    # Outdoor
+    "deck", "decking", "patio", "porch", "driveway", "walkway", "retaining wall",
+    # Common issues / inspections
+    "crack", "mold", "water damage", "leak", "settlement", "moisture",
 ]
 
 # Terms that usually mean the wrong entity: Oak Park, Illinois / tourism / city
@@ -426,13 +445,262 @@ def build_recommendation(topic: str, brief: str, registry_path: Path = DEFAULT_R
     }
 
 
+# =============================================================================
+# Phase 3 — slide-by-slide planner
+# =============================================================================
+#
+# plan_carousel_slides() returns a 5-slide plan with per-slide template_id, role,
+# content goal, image need, required content fields, and a production_safe flag.
+#
+# Templates fall into two buckets:
+# - Production-safe TODAY: opc_tip_cover/stat/list/explainer/sources (Phase 2 split
+#   the production tip builder into 5 callable component renderers).
+# - Plannable but NOT yet renderable: opc_duotone, opc_base, opc_statement,
+#   opc_material_profile, opc_item_spotlight, opc_four_card_grid,
+#   opc_progress_media. Their HTMLs exist in docs/templates/ but no Python
+#   builder exists in carousel_builder.py yet (Phase 6 — port standalones).
+#
+# The renderer (build_opc_from_slide_plan) is responsible for substituting the
+# closest tip component (fallback_template_id) for any slide whose template is
+# not production-safe. The planner just returns the truthful intent.
+
+PRODUCTION_SAFE_TEMPLATE_IDS = {
+    "opc_tip_cover",
+    "opc_tip_stat",
+    "opc_tip_list",
+    "opc_tip_explainer",
+    "opc_tip_sources",
+}
+
+# Standalone template_id → safest tip component to use when its Python builder
+# is not yet implemented. The renderer reads this when production_safe=False.
+STANDALONE_TO_TIP_FALLBACK = {
+    "opc_duotone":          "opc_tip_cover",
+    "opc_base":             "opc_tip_cover",
+    "opc_statement":        "opc_tip_explainer",
+    "opc_material_profile": "opc_tip_stat",
+    "opc_item_spotlight":   "opc_tip_list",
+    "opc_four_card_grid":   "opc_tip_list",
+    "opc_progress_media":   "opc_tip_explainer",
+}
+
+# Required content fields per slide template. Used by the content-generation
+# step (separate from the planner) to know what to fill in. For Phase 3 the
+# field names mirror the keys already produced by carousel_builder for tip
+# slides; standalone schemas come from each template's HTML structure (Phase 6
+# will validate them).
+SLIDE_REQUIRED_FIELDS: dict[str, list[str]] = {
+    "opc_tip_cover":        ["headline", "accent_word", "subhead"],
+    "opc_tip_stat":         ["slide2_stat", "slide2_label", "slide2_headline"],
+    "opc_tip_list":         ["slide3_items"],
+    "opc_tip_explainer":    ["slide4_headline", "slide4_body"],
+    "opc_tip_sources":      ["sources", "cta"],
+    "opc_duotone":          ["claim", "photo", "quote_text", "attr_name", "duotone_variant"],
+    "opc_base":             ["headline", "hook", "byline", "tag", "stamp_text", "bg_photo", "sticker_photo"],
+    "opc_statement":        ["tag", "quote_opener", "quote_body", "attribution", "person_photo"],
+    "opc_material_profile": [
+        "profile_label", "profile_headline",
+        "profile_grid_best_for", "profile_grid_not_ideal",
+        "profile_grid_durability", "profile_grid_install",
+        "profile_grid_cost", "profile_grid_style", "profile_tags",
+    ],
+    "opc_item_spotlight":   ["tag", "category", "headline", "sub", "fact_list"],
+    "opc_four_card_grid":   ["headline", "subhead", "cards"],
+    "opc_progress_media":   ["tag", "title", "title_em", "description", "media_frame", "pill_tags"],
+}
+
+# Image-need hint per template. The pipeline's image-fetch step uses this to
+# pick a Pexels/Pixabay/Apify query strategy and to enforce visual variety.
+SLIDE_IMAGE_NEED: dict[str, str] = {
+    "opc_tip_cover":        "1 hero photo (jobsite/material/finished room) — covers the slide bg",
+    "opc_tip_stat":         "1 context image (stat-relevant photo or branded placeholder)",
+    "opc_tip_list":         "1 context image (process/jobsite/checklist visual)",
+    "opc_tip_explainer":    "1 context image (technique/detail/before-after) — landscape",
+    "opc_tip_sources":      "1 hero photo (re-uses cover or last context image as bg)",
+    "opc_duotone":          "1 hero photo, dramatic, high-contrast — duotone filter applied",
+    "opc_base":             "2 photos: bg hero + sticker portrait (project detail)",
+    "opc_statement":        "1 person photo (Mike, homeowner, inspector) — B&W treated",
+    "opc_material_profile": "0 (text-only material grid) — optional material thumbnail",
+    "opc_item_spotlight":   "1 product/material thumbnail (260×340)",
+    "opc_four_card_grid":   "4 photos (one per card, 185×185)",
+    "opc_progress_media":   "1 photo or video (920×585) — required, real jobsite",
+}
+
+
+def _slide_goal(template_id: str, role: str, topic: str) -> str:
+    """Short prose describing what THIS slide should communicate. Reads as a brief
+    for the content step (planner does NOT generate copy itself)."""
+    role_goals = {
+        "cover":      f"Hook the homeowner on '{topic}' — name the cost or risk in one line.",
+        "definition": f"Define the key thing in '{topic}' so a non-expert understands it.",
+        "comparison": f"Compare 3-4 options/checks/scenarios that decide the outcome of '{topic}'.",
+        "statement":  f"Land one warning, rule, or quote that crystallizes the lesson of '{topic}'.",
+        "sources":    f"List 2-3 sources and a save-this CTA for '{topic}'.",
+    }
+    template_goals = {
+        "opc_duotone":          "Open with a bold warning/red-flag headline + duotone hero image.",
+        "opc_base":             "Calm topic intro with bg photo + sticker portrait of project detail.",
+        "opc_material_profile": "Present material/product profile in a 6-field grid (best-for, not-ideal, durability, install, cost, style).",
+        "opc_item_spotlight":   "Spotlight ONE item (cabinet, tile, fixture) with 4 key fact bullets.",
+        "opc_four_card_grid":   "Show exactly 4 options/products/decisions side-by-side as cards.",
+        "opc_statement":        "Carry one quoted line + attribution (Mike / homeowner / inspector).",
+        "opc_progress_media":   "Show real jobsite proof — before/during/after photo with description.",
+    }
+    if template_id in template_goals:
+        return template_goals[template_id]
+    return role_goals.get(role, f"Slide {role} for '{topic}'.")
+
+
+def plan_carousel_slides(
+    topic: str,
+    brief: str = "",
+    registry_path: Path = DEFAULT_REGISTRY,
+) -> dict[str, Any]:
+    """Return a 5-slide plan: each slide gets its own template_id chosen for the
+    slide ROLE and the topic's storytelling signals.
+
+    Output schema:
+      {
+        "topic": str,
+        "status": "passed" | "blocked",
+        "primary_recommendation": dict | None,   # whole-carousel rec (legacy)
+        "matched_signals": list[str],
+        "slides": [
+          {
+            "slide": 1..5,
+            "role": "cover" | "definition" | "comparison" | "statement" | "sources",
+            "template_id": str,
+            "content_goal": str,
+            "image_need": str,
+            "required_fields": list[str],
+            "production_safe": bool,
+            "fallback_template_id": str | None,
+          },
+          ...
+        ],
+        "safety_notes": [...],
+      }
+
+    The renderer uses fallback_template_id when production_safe=False so the
+    plan can describe the IDEAL design even before standalones are wired."""
+    rec = build_recommendation(topic, brief, registry_path)
+    if rec.get("status") != "passed":
+        return {
+            "topic": topic,
+            "status": rec.get("status", "blocked"),
+            "reason": rec.get("opc_content_fit", {}).get("reason", "blocked"),
+            "primary_recommendation": rec.get("primary_recommendation"),
+            "matched_signals": [],
+            "slides": [],
+            "safety_notes": [
+                "Plan blocked at OPC content-fit gate.",
+                "No rendering performed.",
+            ],
+        }
+
+    matches = rec["storytelling_read"]["matched_signals"]
+
+    # Slide 1 — cover
+    if "warning" in matches:
+        s1 = "opc_duotone"
+    elif "progress" in matches:
+        s1 = "opc_base"
+    else:
+        s1 = "opc_tip_cover"
+
+    # Slide 2 — definition / stat
+    if "material" in matches:
+        s2 = "opc_material_profile"
+    elif "single_item" in matches:
+        s2 = "opc_item_spotlight"
+    else:
+        s2 = "opc_tip_stat"
+
+    # Slide 3 — comparison / list / spotlight
+    if "comparison" in matches:
+        s3 = "opc_four_card_grid"
+    elif "single_item" in matches and s2 != "opc_item_spotlight":
+        s3 = "opc_item_spotlight"
+    else:
+        s3 = "opc_tip_list"
+
+    # Slide 4 — statement / explainer / proof
+    if "quote_statement" in matches:
+        s4 = "opc_statement"
+    elif "progress" in matches:
+        s4 = "opc_progress_media"
+    else:
+        s4 = "opc_tip_explainer"
+
+    # Slide 5 — sources / CTA (only one template handles this role today)
+    s5 = "opc_tip_sources"
+
+    role_for_slide = {
+        1: "cover", 2: "definition", 3: "comparison",
+        4: "statement", 5: "sources",
+    }
+    plan_slides = []
+    for slide_num, template_id in [(1, s1), (2, s2), (3, s3), (4, s4), (5, s5)]:
+        role = role_for_slide[slide_num]
+        production_safe = template_id in PRODUCTION_SAFE_TEMPLATE_IDS
+        plan_slides.append({
+            "slide": slide_num,
+            "role": role,
+            "template_id": template_id,
+            "content_goal": _slide_goal(template_id, role, topic),
+            "image_need": SLIDE_IMAGE_NEED.get(template_id, "1 image"),
+            "required_fields": SLIDE_REQUIRED_FIELDS.get(template_id, []),
+            "production_safe": production_safe,
+            "fallback_template_id": (
+                STANDALONE_TO_TIP_FALLBACK.get(template_id) if not production_safe else None
+            ),
+        })
+
+    return {
+        "topic": topic,
+        "status": "passed",
+        "primary_recommendation": rec.get("primary_recommendation"),
+        "matched_signals": list(matches.keys()),
+        "slides": plan_slides,
+        "safety_notes": [
+            "Plan only — no rendering performed.",
+            "Slides marked production_safe=False fall back to fallback_template_id at render time until standalone Python builders ship (Phase 6).",
+            "Banned legacy keys cutout/illustrated cannot appear in any slot.",
+        ],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Dry-run OPC template chooser")
     parser.add_argument("topic", help="OPC topic or working title")
     parser.add_argument("--brief", default="", help="Optional brief/details to improve classification")
     parser.add_argument("--registry", default=str(DEFAULT_REGISTRY), help="Path to opc_template_intelligence.json")
     parser.add_argument("--pretty", action="store_true", help="Print a readable summary instead of JSON")
+    parser.add_argument("--plan", action="store_true",
+                        help="Return a 5-slide plan instead of a single template recommendation")
     args = parser.parse_args()
+
+    if args.plan:
+        result = plan_carousel_slides(args.topic, args.brief, Path(args.registry))
+        if not args.pretty:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 0
+        print(f"Topic: {result['topic']}")
+        print(f"Status: {result['status']}")
+        if result["status"] != "passed":
+            print(f"Reason: {result.get('reason')}")
+            return 0
+        print(f"Matched signals: {', '.join(result['matched_signals']) or '(none)'}")
+        print("\n5-Slide Plan:")
+        for s in result["slides"]:
+            mark = "✓" if s["production_safe"] else "⏳"
+            fb = f" (fallback → {s['fallback_template_id']})" if s["fallback_template_id"] else ""
+            print(f"  {mark} Slide {s['slide']} [{s['role']}] {s['template_id']}{fb}")
+            print(f"      Goal: {s['content_goal']}")
+            print(f"      Image: {s['image_need']}")
+        for note in result["safety_notes"]:
+            print(f"  · {note}")
+        return 0
 
     result = build_recommendation(args.topic, args.brief, Path(args.registry))
     if not args.pretty:

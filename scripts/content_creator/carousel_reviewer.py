@@ -1066,6 +1066,93 @@ def score_storytelling(html_path: str, niche: str) -> dict:
         return {}
 
 
+# =============================================================================
+# Phase 5 — Smart slide-plan reviewer gates (added 2026-05-06)
+# =============================================================================
+# Catches errors specific to the SH-OPC-SMART-SLIDE-PICKER planner output:
+# - banned legacy keys (cutout/illustrated) sneaking back in via plan
+# - unmapped template_ids (typo / hallucinated by the planner)
+# - mismatch between slide-number and expected role
+# - slide count != 5
+# Vision-based image-text match remains gated on ANTHROPIC_KEY (existing behavior).
+
+OPC_BANNED_TEMPLATE_KEYS = {"cutout", "illustrated"}
+
+KNOWN_OPC_TEMPLATE_IDS = {
+    "opc_tip_cover", "opc_tip_stat", "opc_tip_list", "opc_tip_explainer", "opc_tip_sources",
+    "opc_duotone", "opc_base", "opc_statement", "opc_material_profile",
+    "opc_item_spotlight", "opc_four_card_grid", "opc_progress_media",
+}
+
+EXPECTED_ROLE_FOR_SLIDE = {
+    1: "cover",
+    2: "definition",
+    3: "comparison",
+    4: "statement",
+    5: "sources",
+}
+
+
+def check_slide_plan(content: dict) -> list[str]:
+    """Phase 5 — validate content['_slide_plan'] before render/upload.
+    Returns a list of issue strings (empty list = passed).
+    No-op when no plan is attached (legacy tip path)."""
+    plan = (content or {}).get("_slide_plan") or {}
+    if not plan:
+        return []  # legacy path — nothing to check
+
+    issues = []
+    if plan.get("status") != "passed":
+        issues.append(f"[slide-plan] status={plan.get('status')!r}; expected 'passed'")
+        return issues  # no point checking individual slides if plan blocked
+
+    slides = plan.get("slides") or []
+    if len(slides) != 5:
+        issues.append(f"[slide-plan] {len(slides)} slides; expected 5")
+
+    seen_template_ids = []
+    for s in slides:
+        n = s.get("slide")
+        tid = s.get("template_id", "")
+        role = s.get("role", "")
+        seen_template_ids.append(tid)
+
+        if tid in OPC_BANNED_TEMPLATE_KEYS:
+            issues.append(
+                f"[slide-plan] slide {n}: banned legacy key '{tid}' "
+                "(cutout/illustrated were disabled — see commit 72ff06c)"
+            )
+        if tid not in KNOWN_OPC_TEMPLATE_IDS:
+            issues.append(
+                f"[slide-plan] slide {n}: unknown template_id '{tid}' "
+                f"(not in KNOWN_OPC_TEMPLATE_IDS)"
+            )
+
+        expected_role = EXPECTED_ROLE_FOR_SLIDE.get(n)
+        if expected_role and role != expected_role:
+            issues.append(
+                f"[slide-plan] slide {n}: role '{role}' does not match "
+                f"expected role '{expected_role}'"
+            )
+
+        if not s.get("production_safe", False):
+            fb = s.get("fallback_template_id")
+            if not fb or fb not in KNOWN_OPC_TEMPLATE_IDS:
+                issues.append(
+                    f"[slide-plan] slide {n}: template_id '{tid}' is not "
+                    f"production_safe and has no valid fallback_template_id"
+                )
+
+    # Sources-slide special rule: there's only one renderer for it today.
+    if seen_template_ids and seen_template_ids[-1] != "opc_tip_sources":
+        issues.append(
+            f"[slide-plan] slide 5: must be opc_tip_sources today "
+            f"(got '{seen_template_ids[-1]}'). Only sources renderer wired."
+        )
+
+    return issues
+
+
 def check_built_post(result: dict) -> dict:
     """Run all checks on a single built post result dict.
     Returns {post_id, topic, niche, issues: [str], passed: bool}."""
@@ -1074,6 +1161,12 @@ def check_built_post(result: dict) -> dict:
     niche   = result.get("niche", "")
 
     all_issues = []
+
+    # 0. Phase 5 — smart slide-plan gates (Phase 4 picker output validation).
+    # Runs FIRST so a hallucinated/banned plan blocks the post before any
+    # render/PNG/Drive cost. No-op for posts that don't use the planner.
+    if niche == "opc":
+        all_issues.extend(check_slide_plan(result.get("content", {}) or {}))
 
     # 1. HTML placeholder check — look for cover.html in version folder (local path)
     # The content_creator already cleaned up work_dir, so we check Drive link heuristically.

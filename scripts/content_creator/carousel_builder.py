@@ -2924,6 +2924,14 @@ body { background: #333; font-family: 'Barlow Condensed', 'Impact', sans-serif; 
 
 def build_html(content, niche, topic_slug, work_dir, handle="@HANDLE_PLACEHOLDER", media_paths=None):
     if niche == "opc":
+        # Phase 4: when the planner has attached a slide plan, render via the
+        # smart slide-by-slide path. Falls back to the legacy tip builder if
+        # the plan is missing/blocked. Feature flag lives in main.py
+        # (OPC_SLIDE_PLANNER_ENABLED) — by the time we reach build_html the
+        # decision to attach _slide_plan has already been made.
+        slide_plan = (content or {}).get("_slide_plan") or {}
+        if slide_plan.get("status") == "passed" and len(slide_plan.get("slides", [])) == 5:
+            return build_opc_from_slide_plan(content, topic_slug, work_dir, media_paths=media_paths)
         template_key = content.get("_template_key", "tip")
         if template_key == "progress":
             return _build_opc_progress_html(content, topic_slug, work_dir, media_paths=media_paths)
@@ -2956,6 +2964,131 @@ def _cap34(text: str) -> str:
     return t[:t.rfind(" ")].rstrip() if " " in t else t
 
 
+def _opc_tip_context_slot(slide_num, fallback_label, opc_slides_meta, media_paths):
+    """Picks the right context image (or branded placeholder) for an OPC tip slide.
+    Module-level so the slide-component renderers + a future opc_slide_planner can reuse it."""
+    slide_meta_idx = max(0, slide_num - 2)
+    slide_meta = opc_slides_meta[slide_meta_idx] if slide_meta_idx < len(opc_slides_meta) else {}
+    visual_hint = str(slide_meta.get("visual_hint", "context-image")).strip().lower()
+    query = str(slide_meta.get("context_image_query", "")).strip()
+    query_attr = query.replace('"', "&quot;")
+    img_path = ((media_paths or {}).get("slides", {}) or {}).get(slide_num, "")
+    # If a real image was fetched, always show it
+    if img_path:
+        return (
+            f'<div class="context-img-slot" data-query="{query_attr}">'
+            f'<img src="{img_path}" alt="{fallback_label}">'
+            '</div>'
+        )
+    # No image: if hint is explicitly "none", omit the slot entirely
+    if visual_hint == "none":
+        return ""
+    # No image but slot is expected: show a branded placeholder (not raw query text)
+    return (
+        f'<div class="context-img-slot context-img-placeholder" data-query="{query_attr}">'
+        f'<div class="ctx-placeholder-inner">'
+        f'<div class="ctx-placeholder-icon">&#9632;</div>'
+        f'<div class="ctx-placeholder-label">{fallback_label}</div>'
+        f'</div>'
+        '</div>'
+    )
+
+
+def render_opc_tip_cover(content, v_class, *, hl_html, bg_photo_el):
+    """OPC tip — slide 1 (cover). Public so opc_slide_planner / build_opc_from_slide_plan
+    can call it independently of the full 5-slide tip carousel."""
+    return (
+        f'<div class="slide slide-cover {v_class}">\n'
+        f'  {bg_photo_el}\n'
+        f'  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>\n'
+        f'  <div class="tag">Tip of the Week · Oak Park Construction</div>\n'
+        f'  <div class="headline">{hl_html}</div>\n'
+        f'  <div class="body-text">{content["subhead"]}</div>\n'
+        f'  <div class="arrow">SWIPE &#8594;</div>\n'
+        f'  <div class="slide-logo">Oak Park Construction · CBC1263425</div>\n'
+        f'</div>'
+    )
+
+
+def render_opc_tip_stat(content, v_class, *, context_slot):
+    """OPC tip — slide 2 (THE REAL NUMBER stat slide)."""
+    return (
+        f'<div class="slide slide-stat {v_class}">\n'
+        f'  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>\n'
+        f'  <div class="tag">The Real Number</div>\n'
+        f'  <div class="stat-big">{content.get("slide2_stat", "—")}</div>\n'
+        f'  <div class="stat-label">{content.get("slide2_label", "")}</div>\n'
+        f'  {context_slot}\n'
+        f'  <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>\n'
+        f'  <div class="arrow">SWIPE &#8594;</div>\n'
+        f'  <div class="slide-logo">Oak Park Construction · CBC1263425</div>\n'
+        f'</div>'
+    )
+
+
+def render_opc_tip_list(content, v_class, *, items_html, context_slot):
+    """OPC tip — slide 3 (THE LIST. checklist slide)."""
+    return (
+        f'<div class="slide slide-list {v_class}">\n'
+        f'  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>\n'
+        f'  <div class="tag">What To Know</div>\n'
+        f'  <div class="headline" style="font-size:96px; margin-bottom:36px;">THE <span class="accent">LIST.</span></div>\n'
+        f'  {context_slot}\n'
+        f'  <div class="list">\n'
+        f'{items_html}  </div>\n'
+        f'  <div class="arrow">SWIPE &#8594;</div>\n'
+        f'  <div class="slide-logo">Oak Park Construction · CBC1263425</div>\n'
+        f'</div>'
+    )
+
+
+def render_opc_tip_explainer(content, v_class, *, s4_hl, s4_accent, s4_accent_style, context_slot):
+    """OPC tip — slide 4 (THE PRO MOVE explainer slide)."""
+    s4_with_accent = s4_hl.replace(s4_accent, f'<span style="color:{s4_accent_style};">{s4_accent}</span>')
+    return (
+        f'<div class="slide slide-tip {v_class}">\n'
+        f'  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>\n'
+        f'  <div class="tag">Pro Tip</div>\n'
+        f'  <div class="tip-label"><span class="tip-arrow">&#9658;</span> The Pro Move</div>\n'
+        f'  <div class="tip-big">{s4_with_accent}</div>\n'
+        f'  {context_slot}\n'
+        f'  <div class="tip-explain">{content.get("slide4_body", "")}</div>\n'
+        f'  <div class="arrow">SWIPE &#8594;</div>\n'
+        f'  <div class="slide-logo">Oak Park Construction · CBC1263425</div>\n'
+        f'</div>'
+    )
+
+
+def render_opc_tip_sources(content, v_class, *, sources_html, src_accent_style, sources_bg_el, cta):
+    """OPC tip — slide 5 (sources / CTA closing slide)."""
+    return (
+        f'<div class="slide slide-sources {v_class}">\n'
+        f'  {sources_bg_el}\n'
+        f'  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>\n'
+        f'  <div class="tag">Sources</div>\n'
+        f'  <div class="src-head">WHERE THIS<br>COMES <span style="color:{src_accent_style};">FROM.</span></div>\n'
+        f'  <div class="src-list">\n'
+        f'{sources_html}  </div>\n'
+        f'  <div class="save-cta">{cta}</div>\n'
+        f'  <div class="footer">\n'
+        f'    <span class="handle">@oakparkconstruction</span>\n'
+        f'    <span class="license">LIC · CBC1263425</span>\n'
+        f'  </div>\n'
+        f'</div>'
+    )
+
+
+# Map of OPC tip slide-component key → callable. Used by opc_slide_planner +
+# build_opc_from_slide_plan when the planner picks an opc_tip_* component for a slide.
+OPC_TIP_COMPONENT_RENDERERS = {
+    "opc_tip_cover":     render_opc_tip_cover,
+    "opc_tip_stat":      render_opc_tip_stat,
+    "opc_tip_list":      render_opc_tip_list,
+    "opc_tip_explainer": render_opc_tip_explainer,
+    "opc_tip_sources":   render_opc_tip_sources,
+}
+
+
 def _build_opc_html(content, slug, work_dir, media_paths=None):
     hl = content["headline"]
     # Guardrail: keep cover subhead short enough to avoid colliding with the bottom HUD lane.
@@ -2982,34 +3115,6 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
     s4_hl = content.get("slide4_headline", "THE PRO MOVE")
     s4_accent = s4_hl.split()[-1] if s4_hl else "MOVE"
     opc_slides_meta = content.get("slides", []) if isinstance(content.get("slides", []), list) else []
-
-    def _opc_context_slot(slide_num, fallback_label):
-        slide_meta_idx = max(0, slide_num - 2)
-        slide_meta = opc_slides_meta[slide_meta_idx] if slide_meta_idx < len(opc_slides_meta) else {}
-        visual_hint = str(slide_meta.get("visual_hint", "context-image")).strip().lower()
-        query = str(slide_meta.get("context_image_query", "")).strip()
-        query_attr = query.replace('"', "&quot;")
-        img_path = ((media_paths or {}).get("slides", {}) or {}).get(slide_num, "")
-        # If a real image was fetched, always show it
-        if img_path:
-            return (
-                f'<div class="context-img-slot" data-query="{query_attr}">'
-                f'<img src="{img_path}" alt="{fallback_label}">'
-                '</div>'
-            )
-        # No image: if hint is explicitly "none", omit the slot entirely
-        if visual_hint == "none":
-            return ""
-        # No image but slot is expected: show a branded placeholder (not raw query text)
-        return (
-            f'<div class="context-img-slot context-img-placeholder" data-query="{query_attr}">'
-            f'<div class="ctx-placeholder-inner">'
-            f'<div class="ctx-placeholder-icon">&#9632;</div>'
-            f'<div class="ctx-placeholder-label">{fallback_label}</div>'
-            f'</div>'
-            '</div>'
-        )
-
     cta = content.get("cta", "SAVE THIS.")
 
     cover_img = (media_paths or {}).get("cover", "")
@@ -3030,65 +3135,28 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
     )
 
     def variant_block(v_class, cover_accent_style, s4_accent_style, src_accent_style):
-        return f"""
-<!-- {v_class.upper()} -->
-<div class="slide slide-cover {v_class}">
-  {bg_photo_el}
-  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-  <div class="tag">Tip of the Week · Oak Park Construction</div>
-  <div class="headline">{hl_html}</div>
-  <div class="body-text">{content["subhead"]}</div>
-  <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
-</div>
-
-<div class="slide slide-stat {v_class}">
-  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-  <div class="tag">The Real Number</div>
-  <div class="stat-big">{content.get("slide2_stat", "—")}</div>
-  <div class="stat-label">{content.get("slide2_label", "")}</div>
-  {_opc_context_slot(2, "STAT CONTEXT IMAGE")}
-  <div class="project-note">What you are seeing here: cost, scope, and site conditions can change this number.</div>
-  <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
-</div>
-
-<div class="slide slide-list {v_class}">
-  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-  <div class="tag">What To Know</div>
-  <div class="headline" style="font-size:96px; margin-bottom:36px;">THE <span class="accent">LIST.</span></div>
-  {_opc_context_slot(3, "PROCESS IMAGE")}
-  <div class="list">
-{items_html}  </div>
-  <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
-</div>
-
-<div class="slide slide-tip {v_class}">
-  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-  <div class="tag">Pro Tip</div>
-  <div class="tip-label"><span class="tip-arrow">&#9658;</span> The Pro Move</div>
-  <div class="tip-big">{s4_hl.replace(s4_accent, f'<span style="color:{s4_accent_style};">{s4_accent}</span>')}</div>
-  {_opc_context_slot(4, "TIP IN ACTION IMAGE")}
-  <div class="tip-explain">{content.get("slide4_body", "")}</div>
-  <div class="arrow">SWIPE &#8594;</div>
-  <div class="slide-logo">Oak Park Construction · CBC1263425</div>
-</div>
-
-<div class="slide slide-sources {v_class}">
-  {sources_bg_el}
-  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-  <div class="tag">Sources</div>
-  <div class="src-head">WHERE THIS<br>COMES <span style="color:{src_accent_style};">FROM.</span></div>
-  <div class="src-list">
-{sources_html}  </div>
-  <div class="save-cta">{cta}</div>
-  <div class="footer">
-    <span class="handle">@oakparkconstruction</span>
-    <span class="license">LIC · CBC1263425</span>
-  </div>
-</div>
-"""
+        # Each tip slide is rendered by its own component function. Output stays
+        # byte-identical to the pre-split version because the joins below preserve
+        # the original f-string layout (\n<!-- V2 -->\n + 5 slides separated by \n\n + trailing \n).
+        s2_ctx = _opc_tip_context_slot(2, "STAT CONTEXT IMAGE", opc_slides_meta, media_paths)
+        s3_ctx = _opc_tip_context_slot(3, "PROCESS IMAGE",      opc_slides_meta, media_paths)
+        s4_ctx = _opc_tip_context_slot(4, "TIP IN ACTION IMAGE", opc_slides_meta, media_paths)
+        cover_html   = render_opc_tip_cover(content, v_class, hl_html=hl_html, bg_photo_el=bg_photo_el)
+        stat_html    = render_opc_tip_stat(content, v_class, context_slot=s2_ctx)
+        list_html    = render_opc_tip_list(content, v_class, items_html=items_html, context_slot=s3_ctx)
+        explain_html = render_opc_tip_explainer(content, v_class, s4_hl=s4_hl, s4_accent=s4_accent,
+                                                s4_accent_style=s4_accent_style, context_slot=s4_ctx)
+        sources_block = render_opc_tip_sources(content, v_class, sources_html=sources_html,
+                                               src_accent_style=src_accent_style,
+                                               sources_bg_el=sources_bg_el, cta=cta)
+        return (
+            f"\n<!-- {v_class.upper()} -->\n"
+            + cover_html + "\n\n"
+            + stat_html + "\n\n"
+            + list_html + "\n\n"
+            + explain_html + "\n\n"
+            + sources_block + "\n"
+        )
 
     v2 = variant_block("v2", "#0A0A0A", "#CBCC10", "#CBCC10")
     v3 = variant_block("v3", "#F0EBE3", "#F0EBE3", "#F0EBE3")
@@ -3114,6 +3182,150 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
 </body>
 </html>"""
 
+    html_path.write_text(full_html)
+    return str(html_path)
+
+
+# Banned legacy template keys — must never appear in a slide plan or content dict.
+# Phase 5 reviewer gates also enforce this; the renderer raises immediately if seen.
+OPC_BANNED_TEMPLATE_KEYS = {"cutout", "illustrated"}
+
+
+def build_opc_from_slide_plan(content, slug, work_dir, media_paths=None):
+    """Phase 4 — render a 5-slide OPC carousel from a per-slide template plan
+    (content["_slide_plan"]). Each slide picks its own component renderer.
+
+    The plan's status must be "passed" and its slides list must contain 5
+    entries each with template_id + role. Templates that are not yet
+    production-safe (Phase 6 standalones) automatically substitute their
+    fallback_template_id so the band-aid stays renderable.
+
+    Output is a complete <!DOCTYPE html>...</html> document written to
+    cover.html in work_dir, same as _build_opc_html. Renders v2 + v3 variants
+    so the existing export_variants.js cream/lime extraction still works.
+    """
+    plan = (content or {}).get("_slide_plan") or {}
+    slides = plan.get("slides") or []
+    if plan.get("status") != "passed" or len(slides) != 5:
+        # Defensive: planner returned no usable plan — fall back to legacy tip.
+        return _build_opc_html(content, slug, work_dir, media_paths=media_paths)
+
+    # Hard-fail if any banned legacy key sneaks in (cutout/illustrated).
+    for s in slides:
+        tid = s.get("template_id", "")
+        if tid in OPC_BANNED_TEMPLATE_KEYS:
+            raise ValueError(
+                f"build_opc_from_slide_plan: banned template key '{tid}' "
+                f"in slide plan (slide {s.get('slide')}). "
+                "cutout/illustrated were disabled — see commit 72ff06c."
+            )
+
+    # Pre-compute the same shared values _build_opc_html computes — so each
+    # tip-component renderer has the data it needs regardless of which slide
+    # role it ends up filling.
+    hl = content["headline"]
+    raw_subhead = str(content.get("subhead", "")).strip()
+    if len(raw_subhead) > 110:
+        cut = raw_subhead[:107].rsplit(" ", 1)[0].strip() or raw_subhead[:107].strip()
+        raw_subhead = f"{cut}..."
+    content["subhead"] = raw_subhead
+    accent = content.get("accent_word", hl.split()[-1])
+    hl_html = hl.replace(accent, f'<span class="accent">{accent}</span>')
+
+    items_html = ""
+    for i, item in enumerate(content.get("slide3_items", []), 1):
+        items_html += f'''    <div class="list-item"><span class="list-num">{i:02d}</span><div><div class="list-text">{_cap34(item["title"])}</div><div class="list-sub">{item["sub"]}</div></div></div>\n'''
+
+    sources_html = ""
+    for i, src in enumerate(content.get("sources", []), 1):
+        sources_html += f'    <div class="src-row"><span class="src-num">{i:02d}</span><span>{src}</span></div>\n'
+
+    s4_hl = content.get("slide4_headline", "THE PRO MOVE")
+    s4_accent = s4_hl.split()[-1] if s4_hl else "MOVE"
+    opc_slides_meta = content.get("slides", []) if isinstance(content.get("slides", []), list) else []
+    cta = content.get("cta", "SAVE THIS.")
+
+    cover_img = (media_paths or {}).get("cover", "")
+    bg_photo_el = (
+        f'<div class="bg-photo" style="background-image:url(\'{cover_img}\');"></div>'
+        if cover_img else '<div class="bg-photo"></div>'
+    )
+    last_img = (
+        ((media_paths or {}).get("slides", {}) or {}).get(5)
+        or ((media_paths or {}).get("slides", {}) or {}).get(4)
+        or ((media_paths or {}).get("slides", {}) or {}).get(2)
+        or cover_img
+    )
+    sources_bg_el = (
+        f'<div class="bg-photo" style="background-image:url(\'{last_img}\');"></div>'
+        if last_img else '<div class="bg-photo"></div>'
+    )
+
+    # For each slide, resolve template_id (or fallback) → tip component renderer.
+    # Standalone template_ids that aren't yet wired (no Python builder) substitute
+    # their fallback. The "effective" key is what actually renders today.
+    effective_keys = []
+    for s in slides:
+        tid = s.get("template_id", "")
+        if tid in OPC_TIP_COMPONENT_RENDERERS:
+            effective_keys.append(tid)
+        else:
+            fb = s.get("fallback_template_id") or "opc_tip_explainer"
+            effective_keys.append(fb)
+
+    def _render_slide_for_variant(eff_key, v_class, s4_accent_style, src_accent_style):
+        """Dispatch to the tip-component renderer for this effective key + variant."""
+        if eff_key == "opc_tip_cover":
+            return render_opc_tip_cover(content, v_class, hl_html=hl_html, bg_photo_el=bg_photo_el)
+        if eff_key == "opc_tip_stat":
+            ctx = _opc_tip_context_slot(2, "STAT CONTEXT IMAGE", opc_slides_meta, media_paths)
+            return render_opc_tip_stat(content, v_class, context_slot=ctx)
+        if eff_key == "opc_tip_list":
+            ctx = _opc_tip_context_slot(3, "PROCESS IMAGE", opc_slides_meta, media_paths)
+            return render_opc_tip_list(content, v_class, items_html=items_html, context_slot=ctx)
+        if eff_key == "opc_tip_explainer":
+            ctx = _opc_tip_context_slot(4, "TIP IN ACTION IMAGE", opc_slides_meta, media_paths)
+            return render_opc_tip_explainer(
+                content, v_class, s4_hl=s4_hl, s4_accent=s4_accent,
+                s4_accent_style=s4_accent_style, context_slot=ctx,
+            )
+        if eff_key == "opc_tip_sources":
+            return render_opc_tip_sources(
+                content, v_class, sources_html=sources_html,
+                src_accent_style=src_accent_style, sources_bg_el=sources_bg_el, cta=cta,
+            )
+        # Should never happen — effective_keys built only from known set above.
+        raise ValueError(f"build_opc_from_slide_plan: unknown effective key {eff_key!r}")
+
+    def variant_block(v_class, s4_accent_style, src_accent_style):
+        rendered = [
+            _render_slide_for_variant(k, v_class, s4_accent_style, src_accent_style)
+            for k in effective_keys
+        ]
+        return f"\n<!-- {v_class.upper()} -->\n" + "\n\n".join(rendered) + "\n"
+
+    v2 = variant_block("v2", "#CBCC10", "#CBCC10")
+    v3 = variant_block("v3", "#F0EBE3", "#F0EBE3")
+
+    html_path = Path(work_dir) / "cover.html"
+    with open(Path(__file__).parent / "opc_tip_base.css") as f:
+        base_css = f.read()
+    title_suffix = " · Plan" if plan.get("status") == "passed" else ""
+    full_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OPC — Smart Plan — {slug}{title_suffix}</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+{base_css}
+</style>
+</head>
+<body>
+{v2}
+{v3}
+</body>
+</html>"""
     html_path.write_text(full_html)
     return str(html_path)
 

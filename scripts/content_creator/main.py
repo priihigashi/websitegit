@@ -67,6 +67,10 @@ HISTORY_DEDUP_DAYS = 30
 ALERT_EMAIL = os.environ.get("ALERT_EMAIL", "priscila@oakpark-construction.com")
 TEMPLATE_ROTATION_MODE = os.environ.get("TEMPLATE_ROTATION_MODE", "weekday").strip().lower()
 TEMPLATE_ROTATION_ENABLED = os.environ.get("TEMPLATE_ROTATION_ENABLED", "1").strip().lower() not in ("0", "false", "no")
+# Phase 4 — Smart OPC slide-by-slide template picker. Off by default until the
+# planner + standalone Python builders (Phase 6) have side-by-side parity with
+# the band-aid. See SH-OPC-SMART-SLIDE-PICKER detail doc for rollout plan.
+OPC_SLIDE_PLANNER_ENABLED = os.environ.get("OPC_SLIDE_PLANNER_ENABLED", "0").strip().lower() in ("1", "true", "yes")
 MANUAL_MODE = os.environ.get("MANUAL_MODE", "0").strip().lower() in ("1", "true", "yes")
 MANUAL_TOPIC = os.environ.get("MANUAL_TOPIC", "").strip()
 if MANUAL_TOPIC:
@@ -1266,6 +1270,24 @@ def process_one_topic(topic_entry, run_date, drive):
     if content and template_key:
         content["_template_key"] = template_key
 
+    # Phase 4: smart slide-by-slide template picker (feature-flagged).
+    # When OPC_SLIDE_PLANNER_ENABLED=1 and niche is OPC, run the planner and
+    # attach the resulting plan to content. carousel_builder.build_html
+    # detects content["_slide_plan"] and dispatches to build_opc_from_slide_plan
+    # — falls back to the legacy tip builder if the plan is blocked/empty.
+    if niche == "opc" and OPC_SLIDE_PLANNER_ENABLED and content:
+        try:
+            from opc_template_chooser import plan_carousel_slides
+            plan = plan_carousel_slides(topic, brief or "")
+            if plan.get("status") == "passed" and len(plan.get("slides", [])) == 5:
+                content["_slide_plan"] = plan
+                slide_summary = " → ".join(s["template_id"] for s in plan["slides"])
+                print(f"  smart-plan: {slide_summary}")
+            else:
+                print(f"  smart-plan: skipped ({plan.get('status')}) — using legacy tip path")
+        except Exception as exc:
+            print(f"  smart-plan: error {exc!r} — using legacy tip path")
+
     if niche in ("brazil", "usa"):
         content = _enforce_news_visual_targets(content, topic, niche)
 
@@ -1776,6 +1798,10 @@ def process_one_topic(topic_entry, run_date, drive):
         "post_id": post_id,
         "topic": topic,
         "niche": niche,
+        # Phase 5: pass content so the reviewer can validate _slide_plan
+        # (banned keys, unknown template_ids, role mismatches). Cheap — content
+        # is already a dict in memory and small enough to keep in the result.
+        "content": content,
         "series_override": series_override,
         "fake_news_route": fake_news_route,
         "requires_approval": series_override in ("VERIFICAMOS", "DADOS OU AGENDA", "VERDADE PELA METADE"),
