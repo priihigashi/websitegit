@@ -36,6 +36,7 @@ def _run_actor(actor_id, input_data, timeout_s=300):
         status_resp = requests.get(
             f"{APIFY_BASE}/actor-runs/{run_id}",
             params={"token": APIFY_API_KEY},
+            timeout=30,
         ).json()
         if "error" in status_resp:
             raise RuntimeError(f"Apify status error: {status_resp['error']}")
@@ -48,6 +49,7 @@ def _run_actor(actor_id, input_data, timeout_s=300):
     items = requests.get(
         f"{APIFY_BASE}/actor-runs/{run_id}/dataset/items",
         params={"token": APIFY_API_KEY},
+        timeout=60,
     ).json()
     return items if isinstance(items, list) else []
 

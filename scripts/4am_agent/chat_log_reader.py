@@ -73,7 +73,7 @@ def _load_from_github(file_path):
     r = requests.get(url, headers={
         "Authorization": f"token {GITHUB_TOKEN}",
         "Accept": "application/vnd.github+json",
-    })
+    }, timeout=15)
     if r.status_code == 200:
         content = base64.b64decode(r.json()["content"]).decode()
         try:
@@ -88,14 +88,14 @@ def _push_to_github(file_path, data):
     url     = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
     b64     = base64.b64encode(json.dumps(data, indent=2).encode()).decode()
-    existing = requests.get(url, headers=headers)
+    existing = requests.get(url, headers=headers, timeout=15)
     payload  = {
         "message": f"agent: update {file_path.split('/')[-1]} [{datetime.now(et).strftime('%Y-%m-%d')}]",
         "content": b64,
     }
     if existing.status_code == 200:
         payload["sha"] = existing.json()["sha"]
-    r = requests.put(url, headers=headers, json=payload)
+    r = requests.put(url, headers=headers, json=payload, timeout=20)
     if r.status_code not in (200, 201):
         print(f"[chat_log_reader] WARNING: push failed for {file_path}: {r.status_code}")
 

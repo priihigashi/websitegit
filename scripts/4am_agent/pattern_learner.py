@@ -200,7 +200,7 @@ def _create_skill_in_github(filename, content):
     now_et   = datetime.now(et).strftime("%Y-%m-%d %H:%M ET")
 
     # Check if file exists (need SHA to update)
-    existing = requests.get(api_url, headers=_github_headers())
+    existing = requests.get(api_url, headers=_github_headers(), timeout=15)
     payload  = {
         "message": f"auto: add skill {filename} from pattern learner [{now_et}]",
         "content": b64,
@@ -208,7 +208,7 @@ def _create_skill_in_github(filename, content):
     if existing.status_code == 200:
         payload["sha"] = existing.json()["sha"]
 
-    resp = requests.put(api_url, headers=_github_headers(), json=payload)
+    resp = requests.put(api_url, headers=_github_headers(), json=payload, timeout=20)
     return resp.status_code in (200, 201)
 
 
@@ -268,7 +268,7 @@ def apply_patterns(patterns, notifier_fn=None):
 def load_last_seen():
     """Load previous doc timestamps from GitHub state file."""
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{LAST_SEEN_PATH}"
-    r = requests.get(url, headers=_github_headers())
+    r = requests.get(url, headers=_github_headers(), timeout=15)
     if r.status_code == 200:
         content = base64.b64decode(r.json()["content"]).decode()
         return json.loads(content)
@@ -279,14 +279,14 @@ def save_last_seen(state):
     """Save current doc timestamps back to GitHub state file."""
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{LAST_SEEN_PATH}"
     b64 = base64.b64encode(json.dumps(state, indent=2).encode()).decode()
-    existing = requests.get(url, headers=_github_headers())
+    existing = requests.get(url, headers=_github_headers(), timeout=15)
     payload = {
         "message": f"agent: update last_seen [{datetime.now(et).strftime('%Y-%m-%d')}]",
         "content": b64,
     }
     if existing.status_code == 200:
         payload["sha"] = existing.json()["sha"]
-    r = requests.put(url, headers=_github_headers(), json=payload)
+    r = requests.put(url, headers=_github_headers(), json=payload, timeout=20)
     if r.status_code not in (200, 201):
         print(f"[pattern_learner] WARNING: Could not save last_seen: {r.status_code}")
 
