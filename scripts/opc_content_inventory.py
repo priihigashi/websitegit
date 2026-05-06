@@ -54,7 +54,8 @@ def _token():
         "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
     }).encode()
     resp = json.loads(urllib.request.urlopen(
-        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+        timeout=15).read())
     _tok_cache["t"] = resp["access_token"]
     _tok_cache["e"] = __import__("time").time() + resp.get("expires_in", 3500) - 60
     return resp["access_token"]
@@ -74,7 +75,8 @@ def _drive():
         "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
     }).encode()
     resp = json.loads(urllib.request.urlopen(
-        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+        timeout=15).read())
     creds = Credentials(
         token=resp["access_token"], refresh_token=td["refresh_token"],
         token_uri="https://oauth2.googleapis.com/token",
@@ -88,7 +90,7 @@ def _sheets_get(sheet_id, range_str):
     enc = urllib.parse.quote(range_str, safe="!:'")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc}"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    return json.loads(urllib.request.urlopen(req).read()).get("values", [])
+    return json.loads(urllib.request.urlopen(req, timeout=20).read()).get("values", [])
 
 
 # ── Step 1: Scan OPC _TEMPLATE_CAROUSEL for version folders ──────────────────
@@ -181,7 +183,7 @@ def _sheets_batch_update(data_list):
         f"https://sheets.googleapis.com/v4/spreadsheets/{_CC_SHEET_ID}/values:batchUpdate",
         data=payload,
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-    )).read()
+    ), timeout=20).read()
 
 
 def _sheets_append(values_list):
@@ -193,7 +195,7 @@ def _sheets_append(values_list):
     urllib.request.urlopen(urllib.request.Request(
         url, data=payload,
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-    )).read()
+    ), timeout=20).read()
 
 
 def _slug_to_title(slug):

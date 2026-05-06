@@ -55,8 +55,22 @@
       "id": "S7-FIX8",
       "title": "Sheet auto-update infrastructure for ad-hoc fixes",
       "what_done": "Added pipeline_tracker_writer.py append-session mode + 1-line hook in pipeline_self_heal.yml's Sync tracker step. Reads .github/session_fixes/pending.json, appends rows to Master Checklist, self-renames pending.json after success (idempotent). This row was created by that mechanism.",
-      "evidence": "commit (next)",
+      "evidence": "commit 9ab73d2",
       "category": "infra"
+    },
+    {
+      "id": "S7-FIX9",
+      "title": "Priscila-pending tab + auto-email digest infrastructure",
+      "what_done": "Added pipeline_tracker_writer.py priscila-pending mode + cron hook. Source of truth: .github/session_fixes/priscila_pending.json. Cron creates/updates '🙋 Pending from Priscila' tab in Ideas & Inbox AND emails a digest to priscila@oakpark-construction.com on hash change. Seeded 7 known pending items (P-001..P-007).",
+      "evidence": "commit 614bc63",
+      "category": "infra"
+    },
+    {
+      "id": "S7-FIX10",
+      "title": "Add timeout to ~20 more urlopen() calls (4 files)",
+      "what_done": "Pass-4 audit found 4 more files with urlopen() calls missing timeout=: cost_tracker.py (5 calls), build_tracker_writer.py (4), opc_content_inventory.py (5), daily_content_processor.py (6 incl. Anthropic Vision/Claude API at 90s + Whisper at 180s + Drive upload at 60s). Same hang-forever class as FIX6/FIX7.",
+      "evidence": "commit (next)",
+      "category": "fix"
     }
   ]
 }

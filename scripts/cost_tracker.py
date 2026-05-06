@@ -78,7 +78,8 @@ def _get_token() -> str:
         "grant_type":    "refresh_token",
     }).encode()
     resp = json.loads(urllib.request.urlopen(
-        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+        timeout=15,
     ).read())
     return resp["access_token"]
 
@@ -89,7 +90,8 @@ def _sheets_get(token: str, sheet_id: str, range_: str) -> list:
     enc = urllib.parse.quote(range_, safe="!:'")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc}"
     resp = json.loads(urllib.request.urlopen(
-        urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"}),
+        timeout=20,
     ).read())
     return resp.get("values", [])
 
@@ -103,7 +105,7 @@ def _sheets_append(token: str, sheet_id: str, tab: str, rows: list):
         url, data=body,
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
     )
-    urllib.request.urlopen(req).read()
+    urllib.request.urlopen(req, timeout=20).read()
 
 
 def _ensure_tab(token: str, sheet_id: str, tab_name: str, header: list):
@@ -111,7 +113,8 @@ def _ensure_tab(token: str, sheet_id: str, tab_name: str, header: list):
         urllib.request.Request(
             f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}?fields=sheets.properties",
             headers={"Authorization": f"Bearer {token}"}
-        )
+        ),
+        timeout=20,
     ).read())
     existing = [s["properties"]["title"] for s in meta.get("sheets", [])]
     if tab_name not in existing:
@@ -120,7 +123,7 @@ def _ensure_tab(token: str, sheet_id: str, tab_name: str, header: list):
             f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}:batchUpdate",
             data=body,
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        )).read()
+        ), timeout=20).read()
         _sheets_append(token, sheet_id, tab_name, [header])
         print(f"  Created tab: {tab_name}")
 

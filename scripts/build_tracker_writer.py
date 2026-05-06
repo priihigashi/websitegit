@@ -42,7 +42,8 @@ def _get_token():
     }).encode()
     try:
         resp = json.loads(urllib.request.urlopen(
-            urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
+            urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+            timeout=15,
         ).read())
         return resp.get("access_token", "")
     except Exception as e:
@@ -54,7 +55,7 @@ def _sheets_get(token, range_name):
     url = (f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/"
            f"{urllib.parse.quote(range_name)}")
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    return json.loads(urllib.request.urlopen(req).read())
+    return json.loads(urllib.request.urlopen(req, timeout=20).read())
 
 
 def _sheets_put(token, range_name, values):
@@ -65,7 +66,7 @@ def _sheets_put(token, range_name, values):
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     })
-    return json.loads(urllib.request.urlopen(req).read())
+    return json.loads(urllib.request.urlopen(req, timeout=20).read())
 
 
 def _sheets_append(token, range_name, values):
@@ -77,7 +78,7 @@ def _sheets_append(token, range_name, values):
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     })
-    return json.loads(urllib.request.urlopen(req).read())
+    return json.loads(urllib.request.urlopen(req, timeout=20).read())
 
 
 def update_build_tracker(workflow_file: str, status: str, error: str = ""):

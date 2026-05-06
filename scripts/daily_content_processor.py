@@ -70,7 +70,8 @@ def get_token() -> str:
         "refresh_token": td["refresh_token"], "grant_type": "refresh_token"
     }).encode()
     return json.loads(urllib.request.urlopen(
-        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())["access_token"]
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+        timeout=15).read())["access_token"]
 
 # ── Sheet helpers ──────────────────────────────────────────────────────────────
 
@@ -78,7 +79,7 @@ def sheet_get(token: str, tab: str, range_str: str) -> list:
     enc = urllib.parse.quote(f"'{tab}'!{range_str}", safe="!:'")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
     r = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    return json.loads(urllib.request.urlopen(r).read()).get("values", [])
+    return json.loads(urllib.request.urlopen(r, timeout=20).read()).get("values", [])
 
 def sheet_update_row(token: str, tab: str, row_idx: int, values: list):
     """Update a specific row (1-indexed). row_idx=2 is first data row."""
@@ -87,7 +88,7 @@ def sheet_update_row(token: str, tab: str, row_idx: int, values: list):
     body = json.dumps({"values": [values]}).encode()
     req = urllib.request.Request(url, data=body, method="PUT",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
-    urllib.request.urlopen(req)
+    urllib.request.urlopen(req, timeout=20)
 
 # ── Video processing ───────────────────────────────────────────────────────────
 
@@ -143,7 +144,7 @@ def whisper_transcribe(audio_path: str) -> str:
     req = urllib.request.Request("https://api.openai.com/v1/audio/transcriptions", data=body,
         headers={"Authorization": f"Bearer {OPENAI_KEY}",
                  "Content-Type": f"multipart/form-data; boundary={boundary}"})
-    resp = json.loads(urllib.request.urlopen(req).read())
+    resp = json.loads(urllib.request.urlopen(req, timeout=180).read())
     lines = []
     for seg in resp.get("segments", []):
         m, s = divmod(int(seg["start"]), 60)
@@ -179,7 +180,7 @@ def vision_extract(video_path: str) -> str:
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body,
         headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01",
                  "content-type": "application/json"})
-    resp = json.loads(urllib.request.urlopen(req).read())
+    resp = json.loads(urllib.request.urlopen(req, timeout=90).read())
     return resp["content"][0]["text"]
 
 def claude_extract(whisper_text: str, vision_text: str, url: str) -> dict:
@@ -209,7 +210,7 @@ Quality: 1=music/junk, 2=low value, 3=decent tips, 4=strong framework, 5=must-im
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body,
         headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01",
                  "content-type": "application/json"})
-    resp = json.loads(urllib.request.urlopen(req).read())
+    resp = json.loads(urllib.request.urlopen(req, timeout=90).read())
     text = resp["content"][0]["text"].strip()
     try:
         clean = text
@@ -244,7 +245,7 @@ def upload_to_drive(content: str, filename: str, token: str) -> str:
             data=body_bytes,
             headers={"Authorization": f"Bearer {token}",
                      "Content-Type": f"multipart/related; boundary={boundary}"})
-        result = json.loads(urllib.request.urlopen(req).read())
+        result = json.loads(urllib.request.urlopen(req, timeout=60).read())
         return result.get("webViewLink", "")
     except Exception as e:
         print(f"  ⚠️  Drive upload failed: {e}")
