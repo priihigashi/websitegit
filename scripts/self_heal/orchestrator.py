@@ -1123,7 +1123,9 @@ def main() -> None:
 
     for attempt in range(1, 4):
         log(f"=== Attempt {attempt}/3 ===")
-        # Try Claude first; if it's broke (credit / auth) fall back to OpenAI as primary.
+        # Try Claude first; if it's broke (credit / auth / rate-limit / overloaded)
+        # fall back to OpenAI as primary so a transient Anthropic outage does not
+        # crash the cycle and leave the task stuck IN-PROGRESS.
         try:
             claude_patch = request_patch_claude(cl, task, path, before, error_log)
         except anthropic.BadRequestError as e:
@@ -1131,6 +1133,10 @@ def main() -> None:
             claude_patch = request_patch_openai_primary(oa, task, path, before, error_log)
         except anthropic.AuthenticationError as e:
             log(f"Claude AUTH error ({e}); falling back to OpenAI as primary")
+            claude_patch = request_patch_openai_primary(oa, task, path, before, error_log)
+        except (anthropic.RateLimitError, anthropic.APIStatusError,
+                anthropic.APIConnectionError, anthropic.APITimeoutError) as e:
+            log(f"Claude transient error ({type(e).__name__}: {e}); falling back to OpenAI")
             claude_patch = request_patch_openai_primary(oa, task, path, before, error_log)
         if claude_patch.get("decision") == "REFUSE":
             log(f"Claude REFUSED: {claude_patch.get('reason')}")
@@ -1200,6 +1206,12 @@ def main() -> None:
         else:
             final_outcome = "PATCHED_NO_SMOKE"
             break
+
+    # If the loop exhausted all 3 attempts without a definitive outcome
+    # (smoke test failed every time / patch content empty / NN guard rejected),
+    # surface that explicitly instead of leaving "UNKNOWN" in the log + queue.
+    if final_outcome == "UNKNOWN":
+        final_outcome = f"FAILED_AFTER_RETRIES: {(error_log or 'no diagnostic')[:160]}"
 
     # Done — write the log + update queue
     fix_url = write_fixing_log_doc(creds, task, before, after,
