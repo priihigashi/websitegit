@@ -3486,7 +3486,7 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
         base_css = f.read()
 
     cutout_css = """
-.cut-shell { position:relative; overflow:hidden; }
+.cut-shell { position:relative; overflow:visible; }
 .cut-bg {
   position:absolute; inset:0; background-size:cover; background-position:center;
   filter: grayscale(0.1) contrast(1.15) brightness(0.85);
@@ -3499,7 +3499,7 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
   margin:10px 0 4px;
 }
 .cut-artifact-img {
-  max-height:390px; max-width:68%; object-fit:contain;
+  max-height:390px; min-height:110%; max-width:68%; object-fit:contain; object-position:top center;
   filter: drop-shadow(0 16px 40px rgba(0,0,0,.44)) contrast(1.1) saturate(1.06);
 }
 .cut-artifact-label {
@@ -3522,7 +3522,7 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
   display:flex; justify-content:center; align-items:center;
 }
 .cut-split-art img {
-  max-height:300px; max-width:100%; object-fit:contain;
+  max-height:300px; min-height:110%; max-width:100%; object-fit:contain; object-position:top center;
   filter: drop-shadow(0 10px 26px rgba(0,0,0,.40)) contrast(1.08);
 }
 /* Cover slide — floating bg-removed product image */
@@ -3744,8 +3744,8 @@ body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px;font-fam
 .ill-panel{{width:100%;min-height:220px;max-height:320px;margin:14px 0 16px;border:2px solid rgba(244,196,48,.45);border-radius:8px;overflow:hidden;background:#151515;display:flex;align-items:center;justify-content:center}}
 .ill-photo{{width:100%;height:100%;object-fit:cover;filter:contrast(1.2) saturate(1.08)}}
 .ill-empty{{border-style:dashed;color:rgba(244,196,48,.55);font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:.12em}}
-.cutout-wrap{{width:100%;min-height:220px;max-height:320px;margin:14px 0 16px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}}
-.cutout-img{{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 10px 26px rgba(0,0,0,.38)) contrast(1.1) saturate(1.05)}}
+.cutout-wrap{{width:100%;min-height:220px;max-height:320px;margin:14px 0 16px;display:flex;align-items:flex-start;justify-content:center;overflow:visible}}
+.cutout-img{{max-width:100%;min-height:110%;object-fit:contain;object-position:top center;filter:drop-shadow(0 10px 26px rgba(0,0,0,.38)) contrast(1.1) saturate(1.05)}}
 .cutout-empty{{border:2px dashed rgba(244,196,48,.45);border-radius:8px;align-items:center;color:rgba(244,196,48,.52);font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:.12em}}
 .src-head{{font-family:'Fraunces',serif;font-size:68px;line-height:1.0;text-transform:uppercase;margin-bottom:22px}}
 .src-list{{flex:1;overflow:hidden}}
