@@ -1922,22 +1922,30 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 if c and _vision_accept(c, search_q, f"cover/{used_prov}"):
                     _set_cover(c, used_prov, "ai", query=search_q, prompt=fresh_prompt)
             elif ai_prompt:
-                # Legacy fallback when image_providers not available
-                c = _generate_gemini_image(ai_prompt, work_dir, cover_fname)
-                if c and _vision_accept(c, search_q, "cover/gemini"):
-                    _set_cover(c, "gemini", "ai", query=search_q, prompt=ai_prompt)
-                if not paths["cover"]:
+                # Legacy fallback when image_providers not available.
+                # OPC: DALL-E is forbidden — real photos only (SH-039). Skip all AI tiers.
+                if not (niche == "opc"):
+                    c = _generate_gemini_image(ai_prompt, work_dir, cover_fname)
+                    if c and _vision_accept(c, search_q, "cover/gemini"):
+                        _set_cover(c, "gemini", "ai", query=search_q, prompt=ai_prompt)
+                if not paths["cover"] and not (niche == "opc"):
                     c = _generate_seedream_image(ai_prompt, work_dir, cover_fname)
                     if c and _vision_accept(c, search_q, "cover/seedream"):
                         _set_cover(c, "seedream", "ai", query=search_q, prompt=ai_prompt)
-                if not paths["cover"]:
+                # DALL-E: explicitly skipped for OPC (real-photo only — SH-039)
+                if not paths["cover"] and not (niche == "opc"):
                     c = _generate_ai_cover(ai_prompt, work_dir, cover_fname)
                     if c and _vision_accept(c, search_q, "cover/dall-e-3"):
                         _set_cover(c, "dall-e-3", "ai", query=search_q, prompt=ai_prompt)
-                if not paths["cover"]:
+                if not paths["cover"] and not (niche == "opc"):
                     c = _generate_replicate_sdxl(ai_prompt, work_dir, cover_fname)
                     if c and _vision_accept(c, search_q, "cover/sdxl"):
                         _set_cover(c, "sdxl", "ai", query=search_q, prompt=ai_prompt)
+                if not paths["cover"] and niche == "opc":
+                    print(
+                        f"  [OPC] cover: AI tiers skipped (real-photo only). "
+                        f"Falling through to Wikimedia/Pexels/Pixabay for '{search_q[:50]}'"
+                    )
 
         # Step 3 — real-photo fallback (Wiki CC → Pexels → Pixabay)
         # Triggered only when AI cascade exhausted for non-persons,
