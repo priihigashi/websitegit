@@ -105,6 +105,8 @@ jobs:
       CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
       BRAZIL_TEMPLATES_FOLDER: '1gDOjtW_X-_jWtu94pffbDaUsw6VGCKuA'
       GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }}
+      VISION_API_KEY: ${{ secrets.VISION_API_KEY }}
+      SLIDE_INSET_PX: ${{ vars.SLIDE_INSET_PX || '40' }}
       # Opt-in: change '' to 'true' to enable DALL-E 3 fallback (Brazil/USA only; OPC is real-photos-only)
       USE_DALLE: ''
 
@@ -250,6 +252,8 @@ jobs:
       BRAZIL_TEMPLATES_FOLDER: '1gDOjtW_X-_jWtu94pffbDaUsw6VGCKuA'
       CONTENT_CREATOR_RETRY: 'true'
       GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }}
+      VISION_API_KEY: ${{ secrets.VISION_API_KEY }}
+      SLIDE_INSET_PX: ${{ vars.SLIDE_INSET_PX || '40' }}
       # Opt-in: change '' to 'true' to enable DALL-E 3 fallback (Brazil/USA only; OPC is real-photos-only)
       USE_DALLE: ''
 
