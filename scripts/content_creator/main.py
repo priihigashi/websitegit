@@ -243,15 +243,15 @@ def _safe_float(val, default=0.0):
 
 def _weekday_template(day_idx):
     """Mon(0)→Sun(6) mapping for OPC template rotation.
-    Keeps current "tip" frequently, introduces "illustrated" on set days."""
+    Only tip and progress are active; cutout/illustrated disabled (not production-proven)."""
     weekday_map = {
-        0: "illustrated",  # Monday
-        1: "tip",          # Tuesday
-        2: "cutout",       # Wednesday
-        3: "tip",          # Thursday
-        4: "illustrated",  # Friday
-        5: "progress",     # Saturday
-        6: "tip",          # Sunday
+        0: "tip",      # Monday
+        1: "tip",      # Tuesday
+        2: "tip",      # Wednesday
+        3: "tip",      # Thursday
+        4: "tip",      # Friday
+        5: "progress", # Saturday
+        6: "tip",      # Sunday
     }
     return weekday_map.get(day_idx, "tip")
 
@@ -260,7 +260,7 @@ def _resolve_opc_template(topic_entry, topic, run_date):
     """Choose OPC template route with deterministic rotation.
     Priority: explicit sheet override > rotation mode > default tip."""
     explicit = (topic_entry.get("template_key") or "").strip().lower()
-    if explicit in ("tip", "progress", "illustrated", "cutout"):
+    if explicit in ("tip", "progress"):
         return explicit
 
     if not TEMPLATE_ROTATION_ENABLED:
@@ -268,8 +268,7 @@ def _resolve_opc_template(topic_entry, topic, run_date):
 
     mode = TEMPLATE_ROTATION_MODE
     if mode == "alternate":
-        parity_seed = f"{run_date}|{topic or ''}"
-        return "illustrated" if (sum(ord(c) for c in parity_seed) % 2 == 0) else "cutout"
+        return "tip"
     if mode == "weekday":
         day_idx = datetime.now(ET).weekday()
         return _weekday_template(day_idx)
@@ -1593,8 +1592,9 @@ def process_one_topic(topic_entry, run_date, drive):
     # Runs when OPC and the primary template is "tip" (default) — adds the other styles
     # to the same version folder so all three variants live in one place.
     primary_tkey = content.get("_template_key", "tip")
+    # cutout/illustrated disabled for OPC — not production-proven (opc_template_intelligence.json)
     if niche == "opc" and primary_tkey in ("tip", "native", "auto", ""):
-        for alt_key in ("cutout", "illustrated"):
+        for alt_key in ():
             try:
                 import copy
                 alt_content = copy.deepcopy(content)
@@ -1972,7 +1972,7 @@ def main():
 
         if MANUAL_TEMPLATE_SET == "all":
             if MANUAL_NICHE == "opc":
-                tkeys = ["tip", "illustrated", "cutout"]
+                tkeys = ["tip"]
             else:
                 tkeys = ["native", "illustrated", "cutout"]
         else:
