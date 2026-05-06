@@ -51,7 +51,12 @@ def search_gmail_replies(token, after_date=None):
     if not after_date:
         after_date = (datetime.now(ET) - timedelta(days=1)).strftime("%Y/%m/%d")
 
-    query = urllib.parse.quote(f'(subject:"Re: [REVIEW]" OR subject:"Re: DAILY CONTENT") after:{after_date}')
+    # SH-104 subject line is `[SH-104] Evidence manifest ready — <person> — <niche>`.
+    # Reply preserves the bracket header so we match Re: subject:"[SH-104]".
+    query = urllib.parse.quote(
+        '(subject:"Re: [REVIEW]" OR subject:"Re: DAILY CONTENT" '
+        'OR subject:"Re: [SH-104]") after:' + after_date
+    )
     url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages?q={query}&maxResults=20"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
 
@@ -117,6 +122,249 @@ def _clean_reply(text):
         if cleaned:
             lines.append(cleaned)
     return " ".join(lines).strip()
+
+
+def is_sh104_reply(subject: str) -> bool:
+    """SH-104 manifest emails carry [SH-104] in the subject line. Replies
+    keep the bracket prefix (Gmail standard). Detect to route to a
+    different parser than the OPC/News carousel preview."""
+    s = (subject or "")
+    return "[SH-104]" in s or "[sh-104]" in s.lower()
+
+
+# Recognized reply tokens for SH-104 manifest emails. Tokens are case-
+# insensitive, must match the line as a whole (after subject-line stripping).
+_SH104_TOKENS = {
+    "APPROVE MANIFEST":     "approve_manifest",
+    "RENDER CAROUSEL":      "render_carousel",
+    "RENDER REMOTION":      "render_remotion",
+    "NEEDS MORE EVIDENCE":  "needs_more_evidence",
+    "REJECT MANIFEST":      "reject_manifest",
+    # Additional tokens emitted by clipmine_render.yml preview email
+    "APPROVE PREVIEW":      "approve_preview",
+    "CHANGE":               "render_change",
+    "REJECT":               "render_reject",
+}
+
+
+def parse_sh104_reply(reply_text: str) -> dict:
+    """Parse SH-104 / clipmine_render reply into a routable action.
+
+    Returns:
+      {"sh104": True,
+       "action": "approve_manifest|render_carousel|...|unknown",
+       "raw_token": "<original token text>",
+       "feedback": "<freeform text below the token, if any>"}
+    """
+    out = {"sh104": True, "action": "unknown", "raw_token": "", "feedback": ""}
+    text = (reply_text or "").strip()
+    if not text:
+        return out
+    # First non-quoted line is the token line; everything below = feedback.
+    first_line = text.split("\n", 1)[0].strip()
+    rest = text[len(first_line):].strip()
+    upper = first_line.upper().strip(" .!?:")
+    for token, action in _SH104_TOKENS.items():
+        if upper == token or upper.startswith(token):
+            out["action"] = action
+            out["raw_token"] = token
+            extra = upper[len(token):].strip(" -:.\n\t")
+            out["feedback"] = (rest or extra).strip()
+            return out
+    return out
+
+
+def _gh_dispatch_clipmine_render(manifest_url: str, mode: str, niche: str = "brazil") -> bool:
+    """Trigger clipmine_render.yml via gh CLI."""
+    import shutil, subprocess
+    gh = shutil.which("gh") or os.path.expanduser("~/bin/gh")
+    if not os.path.exists(gh):
+        return False
+    try:
+        r = subprocess.run(
+            [gh, "workflow", "run", "clipmine_render.yml",
+             "--repo", "priihigashi/oak-park-ai-hub",
+             "-f", f"manifest_url={manifest_url}",
+             "-f", f"mode={mode}",
+             "-f", f"niche={niche}"],
+            capture_output=True, text=True, timeout=30,
+        )
+        return r.returncode == 0
+    except Exception as e:
+        print(f"  clipmine_render dispatch failed: {e}")
+        return False
+
+
+def _gh_dispatch_video_research_retry(seed_url: str, person_name: str,
+                                       requirement: str, target_count: int,
+                                       niche: str) -> bool:
+    """Trigger video-research.yml again with broader query intent."""
+    import shutil, subprocess
+    gh = shutil.which("gh") or os.path.expanduser("~/bin/gh")
+    if not os.path.exists(gh):
+        return False
+    try:
+        r = subprocess.run(
+            [gh, "workflow", "run", "video-research.yml",
+             "--repo", "priihigashi/oak-park-ai-hub",
+             "-f", "mode=person_evidence_mining",
+             "-f", f"seed_url={seed_url}",
+             "-f", f"person_name={person_name}",
+             "-f", f"evidence_requirement={requirement}",
+             "-f", f"target_clip_count={target_count}",
+             "-f", f"niche={niche}"],
+            capture_output=True, text=True, timeout=30,
+        )
+        return r.returncode == 0
+    except Exception as e:
+        print(f"  video-research re-dispatch failed: {e}")
+        return False
+
+
+def _update_content_queue_status(person_name: str, niche: str, new_status: str) -> bool:
+    """Update the SH-104 row in 📋 Content Queue (key: SOURCE+TITLE+NICHE)."""
+    try:
+        token, _ = get_gmail_token()
+        tab = "📋 Content Queue"
+        enc = urllib.parse.quote(f"'{tab}'!A:Z", safe="!:'")
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
+        rows = json.loads(urllib.request.urlopen(
+            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        ).read()).get("values", [])
+        if not rows:
+            return False
+        headers = rows[0]
+        try:
+            idx_source = headers.index("SOURCE")
+            idx_title = headers.index("TITLE")
+            idx_niche = headers.index("NICHE")
+            idx_status = headers.index("STATUS")
+        except ValueError:
+            return False
+        title_match = f"{person_name} — evidence clip set (Phase 1 manifest)"
+        for ri, row in enumerate(rows[1:], start=2):
+            def _cell(i): return row[i] if i < len(row) else ""
+            if (_cell(idx_source).strip() == "person_evidence_mining"
+                    and _cell(idx_title).strip() == title_match
+                    and _cell(idx_niche).strip() == niche):
+                col = chr(64 + idx_status + 1) if (idx_status + 1) <= 26 else None
+                if not col:
+                    return False
+                rng = urllib.parse.quote(f"'{tab}'!{col}{ri}", safe="!:'")
+                u = (f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}"
+                     f"/values/{rng}?valueInputOption=USER_ENTERED")
+                payload = json.dumps({"values": [[new_status]]}).encode()
+                req = urllib.request.Request(u, data=payload, method="PUT",
+                    headers={"Authorization": f"Bearer {token}",
+                             "Content-Type": "application/json"})
+                urllib.request.urlopen(req).read()
+                print(f"  Content Queue: {person_name} → {new_status}")
+                return True
+    except Exception as exc:
+        print(f"  Content Queue update failed: {exc}")
+    return False
+
+
+def _find_manifest_url_for(person_name: str, niche: str) -> str:
+    """Look up MANIFEST_URL in 📋 Content Queue by SOURCE+TITLE+NICHE."""
+    try:
+        token, _ = get_gmail_token()
+        tab = "📋 Content Queue"
+        enc = urllib.parse.quote(f"'{tab}'!A:Z", safe="!:'")
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
+        rows = json.loads(urllib.request.urlopen(
+            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        ).read()).get("values", [])
+        if not rows:
+            return ""
+        headers = rows[0]
+        if "TITLE" not in headers or "MANIFEST_URL" not in headers:
+            return ""
+        idx_title = headers.index("TITLE")
+        idx_man = headers.index("MANIFEST_URL")
+        idx_niche = headers.index("NICHE") if "NICHE" in headers else None
+        target = f"{person_name} — evidence clip set (Phase 1 manifest)"
+        for row in rows[1:]:
+            def _cell(i): return row[i] if i < len(row) else ""
+            if _cell(idx_title).strip() == target:
+                if idx_niche is None or _cell(idx_niche).strip() == niche:
+                    return _cell(idx_man).strip()
+    except Exception as exc:
+        print(f"  manifest-url lookup failed: {exc}")
+    return ""
+
+
+def _handle_sh104_reply(sh: dict, meta: dict, reply: dict) -> bool:
+    """Route a parsed SH-104 reply to the right side-effect.
+    Returns True if the action was handled (regardless of dispatch success);
+    False if the action was unknown / no-op."""
+    action = sh["action"]
+    person = meta.get("person_name", "")
+    niche = meta.get("niche", "brazil")
+
+    if action == "approve_manifest":
+        return _update_content_queue_status(person, niche, "Approved — Manifest")
+
+    if action == "render_carousel":
+        manifest_url = _find_manifest_url_for(person, niche)
+        if not manifest_url:
+            print("  No MANIFEST_URL found in Content Queue — cannot dispatch render")
+            return False
+        if _gh_dispatch_clipmine_render(manifest_url, "carousel", niche):
+            _update_content_queue_status(person, niche, "Rendering — Carousel")
+            return True
+        return False
+
+    if action == "render_remotion":
+        manifest_url = _find_manifest_url_for(person, niche)
+        if not manifest_url:
+            print("  No MANIFEST_URL found in Content Queue — cannot dispatch render")
+            return False
+        if _gh_dispatch_clipmine_render(manifest_url, "remotion", niche):
+            _update_content_queue_status(person, niche, "Rendering — Remotion")
+            return True
+        return False
+
+    if action == "needs_more_evidence":
+        # Re-trigger video-research with target_count + 4. Manifest URL holds
+        # seed_url + requirement only via the manifest itself. As a Phase 4
+        # simplification, we read seed/requirement from the SH-104 reply
+        # body if Priscila pasted them; otherwise log a note.
+        manifest_url = _find_manifest_url_for(person, niche)
+        if not manifest_url:
+            print("  needs_more_evidence: no manifest_url known")
+        # Without the original seed_url we cannot auto-retrigger; flag for
+        # manual workflow_dispatch with broader queries.
+        _update_content_queue_status(person, niche, "Needs More Evidence")
+        return True
+
+    if action == "reject_manifest":
+        return _update_content_queue_status(person, niche, "Rejected — Manifest")
+
+    if action == "approve_preview":
+        # Preview email from clipmine_render.yml — finalise as ready.
+        return _update_content_queue_status(person, niche, "Approved — Render")
+
+    if action == "render_change":
+        return _update_content_queue_status(person, niche, "Render — Change Requested")
+
+    if action == "render_reject":
+        return _update_content_queue_status(person, niche, "Rejected — Render")
+
+    return False
+
+
+def _extract_sh104_metadata(subject: str) -> dict:
+    """Pull person + niche out of `Re: [SH-104] Evidence manifest ready — <person> — <niche>`."""
+    s = subject or ""
+    # Strip "Re: " variants
+    body = re.sub(r"^(?:re|fwd?)\s*:\s*", "", s, flags=re.IGNORECASE).strip()
+    body = body.replace("[SH-104]", "").strip().lstrip("—").strip()
+    # Pattern: Evidence manifest ready — <person> — <niche>
+    m = re.search(r"Evidence manifest ready\s*[—-]\s*([^—]+?)\s*[—-]\s*(\w+)\s*$", body)
+    if m:
+        return {"person_name": m.group(1).strip(), "niche": m.group(2).strip().lower()}
+    return {"person_name": "", "niche": "brazil"}
 
 
 def parse_approval(reply_text):
@@ -906,9 +1154,26 @@ def process_replies():
         print("  No pending_approval posts in catalog")
         return {"approved": 0, "changes": 0, "skipped": 0}
 
-    stats = {"approved": 0, "changes": 0, "skipped": 0}
+    stats = {"approved": 0, "changes": 0, "skipped": 0,
+             "sh104_actions": 0, "sh104_unknown": 0}
 
     for reply in replies:
+        # SH-104 reply routing — separate from carousel preview replies.
+        if is_sh104_reply(reply.get("subject", "")):
+            sh = parse_sh104_reply(reply["reply_text"])
+            meta = _extract_sh104_metadata(reply.get("subject", ""))
+            print(
+                f"  SH-104 reply: '{reply['reply_text'][:60]}' → "
+                f"{sh['action']} (person={meta['person_name']}, niche={meta['niche']})"
+            )
+            if sh["action"] == "unknown":
+                stats["sh104_unknown"] += 1
+                continue
+            handled = _handle_sh104_reply(sh, meta, reply)
+            if handled:
+                stats["sh104_actions"] += 1
+            continue
+
         result = parse_approval(reply["reply_text"])
         scoped_posts = _pick_target_posts(reply, pending)
         print(

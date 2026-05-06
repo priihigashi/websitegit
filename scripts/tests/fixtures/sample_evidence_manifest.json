@@ -1,0 +1,136 @@
+{
+  "mode": "person_evidence_mining",
+  "schema_version": 1,
+  "run_id": "sample-fixture-001",
+  "created_at": "2026-05-06T00:00:00+00:00",
+  "seed": {
+    "url": "https://www.instagram.com/reel/SAMPLE_SEED/",
+    "role": "intro_hook",
+    "transcript_excerpt": "This is a sample seed clip excerpt used by the SH-104 fixture. No real person or claim — for renderer tests only."
+  },
+  "person": {
+    "name": "Sample Public Figure",
+    "confidence": 0.85,
+    "method": "user_passed"
+  },
+  "requirement": "Sample requirement text for fixture: looking for transcript-grounded statements that would warrant a fact-check carousel.",
+  "niche": "brazil",
+  "queries_used": {
+    "youtube_queries": ["sample person interview"],
+    "instagram_queries": ["samplepersonpolemica"],
+    "exact_phrase_queries": [],
+    "negative_queries": [],
+    "context_queries": ["sample person speech"]
+  },
+  "candidates_collected": 24,
+  "candidates_transcribed": 9,
+  "verified_clips": [
+    {
+      "candidate": {
+        "platform": "youtube",
+        "id": "SAMPLE_YT_1",
+        "url": "https://youtube.com/watch?v=SAMPLE_YT_1",
+        "title": "Sample interview clip — episode 1",
+        "uploader": "sample_channel_a",
+        "duration": 600,
+        "upload_date": "20260201",
+        "query": "sample person interview"
+      },
+      "score": {
+        "same_person": true,
+        "person_confidence": 0.92,
+        "same_person_method": "title",
+        "requirement_match": true,
+        "match_score": 0.83,
+        "claim_type": "hypocrisy",
+        "best_quote": "I have always opposed X — even when nobody else would say it.",
+        "timestamp_start": "12:04",
+        "timestamp_end": "12:18",
+        "targeted_group": null,
+        "context_needed": "Compare to public position from prior decade.",
+        "safe_to_use": true,
+        "why": "Direct quote contradicting public stance from 2010."
+      }
+    },
+    {
+      "candidate": {
+        "platform": "youtube",
+        "id": "SAMPLE_YT_2",
+        "url": "https://youtube.com/watch?v=SAMPLE_YT_2",
+        "title": "Sample sermon clip",
+        "uploader": "sample_channel_b",
+        "duration": 1800,
+        "upload_date": "20260301",
+        "query": "sample person speech"
+      },
+      "score": {
+        "same_person": true,
+        "person_confidence": 0.95,
+        "same_person_method": "channel",
+        "requirement_match": true,
+        "match_score": 0.78,
+        "claim_type": "moral-contradiction",
+        "best_quote": "Anyone who criticizes leadership is acting in bad faith.",
+        "timestamp_start": "04:22",
+        "timestamp_end": "04:35",
+        "targeted_group": null,
+        "context_needed": "Same speaker condemned this stance in 2018.",
+        "safe_to_use": true,
+        "why": "Statement directly contradicts speaker's documented 2018 position."
+      }
+    },
+    {
+      "candidate": {
+        "platform": "instagram",
+        "id": "SAMPLE_IG_1",
+        "url": "https://www.instagram.com/reel/SAMPLE_IG_1/",
+        "title": "Reel caption sample",
+        "uploader": "sample_handle",
+        "duration": 60,
+        "upload_date": "20260415",
+        "query": "samplepersonpolemica"
+      },
+      "score": {
+        "same_person": true,
+        "person_confidence": 0.88,
+        "same_person_method": "transcript",
+        "requirement_match": true,
+        "match_score": 0.71,
+        "claim_type": "needs-context",
+        "best_quote": "It is what it is, you have to accept it.",
+        "timestamp_start": "00:14",
+        "timestamp_end": "00:20",
+        "targeted_group": null,
+        "context_needed": "Standalone phrase — full segment needed for context.",
+        "safe_to_use": true,
+        "why": "Quote captured verbatim; meaning depends on prior segment."
+      }
+    }
+  ],
+  "rejected_candidates": [
+    {
+      "candidate": {
+        "platform": "youtube",
+        "url": "https://youtube.com/watch?v=SAMPLE_REJECT_1",
+        "title": "Sample reject clip"
+      },
+      "reason": "not_same_person",
+      "score": {
+        "same_person": false,
+        "person_confidence": 0.2,
+        "claim_type": "needs-context",
+        "best_quote": "",
+        "safe_to_use": false,
+        "why": "Different speaker than seed."
+      }
+    }
+  ],
+  "build_gates": {
+    "verified_count": 3,
+    "rejected_count": 1,
+    "target_count": 6,
+    "ready_for_render": false,
+    "requires_manual_approval": true,
+    "reason": "verified_count 3 = 3 minimum | sensitive claim_types present — manual approval required | Phase 1 manifest-only — render gate is manual"
+  }
+}

@@ -46,7 +46,12 @@ def _is_tiktok(url: str) -> bool:
 
 
 def _yt_video_id(url: str) -> str:
-    m = re.search(r"(?:v=|youtu\.be/|/shorts/)([A-Za-z0-9_-]{11})", url)
+    # Handle:
+    #   ?v=ID  | youtu.be/ID | /shorts/ID | /embed/ID
+    #   youtube-nocookie.com/embed/ID
+    m = re.search(
+        r"(?:v=|youtu\.be/|/shorts/|/embed/|/v/)([A-Za-z0-9_-]{11})", url
+    )
     return m.group(1) if m else ""
 
 
@@ -63,8 +68,25 @@ def _write_cookies(raw: str, name: str) -> str:
     if not raw.strip():
         return ""
     path = os.path.join(tempfile.gettempdir(), name)
-    with open(path, "w") as f:
-        f.write(raw)
+    # Owner read/write only — cookies carry session bearers; do not leak to
+    # other processes / users that share /tmp on shared runners.
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    mode = 0o600
+    fd = os.open(path, flags, mode)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(raw)
+    except Exception:
+        try:
+            os.close(fd)
+        except Exception:
+            pass
+        raise
+    # Belt + suspenders for systems where umask intervened.
+    try:
+        os.chmod(path, mode)
+    except Exception:
+        pass
     return path
 
 

@@ -31,6 +31,12 @@ from typing import Optional
 APIFY_API_KEY = os.environ.get("APIFY_API_KEY", "")
 APIFY_BASE    = "https://api.apify.com/v2"
 CLAUDE_KEY    = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
+SERP_API_KEY  = os.environ.get("SERP_API_KEY", "")  # Free fallback when Apify down
+
+# Apify limit / 403 marker — once tripped on the primary actor, sibling
+# actors share the same key, so cascading to a second actor is wasted spend.
+# We still try the SERP fallback in that case.
+_apify_search_limit_hit = False
 
 
 # ── YouTube candidate search (yt-dlp ytsearchN) ──────────────────────────────
@@ -82,12 +88,41 @@ def search_youtube_candidates(queries: list[str], max_per_query: int = 5,
 
 # ── Instagram candidate search (Apify instagram-reel-scraper) ────────────────
 
-def search_instagram_candidates(queries: list[str], max_per_query: int = 5) -> list[dict]:
+def search_instagram_candidates(queries: list[str], max_per_query: int = 5,
+                                 person_name: str = "") -> list[dict]:
+    """Instagram candidate search — 3-route cascade.
+
+    Tier 1 (preferred): Apify instagram-reel-scraper by hashtag.
+    Tier 2 (free fallback): SerpAPI Google search with site:instagram.com filter.
+    Tier 3 (always-on): DuckDuckGo HTML search with site:instagram.com filter.
+
+    Pipeline-resilience non-negotiable per CLAUDE.md: search must NEVER hard-
+    fail when Apify returns 403 / credit exhausted.
+    """
+    primary = _ig_via_apify(queries, max_per_query) if APIFY_API_KEY else []
+    if primary:
+        return primary
+    # Fallback ladder runs when Apify returned nothing OR was unavailable.
+    if not primary:
+        if not APIFY_API_KEY:
+            print("  Instagram: APIFY_API_KEY not set — falling back to web search")
+        elif _apify_search_limit_hit:
+            print("  Instagram: Apify limit hit — falling back to web search")
+        else:
+            print("  Instagram: Apify returned 0 — trying web fallbacks")
+        fallback = _ig_via_web_search(queries, person_name=person_name,
+                                      max_results=max_per_query * 4)
+        if fallback:
+            return fallback
+    return primary
+
+
+def _ig_via_apify(queries: list[str], max_per_query: int = 5) -> list[dict]:
     """Apify instagram-reel-scraper by hashtag.
     Strips spaces/# from queries to make hashtag-friendly tokens.
     Returns up to max_per_query reels per hashtag."""
-    if not APIFY_API_KEY:
-        print("  APIFY_API_KEY not set — skipping Instagram search")
+    global _apify_search_limit_hit
+    if not APIFY_API_KEY or _apify_search_limit_hit:
         return []
 
     actor = "apify~instagram-reel-scraper"
@@ -113,7 +148,10 @@ def search_instagram_candidates(queries: list[str], max_per_query: int = 5) -> l
         ).read())
         run_id = run["data"]["id"]
     except Exception as e:
-        print(f"  Apify IG search start failed: {e}")
+        msg = str(e)
+        if "403" in msg or "402" in msg or "limit" in msg.lower():
+            _apify_search_limit_hit = True
+        print(f"  Apify IG search start failed: {msg[:200]}")
         return []
 
     status = ""
@@ -159,6 +197,115 @@ def search_instagram_candidates(queries: list[str], max_per_query: int = 5) -> l
             "query": ",".join(item.get("hashtags", [])[:3]) or "(hashtag-batch)",
         })
     return results
+
+
+# ── Instagram fallback: web search (SerpAPI > DuckDuckGo) ────────────────────
+
+def _ig_via_web_search(queries: list[str], person_name: str = "",
+                       max_results: int = 20) -> list[dict]:
+    """Free fallback when Apify is down. Searches the open web for
+    instagram.com/reel URLs that mention the person, then resolves each
+    URL to a minimal candidate record (transcript fetched later by runner).
+
+    Tier order:
+      1. SerpAPI (if SERP_API_KEY set) — Google with site:instagram.com filter
+      2. DuckDuckGo HTML — no key needed; rate-limited by DDG itself
+    """
+    pname = (person_name or "").strip()
+    # Build search terms: hashtag tokens map back to keywords
+    keywords = []
+    for q in queries[:6]:
+        token = q.strip().replace("#", "").replace("_", " ")
+        if token:
+            keywords.append(token)
+    base = (pname + " " if pname else "") + " ".join(keywords[:3])
+    if not base.strip():
+        return []
+    google_query = f'site:instagram.com/reel {base}'.strip()
+
+    urls = []
+    if SERP_API_KEY:
+        urls = _serpapi_search(google_query, max_results)
+        if urls:
+            print(f"  Instagram fallback: SerpAPI returned {len(urls)} URLs")
+    if not urls:
+        urls = _duckduckgo_search(google_query, max_results)
+        if urls:
+            print(f"  Instagram fallback: DuckDuckGo returned {len(urls)} URLs")
+
+    results = []
+    seen = set()
+    for u in urls:
+        m = re.search(r"instagram\.com/(?:reel|p|tv)/([A-Za-z0-9_-]+)", u)
+        if not m:
+            continue
+        shortcode = m.group(1)
+        if shortcode in seen:
+            continue
+        seen.add(shortcode)
+        results.append({
+            "platform": "instagram",
+            "id": shortcode,
+            "url": f"https://www.instagram.com/reel/{shortcode}/",
+            "title": "",          # title comes from transcript step
+            "uploader": "",
+            "duration": None,
+            "upload_date": "",
+            "query": f"web-fallback:{base}",
+        })
+        if len(results) >= max_results:
+            break
+    return results
+
+
+def _serpapi_search(query: str, max_results: int) -> list[str]:
+    """SerpAPI Google JSON. Free tier: 100 searches/month — adequate for
+    occasional Apify outages. Returns list of URLs (newest first)."""
+    try:
+        params = urllib.parse.urlencode({
+            "engine": "google", "q": query, "api_key": SERP_API_KEY,
+            "num": max(10, min(max_results, 30)),
+        })
+        url = f"https://serpapi.com/search.json?{params}"
+        data = json.loads(urllib.request.urlopen(url, timeout=20).read())
+        results = data.get("organic_results", []) or []
+        return [r.get("link", "") for r in results if r.get("link")]
+    except Exception as e:
+        print(f"  SerpAPI fallback failed: {e}")
+        return []
+
+
+def _duckduckgo_search(query: str, max_results: int) -> list[str]:
+    """DuckDuckGo HTML scraper. No API key. Last-resort free route.
+    Parses the lite HTML endpoint which is the most stable interface.
+    Honors a small delay to avoid rate-limit. Returns list of URLs."""
+    try:
+        url = "https://html.duckduckgo.com/html/?" + urllib.parse.urlencode({"q": query})
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (oak-park-ai-hub SH-104 fallback)",
+                "Accept-Language": "en-US,en;q=0.7",
+            },
+        )
+        html = urllib.request.urlopen(req, timeout=20).read().decode("utf-8", "replace")
+    except Exception as e:
+        print(f"  DuckDuckGo fallback failed: {e}")
+        return []
+    # Extract result anchors. DDG uses /l/?uddg=<encoded URL>&...
+    raw = re.findall(r'href="(?:https?://[^"]+|/l/\?[^"]+)"', html)
+    out = []
+    for href in raw:
+        if href.startswith("/l/?"):
+            qs = urllib.parse.parse_qs(href.split("?", 1)[1])
+            real = (qs.get("uddg") or [""])[0]
+            if real:
+                href = real
+        if "instagram.com/" in href and "/reel/" in href:
+            out.append(href)
+        if len(out) >= max_results:
+            break
+    return out
 
 
 # ── Dedupe ───────────────────────────────────────────────────────────────────
@@ -312,7 +459,9 @@ def collect_candidates(person_name: str, requirement: str, seed_excerpt: str = "
     raw_ig = []
     try:
         if ig_queries:
-            raw_ig = search_instagram_candidates(ig_queries[:8], max_per_query=5)
+            raw_ig = search_instagram_candidates(
+                ig_queries[:8], max_per_query=5, person_name=person_name,
+            )
             print(f"  Instagram candidates: {len(raw_ig)}")
     except Exception as e:
         _fail("instagram_search", e)

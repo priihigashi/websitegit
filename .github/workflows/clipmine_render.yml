@@ -1,0 +1,302 @@
+name: SH-104 Clipmine Render
+
+# Render an evidence carousel or Remotion compilation from an approved
+# evidence_manifest.json. Triggered by:
+#   - approval_handler.py reply tokens RENDER CAROUSEL / RENDER REMOTION
+#   - manual workflow_dispatch (Priscila pastes manifest_url)
+#   - automated dry-run (mode=carousel + manifest_url=fixture)
+#
+# This workflow runs ONLY after a manifest exists. It does NOT depend on
+# Anthropic or Apify credits — pure Drive read + render.
+#
+# Inputs:
+#   manifest_url   - Drive webViewLink to evidence_manifest.json (or fixture path)
+#   mode           - carousel | remotion | both
+#   person_name    - copied from manifest unless overridden
+#   niche          - brazil | usa | opc | higashi | ugc
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_url:
+        description: "Drive link or local path to evidence_manifest.json"
+        required: true
+        type: string
+      mode:
+        description: "carousel = static PNG slides, remotion = MP4 compilation, both = both"
+        required: true
+        default: "carousel"
+        type: choice
+        options:
+          - carousel
+          - remotion
+          - both
+      niche:
+        description: "Niche routing (brazil/usa/opc/higashi/ugc)"
+        required: false
+        default: "brazil"
+        type: string
+      use_fixture:
+        description: "true = ignore manifest_url and use sample fixture for smoke test"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+# Single-flight per (manifest_url, mode) to prevent double-billing.
+concurrency:
+  group: sh104-render-${{ github.event.inputs.manifest_url }}-${{ github.event.inputs.mode }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install ffmpeg
+        run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Verify ffmpeg
+        run: |
+          set -e
+          command -v ffmpeg
+          ffmpeg -version | head -n 1
+
+      - name: Install Python deps
+        run: pip install google-auth google-api-python-client requests
+
+      - name: Install Playwright (carousel mode)
+        if: ${{ github.event.inputs.mode != 'remotion' }}
+        run: |
+          npm install -g playwright @playwright/test
+          npx playwright install chromium --with-deps
+
+      - name: Install Remotion (remotion mode)
+        if: ${{ github.event.inputs.mode != 'carousel' }}
+        working-directory: scripts/remotion
+        run: npm install
+
+      - name: Stage manifest (download from Drive or use fixture)
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          INPUT_MANIFEST_URL: ${{ github.event.inputs.manifest_url }}
+          USE_FIXTURE: ${{ github.event.inputs.use_fixture }}
+        run: |
+          set -e
+          mkdir -p /tmp/clipmine_render/work
+          if [ "$USE_FIXTURE" = "true" ]; then
+            cp scripts/tests/fixtures/sample_evidence_manifest.json /tmp/clipmine_render/manifest.json
+            echo "Using fixture manifest"
+          else
+            python3 - <<'PYEOF'
+          import json, os, re, sys, urllib.request, urllib.parse
+          token_raw = os.environ.get("SHEETS_TOKEN", "")
+          if not token_raw:
+              sys.exit("No SHEETS_TOKEN")
+          info = json.loads(token_raw)
+          # Refresh access token via refresh_token grant
+          data = urllib.parse.urlencode({
+              "client_id": info["client_id"],
+              "client_secret": info["client_secret"],
+              "refresh_token": info["refresh_token"],
+              "grant_type": "refresh_token",
+          }).encode()
+          tok = json.loads(urllib.request.urlopen(
+              urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
+          ).read())["access_token"]
+          url = os.environ.get("INPUT_MANIFEST_URL", "")
+          m = re.search(r"/d/([A-Za-z0-9_-]+)|id=([A-Za-z0-9_-]+)", url)
+          if not m:
+              sys.exit(f"Cannot parse Drive file ID from manifest_url={url}")
+          fid = m.group(1) or m.group(2)
+          dl = (f"https://www.googleapis.com/drive/v3/files/{fid}"
+                f"?alt=media&supportsAllDrives=true")
+          req = urllib.request.Request(dl, headers={"Authorization": f"Bearer {tok}"})
+          body = urllib.request.urlopen(req, timeout=60).read()
+          with open("/tmp/clipmine_render/manifest.json", "wb") as f:
+              f.write(body)
+          print(f"Downloaded manifest ({len(body)} bytes)")
+          PYEOF
+          fi
+          ls -la /tmp/clipmine_render/
+
+      - name: Render carousel (HTML + PNG)
+        if: ${{ github.event.inputs.mode != 'remotion' }}
+        env:
+          INPUT_NICHE: ${{ github.event.inputs.niche }}
+        run: |
+          python3 scripts/research/evidence_carousel.py \
+            /tmp/clipmine_render/manifest.json \
+            --work-dir /tmp/clipmine_render/work
+          ls -la /tmp/clipmine_render/work/png/ || true
+
+      - name: Render Remotion compilation (MP4)
+        if: ${{ github.event.inputs.mode != 'carousel' }}
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -e
+          # Generate remotion_props.json from manifest
+          python3 -c "
+          import json, sys
+          sys.path.insert(0, 'scripts/research')
+          from manifest_renderer import load_manifest, build_remotion_props
+          m = load_manifest('/tmp/clipmine_render/manifest.json')
+          props = build_remotion_props(m)
+          with open('/tmp/clipmine_render/remotion_props.json', 'w') as f:
+              json.dump(props, f, indent=2, ensure_ascii=False)
+          print('remotion_props.json written:', props['segment_count'], 'segments,', props['duration_seconds'], 's')
+          "
+          # Render via Remotion
+          cd scripts/remotion
+          npx remotion render src/Root.tsx EvidenceCompilation \
+            /tmp/clipmine_render/work/evidence_compilation.mp4 \
+            --props=/tmp/clipmine_render/remotion_props.json \
+            --concurrency=1
+          ls -la /tmp/clipmine_render/work/
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clipmine-render-${{ github.run_id }}
+          path: /tmp/clipmine_render/work/
+          if-no-files-found: warn
+
+      - name: Upload to Drive + email preview
+        if: success()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          INPUT_NICHE: ${{ github.event.inputs.niche }}
+          INPUT_MODE: ${{ github.event.inputs.mode }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, sys, smtplib
+          from email.message import EmailMessage
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          import routing
+          from google.oauth2.credentials import Credentials
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+
+          token_raw = os.environ.get("SHEETS_TOKEN", "")
+          if not token_raw:
+              sys.exit("No SHEETS_TOKEN")
+          creds = Credentials.from_authorized_user_info(
+              json.loads(token_raw),
+              scopes=["https://www.googleapis.com/auth/drive"],
+          )
+          drive = build("drive", "v3", credentials=creds)
+
+          niche = os.environ.get("INPUT_NICHE", "brazil")
+          parent = routing.capture_folder(niche) or routing.capture_folder("brazil")
+
+          # Find or create clipmine_render_<run_id>
+          folder_name = f"clipmine_render_{os.environ.get('GITHUB_RUN_ID','manual')}"
+          q = (f"name='{folder_name}' and '{parent}' in parents "
+               f"and mimeType='application/vnd.google-apps.folder' and trashed=false")
+          existing = drive.files().list(q=q, fields="files(id)",
+              supportsAllDrives=True, includeItemsFromAllDrives=True).execute().get("files", [])
+          if existing:
+              fid = existing[0]["id"]
+          else:
+              fid = drive.files().create(
+                  body={"name": folder_name,
+                        "mimeType": "application/vnd.google-apps.folder",
+                        "parents": [parent]},
+                  supportsAllDrives=True, fields="id",
+              ).execute()["id"]
+
+          uploaded = []
+          work = Path("/tmp/clipmine_render/work")
+          for f in work.rglob("*"):
+              if not f.is_file():
+                  continue
+              # Skip transcripts that may exist alongside
+              if f.suffix in (".html",):
+                  mt = "text/html"
+              elif f.suffix == ".png":
+                  mt = "image/png"
+              elif f.suffix == ".mp4":
+                  mt = "video/mp4"
+              elif f.suffix == ".json":
+                  mt = "application/json"
+              else:
+                  mt = "application/octet-stream"
+              up = drive.files().create(
+                  body={"name": f.name, "parents": [fid]},
+                  media_body=MediaFileUpload(str(f), mimetype=mt),
+                  supportsAllDrives=True, fields="id,webViewLink",
+              ).execute()
+              uploaded.append((f.name, up.get("webViewLink", "")))
+              print(f"Uploaded {f.name}")
+
+          render_link = f"https://drive.google.com/drive/folders/{fid}"
+          # Email preview — 3-route fallback (smtplib only here, MCP not available in CI)
+          pwd = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD", "")
+          if pwd:
+              msg = EmailMessage()
+              msg["Subject"] = f"[SH-104] Render ready ({os.environ.get('INPUT_MODE','carousel')}) — {niche}"
+              msg["From"] = "priscila@oakpark-construction.com"
+              msg["To"]   = "priscila@oakpark-construction.com"
+              lines = [f"Render ready: {render_link}"]
+              for n, l in uploaded[:20]:
+                  lines.append(f"  - {n}: {l}")
+              lines.append("")
+              lines.append("Reply commands (on the original [SH-104] manifest email):")
+              lines.append("  APPROVE PREVIEW   — copy to Ready to Post folder")
+              lines.append("  CHANGE            — re-render with notes")
+              lines.append("  REJECT            — discard")
+              msg.set_content("\n".join(lines))
+              s = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+              s.login("priscila@oakpark-construction.com", pwd)
+              s.send_message(msg)
+              s.quit()
+              print(f"Preview email sent. Folder: {render_link}")
+          else:
+              print(f"No PRI_OP_GMAIL_APP_PASSWORD — folder only: {render_link}")
+          PYEOF
+
+      - name: Email alert on failure
+        if: failure()
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          GH_RUN_ID: ${{ github.run_id }}
+          INPUT_MODE: ${{ github.event.inputs.mode }}
+        run: |
+          python3 - <<'PYEOF'
+          import os, smtplib
+          from email.message import EmailMessage
+          run_id = os.environ.get("GH_RUN_ID", "")
+          msg = EmailMessage()
+          msg["Subject"] = f"🚨 clipmine_render.yml FAILED — run {run_id}"
+          msg["From"] = "priscila@oakpark-construction.com"
+          msg["To"]   = "priscila@oakpark-construction.com"
+          msg.set_content(
+              f"clipmine_render.yml ({os.environ.get('INPUT_MODE','')}) run {run_id} exited non-zero.\n"
+              f"Logs:  https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{run_id}\n"
+          )
+          s = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+          s.login("priscila@oakpark-construction.com", os.environ["GMAIL_APP_PASSWORD"])
+          s.send_message(msg)
+          s.quit()
+          PYEOF

@@ -37,7 +37,7 @@ from transcription import transcribe_url  # noqa: E402
 from candidate_collectors import collect_candidates  # noqa: E402
 from evidence_scoring import (  # noqa: E402
     score_candidate, validate_score, build_manifest, write_manifest,
-    slugify, ALLOWED_SAME_PERSON_METHODS,
+    slugify, slugify_bounded, ALLOWED_SAME_PERSON_METHODS,
 )
 import routing  # noqa: E402
 
@@ -47,6 +47,29 @@ GHA_RUN_ID       = os.environ.get("GITHUB_RUN_ID", "")
 IDEAS_INBOX_ID   = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 RUN_LOG_LINES: list[str] = []
 PIPELINE_FAILURES: list[dict] = []  # mirrored to youtube_research.PIPELINE_FAILURES on exit
+
+# B7 — defamation surface mitigation.
+# Clip Collections is a Google Sheet that may be shared with collaborators
+# or accidentally surfaced. Writing CLAIM_TYPE next to a named-person URL +
+# QUOTE creates a defamation-shaped data point even when our internal label
+# (e.g. "hypocrisy") is non-libelous. The full-fidelity classification stays
+# in evidence_manifest.json (Drive — sharable per-folder). Mode toggle:
+#
+#   SH104_SHEET_REDACT_CLAIM_TYPE=1  (default ON)
+#       For sensitive claim_types (group-targeting / dehumanizing /
+#       moral-contradiction / hypocrisy) the sheet shows
+#       "[review-required: see manifest]" instead of the raw label.
+#       The actual claim type is still in NOTES so reviewers know what to
+#       look at — just not in a ML-scrapeable column.
+#
+#   SH104_SHEET_REDACT_CLAIM_TYPE=0
+#       Raw label is written. Use ONLY if the sheet is not shared with
+#       anyone outside Priscila + (a future) review queue.
+SH104_SHEET_REDACT_CLAIM_TYPE = os.environ.get("SH104_SHEET_REDACT_CLAIM_TYPE", "1") != "0"
+SENSITIVE_CLAIM_TYPES = {
+    "group-targeting", "dehumanizing", "moral-contradiction", "hypocrisy",
+}
+SHEET_REDACT_PLACEHOLDER = "[review-required: see manifest]"
 
 
 def _log(msg: str):
@@ -185,7 +208,16 @@ def _read_existing_rows(svc, sheet_id: str, tab: str, headers: list[str]) -> lis
 
 def _ensure_columns(svc, sheet_id: str, tab: str, required: list[str]) -> list[str]:
     """Guarantee `required` columns exist as headers. Adds at the end if missing.
-    Returns full ordered header list."""
+    Returns full ordered header list.
+
+    Concurrency note (B6): this is a read-then-update against headers row.
+    workflow_dispatch effectively serialises SH-104 runs (only one at a time
+    is realistic), and this script is the only writer to these specific
+    columns, so a TOCTOU race is theoretical not practical. As a belt-and-
+    suspenders mitigation we re-fetch headers once after the update — if a
+    concurrent writer added another column meanwhile, we surface a warning
+    so the next run picks up the merged set rather than silently clobbering.
+    """
     try:
         res = svc.spreadsheets().values().get(spreadsheetId=sheet_id, range=f"'{tab}'!1:1").execute()
         headers = res.get("values", [[]])[0] if res.get("values") else []
@@ -197,6 +229,18 @@ def _ensure_columns(svc, sheet_id: str, tab: str, required: list[str]) -> list[s
                 valueInputOption="USER_ENTERED",
                 body={"values": [new_headers]},
             ).execute()
+            # Re-read to detect concurrent column additions; if changed,
+            # log and trust the latest server state.
+            try:
+                res2 = svc.spreadsheets().values().get(
+                    spreadsheetId=sheet_id, range=f"'{tab}'!1:1"
+                ).execute()
+                live_headers = res2.get("values", [[]])[0] if res2.get("values") else []
+                if live_headers and live_headers != new_headers:
+                    _log(f"  ({tab}) header race detected — using server headers")
+                    return live_headers
+            except Exception:
+                pass
             return new_headers
         return headers
     except Exception as e:
@@ -244,6 +288,15 @@ def _write_clip_collections(verified: list[dict], person_name: str,
             skipped_dup += 1
             continue
         seen_keys.add(url_key)
+        # B7 — redact sensitive claim_types in the sheet (manifest keeps truth).
+        raw_claim = s.get("claim_type", "") or ""
+        notes_raw = s.get("why", "")[:300]
+        if SH104_SHEET_REDACT_CLAIM_TYPE and raw_claim in SENSITIVE_CLAIM_TYPES:
+            sheet_claim = SHEET_REDACT_PLACEHOLDER
+            notes_for_sheet = (f"[claim_type:{raw_claim}] {notes_raw}").strip()[:300]
+        else:
+            sheet_claim = raw_claim
+            notes_for_sheet = notes_raw
         # Build a row keyed by header name (SCRIPTS ADD NEVER DELETE rule)
         row_dict = {
             "DATE": today,
@@ -256,11 +309,11 @@ def _write_clip_collections(verified: list[dict], person_name: str,
             "TIMESTAMP_START": s.get("timestamp_start", ""),
             "TIMESTAMP_END": s.get("timestamp_end", ""),
             "MATCH_SCORE": s.get("match_score", 0.0),
-            "CLAIM_TYPE": s.get("claim_type", ""),
+            "CLAIM_TYPE": sheet_claim,
             "SAFE_TO_USE": s.get("safe_to_use", False),
             "MANIFEST_URL": manifest_url,
             "STATUS": "verified",
-            "NOTES": s.get("why", "")[:300],
+            "NOTES": notes_for_sheet,
         }
         rows.append([row_dict.get(h, "") for h in headers])
     if skipped_dup:
@@ -406,15 +459,66 @@ def _update_inspiration_library(seed_url: str, manifest_url: str):
 
 # ── Email summary ────────────────────────────────────────────────────────────
 
-def _send_email_summary(person_name: str, niche: str, seed_url: str,
-                        manifest_url: str, verified: list[dict], rejected: list[dict],
-                        candidates_collected: int):
+def _send_email_via_workflow(subject: str, body: str) -> bool:
+    """Route B — trigger send_email.yml. Works inside GHA when GITHUB_TOKEN
+    env var is set (capture_pipeline.yml passes ${{ github.token }}).
+    Returns True if dispatch accepted."""
+    import shutil, subprocess
+    gh = shutil.which("gh") or os.path.expanduser("~/bin/gh")
+    if not os.path.exists(gh):
+        return False
+    try:
+        r = subprocess.run(
+            [gh, "workflow", "run", "send_email.yml",
+             "--repo", "priihigashi/oak-park-ai-hub",
+             "-f", "to=priscila@oakpark-construction.com",
+             "-f", f"subject={subject}",
+             "-f", f"body={body}"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if r.returncode == 0:
+            return True
+        _log(f"  send_email.yml dispatch rc={r.returncode}: {(r.stderr or r.stdout)[:200]}")
+        return False
+    except Exception as e:
+        _log(f"  send_email.yml dispatch exception: {e}")
+        return False
+
+
+def _send_email_via_smtplib(subject: str, body: str) -> bool:
+    """Route C — direct SMTP. Requires PRI_OP_GMAIL_APP_PASSWORD env var."""
     import smtplib
     from email.message import EmailMessage
     pwd = os.environ.get("PRI_OP_GMAIL_APP_PASSWORD", "")
     if not pwd:
-        _log("  PRI_OP_GMAIL_APP_PASSWORD not set — skipping email")
-        return
+        return False
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = "priscila@oakpark-construction.com"
+        msg["To"] = "priscila@oakpark-construction.com"
+        msg.set_content(body)
+        s = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        s.login("priscila@oakpark-construction.com", pwd)
+        s.send_message(msg)
+        s.quit()
+        return True
+    except Exception as e:
+        _log(f"  smtplib send failed: {e}")
+        return False
+
+
+def _send_email_summary(person_name: str, niche: str, seed_url: str,
+                        manifest_url: str, verified: list[dict], rejected: list[dict],
+                        candidates_collected: int):
+    """Email summary with 3-route fallback per CLAUDE.md "EMAIL — 3 ROUTES":
+    Route A — Gmail MCP (DRAFT only, IDE-side; not callable from CI runner)
+    Route B — send_email.yml workflow (preferred from CI)
+    Route C — smtplib direct (last resort)
+    Route A is skipped here because this runs inside GitHub Actions where
+    MCP tools are not available. Route B preferred when gh CLI is auth'd
+    via GITHUB_TOKEN; C is the always-available fallback.
+    """
     subject = f"[SH-104] Evidence manifest ready — {person_name} — {niche}"
     top3_lines = []
     for v in verified[:3]:
@@ -456,19 +560,14 @@ NO render triggered. NO Buffer scheduling.
 
 — SH-104 / FLOW_person_evidence_mining
 """
-    try:
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"] = "priscila@oakpark-construction.com"
-        msg["To"] = "priscila@oakpark-construction.com"
-        msg.set_content(body)
-        s = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        s.login("priscila@oakpark-construction.com", pwd)
-        s.send_message(msg)
-        s.quit()
-        _log("  Email summary sent")
-    except Exception as e:
-        _fail("email_summary", e)
+    # 3-route fallback — try workflow first (preferred from CI), then smtplib.
+    if _send_email_via_workflow(subject, body):
+        _log("  Email summary dispatched via send_email.yml")
+        return
+    if _send_email_via_smtplib(subject, body):
+        _log("  Email summary sent via smtplib")
+        return
+    _fail("email_summary", "all_email_routes_failed")
 
 
 # ── main entry ───────────────────────────────────────────────────────────────
@@ -516,7 +615,7 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
     candidates = candidates[:cap]
 
     # Working dir for transcripts/manifests
-    work_root = Path(f"/tmp/clipmine_{slugify(person_name)}_{slugify(evidence_requirement)[:30]}")
+    work_root = Path(f"/tmp/clipmine_{slugify(person_name)}_{slugify_bounded(evidence_requirement, 30)}")
     transcripts_dir = work_root / "transcripts"
     transcripts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -619,7 +718,7 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
 
     # 7) Drive upload
     parent_capture_id = routing.capture_folder(niche) or routing.capture_folder("brazil")
-    folder_name = f"clipmine_{slugify(person_name)}_{slugify(evidence_requirement)[:30]}"
+    folder_name = f"clipmine_{slugify(person_name)}_{slugify_bounded(evidence_requirement, 30)}"
     drive_folder_id = _drive_upload_folder(parent_capture_id, folder_name)
     manifest_link = ""
     if drive_folder_id:

@@ -3,6 +3,11 @@ import { Composition, registerRoot } from "remotion";
 import { NewsReel, NewsReelProps } from "./NewsReel";
 import { CarouselMotion, CarouselMotionProps } from "./CarouselMotion";
 import { CarouselReel, CarouselReelProps } from "./CarouselReel";
+import {
+  EvidenceCompilation,
+  EvidenceCompilationProps,
+  evidenceCompilationDefaultProps,
+} from "./EvidenceCompilation";
 
 // Default props for development previews — overridden by --props in CI render
 const defaultProps: NewsReelProps = {
@@ -72,6 +77,18 @@ const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         defaultProps={{ slides: [], slideDurationFrames: 150 } as CarouselReelProps}
+      />
+      <Composition
+        id="EvidenceCompilation"
+        component={EvidenceCompilation}
+        durationInFrames={Math.max(
+          30,
+          Math.round((evidenceCompilationDefaultProps.duration_seconds || 24) * 30)
+        )}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={evidenceCompilationDefaultProps as EvidenceCompilationProps}
       />
     </>
   );

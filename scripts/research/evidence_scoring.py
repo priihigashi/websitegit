@@ -391,3 +391,21 @@ def slugify(s: str) -> str:
     s = s.lower().strip()
     s = re.sub(r"[^a-z0-9]+", "-", s)
     return re.sub(r"-+", "-", s).strip("-") or "unnamed"
+
+
+def slugify_bounded(s: str, max_len: int = 30) -> str:
+    """Collision-safe truncated slugify. If the full slug would exceed
+    max_len, append a 6-char SHA1 hash of the original input so two
+    requirements that differ past char `max_len` produce DIFFERENT folder
+    names. Use this when the slug becomes part of a Drive path.
+    """
+    import hashlib
+    full = slugify(s)
+    if len(full) <= max_len:
+        return full
+    suffix = hashlib.sha1((s or "").encode("utf-8", errors="ignore")).hexdigest()[:6]
+    base_max = max_len - len(suffix) - 1  # reserve room for "-<hash>"
+    if base_max < 4:
+        base_max = 4
+    base = full[:base_max].rstrip("-") or "unnamed"
+    return f"{base}-{suffix}"

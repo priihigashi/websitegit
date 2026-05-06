@@ -1,0 +1,82 @@
+name: SH-104 Clipmine Retention Sweep
+
+# Daily 30-day retention purge for clipmine_* Drive folders.
+# Per /clip-mine SKILL legal guardrails: raw media auto-prunes after 30 days,
+# transcripts at root level also pruned, but evidence_manifest.json +
+# scored_candidates.json + run.log are KEPT for audit.
+#
+# First run = dry-run (CLIPMINE_RETENTION_APPLY=0). Once Priscila confirms the
+# list looks right, flip the workflow input to apply=true.
+
+on:
+  schedule:
+    # 03:30 UTC daily (after 4AM agent finishes its writes around 04:00 UTC).
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "true = actually delete; false = dry-run list only"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      retain_days:
+        description: "Retention window in days (default 30)"
+        required: false
+        default: "30"
+
+# Single-flight — never two sweeps at once.
+concurrency:
+  group: sh104-retention-sweep
+  cancel-in-progress: false
+
+jobs:
+  retention:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install google-auth google-api-python-client
+
+      - name: Run retention sweep
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          # Cron run = always dry-run by default. Manual dispatch can apply.
+          CLIPMINE_RETENTION_APPLY: ${{ github.event.inputs.apply == 'true' && '1' || '0' }}
+          CLIPMINE_RETAIN_DAYS: ${{ github.event.inputs.retain_days || '30' }}
+        run: |
+          python scripts/research/clipmine_retention.py
+
+      - name: Email alert on failure
+        if: failure()
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          GH_RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 - <<'PYEOF'
+          import os, smtplib
+          from email.message import EmailMessage
+          run_id = os.environ.get("GH_RUN_ID", "")
+          msg = EmailMessage()
+          msg["Subject"] = f"🚨 clipmine_retention.yml FAILED — run {run_id}"
+          msg["From"] = "priscila@oakpark-construction.com"
+          msg["To"]   = "priscila@oakpark-construction.com"
+          msg.set_content(
+              f"clipmine_retention.yml run {run_id} exited non-zero.\n\n"
+              f"Logs:  https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{run_id}\n\n"
+              "Failures recorded in: Ideas & Inbox → 🚨 Pipeline Failures tab\n"
+          )
+          s = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+          s.login("priscila@oakpark-construction.com", os.environ["GMAIL_APP_PASSWORD"])
+          s.send_message(msg)
+          s.quit()
+          PYEOF
