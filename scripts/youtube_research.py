@@ -1109,12 +1109,52 @@ def run(topic: str, queries: list[str], max_per_query: int = 5, niche: str = "")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--topic", required=True, help="Research topic label (e.g. 'kling ai talking head')")
-    parser.add_argument("--queries", required=True, help="Comma-separated search queries")
+    # Existing inputs (kept required ONLY when --mode is general/empty)
+    parser.add_argument("--topic", default="", help="Research topic label (e.g. 'kling ai talking head')")
+    parser.add_argument("--queries", default="", help="Comma-separated search queries")
     parser.add_argument("--max", type=int, default=5, help="Max results per query")
     parser.add_argument("--niche", default="", help="Niche label written to Clip Collections (brazil/usa/opc)")
+    # SH-104: person evidence mining mode
+    parser.add_argument("--mode", default="general",
+                        choices=["general", "person_evidence_mining"],
+                        help="Research mode. Default 'general' = legacy run().")
+    parser.add_argument("--seed-url", dest="seed_url", default="",
+                        help="(person_evidence_mining) Seed Reel/Video URL")
+    parser.add_argument("--person-name", dest="person_name", default="",
+                        help="(person_evidence_mining) Person to mine clips of")
+    parser.add_argument("--evidence-requirement", dest="evidence_requirement", default="",
+                        help="(person_evidence_mining) What we are looking for in transcripts")
+    parser.add_argument("--target-clip-count", dest="target_clip_count", type=int, default=6,
+                        help="(person_evidence_mining) Number of verified clips wanted")
     args = parser.parse_args()
 
+    if args.mode == "person_evidence_mining":
+        # Validate required inputs for new mode
+        if not args.seed_url or not args.person_name or not args.evidence_requirement:
+            print("ERROR: --mode person_evidence_mining requires --seed-url, "
+                  "--person-name, --evidence-requirement")
+            sys.exit(2)
+        # scripts/ already on sys.path because youtube_research.py is run
+        # from scripts/. research/ is a package with its own helper imports.
+        from research.person_evidence_runner import (  # type: ignore
+            run_person_evidence_mining, PIPELINE_FAILURES as RES_FAILURES,
+        )
+        rc = run_person_evidence_mining(
+            seed_url=args.seed_url,
+            person_name=args.person_name,
+            evidence_requirement=args.evidence_requirement,
+            target_clip_count=args.target_clip_count,
+            niche=args.niche or "brazil",
+        )
+        # Surface inner failures into module-level list so the existing
+        # exit gate below catches them too
+        PIPELINE_FAILURES.extend(RES_FAILURES)
+        sys.exit(rc if rc != 0 else (1 if PIPELINE_FAILURES else 0))
+
+    # Legacy general mode
+    if not args.topic or not args.queries:
+        print("ERROR: --mode general requires --topic and --queries")
+        sys.exit(2)
     queries = [q.strip() for q in args.queries.split(",")]
     run(args.topic, queries, args.max, args.niche)
 

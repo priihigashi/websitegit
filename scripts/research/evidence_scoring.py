@@ -1,0 +1,348 @@
+"""evidence_scoring.py — transcript -> rubric score against requirement.
+
+Public:
+  score_candidate(candidate, transcript, person_name, requirement, seed_excerpt)
+    -> dict (locked schema)
+  validate_score(score)                -> (ok: bool, reasons: list[str])
+  apply_build_gates(verified, rejected) -> dict (build_gates block)
+  write_manifest(path, payload)        -> str (path)
+
+LOCKED scoring schema (per CLAUDE.md / SH-104 / FLOW_person_evidence_mining):
+{
+  "same_person": bool,
+  "person_confidence": float (0.0-1.0),
+  "same_person_method": "metadata|transcript|title|channel|user_passed|face_match",
+  "requirement_match": bool,
+  "match_score": float (0.0-1.0),
+  "claim_type": "group-targeting|dehumanizing|unfair-generalization|moral-contradiction|hypocrisy|needs-context",
+  "best_quote": str,
+  "timestamp_start": "MM:SS",
+  "timestamp_end": "MM:SS",
+  "targeted_group": str | None,
+  "context_needed": str,
+  "safe_to_use": bool,
+  "why": str
+}
+
+NEVER auto-label "hate speech." Only the 6 categorical labels above.
+NEVER use Detoxify. Haiku/Sonnet rubric only.
+"""
+
+from __future__ import annotations
+import json
+import os
+import re
+from datetime import datetime, timezone
+from typing import Optional
+
+CLAUDE_KEY = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
+
+ALLOWED_CLAIM_TYPES = {
+    "group-targeting",
+    "dehumanizing",
+    "unfair-generalization",
+    "moral-contradiction",
+    "hypocrisy",
+    "needs-context",
+}
+
+ALLOWED_SAME_PERSON_METHODS = {
+    "metadata", "transcript", "title", "channel",
+    "user_passed", "face_match",
+}
+
+SENSITIVE_CLAIM_TYPES = {
+    "group-targeting",
+    "dehumanizing",
+    "moral-contradiction",
+    "hypocrisy",
+}
+
+
+# ── rubric prompt ────────────────────────────────────────────────────────────
+
+_RUBRIC_PROMPT = """You are a fact-checking rubric scorer. You will score ONE candidate clip transcript against a stated evidence requirement about a public figure.
+
+You are NOT publishing or making claims. You are producing a structured JSON scoring record. Your job: extract evidence FROM THE TRANSCRIPT, never from your own knowledge.
+
+PERSON OF INTEREST: {person_name}
+
+EVIDENCE REQUIREMENT (what we are looking for):
+{requirement}
+
+SEED CLIP EXCERPT (this is the original clip the user wants to anchor to — for tone reference only):
+{seed_excerpt}
+
+CANDIDATE METADATA:
+  Platform: {platform}
+  Title: {title}
+  Uploader / channel: {uploader}
+  URL: {url}
+
+CANDIDATE TRANSCRIPT:
+\"\"\"
+{transcript}
+\"\"\"
+
+RULES — FOLLOW EXACTLY:
+
+1. SAME PERSON DETERMINATION (transcript+metadata only — no external knowledge):
+   - If title or channel/handle clearly contains the person's name -> same_person=true with method "title" or "channel".
+   - If transcript shows first-person speech matching the requirement context -> "transcript".
+   - If only inferential -> mark same_person=false. Do NOT guess.
+
+2. REQUIREMENT MATCH:
+   - Quote MUST come from the transcript verbatim (or near-verbatim with minor cleanup).
+   - If you cannot find a quote in the transcript that matches the requirement -> requirement_match=false, best_quote="", safe_to_use=false.
+
+3. CLAIM TYPE (pick ONE — these are the ONLY allowed values):
+   - "group-targeting"        : statement specifically directed at an identifiable group.
+   - "dehumanizing"           : language that strips humanity from a group/person.
+   - "unfair-generalization"  : sweeping claim about a group not supported by evidence.
+   - "moral-contradiction"    : statement that contradicts the public moral persona.
+   - "hypocrisy"              : statement contradicts past public position by same person.
+   - "needs-context"          : ambiguous — meaning depends on context not visible in transcript.
+
+   You MAY NOT use the label "hate speech" or any other label. If unsure -> "needs-context".
+
+4. SAFETY:
+   - safe_to_use=true ONLY when: same_person=true AND requirement_match=true AND quote is unambiguous AND context_needed is non-blocking.
+   - When in doubt -> safe_to_use=false and explain in "why".
+
+5. TIMESTAMPS:
+   - If the transcript contains time markers, use them. Format MM:SS.
+   - If no markers, write best-effort estimates as MM:SS based on word position. If unknown, write "00:00" for both.
+
+6. OUTPUT: STRICT JSON ONLY. No prose. No code fences. Schema:
+
+{{
+  "same_person": <bool>,
+  "person_confidence": <float 0.0-1.0>,
+  "same_person_method": "metadata|transcript|title|channel|user_passed|face_match",
+  "requirement_match": <bool>,
+  "match_score": <float 0.0-1.0>,
+  "claim_type": "group-targeting|dehumanizing|unfair-generalization|moral-contradiction|hypocrisy|needs-context",
+  "best_quote": "<verbatim from transcript or empty>",
+  "timestamp_start": "MM:SS",
+  "timestamp_end": "MM:SS",
+  "targeted_group": "<group name or null>",
+  "context_needed": "<what additional context would a reviewer need, if any>",
+  "safe_to_use": <bool>,
+  "why": "<one-sentence transcript-grounded justification>"
+}}"""
+
+
+# ── core scorer ──────────────────────────────────────────────────────────────
+
+def _empty_score(reason: str) -> dict:
+    return {
+        "same_person": False,
+        "person_confidence": 0.0,
+        "same_person_method": "metadata",
+        "requirement_match": False,
+        "match_score": 0.0,
+        "claim_type": "needs-context",
+        "best_quote": "",
+        "timestamp_start": "00:00",
+        "timestamp_end": "00:00",
+        "targeted_group": None,
+        "context_needed": reason,
+        "safe_to_use": False,
+        "why": reason,
+    }
+
+
+def score_candidate(candidate: dict, transcript: str, person_name: str,
+                    requirement: str, seed_excerpt: str = "",
+                    person_passed_by_user: bool = False) -> dict:
+    """Score a single candidate. Returns LOCKED schema dict.
+    NEVER raises — failures return safe-default empty score with reason in 'why'."""
+    if not transcript or not transcript.strip():
+        return _empty_score("no_transcript")
+    if not CLAUDE_KEY:
+        return _empty_score("no_claude_key")
+
+    # Truncate transcript to keep token cost bounded
+    trimmed = transcript[:12000]
+    prompt = _RUBRIC_PROMPT.format(
+        person_name=person_name,
+        requirement=requirement[:1500],
+        seed_excerpt=(seed_excerpt or "(none)")[:1000],
+        platform=candidate.get("platform", ""),
+        title=candidate.get("title", "")[:300],
+        uploader=candidate.get("uploader", "")[:200],
+        url=candidate.get("url", ""),
+        transcript=trimmed,
+    )
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=CLAUDE_KEY)
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1200,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
+            raw = re.sub(r"```\s*$", "", raw)
+        data = json.loads(raw)
+    except Exception as e:
+        return _empty_score(f"score_failed: {str(e)[:200]}")
+
+    # User-passed person flag overrides ambiguous same_person inference
+    if person_passed_by_user and not data.get("same_person"):
+        # Promote only when title/uploader corroborates
+        title_low = (candidate.get("title", "") + " " + candidate.get("uploader", "")).lower()
+        if person_name.lower() in title_low:
+            data["same_person"] = True
+            data["same_person_method"] = "user_passed"
+            data["person_confidence"] = max(data.get("person_confidence", 0.0), 0.7)
+
+    # Validate + clamp
+    score = _coerce_to_schema(data)
+    return score
+
+
+def _coerce_to_schema(data: dict) -> dict:
+    """Force fields into LOCKED schema. Never trust LLM output blindly."""
+    out = _empty_score("validated")
+    out["same_person"] = bool(data.get("same_person", False))
+    out["person_confidence"] = _clamp_float(data.get("person_confidence"))
+    method = str(data.get("same_person_method", "metadata"))
+    out["same_person_method"] = method if method in ALLOWED_SAME_PERSON_METHODS else "metadata"
+    out["requirement_match"] = bool(data.get("requirement_match", False))
+    out["match_score"] = _clamp_float(data.get("match_score"))
+    claim = str(data.get("claim_type", "needs-context"))
+    out["claim_type"] = claim if claim in ALLOWED_CLAIM_TYPES else "needs-context"
+    out["best_quote"] = str(data.get("best_quote", ""))[:1000]
+    out["timestamp_start"] = _coerce_mmss(data.get("timestamp_start"))
+    out["timestamp_end"] = _coerce_mmss(data.get("timestamp_end"))
+    tg = data.get("targeted_group")
+    out["targeted_group"] = str(tg)[:120] if tg else None
+    out["context_needed"] = str(data.get("context_needed", ""))[:600]
+    out["safe_to_use"] = bool(data.get("safe_to_use", False))
+    out["why"] = str(data.get("why", ""))[:600]
+
+    # Self-consistency: no quote -> not safe
+    if not out["best_quote"].strip():
+        out["safe_to_use"] = False
+        out["requirement_match"] = False
+    # Not same person -> not safe
+    if not out["same_person"]:
+        out["safe_to_use"] = False
+    return out
+
+
+def _clamp_float(v) -> float:
+    try:
+        f = float(v)
+    except Exception:
+        return 0.0
+    return max(0.0, min(1.0, f))
+
+
+def _coerce_mmss(v) -> str:
+    s = str(v or "00:00").strip()
+    if re.fullmatch(r"\d{1,2}:\d{2}", s):
+        return s if len(s) == 5 else "0" + s
+    if re.fullmatch(r"\d+", s):
+        secs = int(s)
+        return f"{secs//60:02d}:{secs%60:02d}"
+    return "00:00"
+
+
+# ── validation + gates ───────────────────────────────────────────────────────
+
+def validate_score(score: dict) -> tuple[bool, list[str]]:
+    """Return (ok, reasons). ok=True means score passes minimum quality bar
+    to be considered for verified_clips. Doesn't mean safe_to_use=True."""
+    reasons = []
+    if not isinstance(score, dict):
+        return False, ["not_a_dict"]
+    if score.get("claim_type") not in ALLOWED_CLAIM_TYPES:
+        reasons.append("invalid_claim_type")
+    if not score.get("best_quote", "").strip():
+        reasons.append("no_quote")
+    if not score.get("same_person"):
+        reasons.append("not_same_person")
+    if score.get("person_confidence", 0) < 0.6:
+        reasons.append("person_confidence_low")
+    if not score.get("requirement_match"):
+        reasons.append("requirement_not_matched")
+    return (len(reasons) == 0), reasons
+
+
+def apply_build_gates(verified: list[dict], rejected: list[dict],
+                      target_count: int = 6) -> dict:
+    """Determine if manifest is ready for render (Phase 3).
+    Phase 1 always returns ready_for_render=False — manual review required."""
+    requires_approval = any(
+        v.get("score", {}).get("claim_type") in SENSITIVE_CLAIM_TYPES
+        for v in verified
+    )
+    reason_parts = []
+    if len(verified) < 3:
+        reason_parts.append(f"verified_count {len(verified)} < 3 minimum")
+    if requires_approval:
+        reason_parts.append("sensitive claim_types present — manual approval required")
+    reason_parts.append("Phase 1 manifest-only — render gate is manual")
+    return {
+        "verified_count": len(verified),
+        "rejected_count": len(rejected),
+        "target_count": target_count,
+        "ready_for_render": False,
+        "requires_manual_approval": True,
+        "reason": " | ".join(reason_parts),
+    }
+
+
+# ── manifest writer ──────────────────────────────────────────────────────────
+
+def build_manifest(seed_url: str, person_name: str, person_confidence: float,
+                   person_method: str, requirement: str, niche: str,
+                   queries: dict, candidates_collected: int,
+                   candidates_transcribed: int, verified: list[dict],
+                   rejected: list[dict], seed_excerpt: str = "",
+                   run_id: str = "", target_count: int = 6) -> dict:
+    """Assemble evidence_manifest.json payload (does not write to disk)."""
+    return {
+        "mode": "person_evidence_mining",
+        "schema_version": 1,
+        "run_id": run_id or os.environ.get("GITHUB_RUN_ID", ""),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "seed": {
+            "url": seed_url,
+            "role": "intro_hook",
+            "transcript_excerpt": (seed_excerpt or "")[:1500],
+        },
+        "person": {
+            "name": person_name,
+            "confidence": _clamp_float(person_confidence),
+            "method": person_method if person_method in ALLOWED_SAME_PERSON_METHODS
+                      else "user_passed",
+        },
+        "requirement": requirement,
+        "niche": niche,
+        "queries_used": queries,
+        "candidates_collected": candidates_collected,
+        "candidates_transcribed": candidates_transcribed,
+        "verified_clips": verified,
+        "rejected_candidates": rejected,
+        "build_gates": apply_build_gates(verified, rejected, target_count),
+    }
+
+
+def write_manifest(path: str, payload: dict) -> str:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+    return path
+
+
+# ── slug helpers (used by run orchestrator for folder naming) ────────────────
+
+def slugify(s: str) -> str:
+    s = s.lower().strip()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    return re.sub(r"-+", "-", s).strip("-") or "unnamed"

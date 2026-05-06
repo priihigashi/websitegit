@@ -3,22 +3,48 @@ name: Video & Topic Research
 on:
   workflow_dispatch:
     inputs:
-      topic:
-        description: 'Research label (e.g. "kling ai talking head")'
+      mode:
+        description: 'Research mode'
         required: true
+        type: choice
+        options:
+          - general
+          - person_evidence_mining
+        default: general
+      # ── general mode ────────────────────────────────────────────────────────
+      topic:
+        description: '(general) Research label (e.g. "kling ai talking head")'
+        required: false
         default: 'kling ai video generation'
       queries:
-        description: 'Comma-separated YouTube search queries'
-        required: true
+        description: '(general) Comma-separated YouTube search queries'
+        required: false
         default: 'kling ai tutorial 2025,kling 3.0 video generation,kling vs heygen talking head'
       max_per_query:
-        description: 'Max videos per query (default 5)'
+        description: '(general) Max videos per query'
         required: false
         default: '5'
       niche:
-        description: 'Niche for Clip Collections routing (brazil / usa / opc — leave blank for general research)'
+        description: 'Niche for routing (brazil / usa / opc / higashi / ugc)'
         required: false
         default: ''
+      # ── person_evidence_mining mode (SH-104) ────────────────────────────────
+      seed_url:
+        description: '(person_evidence_mining) Seed Reel/Video URL'
+        required: false
+        default: ''
+      person_name:
+        description: '(person_evidence_mining) Person to mine clips of'
+        required: false
+        default: ''
+      evidence_requirement:
+        description: '(person_evidence_mining) What to look for in transcripts'
+        required: false
+        default: ''
+      target_clip_count:
+        description: '(person_evidence_mining) Number of verified clips wanted'
+        required: false
+        default: '6'
 
 jobs:
   research:
@@ -32,7 +58,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install anthropic youtube-transcript-api yt-dlp gspread google-auth openai
+        run: pip install anthropic youtube-transcript-api yt-dlp gspread google-auth google-api-python-client openai requests
 
       - name: Run research
         env:
@@ -41,14 +67,27 @@ jobs:
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PRI_OP_YT_COOKIES: ${{ secrets.PRI_OP_YT_COOKIES }}
+          PRI_OP_IG_COOKIES: ${{ secrets.PRI_OP_IG_COOKIES }}
           APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
+          PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
-          python scripts/youtube_research.py \
-            --topic "${{ github.event.inputs.topic }}" \
-            --queries "${{ github.event.inputs.queries }}" \
-            --max ${{ github.event.inputs.max_per_query }} \
-            --niche "${{ github.event.inputs.niche }}"
+          if [ "${{ github.event.inputs.mode }}" = "person_evidence_mining" ]; then
+            python scripts/youtube_research.py \
+              --mode person_evidence_mining \
+              --seed-url "${{ github.event.inputs.seed_url }}" \
+              --person-name "${{ github.event.inputs.person_name }}" \
+              --evidence-requirement "${{ github.event.inputs.evidence_requirement }}" \
+              --target-clip-count ${{ github.event.inputs.target_clip_count }} \
+              --niche "${{ github.event.inputs.niche }}"
+          else
+            python scripts/youtube_research.py \
+              --mode general \
+              --topic "${{ github.event.inputs.topic }}" \
+              --queries "${{ github.event.inputs.queries }}" \
+              --max ${{ github.event.inputs.max_per_query }} \
+              --niche "${{ github.event.inputs.niche }}"
+          fi
 
       - name: Upload findings as artifact
         if: always()
