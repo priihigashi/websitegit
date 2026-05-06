@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>FORMAT-024 — Verdade Pela Metade · Brazil News Debunk Series</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;1,9..144,700&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/*
+  FORMAT-024 — Verdade Pela Metade
+  Weekly debunk series. Two modes:
+    Mode A: real fact, wrong attribution → flip to correct politician
+    Mode B: fear/exaggeration → correct scale + context
+  7 slides: Cover → Viral Claim → What's True → What's Missing → Timeline → Sources → Closing
+  Shadow ban rules: no "fake news", "mentira", "desinformação" in captions
+  Never name source account. Confidence gate: 2+ outlets required.
+  Pipeline key: carousel_builder.py series "Verdade Pela Metade"
+  Template file: news_brazil_verdade_pela_metade.html
+*/
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ob:#0E0D0B;
+  --pa:#F2ECE0;
+  --ac:#C9A84C;
+  --mu:#7A7267;
+  --red:#C94C4C;
+  --green:#4CC96A;
+  --W:1080px;--H:1350px;--slide-inset:100px;--P:var(--slide-inset);
+}
+body{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px;font-family:'Inter',sans-serif}
+
+/* ── Base slide ── */
+.slide{
+  width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);
+  padding:var(--P);position:relative;overflow:hidden;
+  display:flex;flex-direction:column;flex-shrink:0;
+}
+.bg{
+  position:absolute;inset:0;background-size:cover;background-position:center;
+  opacity:.18;filter:grayscale(.15) contrast(1.12) brightness(.85);
+}
+.slide>*:not(.bg){position:relative;z-index:2}
+
+/* ── Typography ── */
+.tag{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--mu);margin-bottom:20px;text-transform:uppercase;letter-spacing:.06em}
+.accent{color:var(--ac)}
+.accent-red{color:var(--red)}
+.accent-green{color:var(--green)}
+.hl{font-family:'Fraunces',serif;font-size:72px;line-height:1.04;text-transform:uppercase;margin-bottom:14px}
+.hl-sm{font-family:'Fraunces',serif;font-size:54px;line-height:1.06;text-transform:uppercase;margin-bottom:14px}
+.body-text{font-size:30px;line-height:1.45;color:var(--pa);margin-bottom:10px}
+.src-inline{font-family:'JetBrains Mono',monospace;font-size:19px;color:var(--mu);margin-top:8px}
+.swipe{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--mu);position:absolute;right:var(--P);bottom:var(--P)}
+.footer-handle{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--mu);position:absolute;left:var(--P);bottom:var(--P)}
+.divider{width:64px;height:3px;background:var(--ac);margin:18px 0 22px}
+
+/* ── FORMAT-024 stamp ── */
+.stamp-wrap{
+  position:absolute;right:var(--P);top:var(--P);z-index:5;
+  width:220px;height:220px;display:flex;align-items:center;justify-content:center;
+}
+.stamp{
+  width:200px;height:200px;border-radius:50%;
+  border:6px solid var(--ac);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;transform:rotate(-12deg);
+  background:rgba(201,168,76,.06);
+  position:relative;
+}
+.stamp::before{
+  content:'';position:absolute;inset:8px;border-radius:50%;
+  border:2px dashed rgba(201,168,76,.35);
+}
+.stamp-top{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ac);letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px}
+.stamp-main{font-family:'Fraunces',serif;font-size:18px;color:var(--ac);line-height:1.15;text-transform:uppercase;font-weight:700;max-width:110px}
+.stamp-bot{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--mu);letter-spacing:.12em;text-transform:uppercase;margin-top:4px}
+
+/* ── Mode pill (A / B) ── */
+.mode-pill{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:'JetBrains Mono',monospace;font-size:18px;
+  border:2px solid var(--ac);border-radius:3px;
+  padding:6px 14px;color:var(--ac);margin-bottom:28px;
+  width:fit-content;
+}
+.mode-pill .dot{width:8px;height:8px;border-radius:50%;background:var(--ac)}
+
+/* ── Cover slide ── */
+.slide-cover .cover-claim{
+  font-family:'Fraunces',serif;font-size:84px;line-height:1.02;
+  text-transform:uppercase;max-width:68%;margin-bottom:20px;
+}
+.slide-cover .cover-sub{
+  font-size:28px;color:var(--mu);line-height:1.4;
+  border-left:3px solid var(--ac);padding-left:16px;max-width:60%;
+}
+.cover-spacer{flex:1}
+.cover-series{
+  font-family:'JetBrains Mono',monospace;font-size:20px;
+  color:var(--mu);margin-bottom:14px;letter-spacing:.05em;
+}
+
+/* ── Viral claim slide ── */
+.viral-box{
+  background:rgba(255,255,255,.04);border:2px solid rgba(201,168,76,.25);
+  border-radius:4px;padding:28px 30px;margin:18px 0 16px;
+  position:relative;overflow:hidden;
+}
+.viral-box::before{
+  content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(135deg,transparent,transparent 8px,rgba(255,255,255,.015) 8px,rgba(255,255,255,.015) 9px);
+}
+.viral-box .vb-label{font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--mu);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
+.viral-box .vb-text{font-family:'Fraunces',serif;font-size:38px;line-height:1.2;color:var(--pa);font-style:italic;position:relative;z-index:1}
+.viral-note{font-size:26px;color:var(--mu);line-height:1.4;margin-top:14px}
+
+/* ── What's true slide ── */
+.fact-block{
+  background:rgba(201,168,76,.06);border-left:4px solid var(--ac);
+  padding:22px 24px;margin:16px 0;border-radius:0 4px 4px 0;
+}
+.fact-block .fb-tag{font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--ac);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+.fact-block .fb-text{font-size:30px;line-height:1.4}
+
+/* ── What's missing slide ── */
+.stat-hero{
+  margin:20px 0;
+}
+.stat-num{font-family:'Fraunces',serif;font-size:100px;line-height:1;color:var(--ac);margin-bottom:6px}
+.stat-label{font-size:34px;color:var(--pa);line-height:1.3}
+
+/* ── Timeline slide ── */
+.timeline{margin:24px 0;flex:1}
+.tl-event{display:flex;gap:20px;margin-bottom:0}
+.tl-event:not(:last-child){margin-bottom:0}
+.tl-spine{display:flex;flex-direction:column;align-items:center;width:40px;flex-shrink:0}
+.tl-dot{width:20px;height:20px;border-radius:50%;border:3px solid var(--ac);background:var(--ob);flex-shrink:0;margin-top:6px}
+.tl-dot.dot-filled{background:var(--ac)}
+.tl-line{width:2px;flex:1;background:rgba(201,168,76,.25);margin:4px 0}
+.tl-content{flex:1;padding-bottom:32px}
+.tl-date{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--ac);margin-bottom:8px;letter-spacing:.04em}
+.tl-govt{font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--mu);text-transform:uppercase;margin-bottom:6px}
+.tl-action{font-size:30px;line-height:1.35}
+.tl-src{font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--mu);margin-top:6px}
+
+/* ── Sources slide ── */
+.confidence-bar{
+  display:flex;align-items:center;gap:12px;margin-bottom:24px;
+}
+.conf-dot{width:14px;height:14px;border-radius:50%;background:var(--ac)}
+.conf-dot.empty{background:transparent;border:2px solid rgba(201,168,76,.3)}
+.conf-label{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--ac);letter-spacing:.06em}
+.src-list{flex:1;overflow:hidden}
+.src-row{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid rgba(242,236,224,.09);font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--mu);line-height:1.35}
+.src-num{color:var(--ac);width:32px;flex-shrink:0;font-size:24px}
+.src-text{flex:1}
+.src-domain{display:block;color:var(--ac);font-size:16px;margin-top:3px;letter-spacing:.04em}
+.cta-save{font-size:30px;font-weight:700;margin-top:20px}
+
+/* ── Closing slide ── */
+.closing-stamp-wrap{
+  flex:1;display:flex;align-items:center;justify-content:center;margin:20px 0;
+}
+.closing-stamp{
+  width:340px;height:340px;border-radius:50%;
+  border:8px solid var(--ac);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;transform:rotate(-8deg);
+  background:rgba(201,168,76,.05);position:relative;
+}
+.closing-stamp::before{
+  content:'';position:absolute;inset:12px;border-radius:50%;
+  border:3px dashed rgba(201,168,76,.3);
+}
+.closing-stamp-text{font-family:'Fraunces',serif;font-size:32px;color:var(--ac);text-transform:uppercase;line-height:1.2;font-weight:700;max-width:200px;position:relative;z-index:1}
+.closing-stamp-sub{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--mu);text-transform:uppercase;letter-spacing:.12em;margin-top:8px;position:relative;z-index:1}
+.cta-block{text-align:center}
+.cta-main{font-size:32px;font-weight:700;margin-bottom:10px;line-height:1.35}
+.cta-sub{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--ac);letter-spacing:.04em}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 1 — CAPA (Cover / Hook)
+     Pipeline injects: bg image URL, cover_claim, cover_sub
+     ═══════════════════════════════════════════════ -->
+<div class="slide slide-cover">
+  <div class="bg" style="background-image:url('');"></div>
+
+  <div class="stamp-wrap">
+    <div class="stamp">
+      <div class="stamp-top">Série</div>
+      <div class="stamp-main">Verdade Pela Metade</div>
+      <div class="stamp-bot">EP. 001</div>
+    </div>
+  </div>
+
+  <div class="cover-series">VERDADE PELA METADE</div>
+
+  <div class="cover-claim">QUEM CORTOU O BOLSA FAMÍLIA?</div>
+
+  <div class="divider"></div>
+
+  <div class="cover-sub">A metade da história que todo mundo compartilhou</div>
+
+  <div class="cover-spacer"></div>
+
+  <div class="swipe">SWIPE &#8594;</div>
+  <div class="footer-handle">@brazilnews</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 2 — A VERSÃO QUE VIRALIZOU (The viral claim)
+     Pipeline injects: viral_attribution, viral_body_text
+     ═══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bg" style="background-image:url('');"></div>
+
+  <div class="mode-pill"><div class="dot"></div> MODO A — ATRIBUIÇÃO ERRADA</div>
+
+  <div class="tag">A Versão que Viralizou</div>
+  <div class="hl-sm"><span class="accent-red">LULA</span> CORTOU OS BENEFICIÁRIOS</div>
+
+  <div class="viral-box">
+    <div class="vb-label">O que circula</div>
+    <div class="vb-text">"Lula cortou o Bolsa Família e retirou famílias do programa."</div>
+  </div>
+
+  <div class="viral-note">Essa afirmação circula com fotos antigas.<br>Mas há uma data que ninguém menciona.</div>
+
+  <div class="swipe">SWIPE &#8594;</div>
+  <div class="footer-handle">@brazilnews</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 3 — O QUE É VERDADE (What's actually true)
+     Pipeline injects: true_fact_headline, true_fact_body, source_1
+     ═══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bg" style="background-image:url('');"></div>
+
+  <div class="tag">O que é Verdade</div>
+  <div class="hl-sm">O PROGRAMA <span class="accent">MUDOU DE NOME</span></div>
+
+  <div class="fact-block">
+    <div class="fb-tag">Fato confirmado</div>
+    <div class="fb-text">Em novembro de 2021, o Bolsa Família foi renomeado para <strong>Auxílio Brasil</strong>. Isso é real.</div>
+  </div>
+
+  <div class="body-text">Mas renomear não é o mesmo que cortar. E quem renomeou não foi Lula.</div>
+
+  <div class="src-inline">Fonte: Lei 14.284/2021 — Senado Federal</div>
+
+  <div class="swipe">SWIPE &#8594;</div>
+  <div class="footer-handle">@brazilnews</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 4 — O QUE NINGUÉM MENCIONA (The missing piece)
+     Pipeline injects: missing_stat_num, missing_stat_label, missing_body, source_2
+     ═══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bg" style="background-image:url('');"></div>
+
+  <div class="tag">O que Ninguém Menciona</div>
+  <div class="hl-sm">A PARTE QUE <span class="accent">FICOU DE FORA</span></div>
+
+  <div class="stat-hero">
+    <div class="stat-num">1,3 Mi</div>
+    <div class="stat-label">de famílias excluídas do programa<br>entre 2021 e 2022</div>
+  </div>
+
+  <div class="body-text">Sob o Auxílio Brasil, 1,3 milhão de famílias perderam o benefício. O TCU confirmou.</div>
+
+  <div class="src-inline">Fonte: TCU — Relatório de Auditoria Auxílio Brasil (2022)</div>
+
+  <div class="swipe">SWIPE &#8594;</div>
+  <div class="footer-handle">@brazilnews</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 5 — A DATA QUE IMPORTA (Timeline)
+     Pipeline injects: tl_event_1 (date, govt, action, src), tl_event_2
+     ═══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bg" style="background-image:url('');"></div>
+
+  <div class="tag">A Data que Importa</div>
+  <div class="hl-sm">QUEM ASSINOU O QUÊ</div>
+
+  <div class="timeline">
+
+    <div class="tl-event">
+      <div class="tl-spine">
+        <div class="tl-dot dot-filled"></div>
+        <div class="tl-line"></div>
+      </div>
+      <div class="tl-content">
+        <div class="tl-date">NOV / 2021</div>
+        <div class="tl-govt">Governo Bolsonaro</div>
+        <div class="tl-action">Criou Auxílio Brasil e <span class="accent-red">excluiu 1,3 milhão</span> de famílias do benefício.</div>
+        <div class="tl-src">Lei 14.284/2021</div>
+      </div>
+    </div>
+
+    <div class="tl-event">
+      <div class="tl-spine">
+        <div class="tl-dot dot-filled"></div>
+      </div>
+      <div class="tl-content">
+        <div class="tl-date">JAN / 2023</div>
+        <div class="tl-govt">Governo Lula</div>
+        <div class="tl-action">Restaurou o Bolsa Família com <span class="accent-green">21,6 milhões</span> de famílias e R$600/mês.</div>
+        <div class="tl-src">Lei 14.601/2023 — Agência Câmara</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="swipe">SWIPE &#8594;</div>
+  <div class="footer-handle">@brazilnews</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 6 — VERIFICADO COM 2+ FONTES (Sources)
+     Pipeline injects: src_list items, confidence_count
+     ═══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bg" style="background-image:url('');"></div>
+
+  <div class="tag">Verificado</div>
+  <div class="hl-sm">AS FONTES <span class="accent">ESTÃO AQUI</span></div>
+
+  <div class="confidence-bar">
+    <div class="conf-dot"></div>
+    <div class="conf-dot"></div>
+    <div class="conf-dot"></div>
+    <div class="conf-dot empty"></div>
+    <div class="conf-label">3 FONTES VERIFICADAS</div>
+  </div>
+
+  <div class="src-list">
+    <div class="src-row">
+      <div class="src-num">01</div>
+      <div class="src-text">
+        Lei 14.284/2021 — Criação do Auxílio Brasil e exclusão de famílias
+        <span class="src-domain">senado.leg.br</span>
+      </div>
+    </div>
+    <div class="src-row">
+      <div class="src-num">02</div>
+      <div class="src-text">
+        Lei 14.601/2023 — Restauração do Bolsa Família (21,6 mi famílias)
+        <span class="src-domain">camara.leg.br</span>
+      </div>
+    </div>
+    <div class="src-row">
+      <div class="src-num">03</div>
+      <div class="src-text">
+        Relatório de Auditoria Auxílio Brasil 2022 — exclusão confirmada
+        <span class="src-domain">tcu.gov.br</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cta-save">Salva pra lembrar.</div>
+
+  <div class="footer-handle">@brazilnews</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 7 — CONCLUSÃO (Closing card)
+     Pipeline injects: closing_body, cta_text
+     Same stamp as cover — visual bookend.
+     ═══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bg" style="background-image:url('');"></div>
+
+  <div class="tag">Verdade Pela Metade</div>
+  <div class="hl-sm">A HISTÓRIA COMPLETA <span class="accent">MUDA TUDO</span></div>
+
+  <div class="body-text">O corte aconteceu. Mas foi antes de 2023. A data importa.</div>
+
+  <div class="closing-stamp-wrap">
+    <div class="closing-stamp">
+      <div class="closing-stamp-text">Verdade Pela Metade</div>
+      <div class="closing-stamp-sub">EP. 001</div>
+    </div>
+  </div>
+
+  <div class="cta-block">
+    <div class="cta-main">Manda pra quem só viu a metade.</div>
+    <div class="cta-sub">@brazilnews</div>
+  </div>
+
+  <div class="footer-handle">@brazilnews</div>
+</div>
+
+</body>
+</html>
