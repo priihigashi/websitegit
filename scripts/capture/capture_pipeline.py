@@ -2873,7 +2873,7 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
 
     # Trigger topic cluster scraper (ported from run_opc — applies to political/Brazil news)
     if os.getenv("APIFY_API_KEY"):
-        _trigger_topic_scraper(news_cl)
+        _trigger_topic_scraper(news_cl, niche="Brazil")
 
     print(f"\n{'='*50}\nNEWS CAPTURE DONE\nStory ID: {args.story_id}\nDoc: {doc_url or 'check artifacts'}\nBrief: {brief_doc_url or 'check artifacts'}\nVideo: {video_drive_url or 'upload failed — check artifacts'}\n{'='*50}")
 
@@ -2903,8 +2903,8 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
     except Exception: pass
 
 
-def _trigger_topic_scraper(classification):
-    """Dispatch topic_scraper.yml after a Brazil capture. Non-fatal if it fails."""
+def _trigger_topic_scraper(classification, niche="Brazil"):
+    """Dispatch topic_scraper.yml after a capture. Non-fatal if it fails."""
     import urllib.request
     token = os.getenv("GITHUB_TOKEN", "")
     if not token:
@@ -2914,7 +2914,7 @@ def _trigger_topic_scraper(classification):
     if not keywords:
         print("  SKIP topic scraper dispatch: no keywords extracted")
         return
-    payload = json.dumps({"ref": "main", "inputs": {"keywords": keywords}}).encode()
+    payload = json.dumps({"ref": "main", "inputs": {"keywords": keywords, "niche": niche}}).encode()
     req = urllib.request.Request(
         "https://api.github.com/repos/priihigashi/oak-park-ai-hub/actions/workflows/topic_scraper.yml/dispatches",
         data=payload,
@@ -3784,7 +3784,7 @@ def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_c
     create_calendar_task(sid, args.project, args.url, doc_url or "", transcript[:400], args.notes or "", hub_url=hub_url)
     # Auto-trigger Topic Cluster Scraper for Brazil captures
     if cl.get("niche") == "Brazil" and os.getenv("APIFY_API_KEY"):
-        _trigger_topic_scraper(cl)
+        _trigger_topic_scraper(cl, niche="Brazil")
 
     niche = cl.get("niche", "")
     summary = cl.get("summary") or sid
