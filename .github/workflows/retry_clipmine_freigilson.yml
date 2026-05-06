@@ -1,12 +1,26 @@
 name: SH-104 Retry — Frei Gilson clip mine
 
 # One-click retry of the SH-104 Phase 1 test run.
-# Use AFTER topping up Anthropic + Apify credits.
-# This dispatches video-research.yml in person_evidence_mining mode
-# with the locked Frei Gilson inputs from CLAUDE memory.
+# Default fallback_mode=auto: tries Apify + Anthropic first, cascades to
+# OpenAI + SerpAPI/DuckDuckGo when those are unavailable. The run still
+# completes and emails a manifest even with no Anthropic/Apify credits.
 
 on:
   workflow_dispatch:
+    inputs:
+      fallback_mode:
+        description: 'Route policy: auto (default) | strict | no_paid_anthropic_apify'
+        required: false
+        type: choice
+        options:
+          - auto
+          - strict
+          - no_paid_anthropic_apify
+        default: auto
+      candidate_urls:
+        description: 'Optional manual candidate URLs (one per line)'
+        required: false
+        default: ''
 
 # Prevent accidental double-click / double-billing — second dispatch waits.
 concurrency:
@@ -20,6 +34,8 @@ jobs:
       - name: Trigger video-research.yml with Frei Gilson inputs
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_FALLBACK_MODE: ${{ github.event.inputs.fallback_mode }}
+          INPUT_CANDIDATE_URLS: ${{ github.event.inputs.candidate_urls }}
         run: |
           gh workflow run video-research.yml \
             --repo ${{ github.repository }} \
@@ -28,5 +44,7 @@ jobs:
             -f person_name='Frei Gilson' \
             -f evidence_requirement='Same public person making statements that are unfair toward a group, morally contradictory, or needing context against public religious persona' \
             -f target_clip_count=6 \
-            -f niche=brazil
-          echo "✅ video-research.yml dispatched. See: https://github.com/${{ github.repository }}/actions"
+            -f niche=brazil \
+            -f fallback_mode="${INPUT_FALLBACK_MODE:-auto}" \
+            -f candidate_urls="${INPUT_CANDIDATE_URLS}"
+          echo "✅ video-research.yml dispatched (fallback_mode=${INPUT_FALLBACK_MODE:-auto}). See: https://github.com/${{ github.repository }}/actions"

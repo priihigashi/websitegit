@@ -17,10 +17,19 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
+from pathlib import Path
 from typing import Optional
+
+# Sibling import shim — route_state lives next to this file when run as
+# `research.transcription` AND when run as a flat script via youtube_research.
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+from route_state import get_state  # noqa: E402
 
 OPENAI_API_KEY  = os.environ.get("OPENAI_API_KEY", "")
 APIFY_API_KEY   = os.environ.get("APIFY_API_KEY", "")
@@ -241,7 +250,12 @@ def _ytdlp_whisper(video_id: str, ios: bool = False) -> str:
 
 def _apify_yt_whisper(video_id: str) -> str:
     global _apify_limit_hit
+    state = get_state()
+    if not state.should_try_apify():
+        return ""
     if _apify_limit_hit or not APIFY_API_KEY:
+        if not APIFY_API_KEY:
+            state.mark_unavailable("apify", "no_api_key")
         return ""
     actor = "bernardo~youtube-scraper"
     payload = {
@@ -291,6 +305,7 @@ def _apify_yt_whisper(video_id: str) -> str:
         msg = _scrub(str(e))
         if "limit" in msg.lower() and "403" in msg:
             _apify_limit_hit = True
+        state.mark_failed("apify", "yt_audio", msg)
         _record_error("apify_yt", msg)
         print(f"    Apify YT failed: {msg[:200]}")
         return ""
@@ -324,7 +339,12 @@ def transcribe_youtube(video_id: str) -> dict:
 def _apify_ig_audio(reel_url: str) -> str:
     """Apify instagram-scraper -> videoUrl -> Whisper."""
     global _apify_limit_hit
+    state = get_state()
+    if not state.should_try_apify():
+        return ""
     if _apify_limit_hit or not APIFY_API_KEY:
+        if not APIFY_API_KEY:
+            state.mark_unavailable("apify", "no_api_key")
         return ""
     actor = "apify~instagram-scraper"
     payload = {
@@ -375,6 +395,7 @@ def _apify_ig_audio(reel_url: str) -> str:
         msg = _scrub(str(e))
         if "limit" in msg.lower() and "403" in msg:
             _apify_limit_hit = True
+        state.mark_failed("apify", "ig_audio", msg)
         _record_error("apify_ig", msg)
         print(f"    Apify IG failed: {msg[:200]}")
         return ""

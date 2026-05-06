@@ -23,10 +23,19 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import time
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Optional
+
+# Sibling import shim (route_state, llm_router) so this module is callable
+# both as `research.candidate_collectors` and as a standalone import.
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+from route_state import get_state  # noqa: E402
 
 APIFY_API_KEY = os.environ.get("APIFY_API_KEY", "")
 APIFY_BASE    = "https://api.apify.com/v2"
@@ -46,9 +55,11 @@ def search_youtube_candidates(queries: list[str], max_per_query: int = 5,
     """Use yt-dlp ytsearchN to find candidate videos.
     Excludes videos > max_duration_sec (default 30 min) to skip long sermons —
     we want the punchy clips, not full 2hr lectures."""
+    state = get_state()
     try:
         import yt_dlp
     except ImportError:
+        state.mark_unavailable("youtube", "yt_dlp_not_installed")
         print("  yt-dlp not installed")
         return []
 
@@ -83,13 +94,16 @@ def search_youtube_candidates(queries: list[str], max_per_query: int = 5,
                     })
         except Exception as e:
             print(f"  YT search '{q}': {e}")
+    if results:
+        state.mark_used("youtube")
     return results
 
 
 # ── Instagram candidate search (Apify instagram-reel-scraper) ────────────────
 
 def search_instagram_candidates(queries: list[str], max_per_query: int = 5,
-                                 person_name: str = "") -> list[dict]:
+                                 person_name: str = "",
+                                 on_failure=None) -> list[dict]:
     """Instagram candidate search — 3-route cascade.
 
     Tier 1 (preferred): Apify instagram-reel-scraper by hashtag.
@@ -97,32 +111,49 @@ def search_instagram_candidates(queries: list[str], max_per_query: int = 5,
     Tier 3 (always-on): DuckDuckGo HTML search with site:instagram.com filter.
 
     Pipeline-resilience non-negotiable per CLAUDE.md: search must NEVER hard-
-    fail when Apify returns 403 / credit exhausted.
+    fail when Apify returns 403 / credit exhausted. fallback_mode env gates
+    Apify entirely when set to no_paid_anthropic_apify.
     """
-    primary = _ig_via_apify(queries, max_per_query) if APIFY_API_KEY else []
+    state = get_state()
+    primary: list[dict] = []
+    if state.should_try_apify() and APIFY_API_KEY:
+        primary = _ig_via_apify(queries, max_per_query, on_failure=on_failure)
     if primary:
         return primary
     # Fallback ladder runs when Apify returned nothing OR was unavailable.
-    if not primary:
-        if not APIFY_API_KEY:
-            print("  Instagram: APIFY_API_KEY not set — falling back to web search")
-        elif _apify_search_limit_hit:
-            print("  Instagram: Apify limit hit — falling back to web search")
-        else:
-            print("  Instagram: Apify returned 0 — trying web fallbacks")
-        fallback = _ig_via_web_search(queries, person_name=person_name,
-                                      max_results=max_per_query * 4)
-        if fallback:
-            return fallback
+    if not state.should_try_apify():
+        print("  Instagram: Apify disabled by fallback_mode — using web search")
+    elif not APIFY_API_KEY:
+        print("  Instagram: APIFY_API_KEY not set — falling back to web search")
+    elif _apify_search_limit_hit:
+        print("  Instagram: Apify limit hit — falling back to web search")
+    else:
+        print("  Instagram: Apify returned 0 — trying web fallbacks")
+    fallback = _ig_via_web_search(queries, person_name=person_name,
+                                  max_results=max_per_query * 4)
+    if fallback:
+        return fallback
     return primary
 
 
-def _ig_via_apify(queries: list[str], max_per_query: int = 5) -> list[dict]:
+def _ig_via_apify(queries: list[str], max_per_query: int = 5,
+                   on_failure=None) -> list[dict]:
     """Apify instagram-reel-scraper by hashtag.
     Strips spaces/# from queries to make hashtag-friendly tokens.
-    Returns up to max_per_query reels per hashtag."""
+    Returns up to max_per_query reels per hashtag.
+
+    Honors fallback_mode via route_state — skips entirely when Apify is
+    disabled, marks the route as failed/unavailable so the manifest reports
+    why the cascade fell through to SerpAPI/DuckDuckGo.
+    """
     global _apify_search_limit_hit
-    if not APIFY_API_KEY or _apify_search_limit_hit:
+    state = get_state()
+    if not state.should_try_apify():
+        return []
+    if not APIFY_API_KEY:
+        state.mark_unavailable("apify", "no_api_key")
+        return []
+    if _apify_search_limit_hit:
         return []
 
     actor = "apify~instagram-reel-scraper"
@@ -151,6 +182,7 @@ def _ig_via_apify(queries: list[str], max_per_query: int = 5) -> list[dict]:
         msg = str(e)
         if "403" in msg or "402" in msg or "limit" in msg.lower():
             _apify_search_limit_hit = True
+        state.mark_failed("apify", "ig_search", msg[:300], on_failure=on_failure)
         print(f"  Apify IG search start failed: {msg[:200]}")
         return []
 
@@ -167,6 +199,8 @@ def _ig_via_apify(queries: list[str], max_per_query: int = 5) -> list[dict]:
         if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
             break
     if status != "SUCCEEDED":
+        state.mark_failed("apify", "ig_search", f"run_status:{status}",
+                          on_failure=on_failure)
         print(f"  Apify IG search ended: {status}")
         return []
 
@@ -176,6 +210,8 @@ def _ig_via_apify(queries: list[str], max_per_query: int = 5) -> list[dict]:
             timeout=30
         ).read())
     except Exception as e:
+        state.mark_failed("apify", "ig_dataset", str(e)[:300],
+                          on_failure=on_failure)
         print(f"  Apify IG dataset fetch failed: {e}")
         return []
 
@@ -196,6 +232,8 @@ def _ig_via_apify(queries: list[str], max_per_query: int = 5) -> list[dict]:
             "upload_date": item.get("timestamp", "")[:10].replace("-", ""),
             "query": ",".join(item.get("hashtags", [])[:3]) or "(hashtag-batch)",
         })
+    if results:
+        state.mark_used("apify")
     return results
 
 
@@ -261,6 +299,10 @@ def _ig_via_web_search(queries: list[str], person_name: str = "",
 def _serpapi_search(query: str, max_results: int) -> list[str]:
     """SerpAPI Google JSON. Free tier: 100 searches/month — adequate for
     occasional Apify outages. Returns list of URLs (newest first)."""
+    state = get_state()
+    if not SERP_API_KEY:
+        state.mark_unavailable("serpapi", "no_api_key")
+        return []
     try:
         params = urllib.parse.urlencode({
             "engine": "google", "q": query, "api_key": SERP_API_KEY,
@@ -269,8 +311,12 @@ def _serpapi_search(query: str, max_results: int) -> list[str]:
         url = f"https://serpapi.com/search.json?{params}"
         data = json.loads(urllib.request.urlopen(url, timeout=20).read())
         results = data.get("organic_results", []) or []
-        return [r.get("link", "") for r in results if r.get("link")]
+        urls = [r.get("link", "") for r in results if r.get("link")]
+        if urls:
+            state.mark_used("serpapi")
+        return urls
     except Exception as e:
+        state.mark_failed("serpapi", "search", str(e)[:300])
         print(f"  SerpAPI fallback failed: {e}")
         return []
 
@@ -279,6 +325,7 @@ def _duckduckgo_search(query: str, max_results: int) -> list[str]:
     """DuckDuckGo HTML scraper. No API key. Last-resort free route.
     Parses the lite HTML endpoint which is the most stable interface.
     Honors a small delay to avoid rate-limit. Returns list of URLs."""
+    state = get_state()
     try:
         url = "https://html.duckduckgo.com/html/?" + urllib.parse.urlencode({"q": query})
         req = urllib.request.Request(
@@ -290,6 +337,7 @@ def _duckduckgo_search(query: str, max_results: int) -> list[str]:
         )
         html = urllib.request.urlopen(req, timeout=20).read().decode("utf-8", "replace")
     except Exception as e:
+        state.mark_failed("duckduckgo", "search", str(e)[:300])
         print(f"  DuckDuckGo fallback failed: {e}")
         return []
     # Extract result anchors. DDG uses /l/?uddg=<encoded URL>&...
@@ -305,6 +353,8 @@ def _duckduckgo_search(query: str, max_results: int) -> list[str]:
             out.append(href)
         if len(out) >= max_results:
             break
+    if out:
+        state.mark_used("duckduckgo")
     return out
 
 
@@ -368,9 +418,11 @@ Rules:
 
 
 def generate_query_buckets(person_name: str, requirement: str,
-                           seed_excerpt: str = "") -> dict:
-    """Call Claude Haiku to generate query buckets. Returns dict with 5 keys.
-    Falls back to a small hand-built default if Claude unavailable."""
+                           seed_excerpt: str = "",
+                           on_failure=None) -> dict:
+    """Generate 5 query buckets via the LLM router (Anthropic Haiku → OpenAI
+    cascade). Falls back to a small hand-built default if every LLM route is
+    unavailable. Always returns a complete dict with all 5 keys."""
     fallback = {
         "youtube_queries": [
             f"{person_name}",
@@ -387,9 +439,6 @@ def generate_query_buckets(person_name: str, requirement: str,
         "negative_queries": [],
         "context_queries": [f"{person_name} discurso", f"{person_name} pregação"],
     }
-    if not CLAUDE_KEY:
-        print("  CLAUDE_KEY_4_CONTENT not set — using fallback queries")
-        return fallback
 
     prompt = _QUERY_BUCKET_PROMPT.format(
         person_name=person_name,
@@ -397,28 +446,22 @@ def generate_query_buckets(person_name: str, requirement: str,
         seed_excerpt=(seed_excerpt or "(none)")[:800],
     )
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=CLAUDE_KEY)
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1500,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = msg.content[0].text.strip()
-        # tolerate ```json fences
-        if raw.startswith("```"):
-            raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
-            raw = re.sub(r"```\s*$", "", raw)
-        data = json.loads(raw)
-        # validate keys
-        for k in ["youtube_queries", "instagram_queries", "exact_phrase_queries",
-                  "negative_queries", "context_queries"]:
-            if k not in data or not isinstance(data[k], list):
-                data[k] = fallback.get(k, [])
-        return data
+        from llm_router import llm_json
+        data = llm_json(prompt, max_tokens=1500, on_failure=on_failure)
     except Exception as e:
-        print(f"  Query bucket generation failed: {e} — using fallback")
+        # strict mode raises — surface to caller; auto-mode never raises.
+        print(f"  Query bucket generation raised: {e} — using fallback")
         return fallback
+
+    if not isinstance(data, dict) or not data:
+        print("  Query bucket generation: no LLM available — using fallback")
+        return fallback
+
+    for k in ["youtube_queries", "instagram_queries", "exact_phrase_queries",
+              "negative_queries", "context_queries"]:
+        if k not in data or not isinstance(data[k], list):
+            data[k] = fallback.get(k, [])
+    return data
 
 
 # ── orchestrator ─────────────────────────────────────────────────────────────
@@ -439,7 +482,8 @@ def collect_candidates(person_name: str, requirement: str, seed_excerpt: str = "
             except Exception:
                 pass
 
-    queries = generate_query_buckets(person_name, requirement, seed_excerpt)
+    queries = generate_query_buckets(person_name, requirement, seed_excerpt,
+                                     on_failure=on_failure)
 
     yt_queries = (queries.get("youtube_queries", [])
                   + queries.get("context_queries", [])
@@ -461,6 +505,7 @@ def collect_candidates(person_name: str, requirement: str, seed_excerpt: str = "
         if ig_queries:
             raw_ig = search_instagram_candidates(
                 ig_queries[:8], max_per_query=5, person_name=person_name,
+                on_failure=on_failure,
             )
             print(f"  Instagram candidates: {len(raw_ig)}")
     except Exception as e:

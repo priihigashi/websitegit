@@ -38,8 +38,15 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
+
+# Sibling import shim (route_state, llm_router).
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
 
 CLAUDE_KEY = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
 
@@ -160,13 +167,15 @@ def _empty_score(reason: str) -> dict:
 
 def score_candidate(candidate: dict, transcript: str, person_name: str,
                     requirement: str, seed_excerpt: str = "",
-                    person_passed_by_user: bool = False) -> dict:
+                    person_passed_by_user: bool = False,
+                    on_failure=None) -> dict:
     """Score a single candidate. Returns LOCKED schema dict.
-    NEVER raises — failures return safe-default empty score with reason in 'why'."""
+    NEVER raises — failures return safe-default empty score with reason in 'why'.
+
+    Routes through llm_router (Anthropic → OpenAI cascade per fallback_mode).
+    """
     if not transcript or not transcript.strip():
         return _empty_score("no_transcript")
-    if not CLAUDE_KEY:
-        return _empty_score("no_claude_key")
 
     # Truncate transcript to keep token cost bounded
     trimmed = transcript[:12000]
@@ -181,20 +190,13 @@ def score_candidate(candidate: dict, transcript: str, person_name: str,
         transcript=trimmed,
     )
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=CLAUDE_KEY)
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1200,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = msg.content[0].text.strip()
-        if raw.startswith("```"):
-            raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
-            raw = re.sub(r"```\s*$", "", raw)
-        data = json.loads(raw)
+        from llm_router import llm_json
+        data = llm_json(prompt, max_tokens=1200, on_failure=on_failure)
     except Exception as e:
+        # strict mode raises — return empty, runner records the route failure
         return _empty_score(f"score_failed: {str(e)[:200]}")
+    if not isinstance(data, dict) or not data:
+        return _empty_score("score_failed: no_llm_available")
 
     # User-passed person flag overrides ambiguous same_person inference
     if person_passed_by_user and not data.get("same_person"):

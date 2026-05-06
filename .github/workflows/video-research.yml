@@ -45,6 +45,19 @@ on:
         description: '(person_evidence_mining) Number of verified clips wanted'
         required: false
         default: '6'
+      fallback_mode:
+        description: 'Route policy: auto (paid first, cascade on failure) | strict (fail if paid unavailable) | no_paid_anthropic_apify (skip paid)'
+        required: false
+        type: choice
+        options:
+          - auto
+          - strict
+          - no_paid_anthropic_apify
+        default: auto
+      candidate_urls:
+        description: '(person_evidence_mining) Optional manual candidate URLs (one per line) — prepended to discovered candidates'
+        required: false
+        default: ''
 
 jobs:
   research:
@@ -100,6 +113,11 @@ jobs:
           INPUT_PERSON_NAME: ${{ github.event.inputs.person_name }}
           INPUT_EVIDENCE_REQUIREMENT: ${{ github.event.inputs.evidence_requirement }}
           INPUT_TARGET_CLIP_COUNT: ${{ github.event.inputs.target_clip_count }}
+          # SH-104 fallback_mode + manual candidate URLs.
+          # Read by scripts/research/route_state.py and person_evidence_runner.py.
+          # auto = default (Apify+Anthropic first, cascade on failure).
+          FALLBACK_MODE: ${{ github.event.inputs.fallback_mode }}
+          CANDIDATE_URLS: ${{ github.event.inputs.candidate_urls }}
         run: |
           if [ "$INPUT_MODE" = "person_evidence_mining" ]; then
             python scripts/youtube_research.py \

@@ -39,14 +39,22 @@ from evidence_scoring import (  # noqa: E402
     score_candidate, validate_score, build_manifest, write_manifest,
     slugify, slugify_bounded, ALLOWED_SAME_PERSON_METHODS,
 )
+from route_state import reset_state, get_state  # noqa: E402
 import routing  # noqa: E402
+
+# Initialise the route-state singleton from FALLBACK_MODE env at module load.
+# auto = paid first, cascade on failure (default).
+# strict = fail if Apify/Anthropic unavailable.
+# no_paid_anthropic_apify = skip paid routes entirely, OpenAI + web/YT/manual.
+reset_state()
 
 # ── env + constants ──────────────────────────────────────────────────────────
 SHEETS_TOKEN_RAW = os.environ.get("SHEETS_TOKEN", "")
 GHA_RUN_ID       = os.environ.get("GITHUB_RUN_ID", "")
 IDEAS_INBOX_ID   = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 RUN_LOG_LINES: list[str] = []
-PIPELINE_FAILURES: list[dict] = []  # mirrored to youtube_research.PIPELINE_FAILURES on exit
+PIPELINE_FAILURES: list[dict] = []  # FATAL only — flips workflow exit code.
+ROUTE_FAILURES: list[dict] = []     # NON-FATAL route fallbacks — logged for visibility, run still succeeds.
 
 # B7 — defamation surface mitigation.
 # Clip Collections is a Google Sheet that may be shared with collaborators
@@ -77,14 +85,11 @@ def _log(msg: str):
     RUN_LOG_LINES.append(f"[{datetime.now(timezone.utc).isoformat()}] {msg}")
 
 
-def _fail(stage: str, error):
-    err_str = str(error)[:500]
-    PIPELINE_FAILURES.append({"stage": stage, "error": err_str})
-    _log(f"  ❌ FAILURE [{stage}]: {err_str[:200]}")
-    # Best-effort write to 🚨 Pipeline Failures tab
+def _write_failure_row(stage: str, err_str: str, fatal: bool) -> None:
+    """Best-effort write to 🚨 Pipeline Failures tab. Used by both _fail and
+    _log_route_failure. NOTE row column order matches existing tab schema."""
     try:
         from googleapiclient.discovery import build
-        from google.oauth2.credentials import Credentials
         if not SHEETS_TOKEN_RAW:
             return
         creds = _creds_from_token()
@@ -93,6 +98,7 @@ def _fail(stage: str, error):
         svc = build("sheets", "v4", credentials=creds)
         run_url = (f"https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{GHA_RUN_ID}"
                    if GHA_RUN_ID else "")
+        note = "" if fatal else "route_fallback (non-fatal — run continued)"
         svc.spreadsheets().values().append(
             spreadsheetId=IDEAS_INBOX_ID,
             range="'🚨 Pipeline Failures'!A:H",
@@ -106,11 +112,31 @@ def _fail(stage: str, error):
                 err_str,
                 run_url,
                 "",
-                "",
+                note,
             ]]},
         ).execute()
     except Exception as e:
         _log(f"  (failure-log write itself failed: {e})")
+
+
+def _fail(stage: str, error):
+    """FATAL failure — flips workflow exit code via PIPELINE_FAILURES list.
+    Use for: drive/sheet write errors, code exceptions, missing required infra."""
+    err_str = str(error)[:500]
+    PIPELINE_FAILURES.append({"stage": stage, "error": err_str})
+    _log(f"  ❌ FAILURE [{stage}]: {err_str[:200]}")
+    _write_failure_row(stage, err_str, fatal=True)
+
+
+def _log_route_failure(stage: str, error):
+    """NON-FATAL route fallback — Apify quota, Anthropic quota, SerpAPI down.
+    Logged to 🚨 tab + ROUTE_FAILURES so the manifest reports which routes
+    cascaded; does NOT push to PIPELINE_FAILURES, so the workflow still
+    exits 0 when only route fallbacks occurred."""
+    err_str = str(error)[:500]
+    ROUTE_FAILURES.append({"stage": stage, "error": err_str})
+    _log(f"  ⚠️  ROUTE FALLBACK [{stage}]: {err_str[:200]} (run continues)")
+    _write_failure_row(stage, err_str, fatal=False)
 
 
 def _creds_from_token():
@@ -523,7 +549,10 @@ def _send_email_summary(person_name: str, niche: str, seed_url: str,
     🚨 Pipeline Failures tab. Route A is documented but absent because there
     is no MCP host inside the runner.
     """
-    subject = f"[SH-104] Evidence manifest ready — {person_name} — {niche}"
+    state_snap = get_state().snapshot()
+    needs_research = len(verified) < 3
+    subject_tag = "Needs Research" if needs_research else "Manifest ready"
+    subject = f"[SH-104] {subject_tag} — {person_name} — {niche}"
     top3_lines = []
     for v in verified[:3]:
         s = v.get("score", {})
@@ -532,8 +561,24 @@ def _send_email_summary(person_name: str, niche: str, seed_url: str,
             f" ({s.get('timestamp_start','?')}-{s.get('timestamp_end','?')})"
             f" safe_to_use={s.get('safe_to_use', False)}"
         )
-    body = f"""Phase 1 evidence manifest ready for review.
 
+    # Compact one-line route summary for the email body.
+    rs = state_snap.get("route_status", {})
+    routes_line = (
+        f"fallback_mode={state_snap.get('fallback_mode','?')} | "
+        f"apify={rs.get('apify','?')} anthropic={rs.get('anthropic','?')} "
+        f"openai={rs.get('openai','?')} serpapi={rs.get('serpapi','?')} "
+        f"ddg={rs.get('duckduckgo','?')} youtube={rs.get('youtube','?')} "
+        f"manual={rs.get('manual_candidates',0)}"
+    )
+    needs_research_block = (
+        "\n⚠️  NEEDS RESEARCH — fewer than 3 verified clips.\n"
+        "    Manifest is preserved. Render gate stays manual.\n"
+        "    Re-run with broader requirement or paste manual candidate URLs.\n"
+        if needs_research else ""
+    )
+    body = f"""Phase 1 evidence manifest ready for review.
+{needs_research_block}
 Person: {person_name}
 Niche: {niche}
 Seed: {seed_url}
@@ -541,6 +586,8 @@ Seed: {seed_url}
 Candidates collected: {candidates_collected}
 Verified: {len(verified)}
 Rejected: {len(rejected)}
+
+Routes: {routes_line}
 
 Top verified quotes:
 """ + ("\n".join(top3_lines) if top3_lines else "  (none)") + f"""
@@ -593,7 +640,9 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
     _log(f"  target_clip_count: {target_clip_count}")
     _log(f"  evidence_requirement: {evidence_requirement[:200]}")
 
-    # 1) Transcribe seed
+    # 1) Transcribe seed — soft failure: if the seed itself can't be transcribed,
+    # the run still proceeds with empty seed_excerpt. The manifest will reflect
+    # candidates_collected but call out the seed transcription gap in route_failures.
     seed_transcript = ""
     try:
         seed_result = transcribe_url(seed_url)
@@ -604,9 +653,9 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
             trace = seed_result.get("error_trace")
             stage = f"seed_transcribe:{trace.get('stage')}" if trace else "seed_transcribe"
             detail = trace.get("error") if trace else seed_result["error"]
-            _fail(stage, detail)
+            _log_route_failure(stage, detail)
     except Exception as e:
-        _fail("seed_transcribe", e)
+        _log_route_failure("seed_transcribe", e)
     seed_excerpt = seed_transcript[:1500]
 
     # 2+3+4) Generate queries + collect candidates
@@ -615,9 +664,41 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
         requirement=evidence_requirement,
         seed_excerpt=seed_excerpt,
         target_count=target_clip_count,
-        on_failure=_fail,
+        on_failure=_log_route_failure,
     )
-    _log(f"  Total candidates: {len(candidates)}")
+    _log(f"  Total candidates from search: {len(candidates)}")
+
+    # Manual candidate URLs (from CANDIDATE_URLS env, newline-separated).
+    # Inserted at the FRONT so they're scored first (likely user-curated).
+    manual_raw = os.environ.get("CANDIDATE_URLS", "") or ""
+    manual_urls = [u.strip() for u in manual_raw.replace("\r", "").split("\n") if u.strip()]
+    if manual_urls:
+        manual_cands = []
+        for u in manual_urls:
+            platform = (
+                "youtube" if ("youtube.com" in u or "youtu.be" in u)
+                else "instagram" if "instagram.com" in u
+                else "tiktok" if "tiktok.com" in u
+                else "other"
+            )
+            manual_cands.append({
+                "platform": platform,
+                "id": u.rsplit("/", 1)[-1].split("?")[0],
+                "url": u,
+                "title": "",
+                "uploader": "",
+                "duration": None,
+                "upload_date": "",
+                "query": "manual_candidate",
+            })
+        # Dedupe against existing search candidates by normalized URL.
+        existing = { (c.get("url") or "").split("?")[0].rstrip("/").lower()
+                     for c in candidates }
+        new_manual = [c for c in manual_cands
+                      if c["url"].split("?")[0].rstrip("/").lower() not in existing]
+        get_state().increment_manual(len(new_manual))
+        candidates = new_manual + candidates
+        _log(f"  Manual candidates added: {len(new_manual)} (total: {len(candidates)})")
 
     # Cap how many we actually transcribe to keep costs bounded
     cap = max(target_clip_count * 4, 20)
@@ -652,9 +733,13 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
             if stage_detail:
                 reason = f"{reason} [{stage_detail}: {err_detail}]"
                 # Surface infra failures (Whisper/Apify/yt-dlp down) to the
-                # 🚨 Pipeline Failures tab so they're not silent.
+                # 🚨 Pipeline Failures tab so they're not silent. These are
+                # non-fatal at the candidate level: the cascade tried every
+                # tier and returned empty for THIS one URL — the run still
+                # produces a manifest from the candidates that did transcribe.
                 if stage_detail in ("whisper", "apify_yt", "apify_ig", "ytdlp_audio"):
-                    _fail(f"transcribe_candidate:{stage_detail}", err_detail or reason)
+                    _log_route_failure(f"transcribe_candidate:{stage_detail}",
+                                       err_detail or reason)
             rejected.append({"candidate": cand, "reason": reason,
                              "error_trace": trace or None})
             continue
@@ -674,6 +759,7 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
                 requirement=evidence_requirement,
                 seed_excerpt=seed_excerpt,
                 person_passed_by_user=bool(person_name),
+                on_failure=_log_route_failure,
             )
         except Exception as e:
             _fail(f"score_candidate:{cand.get('id','')}", e)
@@ -708,6 +794,10 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
         run_id=GHA_RUN_ID,
         target_count=target_clip_count,
     )
+    # Inject route-state snapshot — record which paid/free routes were used,
+    # which fell through, and why. Lets reviewers see at a glance whether
+    # weaker results came from an Apify outage vs no candidates existing.
+    manifest.update(get_state().snapshot())
     manifest_path = work_root / "evidence_manifest.json"
     write_manifest(str(manifest_path), manifest)
     _log(f"\n  Manifest written: {manifest_path}")
@@ -756,6 +846,14 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
     _log(f"\n=== DONE ===")
     _log(f"  verified={len(verified)} rejected={len(rejected)} "
          f"candidates={len(candidates)} transcribed={transcribed_count}")
+    snap = get_state().snapshot()
+    _log(f"  fallback_mode={snap['fallback_mode']} routes={snap['route_status']}")
+    if snap["route_failures"]:
+        _log(f"  route_fallbacks={len(snap['route_failures'])} (non-fatal — see manifest)")
+    if len(verified) < 3:
+        _log(f"  ⚠️  Verified < 3 → STATUS=Needs Research (workflow exit still 0).")
     _log(f"  Phase 1 manifest only. Manual review required before render.")
 
+    # Exit code policy: only FATAL failures (drive/sheet code errors etc.)
+    # flip the workflow. Route fallbacks (Apify/Anthropic quota) do not.
     return 1 if PIPELINE_FAILURES else 0
