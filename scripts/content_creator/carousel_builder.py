@@ -22,6 +22,10 @@ REPLICATE_KEY  = os.environ.get("PRI_OP_REPLICATE_API_KEY", "")
 INFSH_KEY      = os.environ.get("PRI_OP_INFSH_API_KEY", "")
 APIFY_KEY      = os.environ.get("APIFY_API_KEY", "")
 
+# SH-055: configurable slide safety margin — override via SLIDE_INSET_PX env var
+# Default 108px matches existing OPC templates; lower values reduce safe-zone trimming
+SLIDE_INSET_PX: int = int(os.environ.get("SLIDE_INSET_PX", "108"))
+
 # Shared image generation modules (image_providers + prompt_builder)
 try:
     import sys as _sys
@@ -2062,28 +2066,31 @@ def fetch_all_media(content, niche, work_dir, brief=""):
             else:
                 img_path = ""
         else:
-            # Legacy fallback when image_providers not available
-            img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
-            if img_path and _vision_accept(img_path, cq, f"slide{i}/gemini"):
-                _set_slide(i, img_path, "gemini", "ai", query=cq, prompt=ai_prompt)
-                accepted = True
-            else:
-                img_path = ""
-            if not accepted:
+            # Legacy fallback when image_providers not available.
+            # OPC: skip DALL-E (AI-generated photos not allowed for OPC — real photos only).
+            if not (niche == "opc"):
+                img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
+                if img_path and _vision_accept(img_path, cq, f"slide{i}/gemini"):
+                    _set_slide(i, img_path, "gemini", "ai", query=cq, prompt=ai_prompt)
+                    accepted = True
+                else:
+                    img_path = ""
+            if not accepted and not (niche == "opc"):
                 img_path = _generate_seedream_image(ai_prompt, work_dir, fname)
                 if img_path and _vision_accept(img_path, cq, f"slide{i}/seedream"):
                     _set_slide(i, img_path, "seedream", "ai", query=cq, prompt=ai_prompt)
                     accepted = True
                 else:
                     img_path = ""
-            if not accepted:
+            if not accepted and not (niche == "opc"):
                 img_path = _generate_replicate_sdxl(ai_prompt, work_dir, fname)
                 if img_path and _vision_accept(img_path, cq, f"slide{i}/sdxl"):
                     _set_slide(i, img_path, "sdxl", "ai", query=cq, prompt=ai_prompt)
                     accepted = True
                 else:
                     img_path = ""
-            if not accepted:
+            # DALL-E: explicitly skipped for OPC (real-photo rule SH-039)
+            if not accepted and not (niche == "opc"):
                 img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
                 if img_path and _vision_accept(img_path, cq, f"slide{i}/dall-e-3"):
                     _set_slide(i, img_path, "dall-e-3", "ai", query=cq, prompt=ai_prompt)
@@ -2091,7 +2098,8 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 else:
                     img_path = ""
 
-        # Tier 2: real-photo fallback (Wiki CC → Pexels → Pixabay) — only when AI exhausted
+        # Tier 2: real-photo fallback (Wiki CC → Pexels → Pixabay) — only when AI exhausted.
+        # For OPC this is TIER 1 (AI tiers were skipped above) — Wikimedia → Pexels → Pixabay → STOP.
         if not accepted:
             img_path = _fetch_person_photo(cq, work_dir, fname)
             if img_path and _vision_accept(img_path, cq, f"slide{i}/wikimedia"):
@@ -2114,6 +2122,12 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 print(f"  Slide {i}: Pixabay fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "pixabay", "stock", query=cq, prompt=ai_prompt)
                 accepted = True
+        # OPC — all real-photo tiers exhausted → log and leave slot empty (no DALL-E)
+        if not accepted and niche == "opc":
+            print(
+                f"  [OPC] slide{i}: all real-photo tiers exhausted for '{cq[:50]}' — "
+                f"placeholder/bio-initials will render (DALL-E not allowed for OPC)"
+            )
 
     # ── BRAZIL NATIVE SLIDE PHOTOS (motion alternating slides) ────────────────
     # Fetches per-slide CC photos for odd slides (3, 5, 7…) in the Brazil native
@@ -2480,7 +2494,7 @@ def _brazil_motion_css():
     """CSS for per-slide motion HTML files — Ken Burns animation + clip frame styling."""
     return """
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--ob:#0E0D0B;--pa:#F2ECE0;--ca:#C9A84C;--gr:#7A7267;--W:1080px;--H:1350px;--P:108px}
+:root{{--ob:#0E0D0B;--pa:#F2ECE0;--ca:#C9A84C;--gr:#7A7267;--W:1080px;--H:1350px;--P:{SLIDE_INSET_PX}px}}
 body{background:var(--ob);overflow:hidden}
 .slide{width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);position:relative;overflow:hidden;font-family:'Inter',sans-serif}
 .kb-bg{position:absolute;inset:0;background-size:cover;background-position:center top;
@@ -3641,7 +3655,7 @@ def _build_news_shared_template_html(content, slug, work_dir, style, handle="@HA
 
     shared_css = f"""
 *{{box-sizing:border-box;margin:0;padding:0}}
-:root{{--ob:{brand['obsidian']};--pa:{brand['paper']};--ac:{brand['accent']};--mu:{brand['muted']};--W:1080px;--H:1350px;--P:100px}}
+:root{{--ob:{brand['obsidian']};--pa:{brand['paper']};--ac:{brand['accent']};--mu:{brand['muted']};--W:1080px;--H:1350px;--P:{SLIDE_INSET_PX}px}}
 body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px;font-family:'Inter',sans-serif}}
 .slide{{width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);padding:var(--P);position:relative;overflow:hidden;display:flex;flex-direction:column}}
 .shared-shell{{position:relative}}
@@ -4145,7 +4159,7 @@ def _build_brazil_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", me
 <style>
 /* ── Rachadinha v2 brand spec — canonical native Brazil template ── */
 *{{box-sizing:border-box;margin:0;padding:0}}
-:root{{--ob:#0A0A0A;--pa:#F0EBE3;--ca:#C9A84C;--gr:rgba(240,235,227,0.45);--rule:rgba(240,235,227,0.12);--W:1080px;--H:1350px;--P:108px}}
+:root{{--ob:#0A0A0A;--pa:#F0EBE3;--ca:#C9A84C;--gr:rgba(240,235,227,0.45);--rule:rgba(240,235,227,0.12);--W:1080px;--H:1350px;--P:{SLIDE_INSET_PX}px}}
 body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}}
 .slide{{width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);padding:var(--P);position:relative;overflow:hidden;flex-shrink:0;display:flex;flex-direction:column}}
 /* Corner brackets */
@@ -4879,7 +4893,7 @@ def _build_the_case_html(content, slug, work_dir, handle="@HANDLE_PLACEHOLDER", 
 /* FORMAT-021 O Caso — topic/case-centric investigation carousel */
 /* Inherits Rachadinha v2 brand spec (Canário dark editorial palette) */
 *{{box-sizing:border-box;margin:0;padding:0}}
-:root{{--ob:#0A0A0A;--pa:#F0EBE3;--ca:#C9A84C;--gr:rgba(240,235,227,0.45);--rule:rgba(240,235,227,0.12);--W:1080px;--H:1350px;--P:108px}}
+:root{{--ob:#0A0A0A;--pa:#F0EBE3;--ca:#C9A84C;--gr:rgba(240,235,227,0.45);--rule:rgba(240,235,227,0.12);--W:1080px;--H:1350px;--P:{SLIDE_INSET_PX}px}}
 body{{background:#111;display:flex;flex-wrap:wrap;gap:24px;padding:24px}}
 .slide{{width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);padding:var(--P);position:relative;overflow:hidden;flex-shrink:0;display:flex;flex-direction:column}}
 .corner{{position:absolute;width:28px;height:28px;z-index:10}}

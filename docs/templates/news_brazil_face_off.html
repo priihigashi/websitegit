@@ -2,13 +2,12 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Brazil — Face-Off Cover · FORMAT-COVER-FACEOFF-BR (3 variants)</title>
+<title>Brazil — Face-Off Cover · FORMAT02_03 (chosen slide)</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Roboto+Condensed:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-/* FORMAT-COVER-FACEOFF-BR — 3 variants for stories with 2 characters in dispute
-   V1 — Original full-body face-off (sepia bg, two cutouts facing each other, center headline)
-   V2 — V1 + faded grain/texture overlay ON TOP of characters so headline reads stronger
-   V3 — Huge cropped face-off ("split-face battle" framing, both subjects same scale)
+/* FORMAT02_03 — chosen Brazil face-off cover for stories with 2 characters in dispute.
+   Single selected slide: huge cropped faces with the headline separating both people.
+   Production rule: bust cutouts need transparent headroom so hair/head is never clipped.
 */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -56,19 +55,7 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
   padding:8px 18px;border-radius:24px;
 }
 
-/* V1 + V2: full-body cutouts facing each other */
-.face-left,.face-right{
-  position:absolute;height:1050px;z-index:3;
-}
-.face-left{left:-40px;bottom:130px}
-.face-right{right:-40px;bottom:130px;transform:scaleX(-1)}
-.face-img{
-  height:100%;width:auto;
-  object-fit:contain;object-position:bottom center;
-  filter:url(#duotone-bw-faceoff);
-}
-
-/* V3 huge cropped faces — only the inner half of each face shows.
+/* Huge cropped faces — only the inner half of each face shows.
    The center stays open for the headline, so the text separates both people. */
 .bust-left,.bust-right{
   position:absolute;height:980px;z-index:3;
@@ -82,7 +69,7 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
   filter:url(#duotone-bw-faceoff);
 }
 
-/* Texture overlay (V2 + V3) — sits ON TOP of cutouts, UNDER headline */
+/* Texture overlay — sits ON TOP of cutouts, UNDER headline */
 .texture-overlay{
   position:absolute;inset:0;z-index:4;pointer-events:none;
   opacity:0.55;mix-blend-mode:multiply;
@@ -147,52 +134,11 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;paddi
   </filter>
 </svg>
 
-<!-- V1 — Original full-body face-off (no texture overlay) -->
-<div class="slide v1">
-  <div class="bg-photo" style="background-image:url('https://images.unsplash.com/photo-1518639192441-8fce0a366e2e?w=1080&h=1350&fit=crop')"></div>
-  <div class="bg-overlay"></div>
-  <div class="variant-badge">V1 · ORIGINAL</div>
-  <div class="logo-top"><div class="logo-circle"><span>In</span><span>Br</span></div></div>
-  <div class="counter">1/10</div>
-  <div class="face-left"><img class="face-img" src="resources/two_char_demo/person1_cutout.png" alt=""></div>
-  <div class="face-right"><img class="face-img" src="resources/two_char_demo/person2_cutout.png" alt=""></div>
-  <div class="headline">
-    Favela do Moinho<br>vira palco<br>de disputa<br>entre <u>Lula</u><br>e <u>Tarcísio</u>
-  </div>
-  <div class="bottom-strip">
-    <div class="bottom-strip-text">— a população segue abandonada</div>
-  </div>
-  <div class="badge-bl"><div class="logo-circle"><span>In</span><span>Br</span></div></div>
-  <div class="topic-stamp">FAVELA <em>do</em> MOINHO</div>
-</div>
-
-<!-- V2 — Same as V1 + faded grain texture overlay on top of cutouts (headline more readable) -->
-<div class="slide v2">
-  <div class="bg-photo" style="background-image:url('https://images.unsplash.com/photo-1518639192441-8fce0a366e2e?w=1080&h=1350&fit=crop')"></div>
-  <div class="bg-overlay"></div>
-  <div class="variant-badge">V2 · TEXTURE OVERLAY</div>
-  <div class="logo-top"><div class="logo-circle"><span>In</span><span>Br</span></div></div>
-  <div class="counter">1/10</div>
-  <div class="face-left"><img class="face-img" src="resources/two_char_demo/person1_cutout.png" alt=""></div>
-  <div class="face-right"><img class="face-img" src="resources/two_char_demo/person2_cutout.png" alt=""></div>
-  <!-- Texture layer above cutouts -->
-  <div class="skin-mute"></div>
-  <div class="texture-overlay"></div>
-  <div class="headline">
-    Favela do Moinho<br>vira palco<br>de disputa<br>entre <u>Lula</u><br>e <u>Tarcísio</u>
-  </div>
-  <div class="bottom-strip">
-    <div class="bottom-strip-text">— a população segue abandonada</div>
-  </div>
-  <div class="badge-bl"><div class="logo-circle"><span>In</span><span>Br</span></div></div>
-  <div class="topic-stamp">FAVELA <em>do</em> MOINHO</div>
-</div>
-
-<!-- V3 — Half-body equal-height "battle" framing -->
+<!-- Selected slide — huge equal-height "battle" framing -->
 <div class="slide v3">
   <div class="bg-photo" style="background-image:url('https://images.unsplash.com/photo-1518639192441-8fce0a366e2e?w=1080&h=1350&fit=crop')"></div>
   <div class="bg-overlay"></div>
-  <div class="variant-badge">V3 · HUGE FACE-OFF</div>
+  <div class="variant-badge">FORMAT02_03 · HUGE FACE-OFF</div>
   <div class="logo-top"><div class="logo-circle"><span>In</span><span>Br</span></div></div>
   <div class="counter">1/10</div>
   <div class="bust-left"><img class="bust-img" src="resources/two_char_demo/person1_cutout_bust.png" alt=""></div>
