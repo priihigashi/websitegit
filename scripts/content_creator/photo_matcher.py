@@ -20,6 +20,81 @@ SHEET_ID    = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 CATALOG_TAB = "📸 Photo Catalog"
 MIN_QUALITY = 4
 
+# OPC_MATERIAL_REFERENCE — curated fallback search terms when no catalog photo matches.
+# These become query strings for stock-photo providers (Pexels/Pixabay/Wikimedia).
+# NOT a live scraper — static constants only. One category per material type.
+OPC_MATERIAL_REFERENCE = {
+    "paint": [
+        "benjamin moore white dove OC-17 interior wall",
+        "sherwin williams agreeable gray SW 7029 living room",
+        "benjamin moore hale navy HC-154 cabinet paint",
+        "sherwin williams accessible beige SW 7036 bedroom",
+        "interior wall paint roller application professional",
+    ],
+    "flooring": [
+        "hardwood oak flooring installation",
+        "luxury vinyl plank LVP flooring close up",
+        "porcelain tile floor installation South Florida",
+        "engineered hardwood flooring residential",
+        "tile grout flooring detail",
+    ],
+    "tile": [
+        "subway tile kitchen backsplash installation",
+        "marble tile bathroom floor pattern",
+        "hexagon mosaic tile shower wall",
+        "large format porcelain tile installation",
+        "handmade ceramic tile backsplash close up",
+    ],
+    "countertop": [
+        "quartz countertop kitchen white veined",
+        "granite countertop dark stone kitchen",
+        "butcher block wood countertop detail",
+        "marble countertop bathroom vanity",
+        "quartzite slab countertop installation",
+    ],
+    "lumber": [
+        "pressure treated lumber stack construction",
+        "2x4 framing lumber construction site",
+        "cedar wood siding exterior installation",
+        "engineered LVL beam installation framing",
+        "plywood subfloor installation residential",
+    ],
+    "roofing": [
+        "asphalt shingle roof installation South Florida",
+        "metal standing seam roof residential",
+        "flat roof membrane installation commercial",
+        "tile roof clay residential Florida",
+        "roof underlayment installation close up",
+    ],
+    "windows_doors": [
+        "impact window installation South Florida hurricane",
+        "french door exterior installation residential",
+        "sliding glass door installation patio",
+        "casement window installation modern home",
+        "front door entry replacement installation",
+    ],
+    "concrete": [
+        "concrete slab pouring residential foundation",
+        "stamped concrete driveway pattern",
+        "concrete block wall construction",
+        "polished concrete floor residential",
+        "concrete formwork construction site",
+    ],
+    "insulation": [
+        "spray foam insulation attic application",
+        "batt insulation wall cavity residential",
+        "rigid foam board insulation exterior",
+        "blown in insulation attic residential",
+    ],
+    "cabinets": [
+        "white shaker kitchen cabinet installation",
+        "kitchen cabinet door hardware close up",
+        "custom cabinet box installation kitchen",
+        "wood cabinet finish grain detail",
+        "soft close cabinet hinge detail",
+    ],
+}
+
 
 _token_cache = {}
 
