@@ -64,6 +64,33 @@ COMPETITOR_BANNED_TERMS = [
 ]
 
 
+SIMPLIFICATION_GUARDRAIL = """
+════════════════════ READABILITY + SIMPLIFICATION GATE ════════════════════
+Target: 8th-grade reading level. Max 16 words per sentence.
+This is non-negotiable because most viewers scroll on a phone and read fast.
+
+FLAG if any slide contains:
+- A sentence longer than 16 words (count every word; conjunctions count)
+- Jargon that requires industry knowledge (technical term without a plain
+  definition within 2 lines)
+- Double negatives ("not without merit" → "worth noting")
+- Passive-voice stacking ("was being considered to be processed")
+- Abstract noun chains ("the implementation of the utilization of resources")
+
+SUGGEST: always provide a simpler rewrite that preserves the meaning.
+The rewrite must stay within the same length guardrail.
+Severity: med for any sentence > 16 words. low for style choices.
+Issue type: readability
+"""
+
+INTERNAL_LABEL_PATTERNS = [
+    r"\[HOOK\]", r"\[SLIDE_\d+\]", r"\[COVER\]", r"\[SOURCES?\]",
+    r"\[TITLE\]", r"\[SUBTITLE\]", r"\[HEADLINE\]", r"\[BODY\]",
+    r"\[CTA\]", r"\[CAPTION\]", r"\[PLACEHOLDER\]", r"\[INSERT\]",
+    r"\[FACT_?\d*\]", r"\[POINT_?\d*\]", r"\[ITEM_?\d*\]",
+    r"\{.*?hook.*?\}", r"\{.*?slide.*?\}", r"\{.*?title.*?\}",
+]
+
 HOOK_STORYTELLING_REVIEW_RULES = """
 ══════════════════════ HOOK + STORYTELLING QUALITY GATE ══════════════════════
 This gate exists because hooks must be very good, not average.
@@ -158,6 +185,8 @@ Preserve everything that's already correct.
 
 {HOOK_STORYTELLING_REVIEW_RULES}
 
+{SIMPLIFICATION_GUARDRAIL}
+
 ══════════════════════ LENGTH GUARDRAILS ══════════════════════
 - Cover headline: max {LENGTH_GUARDRAILS['cover_headline_max']} chars
 - Cover subhead:  max {LENGTH_GUARDRAILS['cover_subhead_max']} chars
@@ -172,7 +201,7 @@ Preserve everything that's already correct.
 
 ══════════════════════ YOUR JOB ══════════════════════
 For EACH issue you find, decide:
-  · type: one of [factual, unsourced, suspicious, competitor, tone, length, promise, hook, story_arc, proof_gap]
+  · type: one of [factual, unsourced, suspicious, competitor, tone, length, promise, hook, story_arc, proof_gap, readability]
   · severity: high | med | low
       - high  = factual error, unverified claim presented as fact, banned mention,
                 explicit promise about OPC ("we always", "our guarantee"), opinion
@@ -206,6 +235,50 @@ If the carousel is clean, return: {{"overall_assessment": "pass", "issues": []}}
 
 
 _JSON_BLOB = re.compile(r"\{[\s\S]+\}")
+_LABEL_RE = re.compile("|".join(INTERNAL_LABEL_PATTERNS), re.IGNORECASE)
+
+
+def check_label_leakage(slide_texts: dict) -> list[dict]:
+    """SH-020: Pre-LLM check — find internal labels like [HOOK] / [SLIDE_1] in rendered text.
+
+    These are scaffold markers that should never appear in final PNGs.
+    Returns issues in the same format as review_slide_texts so they merge cleanly.
+    """
+    issues = []
+    for slide_num, text in slide_texts.items():
+        for m in _LABEL_RE.finditer(text):
+            issues.append({
+                "slide": slide_num,
+                "type": "internal_label_leakage",
+                "severity": "high",
+                "original": m.group(0),
+                "suggested": "",
+                "reason": f"Internal scaffold label '{m.group(0)}' leaked into rendered slide — must be removed before export.",
+            })
+    return issues
+
+
+def check_sentence_length(slide_texts: dict, max_words: int = 16) -> list[dict]:
+    """SH-013: Pre-LLM check — flag any sentence exceeding max_words words.
+
+    Runs before Claude to catch obvious violations for free (zero tokens).
+    Returns issues in the same format; severity is always 'med'.
+    """
+    issues = []
+    sentence_split = re.compile(r"(?<=[.!?])\s+")
+    for slide_num, text in slide_texts.items():
+        for sentence in sentence_split.split(text.strip()):
+            words = sentence.split()
+            if len(words) > max_words:
+                issues.append({
+                    "slide": slide_num,
+                    "type": "readability",
+                    "severity": "med",
+                    "original": sentence,
+                    "suggested": None,
+                    "reason": f"Sentence is {len(words)} words (max {max_words}). Simplify for 8th-grade reading.",
+                })
+    return issues
 
 
 def _parse_review_json(raw: str) -> dict:
@@ -259,6 +332,9 @@ def review_slide_texts(
         return {"overall_assessment": "pass", "issues": [],
                 "note": "no slide texts extracted"}
 
+    # SH-020 + SH-013: zero-token pre-checks (run before LLM call)
+    pre_issues = check_label_leakage(slide_texts) + check_sentence_length(slide_texts)
+
     prompt = _build_review_prompt(slide_texts, niche, post_id)
     try:
         raw = _claude_with_fallback(
@@ -266,13 +342,27 @@ def review_slide_texts(
             context="text_reviewer",
         )
     except Exception as e:
-        return {
+        # Still return any pre-check issues even if LLM failed
+        result = {
             "overall_assessment": "error",
-            "issues": [],
+            "issues": pre_issues,
             "error": f"{type(e).__name__}: {e}",
         }
+        if pre_issues:
+            result["overall_assessment"] = "needs_major" if any(i["severity"] == "high" for i in pre_issues) else "needs_minor"
+        return result
 
-    return _parse_review_json(raw)
+    result = _parse_review_json(raw)
+    # Merge pre-check issues (dedup by original text to avoid double-flagging)
+    if pre_issues:
+        existing_originals = {i.get("original", "") for i in result.get("issues", [])}
+        for issue in pre_issues:
+            if issue.get("original", "") not in existing_originals:
+                result.setdefault("issues", []).insert(0, issue)
+        # Upgrade overall_assessment if label leakage found
+        if any(i["type"] == "internal_label_leakage" for i in pre_issues):
+            result["overall_assessment"] = "needs_major"
+    return result
 
 
 def review_carousel_html(
