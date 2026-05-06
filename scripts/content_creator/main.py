@@ -740,6 +740,93 @@ def render_motion_remotion(cover_png_path, clip_path, output_dir, variant,
         return None
 
 
+def render_carousel_reel_remotion(png_dir: Path, motion_dir: Path, slug: str,
+                                   clips: dict) -> str | None:
+    """Tier 1 reel renderer — Remotion CarouselReel composition.
+
+    Sequences all black_NN_*_html.png slides into a single 1080x1920 MP4.
+    Each slide is letterboxed (4:5 centered, black bars top/bottom) matching
+    the layout of build_carousel_reel.sh (FFmpeg tier 2 fallback).
+
+    Returns output path on success, None on any failure.
+    """
+    remotion_root = Path(__file__).resolve().parents[1] / "remotion"
+    if not (remotion_root / "package.json").exists():
+        return None
+    if not (remotion_root / "node_modules").exists():
+        print("  CarouselReel: node_modules missing — falling back to FFmpeg")
+        return None
+
+    pngs = sorted(png_dir.glob("black_*_html.png"))
+    if len(pngs) < 3:
+        return None
+
+    public_dir = remotion_root / "public"
+    public_dir.mkdir(exist_ok=True)
+
+    staged = []
+    slides = []
+    for png in pngs:
+        staged_png = public_dir / f"reel_{slug}_{png.name}"
+        shutil.copy2(png, staged_png)
+        staged.append(staged_png)
+
+        # Extract slide index from filename (black_01_... → 1)
+        m = re.search(r"black_(\d+)_", png.name)
+        idx = int(m.group(1)) if m else 0
+        clip_src = clips.get(idx, "")
+        staged_clip = None
+        if clip_src and Path(clip_src).exists():
+            staged_clip = public_dir / f"reel_{slug}_clip_{idx:02d}.mp4"
+            shutil.copy2(clip_src, staged_clip)
+            staged.append(staged_clip)
+
+        slides.append({
+            "posterPng": staged_png.name,
+            "clipSrc": staged_clip.name if staged_clip else None,
+        })
+
+    output_path = motion_dir / "carousel_reel.mp4"
+    props = {"slides": slides, "slideDurationFrames": 150}
+    props_file = motion_dir / f".remotion_reel_props_{slug}.json"
+    props_file.write_text(json.dumps(props))
+
+    total_frames = 150 * len(slides)
+    try:
+        r = subprocess.run(
+            ["npx", "remotion", "render",
+             "src/Root.tsx", "CarouselReel",
+             str(output_path.resolve()),
+             f"--props={props_file.resolve()}",
+             f"--frames=0-{total_frames - 1}",
+             "--codec=h264",
+             "--log=error"],
+            cwd=str(remotion_root),
+            capture_output=True, timeout=600,
+        )
+        props_file.unlink(missing_ok=True)
+        for f in staged:
+            f.unlink(missing_ok=True)
+
+        if r.returncode != 0 or not output_path.exists():
+            err = r.stderr.decode("utf-8", errors="replace")[:300] if r.stderr else ""
+            print(f"  CarouselReel Remotion miss: {err}")
+            return None
+
+        size_kb = output_path.stat().st_size // 1024
+        print(f"  CarouselReel (Remotion) → carousel_reel.mp4 ({size_kb}KB, {len(slides)} slides)")
+        return str(output_path)
+    except Exception as e:
+        props_file.unlink(missing_ok=True)
+        for f in staged:
+            try:
+                f.unlink(missing_ok=True)
+            except Exception:
+                pass
+        print(f"  CarouselReel Remotion exception: {e}")
+        return None
+
+
 def render_motion_cover(cover_png_path, output_dir, variant):
     """Ken Burns ffmpeg zoom on ONE static PNG → MP4 + GIF.
     Output MP4 inherits PNG name so every slide gets its own motion file:
@@ -1191,23 +1278,30 @@ def process_one_topic(topic_entry, run_date, drive):
         return None
 
     # Build carousel reel: stitch per-slide MP4s into one continuous 9:16 reel.
-    # Ken Burns fallback fires for any slide that lacks a real MP4.
+    # Tier 1 — Remotion CarouselReel (letterboxed, smooth Ken Burns per slide)
+    # Tier 2 — build_carousel_reel.sh (FFmpeg, always-succeeds floor)
     reel_built = False
     reel_link  = ""
     png_count = len(list(png_dir.glob("*.png")))
     if png_count >= 3:
-        _reel_script = Path(__file__).parent / "build_carousel_reel.sh"
-        if _reel_script.exists():
-            try:
-                _reel_proc = subprocess.run(
-                    ["bash", str(_reel_script), slug, str(motion_dir)],
-                    capture_output=True, text=True, timeout=300,
-                )
-                for _line in _reel_proc.stdout.strip().splitlines():
-                    print(f"  {_line}")
-                reel_built = (motion_dir / "carousel_reel.mp4").exists()
-            except Exception as _reel_err:
-                print(f"  [carousel_reel] build failed (non-fatal): {_reel_err}")
+        # Tier 1 — Remotion
+        _remotion_reel = render_carousel_reel_remotion(png_dir, motion_dir, slug, clips)
+        reel_built = bool(_remotion_reel)
+
+        # Tier 2 — FFmpeg fallback
+        if not reel_built:
+            _reel_script = Path(__file__).parent / "build_carousel_reel.sh"
+            if _reel_script.exists():
+                try:
+                    _reel_proc = subprocess.run(
+                        ["bash", str(_reel_script), slug, str(motion_dir)],
+                        capture_output=True, text=True, timeout=300,
+                    )
+                    for _line in _reel_proc.stdout.strip().splitlines():
+                        print(f"  {_line}")
+                    reel_built = (motion_dir / "carousel_reel.mp4").exists()
+                except Exception as _reel_err:
+                    print(f"  [carousel_reel] FFmpeg fallback failed (non-fatal): {_reel_err}")
 
     # Media presence check (non-blocking) — alert if images/clips are missing
     media_ok, media_issues = _check_media_presence(

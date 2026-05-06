@@ -2,6 +2,7 @@ import React from "react";
 import { Composition, registerRoot } from "remotion";
 import { NewsReel, NewsReelProps } from "./NewsReel";
 import { CarouselMotion, CarouselMotionProps } from "./CarouselMotion";
+import { CarouselReel, CarouselReelProps } from "./CarouselReel";
 
 // Default props for development previews — overridden by --props in CI render
 const defaultProps: NewsReelProps = {
@@ -62,6 +63,15 @@ const RemotionRoot: React.FC = () => {
         width={1080}
         height={1350}
         defaultProps={carouselDefaultProps}
+      />
+      <Composition
+        id="CarouselReel"
+        component={CarouselReel}
+        durationInFrames={150 * 7}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{ slides: [], slideDurationFrames: 150 } as CarouselReelProps}
       />
     </>
   );
