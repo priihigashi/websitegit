@@ -90,6 +90,25 @@ def check_html_placeholders(html_path: str) -> list[str]:
             + "; ".join(ctx_matches[:3])
         )
 
+    # Label-leak: structural labels that Haiku sometimes emits verbatim into slide copy
+    _LABEL_PATTERNS = [
+        r'\bSlide\s+\d+\s*[:\-]',          # "Slide 1:", "Slide 2 -"
+        r'\b(?:Hook|CTA|Body|Title|Intro|Outro|Headline|Subhead|Caption)\s*:',  # field names
+        r'\[INSERT\b', r'\[ADD\b', r'\[REPLACE\b', r'\[PUT\b',  # imperative placeholders
+        r'\[YOUR\s+\w', r'\[WRITE\b',       # authoring reminders
+        r'\bNUM_\w+\b', r'\bDATE_\w+\b',   # token stubs
+    ]
+    label_hits = []
+    for pat in _LABEL_PATTERNS:
+        matches = re.findall(pat, html, re.IGNORECASE)
+        if matches:
+            label_hits.extend(set(m.strip() for m in matches[:3]))
+    if label_hits:
+        issues.append(
+            "Label-leak: structural labels visible in rendered HTML — "
+            "Haiku returned field names verbatim: " + ", ".join(f"'{h}'" for h in label_hits[:6])
+        )
+
     # @HANDLE_PLACEHOLDER in rendered HTML — source_handle was never resolved
     if "@HANDLE_PLACEHOLDER" in html:
         issues.append(
