@@ -554,7 +554,13 @@ def _seedream45(prompt: str, work_dir: str, filename: str) -> str:
     )
 
 
+_USE_DALLE = os.environ.get("USE_DALLE", "").lower() in ("1", "true", "yes")
+
+
 def _dalle3(prompt: str, work_dir: str, filename: str) -> str:
+    if not _USE_DALLE:
+        # SH-041: DALL-E is opt-in — set USE_DALLE=true to enable
+        return ""
     if not OPENAI_KEY or not prompt:
         return ""
     dest = _dest(work_dir, filename)
