@@ -555,6 +555,7 @@ def check_resource_images_local(images_dir: str, prov: dict) -> list[str]:
       2. Relevance — Haiku vision check against the query from media_provenance.json.
     """
     if Image is None:
+        print("  WARNING: Pillow not available — image integrity check skipped")
         return []
 
     issues = []
@@ -664,6 +665,17 @@ def _check_image_relevance_drive(prov: dict, images_folder_id: str, drive,
         except Exception as e:
             print(f"  Vision check: could not download {filename} ({e})")
             continue
+
+        # Corruption check before spending tokens on vision
+        if Image is not None:
+            try:
+                with Image.open(io.BytesIO(raw)) as im:
+                    im.load()
+            except Exception as e:
+                issues.append(
+                    f"[fix_type=corrupt-image] {slot_label}: '{filename}' corrupt in Drive ({e})"
+                )
+                continue
 
         verdict = _vision_check_image(raw, filename, query)
         checked += 1
@@ -978,7 +990,11 @@ def check_built_post(result: dict) -> dict:
             all_issues.append(f"media_provenance.json read/parse failed: {e}")
 
     # 4.5. Resource image integrity + vision relevance (local — runs while /tmp exists)
-    images_dir_local = Path(work_dir_env) / post_id / "resources" / "images"
+    # Primary path: resources/images/. Fallback: resources/ directly for legacy builds.
+    _resources_base = Path(work_dir_env) / post_id / "resources"
+    images_dir_local = _resources_base / "images"
+    if not images_dir_local.exists() and _resources_base.exists():
+        images_dir_local = _resources_base  # legacy layout — images may sit at resources/ root
     if images_dir_local.exists():
         all_issues.extend(check_resource_images_local(str(images_dir_local), _prov_data))
 
@@ -1004,6 +1020,36 @@ def check_built_post(result: dict) -> dict:
         if _html_for_text and Path(_html_for_text).exists():
             all_issues.extend(check_text_quality(str(_html_for_text), niche))
 
+    # 7. Auto-fix — runs in analyze_and_fix mode when Drive folder ID is available.
+    # check_built_post() previously only detected issues; this closes the gap where
+    # corrupt/wrong images were reported but never repaired in the normal build path.
+    autofix_summary = None
+    _drive_link = result.get("version_link") or result.get("static_link", "")
+    _folder_id = _extract_drive_id(_drive_link) if _drive_link else ""
+    _has_image_issues = any(
+        ("[fix_type=regenerate]" in i or "[fix_type=wrong-image]" in i or "[fix_type=corrupt-image]" in i)
+        for i in all_issues
+    )
+    if FIX_MODE == "analyze_and_fix" and _folder_id and _has_image_issues and not DRY_RUN:
+        try:
+            _drive_svc = _build_drive_service()
+            if _drive_svc:
+                from auto_fixer import auto_fix_drive_folder
+                autofix_summary = auto_fix_drive_folder(
+                    _drive_svc,
+                    {"id": _folder_id, "name": post_id},
+                    niche=niche,
+                    dry_run=False,
+                )
+                fixed_n = autofix_summary.get("fixed", 0)
+                if fixed_n:
+                    all_issues.append(
+                        f"[auto-fix] regenerated {fixed_n} image(s) "
+                        f"(niche={niche}, png backup: {autofix_summary.get('png_backup_folder_id', 'none')})"
+                    )
+        except Exception as e:
+            all_issues.append(f"[auto-fix] FAILED — {type(e).__name__}: {e}")
+
     passed = len(all_issues) == 0
     return {
         "post_id": post_id,
@@ -1011,7 +1057,8 @@ def check_built_post(result: dict) -> dict:
         "niche": niche,
         "issues": all_issues,
         "passed": passed,
-        "drive_link": result.get("version_link") or result.get("static_link", ""),
+        "drive_link": _drive_link,
+        "autofix_summary": autofix_summary,
     }
 
 
