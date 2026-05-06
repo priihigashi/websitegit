@@ -571,6 +571,119 @@ def update_clip_collections(sheet, topic: str, video_url: str, video_title: str,
 
 
 # ── DRIVE UPLOAD ──────────────────────────────────────────────────────────────
+
+def _create_drive_subfolder(parent_folder_id: str, name: str, token: str) -> str:
+    """Create a subfolder in Drive and return its ID. Returns '' on failure."""
+    try:
+        import json as _json
+        body = _json.dumps({
+            "name": name,
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": [parent_folder_id],
+        }).encode()
+        req = urllib.request.Request(
+            "https://www.googleapis.com/drive/v3/files?supportsAllDrives=true",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            method="POST"
+        )
+        result = json.loads(urllib.request.urlopen(req, timeout=15).read())
+        folder_id = result.get("id", "")
+        if folder_id:
+            print(f"  Drive subfolder created: {name}/ → {folder_id}")
+        return folder_id
+    except Exception as e:
+        print(f"  _create_drive_subfolder failed (non-fatal): {e}")
+        return ""
+
+
+def upload_clip_to_drive(local_path: str, filename: str, folder_id: str) -> str:
+    """Upload a binary clip file (MP4/MP3) to a Drive folder via multipart upload.
+    Returns the Drive file ID or '' on failure. SH-010.
+
+    Uses resumable multipart with supportsAllDrives=true so clips land in
+    shared drives (never silently in My Drive).
+    """
+    access_token = get_oauth_token()
+    if not access_token:
+        print(f"  No Drive token — skipping clip upload of {filename}")
+        return ""
+    try:
+        import mimetypes
+        mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        with open(local_path, "rb") as f:
+            clip_bytes = f.read()
+        boundary = "boundary_clip_456"
+        meta = json.dumps({"name": filename, "parents": [folder_id]})
+        body = (
+            f"--{boundary}\r\n"
+            f"Content-Type: application/json; charset=UTF-8\r\n\r\n"
+            f"{meta}\r\n"
+            f"--{boundary}\r\n"
+            f"Content-Type: {mime}\r\n\r\n"
+        ).encode() + clip_bytes + f"\r\n--{boundary}--".encode()
+
+        req = urllib.request.Request(
+            "https://www.googleapis.com/upload/drive/v3/files"
+            "?uploadType=multipart&supportsAllDrives=true",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": f"multipart/related; boundary={boundary}",
+            },
+            method="POST",
+        )
+        result = json.loads(urllib.request.urlopen(req, timeout=120).read())
+        fid = result.get("id", "")
+        if fid:
+            print(f"  Clip uploaded to Drive: {filename} ({len(clip_bytes)//1024}KB)")
+        return fid
+    except Exception as e:
+        print(f"  Clip upload failed for {filename} (non-fatal): {e}")
+        return ""
+
+
+def upload_clips_dir_to_drive(clips_local_dir: str, topic: str, timestamp: str) -> None:
+    """Upload all .mp4/.mp3/.webm files in clips_local_dir to Drive under
+    <DRIVE_FOLDER_ID>/clips_<topic_slug>_<timestamp>/. SH-010.
+
+    Called at the end of run() after all research is complete. Non-blocking.
+    """
+    import glob
+    import os
+    clip_files = []
+    for ext in ("*.mp4", "*.mp3", "*.webm", "*.m4a"):
+        clip_files.extend(glob.glob(os.path.join(clips_local_dir, ext)))
+    if not clip_files:
+        print(f"  upload_clips_dir_to_drive: no clip files in {clips_local_dir}")
+        return
+    access_token = get_oauth_token()
+    if not access_token:
+        print("  upload_clips_dir_to_drive: no token — skipping")
+        return
+    topic_slug = re.sub(r"[^a-z0-9]+", "_", topic.lower())[:40]
+    folder_name = f"clips_{topic_slug}_{timestamp}"
+    clips_folder_id = _create_drive_subfolder(DRIVE_FOLDER_ID, folder_name, access_token)
+    if not clips_folder_id:
+        return
+    uploaded = 0
+    for fpath in sorted(clip_files):
+        fname = os.path.basename(fpath)
+        fsize = os.path.getsize(fpath)
+        if fsize < 1024:  # skip tiny stubs
+            continue
+        fid = upload_clip_to_drive(fpath, fname, clips_folder_id)
+        if fid:
+            uploaded += 1
+    print(
+        f"  upload_clips_dir_to_drive: {uploaded}/{len(clip_files)} clips → "
+        f"Drive/{folder_name}/ ({clips_folder_id})"
+    )
+
+
 def upload_to_drive(content: str, filename: str, folder_id: str, token: str = None):
     """Upload a text file to Drive. Refreshes SHEETS_TOKEN to get a fresh access_token."""
     # Always fetch a fresh access_token via refresh flow — the legacy `token`
@@ -967,6 +1080,17 @@ def run(topic: str, queries: list[str], max_per_query: int = 5, niche: str = "")
                 ], value_input_option="USER_ENTERED")
             except Exception:
                 pass
+
+    # SH-010: Upload any downloaded clip files to Drive resources/clips/ folder.
+    # Clips land in /tmp/ during transcript extraction (yt-dlp audio downloads).
+    # We scan /tmp for any mp4/mp3 files whose name matches the research run
+    # timestamp pattern, then upload them to Drive under a clips_<topic>/ subfolder.
+    try:
+        import tempfile
+        _tmp_dir = tempfile.gettempdir()
+        upload_clips_dir_to_drive(_tmp_dir, topic, timestamp)
+    except Exception as _clips_upload_err:
+        print(f"  SH-010 clips upload skipped (non-fatal): {_clips_upload_err}")
 
     print(f"\n{'='*60}")
     print(f"DONE: {len(all_results)} videos analyzed")
