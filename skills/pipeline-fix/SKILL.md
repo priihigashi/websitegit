@@ -724,6 +724,25 @@ update tracker rows automatically. Manual sync available via:
 - 0fa1b2e — fix(pipeline): correct (529,529) typo + portrait orientation for B-roll
 - dedcc8d — fix(self_heal): broaden Anthropic error fallback + surface failed-retries
 - 31cbe0b — fix(capture): _llm_text falls back on transient Anthropic errors too
+- a47b172 — docs(skill): append session 7 notes
+- 5a1f646 — docs: priscila-only TODO email body for session 7
+- e825a13 — fix(pipeline): add timeout to 12 urlopen() calls across 8 files
+
+### Second pass — urlopen() timeout audit (commit e825a13)
+12 urllib.request.urlopen() calls had no timeout= parameter. Each one
+would hang indefinitely on a stalled TCP read — meaning a single API
+blip could pin a GitHub Actions job at the 90-min timeout instead of
+failing fast. Files + functions touched (12 calls / 8 files):
+- approval_handler.py: get_gmail_token, search_gmail_replies (2x), update_catalog
+- image_library.py:    _oauth_token, _sheet_get, _sheet_append, _sheet_batch_update
+- email_preview.py:    get_token, _send_via_workflow
+- topic_picker.py:     get_token, sheet_get
+- opc_proof_post.py:   _make_public_url, _find_run_folder_for_slug
+- motion_sources.py:   _get_oauth_token
+- _llm_fallback.py:    _try_dalle_image, _try_replicate_image
+- capture_pipeline.py: yt-cookie-alert sheet update (2x)
+Timeouts: 15s OAuth/Sheets/Drive REST, 20s Gmail list/detail, 60s image
+download. No success-path behavior change — just bounds the failure mode.
 
 ### PENDING ⏳ (carries forward, unchanged)
 1. ⚠️ PRISCILA: gh secret set GIPHY_API_KEY --repo priihigashi/oak-park-ai-hub
