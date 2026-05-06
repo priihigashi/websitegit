@@ -19,6 +19,10 @@ import json, os, re, sys, time, subprocess, shutil
 from datetime import datetime
 from pathlib import Path
 import pytz
+try:
+    from PIL import Image
+except Exception:
+    Image = None
 
 ET = pytz.timezone("America/New_York")
 
@@ -114,6 +118,47 @@ def _flush_alerts():
 
 
 CLIP_THRESHOLD = 8  # Clip Collections count required before building a clips_needed topic
+
+
+def _validate_media_images(media_paths: dict, post_id: str) -> tuple[dict, list[str]]:
+    """Verify fetched image files are decodable before HTML render.
+    Returns (possibly-mutated media_paths, issues).
+    """
+    issues = []
+    if not isinstance(media_paths, dict):
+        return media_paths, issues
+
+    def _ok(path_str: str) -> bool:
+        p = Path(path_str or "")
+        if not p.exists() or not p.is_file():
+            return False
+        try:
+            if Image is not None:
+                with Image.open(p) as im:
+                    im.verify()
+            else:
+                if p.stat().st_size < 8_000:
+                    return False
+            return True
+        except Exception:
+            return False
+
+    cover = media_paths.get("cover", "")
+    if cover and not _ok(cover):
+        issues.append(f"cover corrupt/unreadable: {cover}")
+        media_paths["cover"] = ""
+
+    slides = media_paths.get("slides", {}) or {}
+    if isinstance(slides, dict):
+        for idx, path in list(slides.items()):
+            if path and not _ok(path):
+                issues.append(f"slide {idx} corrupt/unreadable: {path}")
+                slides[idx] = ""
+        media_paths["slides"] = slides
+
+    if issues:
+        print(f"  Media validation: {len(issues)} corrupt image(s) detected for {post_id}")
+    return media_paths, issues
 
 
 def _trigger_video_research(topic: str, niche: str):
@@ -1210,6 +1255,18 @@ def process_one_topic(topic_entry, run_date, drive):
     # _build_brazil_html() can inject real <img> tags instead of placeholder text.
     print("  Fetching context images + cover...")
     media_paths = fetch_all_media(content, niche, str(work), brief=brief)
+    media_paths, media_issues = _validate_media_images(media_paths, post_id)
+    if media_issues:
+        # One retry pass can recover transient/corrupt fetches from upstream providers.
+        print("  Media validation failed — retrying fetch_all_media once...")
+        media_paths = fetch_all_media(content, niche, str(work), brief=brief)
+        media_paths, media_issues_retry = _validate_media_images(media_paths, post_id)
+        if media_issues_retry:
+            _send_alert(
+                f"Corrupt/unreadable resource image(s) for '{topic[:40]}':\n"
+                + "\n".join(f"  - {x}" for x in media_issues_retry)
+                + "\nProceeding with cleaned media paths (fallback placeholders where needed)."
+            )
 
     # 1d. Fetch video clips for motion version (Clip Collections → Apify → Pexels → ...)
     # Inject topic into each suggestion so tier_clip_collections can match by topic name.
