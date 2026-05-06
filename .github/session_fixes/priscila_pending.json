@@ -1,0 +1,68 @@
+{
+  "_doc": "Source of truth for the '🙋 Pending from Priscila' tab + email digest. Add a new item by editing this file and committing — the next pipeline_self_heal cron cycle (every 2h) will sync it to the sheet AND send Priscila a digest email when the content hash changes. To mark an item done, change its status to 'done' and add a 'completed' date.",
+  "items": [
+    {
+      "id": "P-001",
+      "priority": "P1",
+      "task": "Set GIPHY_API_KEY GitHub secret",
+      "why": "tier_giphy() in motion_sources.py silently skips every pipeline run without it. SH-015 code is wired, only the secret is missing.",
+      "how": "gh secret set GIPHY_API_KEY --repo priihigashi/oak-park-ai-hub  (key from giphy.com/developers → My Apps → Beta Key)",
+      "added": "2026-05-06",
+      "status": "pending"
+    },
+    {
+      "id": "P-002",
+      "priority": "P1",
+      "task": "Add NanoBanana credits",
+      "why": "Every named-person photo for news content falls back to bio-initials placeholder when NB2 is out of credits. AI-cascade tier 1 dies silently.",
+      "how": "nanobanana.com → log in → add credits ($10 covers ~100 images)",
+      "added": "2026-05-06",
+      "status": "pending"
+    },
+    {
+      "id": "P-003",
+      "priority": "P2",
+      "task": "Add Replicate credits",
+      "why": "SDXL image fallback (tier 6 of OPC, tier 3 of news) fails on empty balance. Pipeline then falls through to DALL-E only or to placeholder.",
+      "how": "replicate.com → Billing → top up",
+      "added": "2026-05-06",
+      "status": "pending"
+    },
+    {
+      "id": "P-004",
+      "priority": "P2",
+      "task": "Verify Pexels API key still valid (only if you see 'Pexels 403' in logs)",
+      "why": "PEXELS_API_KEY secret is set per the SH-022 verification, but Pexels rotates keys periodically and 403s blow the entire stock-image tier.",
+      "how": "pexels.com/api → regenerate → gh secret set PEXELS_API_KEY --repo priihigashi/oak-park-ai-hub",
+      "added": "2026-05-06",
+      "status": "pending"
+    },
+    {
+      "id": "P-005",
+      "priority": "P1",
+      "task": "Test approval_handler → Buffer end-to-end",
+      "why": "SH-029 removed the BUFFER_PROFILE_ID guard so this should work, but it has not been tested with a real APPROVE reply yet — until tested, content piles up in Drive with no path to posting.",
+      "how": "Wait for the next preview email from content_creator.yml → reply 'APPROVE' (or 'black approved') → confirm Buffer schedules within 5 min in app.buffer.com.",
+      "added": "2026-05-06",
+      "status": "pending"
+    },
+    {
+      "id": "P-006",
+      "priority": "P0",
+      "task": "Populate target_file + verification_method for blocked SH items",
+      "why": "Master Checklist P0 items SH-018, SH-065, SH-002, SH-003, SH-006 are stuck Blocked because their queue rows lack the target_file column the orchestrator uses to pick up tasks.",
+      "how": "Open Ideas & Inbox → 🔧 Self-Heal Queue tab → fill columns 'Target File' + 'Verification Method' for SH-018/065/002/003/006. Then orchestrator will pick them up on the next cron.",
+      "added": "2026-05-06",
+      "status": "pending"
+    },
+    {
+      "id": "P-007",
+      "priority": "P3",
+      "task": "Merge claude/fix-pipeline-spreadsheet-fw8mc → main",
+      "why": "Session 7 has 9+ commits with all the resilience fixes + the new auto-sync infrastructure. The Master Checklist auto-append + this 🙋 Pending tab won't update until those commits are on main (where pipeline_self_heal.yml's cron runs from).",
+      "how": "GitHub → branch dropdown → claude/fix-pipeline-spreadsheet-fw8mc → New Pull Request → squash-merge into main.",
+      "added": "2026-05-06",
+      "status": "pending"
+    }
+  ]
+}

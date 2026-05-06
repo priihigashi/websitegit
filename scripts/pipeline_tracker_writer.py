@@ -2,9 +2,12 @@
 pipeline_tracker_writer.py — sync Self-Heal Queue → Pipeline Fix Master Checklist
 
 Modes:
-  sync     : read all SH queue rows, update Master Checklist status for each SH-ID found
-  credit   : append one row to Credit Blocks tab (for API credit failures)
-  done     : mark a specific SH-ID as Done with evidence (direct update)
+  sync             : read all SH queue rows, update Master Checklist status for each SH-ID found
+  credit           : append one row to Credit Blocks tab (for API credit failures)
+  done             : mark a specific SH-ID as Done with evidence (direct update)
+  append-session   : append ad-hoc fix rows from .github/session_fixes/pending.json
+  priscila-pending : sync .github/session_fixes/priscila_pending.json → "🙋 Pending from
+                     Priscila" tab + email digest (auto-runs every 2h via self-heal cron)
 
 Usage:
   python scripts/pipeline_tracker_writer.py sync
@@ -14,13 +17,17 @@ Usage:
   python scripts/pipeline_tracker_writer.py done --sh-id SH-007 \
       --done "Manual fix: replaced _get_token() with OAuth refresh" \
       --evidence "commit 2193698"
+  python scripts/pipeline_tracker_writer.py append-session
+  python scripts/pipeline_tracker_writer.py priscila-pending [--force-email | --no-email]
 """
 
 import argparse
 import json
 import os
 import sys
+import smtplib
 import datetime
+from email.mime.text import MIMEText
 from typing import Optional
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -52,6 +59,12 @@ QUEUE_TAB  = "🔧 Self-Heal Queue"
 TRACKER_SS = "1yh9C7KU9OlqCdHNDI9mbZ6ldqLA3bAR3uENXUh37bkQ"
 MC_TAB     = "Master Checklist"
 CB_TAB     = "Credit Blocks"
+
+# Priscila-only pending tab — same Ideas & Inbox spreadsheet as the queue,
+# so she sees it next to all the other tabs she already lives in.
+PRISCILA_SS  = QUEUE_SS
+PRISCILA_TAB = "🙋 Pending from Priscila"
+PRISCILA_NOTIFY_EMAIL = "priscila@oakpark-construction.com"
 
 TODAY = datetime.date.today().isoformat()
 
@@ -299,6 +312,235 @@ def cmd_append_session(svc):
         pending_path.write_text(json.dumps({"fixes": []}, indent=2), encoding="utf-8")
 
 
+# ── PRISCILA-PENDING mode ─────────────────────────────────────────────────────
+# Source of truth: .github/session_fixes/priscila_pending.json
+# Every cron cycle (every 2h via pipeline_self_heal.yml) runs this command, which:
+#   1. Ensures the "🙋 Pending from Priscila" tab exists in Ideas & Inbox.
+#   2. Replaces tab data rows with the current JSON contents (full overwrite of
+#      data — header row stays).
+#   3. Sends Priscila an email digest IF the content hash changed since the
+#      last successful sync (tracked in priscila_state.json next to the JSON).
+#
+# Anyone (Claude session, automation, Priscila herself) adds an item by
+# committing a new entry to priscila_pending.json. Format:
+#   {
+#     "items": [
+#       {
+#         "id":       "P-001",                     # ad-hoc unique ID
+#         "task":     "short imperative title",
+#         "why":      "1-sentence reason it matters",
+#         "how":      "exact command / 1-2 step instruction",
+#         "added":    "YYYY-MM-DD",
+#         "status":   "pending"|"done",            # default pending
+#         "priority": "P0"|"P1"|"P2"|"P3"          # P0 = blocks production
+#       }
+#     ]
+#   }
+# Items with status="done" stay in the file for history but are rendered
+# differently in both sheet and email (gray + DONE prefix).
+
+PRISCILA_HEADER = [
+    "ID", "Priority", "Task", "Why it matters",
+    "How to do it", "Status", "Added", "Last Synced",
+]
+
+
+def _ensure_priscila_tab(svc):
+    """Create the tab if missing + write the header row. Idempotent."""
+    meta = svc.spreadsheets().get(spreadsheetId=PRISCILA_SS).execute()
+    exists = any(s["properties"]["title"] == PRISCILA_TAB for s in meta.get("sheets", []))
+    if not exists:
+        svc.spreadsheets().batchUpdate(
+            spreadsheetId=PRISCILA_SS,
+            body={"requests": [{"addSheet": {"properties": {
+                "title": PRISCILA_TAB,
+                "gridProperties": {"frozenRowCount": 1},
+            }}}]},
+        ).execute()
+        print(f"priscila-pending: created tab '{PRISCILA_TAB}'")
+    # Always re-write the header so a manual edit can't desync the columns.
+    svc.spreadsheets().values().update(
+        spreadsheetId=PRISCILA_SS,
+        range=f"'{PRISCILA_TAB}'!A1",
+        valueInputOption="RAW",
+        body={"values": [PRISCILA_HEADER]},
+    ).execute()
+
+
+def _priscila_clear_data(svc):
+    """Wipe every row below the header so we can rewrite the data block."""
+    svc.spreadsheets().values().clear(
+        spreadsheetId=PRISCILA_SS,
+        range=f"'{PRISCILA_TAB}'!A2:Z10000",
+        body={},
+    ).execute()
+
+
+def _priscila_load_json():
+    import pathlib as _pl
+    path = _pl.Path(".github/session_fixes/priscila_pending.json")
+    if not path.exists():
+        return None, path
+    try:
+        return json.loads(path.read_text(encoding="utf-8")), path
+    except Exception as e:
+        print(f"priscila-pending: parse error — {e} (skipping)")
+        return None, path
+
+
+def _priscila_load_state():
+    import pathlib as _pl
+    path = _pl.Path(".github/session_fixes/priscila_state.json")
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8")), path
+        except Exception:
+            pass
+    return {"last_email_hash": "", "last_email_at": ""}, path
+
+
+def _priscila_save_state(state, path):
+    import pathlib as _pl
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
+def _priscila_content_hash(items):
+    import hashlib
+    norm = json.dumps(
+        [{"id": i.get("id"), "task": i.get("task"),
+          "status": i.get("status", "pending"), "priority": i.get("priority", "P2")}
+         for i in items],
+        sort_keys=True,
+    )
+    return hashlib.sha256(norm.encode()).hexdigest()[:16]
+
+
+def _priscila_send_email(items):
+    """Send a digest email via smtplib (uses GMAIL_APP_PASSWORD env var).
+    No-op if credentials are missing; prints a warning so the cycle continues."""
+    pw = os.environ.get("GMAIL_APP_PASSWORD") or os.environ.get("PRI_OP_GMAIL_APP_PASSWORD")
+    if not pw:
+        print("priscila-pending: GMAIL_APP_PASSWORD missing — skipping email")
+        return False
+
+    pending = [i for i in items if (i.get("status") or "pending").lower() == "pending"]
+    done    = [i for i in items if (i.get("status") or "").lower() == "done"]
+
+    if not pending and not done:
+        print("priscila-pending: no items to email")
+        return False
+
+    # Sort pending by priority (P0 first), then by added date
+    prio_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+    pending.sort(key=lambda i: (prio_order.get(i.get("priority", "P2"), 9),
+                                 i.get("added", "")))
+
+    rows_html = []
+    for it in pending:
+        rows_html.append(
+            f"<tr>"
+            f"<td><b>{it.get('id','')}</b></td>"
+            f"<td><b>{it.get('priority','P2')}</b></td>"
+            f"<td>{it.get('task','')}</td>"
+            f"<td><i>{it.get('why','')}</i></td>"
+            f"<td><code>{it.get('how','')}</code></td>"
+            f"</tr>"
+        )
+
+    sheet_link = (
+        f"https://docs.google.com/spreadsheets/d/{PRISCILA_SS}/edit"
+        f"#gid=0"  # tab is keyed by name, not gid; sheet picker still finds it
+    )
+
+    body = f"""<html><body style="font-family:Inter,Arial,sans-serif">
+<h2>🙋 Pending from Priscila — {len(pending)} item{"s" if len(pending)!=1 else ""}</h2>
+<p>Tasks the agent cannot complete on its own. This list is the same
+content as the <a href="{sheet_link}">{PRISCILA_TAB}</a> tab in Ideas &
+Inbox; both auto-update every 2h from the repo's
+<code>.github/session_fixes/priscila_pending.json</code> file.</p>
+<table border="1" cellpadding="6" cellspacing="0">
+<thead><tr style="background:#f5f5f5">
+<th>ID</th><th>Priority</th><th>Task</th><th>Why</th><th>How</th>
+</tr></thead>
+<tbody>
+{"".join(rows_html) if rows_html else '<tr><td colspan=5>None pending — clean slate.</td></tr>'}
+</tbody></table>
+<p style="color:#888;margin-top:1em">Done items: {len(done)}. Generated by
+<code>pipeline_tracker_writer.py priscila-pending</code> on
+{datetime.datetime.utcnow().isoformat(timespec='seconds')}Z.</p>
+</body></html>"""
+
+    msg = MIMEText(body, "html")
+    msg["Subject"] = f"🙋 Pending from Priscila — {len(pending)} item{'s' if len(pending)!=1 else ''}"
+    msg["From"]    = PRISCILA_NOTIFY_EMAIL
+    msg["To"]      = PRISCILA_NOTIFY_EMAIL
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as s:
+            s.login(PRISCILA_NOTIFY_EMAIL, pw)
+            s.send_message(msg)
+        print(f"priscila-pending: email sent to {PRISCILA_NOTIFY_EMAIL} "
+              f"({len(pending)} pending, {len(done)} done)")
+        return True
+    except Exception as e:
+        print(f"priscila-pending: email send failed — {e}")
+        return False
+
+
+def cmd_priscila_pending(svc, args):
+    """Sync the priscila_pending.json source-of-truth → sheet tab + email digest.
+    Idempotent: a re-run with no JSON change is a sheet-rewrite no-op + skipped email."""
+    payload, json_path = _priscila_load_json()
+    if payload is None:
+        print(f"priscila-pending: no JSON at {json_path} — skipping (this is OK)")
+        return
+
+    items = payload.get("items") or []
+    print(f"priscila-pending: {len(items)} item(s) loaded from {json_path}")
+
+    # 1. Sync sheet tab (always full refresh so deletions propagate)
+    _ensure_priscila_tab(svc)
+    _priscila_clear_data(svc)
+
+    if items:
+        rows = []
+        for it in items:
+            rows.append([
+                it.get("id", ""),
+                it.get("priority", "P2"),
+                it.get("task", ""),
+                it.get("why", ""),
+                it.get("how", ""),
+                (it.get("status") or "pending").upper(),
+                it.get("added", ""),
+                TODAY,
+            ])
+        svc.spreadsheets().values().update(
+            spreadsheetId=PRISCILA_SS,
+            range=f"'{PRISCILA_TAB}'!A2",
+            valueInputOption="RAW",
+            body={"values": rows},
+        ).execute()
+        print(f"priscila-pending: wrote {len(rows)} row(s) to '{PRISCILA_TAB}'")
+
+    # 2. Send digest email IF content changed since last successful email
+    state, state_path = _priscila_load_state()
+    new_hash = _priscila_content_hash(items)
+    force = bool(getattr(args, "force_email", False))
+    skip  = bool(getattr(args, "no_email", False))
+
+    if skip:
+        print("priscila-pending: --no-email passed — skipping digest")
+    elif force or new_hash != state.get("last_email_hash"):
+        sent = _priscila_send_email(items)
+        if sent:
+            state["last_email_hash"] = new_hash
+            state["last_email_at"]   = datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+            _priscila_save_state(state, state_path)
+    else:
+        print("priscila-pending: content hash unchanged — skipping email")
+
+
 # ── CLI ────────────────────────────────────────────────────────────────────────
 def main():
     p = argparse.ArgumentParser(description="Pipeline Fix Tracker writer")
@@ -323,6 +565,15 @@ def main():
         help="Append ad-hoc fix rows from .github/session_fixes/pending.json",
     )
 
+    pp = sub.add_parser(
+        "priscila-pending",
+        help="Sync priscila_pending.json → '🙋 Pending from Priscila' tab + email digest",
+    )
+    pp.add_argument("--force-email", action="store_true",
+                    help="Send the digest even if content hash is unchanged")
+    pp.add_argument("--no-email", action="store_true",
+                    help="Sync the sheet only — never send email this run")
+
     args = p.parse_args()
     if not args.mode:
         p.print_help(); sys.exit(1)
@@ -338,6 +589,8 @@ def main():
         cmd_done(svc, args)
     elif args.mode == "append-session":
         cmd_append_session(svc)
+    elif args.mode == "priscila-pending":
+        cmd_priscila_pending(svc, args)
 
 if __name__ == "__main__":
     main()

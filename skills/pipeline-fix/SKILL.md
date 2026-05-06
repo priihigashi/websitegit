@@ -737,6 +737,34 @@ fix (S7-FIX1..S7-FIX8). After success the file self-renames to
 existing `sync` mode is unchanged — append-session runs after sync via a
 one-line addition to pipeline_self_heal.yml's Sync tracker step.
 
+### "🙋 Pending from Priscila" tab + email digest
+Every "only Priscila can do" item is tracked in
+`.github/session_fixes/priscila_pending.json` (source of truth) and
+auto-mirrored to two places by the same cron step:
+1. **Sheet:** "🙋 Pending from Priscila" tab in Ideas & Inbox — full
+   refresh every 2h so deletions propagate. Columns: ID | Priority |
+   Task | Why | How | Status | Added | Last Synced.
+2. **Email:** digest sent to priscila@oakpark-construction.com whenever
+   the content hash changes (state tracked in priscila_state.json).
+   No spam: same JSON twice in a row → only the first cron sends.
+
+To add a new item, ANY agent or human edits the JSON and commits.
+Schema:
+```json
+{"items": [{"id": "P-008", "priority": "P1", "task": "...",
+            "why": "...", "how": "...", "added": "YYYY-MM-DD",
+            "status": "pending"}]}
+```
+
+To mark done: change status to "done" — item stays in the file for
+history, renders gray in email + sheet.
+
+CLAUDE NOTE: when a task surfaces during a session that only Priscila
+can complete (set a secret, add credits, click a link, sign up for an
+API), append a P-NNN entry to that JSON in the same commit as the work
+that revealed it. Do NOT write standalone "TODO email" markdown files —
+that pattern is retired by this auto-sync.
+
 ### Second pass — urlopen() timeout audit (commit e825a13)
 12 urllib.request.urlopen() calls had no timeout= parameter. Each one
 would hang indefinitely on a stalled TCP read — meaning a single API

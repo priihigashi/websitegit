@@ -110,13 +110,18 @@ jobs:
       - name: Sync tracker — update Pipeline Fix Master Checklist
         if: always()
         env:
-          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          SHEETS_TOKEN:       ${{ secrets.SHEETS_TOKEN }}
+          GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
         run: |
           pip install google-api-python-client google-auth -q
           python scripts/pipeline_tracker_writer.py sync || echo "tracker sync non-fatal error — continuing"
           # Append any ad-hoc session fixes (no-op when pending.json is absent).
           # File self-renames after success so this is idempotent across cycles.
           python scripts/pipeline_tracker_writer.py append-session || echo "append-session non-fatal error — continuing"
+          # Sync the "🙋 Pending from Priscila" tab + send digest email when
+          # the pending.json content hash changes. No-op when JSON is missing
+          # or unchanged. State tracked in .github/session_fixes/priscila_state.json.
+          python scripts/pipeline_tracker_writer.py priscila-pending || echo "priscila-pending non-fatal error — continuing"
 
       - name: Notify on failure
         if: failure()
