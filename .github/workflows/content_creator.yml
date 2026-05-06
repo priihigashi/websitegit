@@ -85,6 +85,11 @@ on:
         description: 'Activate Kling AI animation for cover slides missing real clips (1=yes, leave blank=no)'
         required: false
         default: ''
+      opc_slide_planner:
+        description: 'Phase 8 SH-OPC-SMART-SLIDE-PICKER — enable smart per-slide template picker for OPC. Off by default. Set to "1" only for controlled cutover tests.'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   create-content:
@@ -109,6 +114,9 @@ jobs:
       SLIDE_INSET_PX: ${{ vars.SLIDE_INSET_PX || '40' }}
       # Opt-in: change '' to 'true' to enable DALL-E 3 fallback (Brazil/USA only; OPC is real-photos-only)
       USE_DALLE: ''
+      # Phase 8 — SH-OPC-SMART-SLIDE-PICKER smart slide planner. Default OFF on cron.
+      # Manual runs flip per-run via workflow_dispatch input opc_slide_planner=1.
+      OPC_SLIDE_PLANNER_ENABLED: ${{ github.event.inputs.opc_slide_planner || '0' }}
 
     steps:
       - name: Checkout
@@ -256,6 +264,9 @@ jobs:
       SLIDE_INSET_PX: ${{ vars.SLIDE_INSET_PX || '40' }}
       # Opt-in: change '' to 'true' to enable DALL-E 3 fallback (Brazil/USA only; OPC is real-photos-only)
       USE_DALLE: ''
+      # Phase 8 — SH-OPC-SMART-SLIDE-PICKER smart slide planner. Default OFF on cron.
+      # Manual runs flip per-run via workflow_dispatch input opc_slide_planner=1.
+      OPC_SLIDE_PLANNER_ENABLED: ${{ github.event.inputs.opc_slide_planner || '0' }}
 
     steps:
       - name: Checkout

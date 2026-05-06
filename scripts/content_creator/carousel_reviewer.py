@@ -1106,6 +1106,106 @@ OPC_TEMPLATES_REQUIRING_IMAGE = {
     "opc_duotone",         # Hero photo — duotone filter target
 }
 
+# Phase 8G — required content keys per standalone template_id. Reviewer flags
+# any slide whose nested content is missing/empty/default for these fields.
+# Sourced from carousel_builder.OPC_STANDALONE_SCHEMAS — keep in sync.
+# Default tokens that count as MISSING (true placeholder text — never real
+# brand content). Static signatures like "MIKE · OPC FOUNDER" or
+# "Mike McFolling · GC" are ALLOWED — they are the real attribution lines.
+OPC_STANDALONE_DEFAULT_TOKENS = {
+    # Empty / em-dash
+    "—",
+    # Generic numbered placeholders
+    "Option 1", "Option 2", "Option 3", "Option 4",
+    "OPTION 1", "OPTION 2", "OPTION 3", "OPTION 4", "OPTION",
+    "Detail one.", "Detail two.", "Detail three.", "Detail four.",
+    "Fact one", "Fact two", "Fact three", "Fact four",
+    # Generic single-word slot fillers
+    "Topic", "today.", "Detail", "Decide",
+    # Template stub headline-italic halves (the constant "What is" / "Spotlight
+    # on" / "Compare" first-halves are LEGAL brand patterns; only the italic
+    # second-halves like "this material?" / "this item." / "this detail." are
+    # placeholders that mean nobody filled in the topic).
+    "this material?", "this item.", "this detail.",
+    "What's", "hiding",
+}
+
+OPC_STANDALONE_REQUIRED_CONTENT_KEYS = {
+    "opc_material_profile": ["label", "headline_main", "headline_italic", "best_for", "not_ideal",
+                              "durability", "install_notes", "cost_range", "style_fit", "decision_factors"],
+    "opc_four_card_grid":   ["eyebrow", "headline_main", "headline_italic", "subhead",
+                              "badges", "card_titles", "card_copies"],
+    "opc_item_spotlight":   ["tag", "category", "headline_main", "headline_italic", "subhead",
+                              "fact_1_title", "fact_1_desc", "fact_2_title", "fact_2_desc",
+                              "fact_3_title", "fact_3_desc", "fact_4_title", "fact_4_desc"],
+    "opc_statement":        ["tag", "quote_opener", "quote_body", "attribution"],
+    "opc_base":             ["tag", "headline_main", "headline_italic", "cover_hook", "byline", "stamp_text"],
+    "opc_progress_media":   ["tag", "eyebrow", "title_main", "title_italic",
+                              "description_bold", "description_rest", "caption_pills"],
+    "opc_duotone":          ["claim_main", "claim_strong", "quote_text", "attribution", "variant"],
+}
+
+
+def _is_standalone_field_default(value):
+    """True when value is missing/empty OR matches a known placeholder/default token."""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        v = value.strip()
+        if not v:
+            return True
+        if v in OPC_STANDALONE_DEFAULT_TOKENS:
+            return True
+        return False
+    if isinstance(value, list):
+        if not value:
+            return True
+        # All items are default → list is default
+        return all(_is_standalone_field_default(x) for x in value)
+    return False  # numbers, dicts etc — treat as present
+
+
+def check_standalone_content(content: dict, slide_num: int, template_id: str) -> list[str]:
+    """Phase 8G — validate that content[template_id] has all required fields
+    populated with real (non-default) values. Returns list of issue strings.
+    """
+    issues = []
+    if template_id not in OPC_STANDALONE_REQUIRED_CONTENT_KEYS:
+        return issues
+    nested = (content or {}).get(template_id)
+    if not isinstance(nested, dict):
+        issues.append(
+            f"[content] slide {slide_num}: template '{template_id}' requires "
+            f"content['{template_id}'] dict but it is missing — render will use "
+            "all default placeholders."
+        )
+        return issues
+    for key in OPC_STANDALONE_REQUIRED_CONTENT_KEYS[template_id]:
+        if _is_standalone_field_default(nested.get(key)):
+            issues.append(
+                f"[content] slide {slide_num}: '{template_id}.{key}' is missing/default — "
+                f"slide will render with placeholder text."
+            )
+    # Cardinality checks for list fields (already enforced in builder, but cheap re-check).
+    if template_id == "opc_material_profile":
+        df = nested.get("decision_factors") or []
+        if not isinstance(df, list) or len(df) != 4:
+            issues.append(f"[content] slide {slide_num}: opc_material_profile.decision_factors must be a list of 4")
+    if template_id == "opc_four_card_grid":
+        for k in ("badges", "card_titles", "card_copies"):
+            v = nested.get(k) or []
+            if not isinstance(v, list) or len(v) != 4:
+                issues.append(f"[content] slide {slide_num}: opc_four_card_grid.{k} must be a list of 4")
+    if template_id == "opc_progress_media":
+        cp = nested.get("caption_pills") or []
+        if not isinstance(cp, list) or len(cp) < 1:
+            issues.append(f"[content] slide {slide_num}: opc_progress_media.caption_pills must be a list of 3")
+    if template_id == "opc_duotone":
+        v = str(nested.get("variant", "")).strip().lower()
+        if v not in ("v1", "v2", "v3"):
+            issues.append(f"[content] slide {slide_num}: opc_duotone.variant must be 'v1' | 'v2' | 'v3' (got {v!r})")
+    return issues
+
 EXPECTED_ROLE_FOR_SLIDE = {
     1: "cover",
     2: "definition",
@@ -1192,10 +1292,11 @@ def check_slide_plan(content: dict) -> list[str]:
         media_paths = (content or {}).get("_media_paths") or {}
         slide_imgs  = (media_paths.get("slides") or {}) if isinstance(media_paths, dict) else {}
         cover_img   = (media_paths.get("cover") if isinstance(media_paths, dict) else "") or ""
+        cards_imgs  = (media_paths.get("cards") or {}) if isinstance(media_paths, dict) else {}
         for rs in resolved:
             eid = rs.get("effective_id", "")
+            slide_n = rs.get("slide")
             if eid in OPC_TEMPLATES_REQUIRING_IMAGE:
-                slide_n = rs.get("slide")
                 has_img = bool(slide_imgs.get(slide_n) or slide_imgs.get(str(slide_n)) or cover_img)
                 if not has_img:
                     issues.append(
@@ -1203,6 +1304,28 @@ def check_slide_plan(content: dict) -> list[str]:
                         f"an image but none provided in media_paths "
                         f"(slides[{slide_n}] or cover)."
                     )
+            # Phase 8C — opc_four_card_grid needs 4 distinct images.
+            if eid == "opc_four_card_grid":
+                present = sum(1 for i in range(1, 5) if cards_imgs.get(i) or cards_imgs.get(str(i)))
+                if present < 4:
+                    issues.append(
+                        f"[slide-plan] slide {slide_n}: opc_four_card_grid needs 4 card images "
+                        f"in media_paths['cards'][1..4]; only {present} present."
+                    )
+
+    # Phase 8G — for each slide that uses a ported standalone, validate the
+    # per-template content dict is populated with real (non-default) values.
+    # This is the gate that catches the "renderer works but content is all '—'"
+    # failure mode we got bit by in Phase 7.
+    for s in slides:
+        n = s.get("slide")
+        tid = s.get("template_id", "")
+        # Use the resolved effective_id when available — that's what actually
+        # rendered. If a standalone fell back to a tip, the tip-content gates
+        # don't apply (legacy path will catch its own issues).
+        eff_id = next((r.get("effective_id") for r in resolved if r.get("slide") == n), tid)
+        if eff_id in OPC_STANDALONE_REQUIRED_CONTENT_KEYS:
+            issues.extend(check_standalone_content(content, n, eff_id))
 
     return issues
 

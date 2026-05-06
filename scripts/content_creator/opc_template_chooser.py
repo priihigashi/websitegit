@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-opc_template_chooser.py — dry-run OPC template recommender.
+opc_template_chooser.py — OPC template recommender + slide-by-slide planner.
 
-Phase 2 only: reads docs/templates/opc_template_intelligence.json and prints a
-story-aware template recommendation for Oak Park Construction topics.
+Reads docs/templates/opc_template_intelligence.json and produces:
+1. A whole-carousel recommendation (legacy, story-aware).
+2. A 5-slide plan with one template_id + role per slide (Phase 4 — feature
+   flagged via OPC_SLIDE_PLANNER_ENABLED). Phase 6 wired Python builders for
+   all 7 standalones; Phase 8 added per-template content generation, image
+   queries, image fetching, and reviewer content gates.
 
 Important safety rules:
 - Does NOT import carousel_builder.py.
 - Does NOT render HTML/PNG/MP4.
 - Does NOT upload to Drive or schedule posts.
 - Does NOT rename files or change production routing.
-- Keeps `tip` as a full 5-slide OPC educational carousel until slide-by-slide
-  wiring is intentionally built.
 - Treats Oak Park as Oak Park Construction in Pompano Beach / South Florida,
   not Oak Park, Illinois. Architecture references are allowed only when they
   support construction/remodel/design education; tourism/community framing is blocked.
@@ -342,7 +344,13 @@ def score_templates(story: dict[str, Any], registry: dict[str, Any]) -> list[dic
             score += 1
             reasons.append("already has an active pipeline key today")
         if template.get("wiring_status", "").startswith("gallery_only"):
-            reasons.append("gallery-only today; dry-run recommendation only")
+            # wiring_status stays gallery_only_* until Phase 8 verification —
+            # but if phase_8_status == "pending_verification" the Python builder
+            # IS wired and the planner is safe to pick this slot.
+            if template.get("phase_8_status") == "pending_verification":
+                reasons.append("Python builder wired (Phase 8 — pending end-to-end verification)")
+            else:
+                reasons.append("gallery-only today; dry-run recommendation only")
 
         if tid == "opc_progress_media" and "progress" not in story["matches"]:
             score -= 4

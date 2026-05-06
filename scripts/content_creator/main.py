@@ -31,7 +31,7 @@ ET = pytz.timezone("America/New_York")
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))  # for routing.py
 from topic_picker import pick_topics, get_clip_count_for_topic
-from carousel_builder import generate_carousel_content, build_html, render_pngs, generate_image_suggestions, visual_audit, fetch_all_media, fetch_clips, build_motion_html, generate_caption
+from carousel_builder import generate_carousel_content, build_html, render_pngs, generate_image_suggestions, visual_audit, fetch_all_media, fetch_clips, build_motion_html, generate_caption, generate_opc_per_template_content, fetch_template_aware_media
 from routing import get_route
 import urllib.request, urllib.parse
 from email_preview import send_preview, update_catalog_status
@@ -1283,6 +1283,16 @@ def process_one_topic(topic_entry, run_date, drive):
                 content["_slide_plan"] = plan
                 slide_summary = " → ".join(s["template_id"] for s in plan["slides"])
                 print(f"  smart-plan: {slide_summary}")
+                # Phase 8A — generate per-template nested content for each
+                # standalone in the plan. tip-shape keys stay intact for any
+                # tip slides + as a fallback context for derive-from-tip.
+                try:
+                    per_tpl = generate_opc_per_template_content(topic, plan, content, brief=brief or "")
+                    for tid, fields in per_tpl.items():
+                        if isinstance(fields, dict):
+                            content[tid] = fields
+                except Exception as exc:
+                    print(f"  smart-plan: per-template content gen failed: {exc!r}")
             else:
                 print(f"  smart-plan: skipped ({plan.get('status')}) — using legacy tip path")
         except Exception as exc:
@@ -1307,11 +1317,24 @@ def process_one_topic(topic_entry, run_date, drive):
     # _build_brazil_html() can inject real <img> tags instead of placeholder text.
     print("  Fetching context images + cover...")
     media_paths = fetch_all_media(content, niche, str(work), brief=brief)
+    # Phase 8C — when a smart slide plan is attached, fetch per-template
+    # imagery (4-card grid, statement person, progress jobsite, duotone hero,
+    # base sticker) into the right media_paths keys.
+    if niche == "opc" and (content or {}).get("_slide_plan"):
+        try:
+            media_paths = fetch_template_aware_media(content, niche, str(work), media_paths, brief=brief)
+        except Exception as exc:
+            print(f"  template-aware media fetch failed: {exc!r}")
     media_paths, media_issues = _validate_media_images(media_paths, post_id)
     if media_issues:
         # One retry pass can recover transient/corrupt fetches from upstream providers.
         print("  Media validation failed — retrying fetch_all_media once...")
         media_paths = fetch_all_media(content, niche, str(work), brief=brief)
+        if niche == "opc" and (content or {}).get("_slide_plan"):
+            try:
+                media_paths = fetch_template_aware_media(content, niche, str(work), media_paths, brief=brief)
+            except Exception as exc:
+                print(f"  template-aware media fetch (retry) failed: {exc!r}")
         media_paths, media_issues_retry = _validate_media_images(media_paths, post_id)
         if media_issues_retry:
             _send_alert(

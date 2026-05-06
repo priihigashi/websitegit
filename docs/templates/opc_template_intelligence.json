@@ -16,9 +16,23 @@
     "dry_run_first": "Use this registry first for dry-run chooser output before connecting any template to rendering."
   },
   "template_groups": {
-    "full_carousel_formats": ["opc_tip"],
-    "standalone_or_slide_role_candidates": ["opc_statement", "opc_base", "opc_material_profile", "opc_duotone", "opc_progress_media", "opc_four_card_grid", "opc_item_spotlight"],
-    "active_pipeline_keys_not_fully_mapped_to_page3": ["progress", "illustrated", "cutout"]
+    "full_carousel_formats": [
+      "opc_tip"
+    ],
+    "standalone_or_slide_role_candidates": [
+      "opc_statement",
+      "opc_base",
+      "opc_material_profile",
+      "opc_duotone",
+      "opc_progress_media",
+      "opc_four_card_grid",
+      "opc_item_spotlight"
+    ],
+    "active_pipeline_keys_not_fully_mapped_to_page3": [
+      "progress",
+      "illustrated",
+      "cutout"
+    ]
   },
   "templates": [
     {
@@ -33,10 +47,33 @@
       "pipeline_builder_today": "_build_opc_html",
       "exact_website_file_rendered_by_pipeline": "not_proven",
       "wiring_status": "active_pipeline_key_but_needs_render_compare",
-      "use_as": ["full_carousel"],
-      "slide_purpose_fit": ["cover", "stat", "list", "explanation", "tip", "sources", "cta"],
-      "best_for": ["general_education", "homeowner_warning", "cost_awareness", "contractor_selection", "permit_or_process_explanation", "maintenance_tip", "remodel_planning"],
-      "avoid_for": ["single_product_spotlight_only", "pure_jobsite_progress", "four_option_grid", "client_quote_only"],
+      "use_as": [
+        "full_carousel"
+      ],
+      "slide_purpose_fit": [
+        "cover",
+        "stat",
+        "list",
+        "explanation",
+        "tip",
+        "sources",
+        "cta"
+      ],
+      "best_for": [
+        "general_education",
+        "homeowner_warning",
+        "cost_awareness",
+        "contractor_selection",
+        "permit_or_process_explanation",
+        "maintenance_tip",
+        "remodel_planning"
+      ],
+      "avoid_for": [
+        "single_product_spotlight_only",
+        "pure_jobsite_progress",
+        "four_option_grid",
+        "client_quote_only"
+      ],
       "needs_photo_or_video": "optional",
       "visual_energy": "educational_bold",
       "priscila_preference_score": 4,
@@ -46,7 +83,7 @@
     {
       "id": "opc_statement",
       "niche": "opc",
-      "public_name": "OPC — Statement · Mid-Carousel",
+      "public_name": "OPC \u2014 Statement \u00b7 Mid-Carousel",
       "mental_model_name": "OPC Statement / Takeaway Slide",
       "style_code": "FORMATOPC_01",
       "website_file": "opc_statement.html",
@@ -55,20 +92,46 @@
       "pipeline_builder_today": null,
       "exact_website_file_rendered_by_pipeline": "no",
       "wiring_status": "gallery_only_not_production_wired",
-      "use_as": ["standalone_slide", "mid_carousel_slide"],
-      "slide_purpose_fit": ["statement", "quote", "warning", "takeaway", "rule", "client_question", "contractor_note"],
-      "best_for": ["strong_opinion_without_sales", "homeowner_warning", "short_rule", "quote_style_takeaway", "mid_carousel_emphasis"],
-      "avoid_for": ["photo_heavy_progress", "product_grid", "multi_option_comparison"],
+      "use_as": [
+        "standalone_slide",
+        "mid_carousel_slide"
+      ],
+      "slide_purpose_fit": [
+        "statement",
+        "quote",
+        "warning",
+        "takeaway",
+        "rule",
+        "client_question",
+        "contractor_note"
+      ],
+      "best_for": [
+        "strong_opinion_without_sales",
+        "homeowner_warning",
+        "short_rule",
+        "quote_style_takeaway",
+        "mid_carousel_emphasis"
+      ],
+      "avoid_for": [
+        "photo_heavy_progress",
+        "product_grid",
+        "multi_option_comparison"
+      ],
       "needs_photo_or_video": "no",
       "visual_energy": "bold_text_first",
       "priscila_preference_score": 3,
       "repeat_limit_last_5_opc_posts": 2,
-      "notes": "Good for a punchy mid-carousel point. Must remain OPC-only. Needs production wiring before rendering."
+      "notes": "Good for a punchy mid-carousel point. Must remain OPC-only. Needs production wiring before rendering.",
+      "phase_8_python_builder_wired": true,
+      "phase_8_per_template_content_wired": true,
+      "phase_8_image_query_wired": true,
+      "phase_8_status": "pending_verification",
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
     },
     {
       "id": "opc_base",
       "niche": "opc",
-      "public_name": "OPC — Cover · Base 1",
+      "public_name": "OPC \u2014 Cover \u00b7 Base 1",
       "mental_model_name": "OPC Base Cover",
       "style_code": "FORMATOPC_02",
       "website_file": "opc_base.html",
@@ -77,20 +140,40 @@
       "pipeline_builder_today": null,
       "exact_website_file_rendered_by_pipeline": "no",
       "wiring_status": "gallery_only_not_production_wired",
-      "use_as": ["cover_candidate"],
-      "slide_purpose_fit": ["cover", "topic_intro", "service_intro"],
-      "best_for": ["clean_topic_intro", "service_intro", "general_opc_brand_cover", "calm_educational_opener"],
-      "avoid_for": ["high_conflict_warning", "progress_proof", "four_option_comparison"],
+      "use_as": [
+        "cover_candidate"
+      ],
+      "slide_purpose_fit": [
+        "cover",
+        "topic_intro",
+        "service_intro"
+      ],
+      "best_for": [
+        "clean_topic_intro",
+        "service_intro",
+        "general_opc_brand_cover",
+        "calm_educational_opener"
+      ],
+      "avoid_for": [
+        "high_conflict_warning",
+        "progress_proof",
+        "four_option_comparison"
+      ],
       "needs_photo_or_video": "optional",
       "visual_energy": "calm_brand_anchor",
       "priscila_preference_score": 3,
       "repeat_limit_last_5_opc_posts": 2,
-      "notes": "Potential cover style. Needs lock/approval and wiring before production use."
+      "notes": "Potential cover style. Needs lock/approval and wiring before production use.",
+      "phase_8_python_builder_wired": true,
+      "phase_8_per_template_content_wired": true,
+      "phase_8_image_query_wired": true,
+      "phase_8_status": "pending_verification",
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
     },
     {
       "id": "opc_material_profile",
       "niche": "opc",
-      "public_name": "OPC — Material / Product Profile",
+      "public_name": "OPC \u2014 Material / Product Profile",
       "mental_model_name": "Material / Product / Service Profile",
       "style_code": "FORMATOPC_03",
       "website_file": "opc_material_profile.html",
@@ -99,20 +182,53 @@
       "pipeline_builder_today": null,
       "exact_website_file_rendered_by_pipeline": "no",
       "wiring_status": "gallery_only_not_production_wired",
-      "use_as": ["standalone_slide", "mid_carousel_slide", "service_explainer_slide"],
-      "slide_purpose_fit": ["material", "product", "service", "finish", "technique", "decision_support", "explanation"],
-      "best_for": ["countertop_material", "tile_type", "flooring", "cabinet_style", "paint_finish", "waterproofing", "service_explanation", "construction_technique", "durability_tradeoff", "cost_range_explanation"],
-      "avoid_for": ["pure_before_after", "multiple_options_grid", "quote_only", "sources_slide"],
+      "use_as": [
+        "standalone_slide",
+        "mid_carousel_slide",
+        "service_explainer_slide"
+      ],
+      "slide_purpose_fit": [
+        "material",
+        "product",
+        "service",
+        "finish",
+        "technique",
+        "decision_support",
+        "explanation"
+      ],
+      "best_for": [
+        "countertop_material",
+        "tile_type",
+        "flooring",
+        "cabinet_style",
+        "paint_finish",
+        "waterproofing",
+        "service_explanation",
+        "construction_technique",
+        "durability_tradeoff",
+        "cost_range_explanation"
+      ],
+      "avoid_for": [
+        "pure_before_after",
+        "multiple_options_grid",
+        "quote_only",
+        "sources_slide"
+      ],
       "needs_photo_or_video": "yes_photo_preferred",
       "visual_energy": "calm_technical",
       "priscila_preference_score": 5,
       "repeat_limit_last_5_opc_posts": 2,
-      "notes": "Strong candidate for first dry-run chooser test because it clearly maps to material/product/service topics."
+      "notes": "Strong candidate for first dry-run chooser test because it clearly maps to material/product/service topics.",
+      "phase_8_python_builder_wired": true,
+      "phase_8_per_template_content_wired": true,
+      "phase_8_image_query_wired": true,
+      "phase_8_status": "pending_verification",
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
     },
     {
       "id": "opc_duotone",
       "niche": "opc",
-      "public_name": "OPC — Duotone Statement",
+      "public_name": "OPC \u2014 Duotone Statement",
       "mental_model_name": "Bold Duotone Opener / Warning Cover",
       "style_code": "FORMATOPC_04",
       "website_file": "opc_duotone.html",
@@ -121,22 +237,50 @@
       "pipeline_builder_today": null,
       "exact_website_file_rendered_by_pipeline": "no",
       "wiring_status": "gallery_only_not_production_wired",
-      "use_as": ["cover_candidate", "statement_slide"],
-      "slide_purpose_fit": ["cover", "warning", "bold_claim", "red_flag", "myth", "mistake", "strong_takeaway"],
-      "best_for": ["red_flag", "costly_mistake", "permit_warning", "contractor_warning", "bold_hook", "myth_busting", "attention_grabbing_cover"],
-      "avoid_for": ["quiet_material_explainer", "progress_photo_story", "four_option_grid"],
+      "use_as": [
+        "cover_candidate",
+        "statement_slide"
+      ],
+      "slide_purpose_fit": [
+        "cover",
+        "warning",
+        "bold_claim",
+        "red_flag",
+        "myth",
+        "mistake",
+        "strong_takeaway"
+      ],
+      "best_for": [
+        "red_flag",
+        "costly_mistake",
+        "permit_warning",
+        "contractor_warning",
+        "bold_hook",
+        "myth_busting",
+        "attention_grabbing_cover"
+      ],
+      "avoid_for": [
+        "quiet_material_explainer",
+        "progress_photo_story",
+        "four_option_grid"
+      ],
       "needs_photo_or_video": "photo_preferred",
       "visual_energy": "bold_high_contrast",
       "priscila_preference_score": 4,
       "repeat_limit_last_5_opc_posts": 2,
       "variants": 3,
       "variant_status": "chosen_variant_not_locked_in_registry_yet",
-      "notes": "Before wiring, lock which variant is approved. Good opener for warnings and strong hooks."
+      "notes": "Before wiring, lock which variant is approved. Good opener for warnings and strong hooks.",
+      "phase_8_python_builder_wired": true,
+      "phase_8_per_template_content_wired": true,
+      "phase_8_image_query_wired": true,
+      "phase_8_status": "pending_verification",
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
     },
     {
       "id": "opc_progress_media",
       "niche": "opc",
-      "public_name": "OPC — Progress Media Story",
+      "public_name": "OPC \u2014 Progress Media Story",
       "mental_model_name": "Progress Photo / Video Story",
       "style_code": "FORMATOPC_05",
       "website_file": "opc_progress_media.html",
@@ -147,20 +291,51 @@
       "related_pipeline_builder_today": "_build_opc_progress_html",
       "exact_website_file_rendered_by_pipeline": "no_direct_match_found",
       "wiring_status": "gallery_only_as_exact_design_progress_pipeline_exists_separately",
-      "use_as": ["cover_candidate", "standalone_slide", "proof_slide", "progress_slide"],
-      "slide_purpose_fit": ["progress", "proof", "before_after", "jobsite_update", "process", "field_note", "installation_stage"],
-      "best_for": ["real_project_photo", "progress_video", "before_during_after", "field_update", "inspection_moment", "installation_stage", "jobsite_proof"],
-      "avoid_for": ["abstract_education_without_media", "product_only", "quote_only", "sources_slide"],
+      "use_as": [
+        "cover_candidate",
+        "standalone_slide",
+        "proof_slide",
+        "progress_slide"
+      ],
+      "slide_purpose_fit": [
+        "progress",
+        "proof",
+        "before_after",
+        "jobsite_update",
+        "process",
+        "field_note",
+        "installation_stage"
+      ],
+      "best_for": [
+        "real_project_photo",
+        "progress_video",
+        "before_during_after",
+        "field_update",
+        "inspection_moment",
+        "installation_stage",
+        "jobsite_proof"
+      ],
+      "avoid_for": [
+        "abstract_education_without_media",
+        "product_only",
+        "quote_only",
+        "sources_slide"
+      ],
       "needs_photo_or_video": "yes_required",
       "visual_energy": "realistic_proof_based",
       "priscila_preference_score": 5,
       "repeat_limit_last_5_opc_posts": 2,
-      "notes": "Do not assume this equals the active progress pipeline. Compare against opc_progress.html and _build_opc_progress_html before wiring."
+      "notes": "Do not assume this equals the active progress pipeline. Compare against opc_progress.html and _build_opc_progress_html before wiring.",
+      "phase_8_python_builder_wired": true,
+      "phase_8_per_template_content_wired": true,
+      "phase_8_image_query_wired": true,
+      "phase_8_status": "pending_verification",
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
     },
     {
       "id": "opc_four_card_grid",
       "niche": "opc",
-      "public_name": "OPC — 4-Card Project / Product Grid",
+      "public_name": "OPC \u2014 4-Card Project / Product Grid",
       "mental_model_name": "4-Card Project / Product / Decision Grid",
       "style_code": "FORMATOPC_06",
       "website_file": "opc_four_card_grid.html",
@@ -169,20 +344,49 @@
       "pipeline_builder_today": null,
       "exact_website_file_rendered_by_pipeline": "no",
       "wiring_status": "gallery_only_not_production_wired",
-      "use_as": ["standalone_slide", "mid_carousel_slide", "comparison_slide"],
-      "slide_purpose_fit": ["comparison", "options", "recommendations", "decision_list", "project_choices", "product_choices"],
-      "best_for": ["four_options", "material_comparison", "product_recommendations", "design_choices", "project_decisions", "pros_cons_summary", "what_to_choose"],
-      "avoid_for": ["single_item_spotlight", "progress_proof", "quote_only", "sources_slide"],
+      "use_as": [
+        "standalone_slide",
+        "mid_carousel_slide",
+        "comparison_slide"
+      ],
+      "slide_purpose_fit": [
+        "comparison",
+        "options",
+        "recommendations",
+        "decision_list",
+        "project_choices",
+        "product_choices"
+      ],
+      "best_for": [
+        "four_options",
+        "material_comparison",
+        "product_recommendations",
+        "design_choices",
+        "project_decisions",
+        "pros_cons_summary",
+        "what_to_choose"
+      ],
+      "avoid_for": [
+        "single_item_spotlight",
+        "progress_proof",
+        "quote_only",
+        "sources_slide"
+      ],
       "needs_photo_or_video": "yes_multiple_images_preferred",
       "visual_energy": "organized_comparison",
       "priscila_preference_score": 5,
       "repeat_limit_last_5_opc_posts": 2,
-      "notes": "Strong candidate for topics with exactly 3-4 options or decision points. Needs wiring after dry-run approval."
+      "notes": "Strong candidate for topics with exactly 3-4 options or decision points. Needs wiring after dry-run approval.",
+      "phase_8_python_builder_wired": true,
+      "phase_8_per_template_content_wired": true,
+      "phase_8_image_query_wired": true,
+      "phase_8_status": "pending_verification",
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
     },
     {
       "id": "opc_item_spotlight",
       "niche": "opc",
-      "public_name": "OPC — Item Spotlight",
+      "public_name": "OPC \u2014 Item Spotlight",
       "mental_model_name": "Product / Material / Style Spotlight",
       "style_code": "FORMATOPC_07",
       "website_file": "opc_item_spotlight.html",
@@ -191,22 +395,77 @@
       "pipeline_builder_today": null,
       "exact_website_file_rendered_by_pipeline": "no",
       "wiring_status": "gallery_only_not_production_wired",
-      "use_as": ["standalone_slide", "mid_carousel_slide", "spotlight_slide"],
-      "slide_purpose_fit": ["single_item", "product", "material", "finish", "style", "service_detail", "technique"],
-      "best_for": ["one_product", "one_material", "one_finish", "one_fixture", "one_design_style", "one_service_detail", "one_construction_technique"],
-      "avoid_for": ["four_options", "full_progress_story", "quote_only", "sources_slide"],
+      "use_as": [
+        "standalone_slide",
+        "mid_carousel_slide",
+        "spotlight_slide"
+      ],
+      "slide_purpose_fit": [
+        "single_item",
+        "product",
+        "material",
+        "finish",
+        "style",
+        "service_detail",
+        "technique"
+      ],
+      "best_for": [
+        "one_product",
+        "one_material",
+        "one_finish",
+        "one_fixture",
+        "one_design_style",
+        "one_service_detail",
+        "one_construction_technique"
+      ],
+      "avoid_for": [
+        "four_options",
+        "full_progress_story",
+        "quote_only",
+        "sources_slide"
+      ],
       "needs_photo_or_video": "yes_photo_preferred",
       "visual_energy": "focused_detail",
       "priscila_preference_score": 4,
       "repeat_limit_last_5_opc_posts": 2,
-      "notes": "Use when the topic centers on one item. Not ideal for broad list posts."
+      "notes": "Use when the topic centers on one item. Not ideal for broad list posts.",
+      "phase_8_python_builder_wired": true,
+      "phase_8_per_template_content_wired": true,
+      "phase_8_image_query_wired": true,
+      "phase_8_status": "pending_verification",
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
     }
   ],
   "future_phases": [
-    {"phase": 1, "name": "Registry only", "status": "done_when_this_file_exists", "risk": "low"},
-    {"phase": 2, "name": "Dry-run chooser", "status": "pending", "risk": "low"},
-    {"phase": 3, "name": "Compare against current output", "status": "pending", "risk": "low"},
-    {"phase": 4, "name": "Wire one role only", "status": "pending", "risk": "medium"},
-    {"phase": 5, "name": "History and variety logic", "status": "pending", "risk": "medium"}
+    {
+      "phase": 1,
+      "name": "Registry only",
+      "status": "done_when_this_file_exists",
+      "risk": "low"
+    },
+    {
+      "phase": 2,
+      "name": "Dry-run chooser",
+      "status": "pending",
+      "risk": "low"
+    },
+    {
+      "phase": 3,
+      "name": "Compare against current output",
+      "status": "pending",
+      "risk": "low"
+    },
+    {
+      "phase": 4,
+      "name": "Wire one role only",
+      "status": "pending",
+      "risk": "medium"
+    },
+    {
+      "phase": 5,
+      "name": "History and variety logic",
+      "status": "pending",
+      "risk": "medium"
+    }
   ]
 }

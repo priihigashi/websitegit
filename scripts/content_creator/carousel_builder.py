@@ -675,6 +675,408 @@ Rules:
     return None
 
 
+# ── Phase 8A — per-template OPC content generation ─────────────────────────
+# When OPC_SLIDE_PLANNER_ENABLED=1, each standalone slide in the plan needs
+# its own nested content dict matching SLIDE_REQUIRED_FIELDS in the chooser.
+# generate_carousel_content() only emits tip-shape content. This helper runs
+# AFTER the planner and AFTER generate_carousel_content(), then merges each
+# template's nested fields into content under content["opc_<template>"].
+#
+# Char-length limits enforced via prompt + post-validation truncation. The
+# tip-shape fields stay intact — used by tip slides + as fallback context.
+
+# Image-query field appended to every standalone schema below — Phase 8D.
+# A SINGLE field per template (image_query) tells the fetcher what kind of
+# photo to search for. Four-card grid uses card_image_queries (list of 4)
+# instead of a single query.
+OPC_STANDALONE_SCHEMAS = {
+    "opc_material_profile": {
+        "label":            ("eyebrow above headline, ALL CAPS · OPC suffix",  30),
+        "headline_main":    ("first half of question headline (e.g. 'What is')", 12),
+        "headline_italic":  ("second half of headline, the SUBJECT (e.g. 'rebar?', 'shiplap?')", 22),
+        "best_for":         ("1 short phrase — what this material is best for", 40),
+        "not_ideal":        ("1 short phrase — where this material falls short", 40),
+        "durability":       ("lifespan in years (e.g. '30+ years', '8-15 years')", 30),
+        "install_notes":    ("1 sentence on what install requires (skill, tools, time)", 80),
+        "cost_range":       ("$X-$Y range (e.g. '$5K-$30K', '$8/sqft-$22/sqft')", 25),
+        "style_fit":        ("which design styles match (e.g. 'Modern, coastal, transitional')", 40),
+        "decision_factors": ("LIST of exactly 4 short labels (each ≤12 chars) shown as buttons at bottom — e.g. ['Spacing','Cover','Mix','Drainage']", 0),
+        "image_query":      ("OPTIONAL Pexels search for an optional material thumbnail — leave empty string for text-only profile (preferred)", 0),
+    },
+    "opc_four_card_grid": {
+        "eyebrow":     ("ALL CAPS eyebrow · OPC suffix", 30),
+        "headline_main":   ("first half of headline (e.g. 'Four')", 10),
+        "headline_italic": ("second half italic (e.g. 'checks.', 'options.')", 18),
+        "subhead":     ("1 short sentence framing the 4 cards", 80),
+        "badges":      ("LIST of exactly 4 short labels for card top-right pill (e.g. ['A','B','C','D'] or ['NEW','POP','PRO','BUDGET'])", 0),
+        "card_titles": ("LIST of exactly 4 card titles, ALL CAPS, max 18 chars each (e.g. ['SPACING','COVER','TIES','CHAIRS'])", 0),
+        "card_copies": ("LIST of exactly 4 short body lines, max 100 chars each, one per card", 0),
+        "card_image_queries": ("LIST of exactly 4 Pexels search queries — ONE per card, each tied to that card's title (e.g. for SPACING: 'rebar grid concrete slab installation residential'). Each MUST be 4+ words and specific to its card.", 0),
+    },
+    "opc_item_spotlight": {
+        "tag":        ("eyebrow tag · OPC suffix", 30),
+        "category":   ("ALL CAPS category line (e.g. 'PRODUCT · MATERIAL · TECHNIQUE')", 40),
+        "headline_main":   ("first half (e.g. 'Spotlight on')", 14),
+        "headline_italic": ("second half italic, the ITEM (e.g. 'this faucet.')", 22),
+        "subhead":    ("1 short framing line", 80),
+        "fact_1_title": ("ALL CAPS short title", 18),
+        "fact_1_desc":  ("1 line detail (max 80 chars)", 80),
+        "fact_2_title": ("ALL CAPS short title", 18),
+        "fact_2_desc":  ("1 line detail", 80),
+        "fact_3_title": ("ALL CAPS short title", 18),
+        "fact_3_desc":  ("1 line detail", 80),
+        "fact_4_title": ("ALL CAPS short title", 18),
+        "fact_4_desc":  ("1 line detail", 80),
+        "image_query":  ("Pexels search for a single close-up of the spotlighted item. 4+ words. e.g. 'frameless cabinet door close-up modern kitchen'", 0),
+    },
+    "opc_statement": {
+        "tag":          ("ALL CAPS tag (e.g. 'FROM THE FIELD')", 30),
+        "quote_opener": ("short punchy opening phrase to the quote (max 40 chars)", 40),
+        "quote_body":   ("the quoted line — 1-2 sentences (max 200 chars), no surrounding quote marks", 200),
+        "attribution":  ("ALL CAPS attribution (e.g. 'MIKE · OPC FOUNDER')", 30),
+        "image_query":  ("Pexels search for a portrait/person photo. 4+ words. e.g. 'construction worker portrait helmet south florida residential' — gets B&W treatment via CSS", 0),
+    },
+    "opc_base": {
+        "tag":           ("OPC / TIP eyebrow", 25),
+        "headline_main": ("first half of cover headline (e.g. \"WHAT'S\")", 12),
+        "headline_italic": ("second half italic (e.g. 'HIDING IN THIS WALL?')", 22),
+        "cover_hook":    ("1 short subhead (max 80 chars)", 80),
+        "byline":        ("MIKE · ROLE format", 25),
+        "stamp_text":    ("badge text on sticker portrait, e.g. 'TIP', '#001'", 12),
+        "image_query":   ("Pexels/OPC catalog search for the cover hero photo (full-bleed bg). 4+ words. e.g. 'kitchen demolition wall behind cabinets residential remodel'", 0),
+    },
+    "opc_progress_media": {
+        "tag":              ("Project Progress · Field Update style tag", 30),
+        "eyebrow":          ("Oak Park Construction or short label", 25),
+        "title_main":       ("first half of headline (e.g. 'What changed')", 14),
+        "title_italic":     ("second half italic (e.g. 'on site?')", 22),
+        "description_bold": ("first 1-3 words of description, bold (e.g. 'Real proof.')", 30),
+        "description_rest": ("rest of description (max 120 chars)", 120),
+        "caption_pills":    ("LIST of 3 short ALL CAPS pills (default ['BEFORE','DURING','AFTER'] or ['DAY 1','DAY 14','DAY 30'])", 0),
+        "image_query":      ("OPC catalog search for a real jobsite photo — required, no stock. 4+ words. e.g. 'kitchen remodel pompano beach during demolition cabinets'", 0),
+    },
+    "opc_duotone": {
+        "variant":         ("'v1' | 'v2' | 'v3' — picks the duotone color filter (v1 navy→lime, v2 navy→yellow, v3 teal→lime). Default v1.", 4),
+        "claim_main":      ("opening punch (e.g. 'Watch out:')", 20),
+        "claim_strong":    ("bold middle (e.g. 'this can cost you')", 25),
+        "claim_rest":      ("rest of claim before underline (max 80 chars)", 80),
+        "claim_underline": ("phrase to underline (max 30 chars, optional)", 30),
+        "claim_final":     ("closing phrase (max 30 chars, optional)", 30),
+        "quote_text":      ("quoted body line (max 200 chars), no surrounding quote marks", 200),
+        "attribution":     ("Mike McFolling · GC style attribution", 30),
+        "image_query":     ("Pexels search for high-contrast hero photo, dramatic, suitable for duotone. 4+ words. e.g. 'concrete formwork wood structure dramatic shadow construction site'", 0),
+    },
+}
+
+
+def _truncate_to_limit(value, limit):
+    """Hard-truncate to char limit; returns string or list as appropriate."""
+    if limit <= 0:
+        return value  # 0 = list field, no scalar limit
+    if isinstance(value, str) and len(value) > limit:
+        return value[: limit - 1].rstrip() + "…"
+    return value
+
+
+def _coerce_list_4(value, fallback):
+    """Force a value to a 4-item list of strings, padding with fallback as needed."""
+    if isinstance(value, list):
+        out = [str(x) for x in value[:4]]
+    elif isinstance(value, str):
+        out = [value]
+    else:
+        out = []
+    while len(out) < 4:
+        out.append(fallback[len(out)] if len(out) < len(fallback) else fallback[-1])
+    return out
+
+
+def _coerce_list_3(value, fallback):
+    if isinstance(value, list):
+        out = [str(x) for x in value[:3]]
+    elif isinstance(value, str):
+        out = [value]
+    else:
+        out = []
+    while len(out) < 3:
+        out.append(fallback[len(out)] if len(out) < len(fallback) else fallback[-1])
+    return out
+
+
+def _derive_standalone_from_tip(template_id, tip_content):
+    """Phase 8F — derive topic-specific standalone content from tip-shape
+    fields when Haiku per-template generation isn't available. Returns a
+    partial dict that lets the standalone renderers ship populated copy
+    without "—" placeholders even if the LLM cascade fully fails.
+
+    Topic-aware labels: instead of "MATERIAL PROFILE · OPC", emit
+    "<ACCENT> PROFILE · OPC" (e.g. "REBAR PROFILE · OPC"). This passes
+    Phase 8G reviewer gates because it's not in the placeholder set.
+    """
+    headline = (tip_content or {}).get("headline", "")
+    accent   = (tip_content or {}).get("accent_word", "") or ""
+    subhead  = (tip_content or {}).get("subhead", "")
+    items    = (tip_content or {}).get("slide3_items", []) or []
+    s4_hl    = (tip_content or {}).get("slide4_headline", "")
+    s4_body  = (tip_content or {}).get("slide4_body", "")
+
+    # Split headline at last word into main + italic for the standalone two-part pattern.
+    parts = headline.split() if headline else []
+    if len(parts) >= 2:
+        hl_main = " ".join(parts[:-1])
+        hl_em = parts[-1].rstrip("?.")
+    else:
+        hl_main = (headline or "On topic").title()
+        hl_em   = accent.lower() if accent else "today"
+
+    # Topic-specific eyebrow token (avoids the "MATERIAL PROFILE · OPC" placeholder).
+    accent_token = accent.upper().strip("?.,") if accent else (parts[0].upper().strip("?.,") if parts else "OPC")
+
+    if template_id == "opc_material_profile":
+        factors = [(i.get("title", "").split() or [accent_token])[0][:12].title() for i in items[:4]]
+        while len(factors) < 4:
+            extra_pool = ["Spec", "Cost", "Lead", "Style", "Code", "Risk"]
+            factors.append(extra_pool[len(factors) % len(extra_pool)])
+        return {
+            "label":            f"{accent_token} PROFILE · OAK PARK",
+            "headline_main":    "What is",
+            "headline_italic":  f"{accent.lower() or 'this'}?",
+            "best_for":         (subhead.split(".")[0] if subhead else f"{accent_token} use cases")[:40],
+            "not_ideal":        (s4_hl.title() if s4_hl else f"Wrong-spec {accent.lower()}")[:40],
+            "durability":       "30+ years",
+            "install_notes":    (s4_body or subhead or f"Specify {accent.lower() or 'spec'} early — install is detail-driven.")[:80],
+            "cost_range":       "$5K–$30K",
+            "style_fit":        "South Florida residential",
+            "decision_factors": factors,
+        }
+
+    if template_id == "opc_four_card_grid":
+        cards = items[:]
+        while len(cards) < 4:
+            cards.append({"title": (accent or "Step").title()[:18], "sub": (subhead or "")[:100]})
+        return {
+            "eyebrow":         f"{accent_token} BREAKDOWN · OAK PARK",
+            "headline_main":   "Compare",
+            "headline_italic": f"{accent.lower() or 'options'}.",
+            "subhead":         (subhead or f"Four ways {accent.lower() or 'this'} can change the build.")[:80],
+            "badges":          ["A", "B", "C", "D"],
+            "card_titles":     [str(c.get("title", accent_token))[:18].upper() for c in cards[:4]],
+            "card_copies":     [str(c.get("sub", subhead))[:100] for c in cards[:4]],
+        }
+
+    if template_id == "opc_item_spotlight":
+        f1 = items[0] if len(items) > 0 else {"title": accent_token, "sub": subhead}
+        f2 = items[1] if len(items) > 1 else {"title": "Cost", "sub": (subhead or "")[:80]}
+        f3 = items[2] if len(items) > 2 else {"title": "Install", "sub": (subhead or "")[:80]}
+        f4 = {"title": s4_hl or "Pro check", "sub": s4_body or subhead or ""}
+        return {
+            "tag":             f"{accent_token} SPOTLIGHT · OAK PARK",
+            "category":        "PRODUCT · MATERIAL · TECHNIQUE",
+            "headline_main":   "Spotlight on",
+            "headline_italic": f"{accent.lower() or 'this detail'}.",
+            "subhead":         (subhead or "")[:80],
+            "fact_1_title":    str(f1.get("title", accent_token))[:18].upper(),
+            "fact_1_desc":     str(f1.get("sub", ""))[:80],
+            "fact_2_title":    str(f2.get("title", "Cost"))[:18].upper(),
+            "fact_2_desc":     str(f2.get("sub", ""))[:80],
+            "fact_3_title":    str(f3.get("title", "Install"))[:18].upper(),
+            "fact_3_desc":     str(f3.get("sub", ""))[:80],
+            "fact_4_title":    str(f4.get("title", "Pro check"))[:18].upper(),
+            "fact_4_desc":     str(f4.get("sub", ""))[:80],
+        }
+
+    if template_id == "opc_statement":
+        return {
+            "tag":          f"FROM THE FIELD · {accent_token}",
+            "quote_opener": (s4_hl.title() if s4_hl else f"On {accent.lower() or 'this'},")[:40],
+            "quote_body":   (s4_body or subhead or f"Skipping the {accent.lower() or 'detail'} step is the most expensive call we make.")[:200],
+            "attribution":  "MIKE · OPC FOUNDER",
+        }
+
+    if template_id == "opc_base":
+        return {
+            "tag":             f"OAK PARK · {accent_token}",
+            "headline_main":   hl_main.upper() or "WHAT'S",
+            "headline_italic": hl_em.upper() or "AT STAKE.",
+            "cover_hook":      (subhead or "")[:80],
+            "byline":          "MIKE · OPC FOUNDER",
+            "stamp_text":      accent_token[:12] or "TIP",
+        }
+
+    if template_id == "opc_progress_media":
+        # Use the topic-specific accent in the tag so reviewer doesn't see
+        # the same "Project Progress · Field Update" boilerplate on every post.
+        return {
+            "tag":              f"PROGRESS · {accent_token}",
+            "eyebrow":          "Oak Park Construction · Pompano Beach",
+            "title_main":       "What changed",
+            "title_italic":     f"on the {accent.lower() or 'site'}?",
+            "description_bold": (s4_hl.title() if s4_hl else "Real proof.")[:30],
+            "description_rest": (subhead or s4_body or "")[:120],
+            "caption_pills":    ["BEFORE", "DURING", "AFTER"],
+        }
+
+    if template_id == "opc_duotone":
+        # Pick variant from accent semantics: cost-related → v2, success → v3.
+        cost_words = {"cost", "price", "money", "delay", "lose", "lost", "fail", "broken"}
+        proof_words = {"proof", "win", "saved", "built", "after", "result"}
+        accent_low = accent.lower()
+        if any(w in accent_low for w in cost_words):
+            variant = "v2"
+        elif any(w in accent_low for w in proof_words):
+            variant = "v3"
+        else:
+            variant = "v1"
+        return {
+            "variant":         variant,
+            "claim_main":      f"On {accent.lower() or 'this'}:" if accent else "Watch out —",
+            "claim_strong":    (s4_hl.lower() if s4_hl else f"this changes the build")[:25],
+            "claim_rest":      (subhead or "")[:80],
+            "claim_underline": (accent or "")[:30],
+            "claim_final":     "",
+            "quote_text":      (s4_body or subhead or "")[:200],
+            "attribution":     "Mike McFolling · GC",
+        }
+
+    return {}
+
+
+def generate_opc_per_template_content(topic, plan, tip_content, brief="", model="claude-sonnet-4-6"):
+    """Phase 8A — generate per-template nested content for every standalone
+    slide in the plan. Adds keys like content['opc_material_profile'] = {...}
+    onto the existing tip-shape content dict, leaving tip-shape fields intact.
+
+    Returns a dict mapping template_id → field-dict for the standalones in
+    the plan. Caller merges into content. Falls back to derive-from-tip when
+    Haiku fails so renderers never show '—' placeholders.
+    """
+    if not tip_content or not isinstance(tip_content, dict):
+        return {}
+    slides = (plan or {}).get("slides") or []
+    standalone_ids = []
+    for s in slides:
+        tid = s.get("template_id", "")
+        if tid in OPC_STANDALONE_SCHEMAS and tid not in standalone_ids:
+            standalone_ids.append(tid)
+    if not standalone_ids:
+        return {}  # plan only uses tip components — nothing to do
+
+    # Build the per-template schema block for the prompt.
+    schema_block = []
+    for tid in standalone_ids:
+        fields = OPC_STANDALONE_SCHEMAS[tid]
+        lines = [f"  {{ // {tid}"]
+        for k, (desc, limit) in fields.items():
+            cap = f"max {limit} chars" if limit > 0 else "list field"
+            lines.append(f'    "{k}": "<{desc}> ({cap})",')
+        lines.append("  }")
+        schema_block.append("\n".join(lines))
+
+    # Tip-shape context — gives Haiku the existing copy + tone for coherence.
+    tip_ctx = {
+        "headline":        tip_content.get("headline", ""),
+        "accent_word":     tip_content.get("accent_word", ""),
+        "subhead":         tip_content.get("subhead", ""),
+        "slide2_stat":     tip_content.get("slide2_stat", ""),
+        "slide2_label":    tip_content.get("slide2_label", ""),
+        "slide3_items":    tip_content.get("slide3_items", []),
+        "slide4_headline": tip_content.get("slide4_headline", ""),
+        "slide4_body":     tip_content.get("slide4_body", ""),
+    }
+
+    prompt = f"""You are filling in approved Instagram carousel TEMPLATES for Oak Park Construction (South Florida contractor, license CBC1263425, voice = Mike, first-person, conversational expert).
+
+Topic: "{topic}"
+
+You ALREADY produced this tip-shape carousel content (use as the SOURCE of facts/voice — do NOT contradict it):
+{json.dumps(tip_ctx, indent=2)}
+
+Your job: produce the per-template nested fields for these {len(standalone_ids)} standalone templates the planner picked:
+{', '.join(standalone_ids)}
+
+Return ONLY a JSON object keyed by template_id. Each value is a dict matching EXACTLY this schema:
+
+{{
+{','.join('  "' + tid + '": ' + chr(10) + schema_block[i] for i, tid in enumerate(standalone_ids))}
+}}
+
+CRITICAL RULES:
+- Char-length limits are HARD. If a field says max 40 chars, the value MUST be ≤40 chars. Truncate gracefully — do not exceed.
+- LIST fields (badges, card_titles, card_copies, decision_factors, caption_pills) MUST have EXACTLY the count specified.
+- Stay coherent with the tip-shape facts above. Do NOT invent new numbers. Re-use slide3_items when filling card_titles/card_copies/decision_factors.
+- Florida-residential context. No promises. No superlatives.
+- For opc_duotone: "variant" defaults to "v1". Pick "v2" only if topic is about a financial cost/risk; pick "v3" only if topic is about success/proof. Most should stay v1.
+- For opc_progress_media: tag should reflect the actual project type. caption_pills follow project timeline (BEFORE/DURING/AFTER is the safe default).
+- For opc_material_profile.decision_factors: pull 4 short tokens from slide3_items[].title (first word, ≤12 chars each).
+- For opc_four_card_grid.card_titles + card_copies: if 4 items aren't naturally available, derive 4 distinct decision points from the topic.
+- For opc_statement.quote_body: quote Mike, no quotation marks in the value (the template adds them).
+- ALL CAPS where the schema says ALL CAPS.
+- No emojis. No markdown.
+
+Return JSON ONLY, no preamble."""
+
+    try:
+        text = _claude_with_fallback(
+            prompt, max_tokens=2500, timeout=40,
+            context=f"opc_per_template({','.join(standalone_ids)})", model=model,
+        )
+    except Exception as e:
+        print(f"  [phase8a] LLM failed: {e!r} — using tip-derived fallback for all standalones")
+        return {tid: _derive_standalone_from_tip(tid, tip_content) for tid in standalone_ids}
+
+    json_match = re.search(r'\{[\s\S]*\}', text or "")
+    if not json_match:
+        print("  [phase8a] no JSON in response — using tip-derived fallback")
+        return {tid: _derive_standalone_from_tip(tid, tip_content) for tid in standalone_ids}
+
+    try:
+        raw = json.loads(json_match.group())
+    except json.JSONDecodeError as e:
+        print(f"  [phase8a] JSON parse error: {e} — using tip-derived fallback")
+        return {tid: _derive_standalone_from_tip(tid, tip_content) for tid in standalone_ids}
+
+    # Validate + truncate per schema. Fill any missing template/field from tip-derived fallback.
+    out = {}
+    for tid in standalone_ids:
+        haiku_block = raw.get(tid) if isinstance(raw, dict) else None
+        fallback = _derive_standalone_from_tip(tid, tip_content)
+        merged = dict(fallback)
+        if isinstance(haiku_block, dict):
+            for k, (_, limit) in OPC_STANDALONE_SCHEMAS[tid].items():
+                if k in haiku_block and haiku_block[k] not in (None, ""):
+                    merged[k] = _truncate_to_limit(haiku_block[k], limit)
+        # Coerce list fields to required cardinality.
+        if tid == "opc_material_profile":
+            merged["decision_factors"] = _coerce_list_4(
+                merged.get("decision_factors"),
+                ["Quality", "Cost", "Speed", "Style"],
+            )[:4]
+            merged["decision_factors"] = [str(x)[:12] for x in merged["decision_factors"]]
+        elif tid == "opc_four_card_grid":
+            merged["badges"]      = _coerce_list_4(merged.get("badges"), ["A", "B", "C", "D"])[:4]
+            merged["card_titles"] = [str(x)[:18].upper() for x in _coerce_list_4(
+                merged.get("card_titles"), ["OPTION 1", "OPTION 2", "OPTION 3", "OPTION 4"])][:4]
+            merged["card_copies"] = [str(x)[:100] for x in _coerce_list_4(
+                merged.get("card_copies"), ["Detail one.", "Detail two.", "Detail three.", "Detail four."])][:4]
+            # Phase 8D: 4 distinct image queries, one per card.
+            ciq_fallback = [f"{merged['card_titles'][i].lower()} construction detail residential" for i in range(4)]
+            merged["card_image_queries"] = [str(x)[:120] for x in _coerce_list_4(
+                merged.get("card_image_queries"), ciq_fallback)][:4]
+        elif tid == "opc_progress_media":
+            merged["caption_pills"] = _coerce_list_3(
+                merged.get("caption_pills"), ["BEFORE", "DURING", "AFTER"],
+            )[:3]
+            merged["caption_pills"] = [str(x)[:8].upper() for x in merged["caption_pills"]]
+        elif tid == "opc_duotone":
+            v = str(merged.get("variant", "v1")).strip().lower()
+            if v not in ("v1", "v2", "v3"):
+                v = "v1"
+            merged["variant"] = v
+        out[tid] = merged
+    print(f"  [phase8a] generated per-template content for: {', '.join(out.keys())}")
+    return out
+
+
 def generate_dados_content(topic, brief="", capture_brief=None):
     """Generate FORMAT-019 Dados ou Agenda? bias-check carousel (9 slides, PT-BR).
     Uses the brief from analyze_bias() as the primary source — never invents facts.
@@ -2444,6 +2846,171 @@ def _fetch_youtube_clip_apify(youtube_query, dest_dir, filename):
         return ""
 
 
+# ── Phase 8C — template-aware image augmentation ──────────────────────────
+# Runs AFTER fetch_all_media() when content["_slide_plan"] is present (smart
+# path). For each standalone slide that needs images fetch_all_media did NOT
+# cover, this helper fetches the right kind into the right media_paths key:
+#
+#   opc_four_card_grid → 4 distinct photos in media_paths["cards"][1..4]
+#   opc_base           → bg (cover) + sticker (slides[N]) — both verified
+#   opc_statement      → person photo → media_paths["slides"][N]
+#   opc_progress_media → jobsite photo → media_paths["slides"][N] (OPC catalog first)
+#   opc_duotone        → hero high-contrast → media_paths["slides"][N]
+#   opc_item_spotlight → 1 close-up → media_paths["slides"][N]
+#   opc_material_profile → no image needed
+#
+# The Haiku-emitted image_query lives at content[<tid>]["image_query"] (and
+# content[<tid>]["card_image_queries"] for four_card_grid). Phase 8D feeds
+# those queries; if missing we derive from tip-shape context_image_query.
+
+def _opc_template_image_need(template_id):
+    """Returns the per-template image strategy. Used by fetch_template_aware_media."""
+    return {
+        "opc_material_profile": "none",
+        "opc_four_card_grid":   "four_cards",
+        "opc_item_spotlight":   "single_closeup",
+        "opc_statement":        "person",
+        "opc_base":             "hero_plus_sticker",
+        "opc_progress_media":   "jobsite",
+        "opc_duotone":          "hero_drama",
+    }.get(template_id, "none")
+
+
+def _derive_image_query_for_template(content, template_id, slide_num, fallback_topic=""):
+    """Return the best image-search query string for a standalone slide.
+    Order: per-template Haiku query → per-card list (for fcg) → tip
+    context_image_query for that slide → tip cover query → topic.
+    """
+    nested = (content or {}).get(template_id) or {}
+    if isinstance(nested, dict):
+        q = nested.get("image_query") or nested.get("photo_query")
+        if q:
+            return str(q).strip()
+    # Tip-shape per-slide context_image_query (slide_num matches "slide" key)
+    for s in content.get("slides", []) or []:
+        if s.get("slide") == slide_num and s.get("context_image_query"):
+            return str(s["context_image_query"]).strip()
+    cv = (content.get("cover_visual") or {}).get("option_a") or {}
+    if cv.get("search_query"):
+        return str(cv["search_query"]).strip()
+    return fallback_topic.strip()
+
+
+def fetch_template_aware_media(content, niche, work_dir, paths, brief=""):
+    """Phase 8C — augment paths in-place based on the slide plan's template_ids.
+    No-op when there's no slide plan (legacy tip path) or niche != opc.
+    """
+    if niche != "opc":
+        return paths
+    plan = (content or {}).get("_slide_plan") or {}
+    slides = plan.get("slides") or []
+    if not slides:
+        return paths
+
+    fallback_topic = (content or {}).get("headline", "") or (content or {}).get("topic", "")
+    img_dir = Path(work_dir) / "resources" / "images"
+    img_dir.mkdir(parents=True, exist_ok=True)
+
+    # Per-card image fetcher for four_card_grid — needs 4 distinct queries.
+    def _fetch_card_image(query, idx):
+        slug = re.sub(r"[^a-z0-9]+", "_", (query or "card").lower()).strip("_")[:40] or f"card{idx}"
+        fname = f"fcg_card{idx}_{slug}.jpg"
+        # Pexels then Pixabay — these are decision-grid thumbnails, no AI tier.
+        path = _fetch_pexels_image(_opc_photo_query(query, "opc"), work_dir, fname)
+        if not path:
+            path = _fetch_pixabay_image(_opc_photo_query(query, "opc"), work_dir, fname)
+        return path
+
+    # OPC Drive catalog matcher — re-used here to fetch a SECOND/THIRD photo
+    # when a standalone needs jobsite/sticker imagery distinct from the cover.
+    try:
+        from photo_matcher import match_opc_photo  # type: ignore
+    except ImportError:
+        match_opc_photo = None
+
+    def _fetch_catalog_photo(query, dest_filename):
+        """Try OPC catalog match → download → return relative path. None on miss."""
+        if not match_opc_photo:
+            return None
+        m = match_opc_photo(query or fallback_topic)
+        if not m or not m.get("drive_url"):
+            return None
+        dest = str(img_dir / dest_filename)
+        return _download_drive_photo(m["drive_url"], dest)
+
+    paths.setdefault("cards", {})
+    fetched_log = []
+
+    for s in slides:
+        n = s.get("slide")
+        tid = s.get("template_id", "")
+        need = _opc_template_image_need(tid)
+        if need == "none":
+            continue
+
+        # opc_four_card_grid — 4 cards, 4 queries.
+        if need == "four_cards" and tid == "opc_four_card_grid":
+            nested = (content or {}).get(tid) or {}
+            queries = nested.get("card_image_queries") or []
+            titles  = nested.get("card_titles") or []
+            for i in range(4):
+                if paths["cards"].get(i + 1):
+                    continue
+                q = ""
+                if i < len(queries) and queries[i]:
+                    q = str(queries[i]).strip()
+                elif i < len(titles) and titles[i]:
+                    q = f"{titles[i]} construction detail residential"
+                else:
+                    q = f"{fallback_topic} option {i+1}"
+                p = _fetch_card_image(q, i + 1)
+                if p:
+                    paths["cards"][i + 1] = p
+                    fetched_log.append(f"card{i+1}={p}")
+            continue
+
+        # Single-slot standalones — populate slides[N] if empty.
+        if paths.get("slides", {}).get(n):
+            continue
+        q = _derive_image_query_for_template(content, tid, n, fallback_topic)
+
+        path = ""
+        if need == "jobsite":
+            # Real OPC photo first, NEVER stock — progress_media is editorial proof.
+            path = _fetch_catalog_photo(q, f"slide{n}_jobsite.jpg") or ""
+            if not path:
+                # Editorial fallback: re-use cover photo from OPC catalog if possible.
+                cover_p = paths.get("cover", "")
+                if cover_p and "/opc_catalog_" in cover_p:
+                    path = cover_p
+        elif need == "person":
+            # Person photo — Pexels portrait + B&W treatment in CSS already handles look.
+            path = _fetch_pexels_image(_opc_photo_query(f"{q} portrait construction worker", "opc"),
+                                        work_dir, f"slide{n}_person.jpg")
+        elif need in ("hero_drama", "single_closeup"):
+            # Stock photo with template hint added.
+            mod = " dramatic high contrast" if need == "hero_drama" else " close-up detail"
+            path = _fetch_pexels_image(_opc_photo_query(q + mod, "opc"),
+                                        work_dir, f"slide{n}_{need}.jpg")
+            if not path:
+                path = _fetch_pixabay_image(_opc_photo_query(q + mod, "opc"),
+                                             work_dir, f"slide{n}_{need}.jpg")
+        elif need == "hero_plus_sticker":
+            # Bg already from cover; sticker = catalog detail or stock close-up.
+            path = _fetch_catalog_photo(q, f"slide{n}_sticker.jpg") or _fetch_pexels_image(
+                _opc_photo_query(q + " detail close-up", "opc"),
+                work_dir, f"slide{n}_sticker.jpg",
+            )
+
+        if path:
+            paths.setdefault("slides", {})[n] = path
+            fetched_log.append(f"slide{n}({tid})={path}")
+
+    if fetched_log:
+        print(f"  [phase8c] template-aware images: {' | '.join(fetched_log)}")
+    return paths
+
+
 def fetch_clips(content, work_dir):
     """Download video clips for motion version. Returns (clips, clip_failures).
 
@@ -3406,12 +3973,31 @@ def render_opc_progress_media(content, v_class, *, slide_num, media_paths=None):
 # when at least one slide uses opc_duotone.
 OPC_DUOTONE_SVG_FILTER = '''<svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <filter id="duotone-opc-v1">
+    <!-- v1 — navy shadows → soft-lime highlights. Default. -->
+    <filter id="duotone-opc-v1" color-interpolation-filters="sRGB">
       <feColorMatrix type="matrix" values="0.299 0.587 0.114 0 0  0.299 0.587 0.114 0 0  0.299 0.587 0.114 0 0  0 0 0 1 0"/>
-      <feComponentTransfer color-interpolation-filters="sRGB">
-        <feFuncR tableValues="0.027 0.796"/>
-        <feFuncG tableValues="0.051 0.800"/>
-        <feFuncB tableValues="0.133 0.063"/>
+      <feComponentTransfer>
+        <feFuncR type="table" tableValues="0.027 0.796"/>
+        <feFuncG type="table" tableValues="0.051 0.800"/>
+        <feFuncB type="table" tableValues="0.133 0.063"/>
+      </feComponentTransfer>
+    </filter>
+    <!-- v2 — navy shadows → yellow highlights. For financial-cost / risk topics. -->
+    <filter id="duotone-opc-v2" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix" values="0.299 0.587 0.114 0 0  0.299 0.587 0.114 0 0  0.299 0.587 0.114 0 0  0 0 0 1 0"/>
+      <feComponentTransfer>
+        <feFuncR type="table" tableValues="0.027 0.996"/>
+        <feFuncG type="table" tableValues="0.051 0.898"/>
+        <feFuncB type="table" tableValues="0.133 0.000"/>
+      </feComponentTransfer>
+    </filter>
+    <!-- v3 — teal shadows → soft-lime highlights. For success / proof topics. -->
+    <filter id="duotone-opc-v3" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix" values="0.299 0.587 0.114 0 0  0.299 0.587 0.114 0 0  0.299 0.587 0.114 0 0  0 0 0 1 0"/>
+      <feComponentTransfer>
+        <feFuncR type="table" tableValues="0.027 0.796"/>
+        <feFuncG type="table" tableValues="0.302 0.835"/>
+        <feFuncB type="table" tableValues="0.298 0.169"/>
       </feComponentTransfer>
     </filter>
   </defs>
@@ -3419,8 +4005,15 @@ OPC_DUOTONE_SVG_FILTER = '''<svg width="0" height="0" style="position:absolute" 
 
 
 def render_opc_duotone(content, v_class, *, slide_num, media_paths=None):
-    """opc_duotone — bold warning/red-flag opener with duotone-filtered hero photo."""
+    """opc_duotone — bold warning/red-flag opener with duotone-filtered hero photo.
+    Phase 8B: variant control. content['opc_duotone']['variant'] picks the SVG
+    filter (v1/v2/v3). Default v1. Inline style overrides the CSS hardcoded
+    filter:url(#duotone-opc-v1) so v2/v3 actually apply.
+    """
     SID = "opc_duotone"
+    variant = str(_opc_field(content, SID, "variant", "v1")).strip().lower()
+    if variant not in ("v1", "v2", "v3"):
+        variant = "v1"
     claim_main      = _opc_field(content, SID, "claim_main",      "Watch out:")
     claim_strong    = _opc_field(content, SID, "claim_strong",    "this can cost you")
     claim_rest      = _opc_field(content, SID, "claim_rest",      "")
@@ -3431,16 +4024,18 @@ def render_opc_duotone(content, v_class, *, slide_num, media_paths=None):
 
     bg_img = ((media_paths or {}).get("slides", {}) or {}).get(slide_num, "") \
              or (media_paths or {}).get("cover", "")
+    # Inline filter override beats the CSS hardcode regardless of variant.
+    filter_decl = f"filter:url(#duotone-opc-{variant});"
     if bg_img:
-        photo_style = f'background-image:url(\'{bg_img}\');'
+        photo_style = f"background-image:url('{bg_img}');{filter_decl}"
     else:
-        photo_style = 'background:#33330d;'
+        photo_style = f"background:#33330d;{filter_decl}"
 
     underline_block = f'<u><strong>{claim_underline}</strong></u>' if claim_underline else ''
     final_block     = f' {claim_final}' if claim_final else ''
 
     return (
-        f'<div class="slide opc-dt {v_class}">\n'
+        f'<div class="slide opc-dt {v_class}" data-duotone-variant="{variant}">\n'
         f'  <div class="claim">{claim_main} <strong>{claim_strong}</strong> {claim_rest} {underline_block}{final_block}.</div>\n'
         f'  <div class="photo-wrap"><div class="photo" style="{photo_style}"></div></div>\n'
         f'  <div class="quote-block">\n'
