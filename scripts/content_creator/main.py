@@ -15,7 +15,7 @@ Flow:
   - Pipeline failures → retries or creates issue
   - Email replies → processes approvals/changes
 """
-import json, os, sys, time, subprocess, shutil
+import json, os, re, sys, time, subprocess, shutil
 from datetime import datetime
 from pathlib import Path
 import pytz
