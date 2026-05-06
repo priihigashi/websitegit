@@ -37,6 +37,7 @@ from typing import Callable, List, Optional
 APIFY_KEY = os.environ.get("APIFY_API_KEY", "")
 PEXELS_KEY = os.environ.get("PEXELS_API_KEY", "")
 PIXABAY_KEY = os.environ.get("PIXABAY_API_KEY", "")  # optional — tier skips if unset
+GIPHY_KEY = os.environ.get("GIPHY_API_KEY", "")      # optional — tier skips if unset
 SHEETS_TOKEN_RAW = os.environ.get("SHEETS_TOKEN", "")
 CLIP_COLLECTIONS_SHEET_ID = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
 
@@ -661,6 +662,68 @@ def tier_stock_scrapers(slide_cfg: dict, dest_path: Path) -> bool:
     return False
 
 
+# ─── TIER 7b — GIPHY (silent skip if no key) ──────────────────────────────────
+
+def tier_giphy(slide_cfg: dict, dest_path: Path) -> bool:
+    """Optional tier: GIPHY search → download GIF → convert to MP4 via ffmpeg.
+    Skips silently if GIPHY_API_KEY is unset. Good for reaction/UGC slides."""
+    if not GIPHY_KEY:
+        return False
+    query = (
+        slide_cfg.get("pexels_query")
+        or slide_cfg.get("youtube_query")
+        or slide_cfg.get("query") or ""
+    )
+    if not query:
+        return False
+    try:
+        q = urllib.parse.urlencode({"api_key": GIPHY_KEY, "q": query, "limit": "3", "rating": "g"})
+        url = f"https://api.giphy.com/v1/gifs/search?{q}"
+        data = json.loads(urllib.request.urlopen(url, timeout=10).read())
+        gifs = data.get("data", [])
+        if not gifs:
+            print(f"  motion_sources: GIPHY miss for '{query[:40]}'")
+            return False
+        for gif in gifs:
+            gif_url = gif.get("images", {}).get("original", {}).get("url", "")
+            if not gif_url:
+                continue
+            raw = _http_get_bytes(gif_url, timeout=30)
+            if len(raw) < MIN_CLIP_BYTES:
+                continue
+            gif_path = dest_path.with_suffix(".gif")
+            gif_path.write_bytes(raw)
+            # Convert GIF → MP4 if ffmpeg available
+            if shutil.which("ffmpeg"):
+                result = subprocess.run(
+                    ["ffmpeg", "-y", "-i", str(gif_path),
+                     "-movflags", "+faststart", "-pix_fmt", "yuv420p",
+                     "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                     str(dest_path)],
+                    capture_output=True, timeout=30,
+                )
+                gif_path.unlink(missing_ok=True)
+                if result.returncode != 0 or not dest_path.exists():
+                    continue
+            else:
+                # No ffmpeg — keep GIF at dest_path directly
+                shutil.move(str(gif_path), str(dest_path))
+            if dest_path.stat().st_size < MIN_CLIP_BYTES:
+                continue
+            page_url = gif.get("url", gif_url)
+            _write_sidecar(dest_path, "giphy", page_url,
+                           license_str="GIPHY (attribution required)",
+                           attribution=f"via GIPHY — {page_url}",
+                           query=query)
+            print(f"  motion_sources: GIPHY → {dest_path.name} ({dest_path.stat().st_size//1024}KB)")
+            return True
+        print(f"  motion_sources: GIPHY no downloadable GIF for '{query[:40]}'")
+        return False
+    except Exception as e:
+        print(f"  motion_sources: GIPHY error ({query[:40]}): {e}")
+        return False
+
+
 # ─── Whisper + ffmpeg trim ────────────────────────────────────────────────────
 
 def _trim_to_relevant_window(clip_path: Path, slide_cfg: dict,
@@ -770,6 +833,7 @@ SOURCE_CHAIN: List[tuple] = [
     ("archive_org",      tier_archive_org,      ("any",)),            # public domain
     ("wikimedia",        tier_wikimedia,        ("any",)),            # CC archival
     ("stock_scrapers",   tier_stock_scrapers,   ("context-image", "place", "event")),
+    ("giphy",            tier_giphy,            ("context-image", "place", "event", "product-photo")),  # silent skip if no key
 ]
 
 
@@ -818,6 +882,7 @@ if __name__ == "__main__":  # pragma: no cover
     print(f"  APIFY_API_KEY set: {bool(APIFY_KEY)}")
     print(f"  PEXELS_API_KEY set: {bool(PEXELS_KEY)}")
     print(f"  PIXABAY_API_KEY set: {bool(PIXABAY_KEY)}")
+    print(f"  GIPHY_API_KEY set: {bool(GIPHY_KEY)}")
     print(f"  tiers: {[t[0] for t in SOURCE_CHAIN]}")
     # Light test: only runs if keys set. Use a query that should hit stock libs.
     if PEXELS_KEY:
