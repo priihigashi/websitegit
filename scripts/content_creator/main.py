@@ -560,7 +560,7 @@ def next_version_number(parent_folder_id, slug, drive):
         fields="files(name)",
         supportsAllDrives=True, includeItemsFromAllDrives=True,
         corpora="allDrives",
-    ).execute()
+    ).execute(num_retries=5)
     import re
     pattern = re.compile(rf"^v(\d+)_{re.escape(slug)}$")
     max_n = 0
@@ -583,7 +583,7 @@ def create_subfolder(parent_id, name, drive):
     folder = drive.files().create(
         body={"name": name, "mimeType": "application/vnd.google-apps.folder", "parents": [parent_id]},
         supportsAllDrives=True, fields="id",
-    ).execute()
+    ).execute(num_retries=5)
     return folder["id"]
 
 
@@ -598,29 +598,74 @@ def add_shortcut(target_id, name, dest_folder_id, drive):
                 "parents": [dest_folder_id],
             },
             supportsAllDrives=True, fields="id",
-        ).execute()
+        ).execute(num_retries=5)
     except Exception as e:
         print(f"  Shortcut creation skipped ({name}): {e}")
 
 
 def upload_single_file(local_path, parent_id, name, mime, drive):
+    """Drive upload with retry-friendly transport selection.
+
+    - Files >5MB use resumable upload (chunked + per-chunk retry) so a
+      transient HTTP 500 mid-upload doesn't kill the whole job.
+    - All paths get num_retries=5 on the googleapiclient request itself
+      (exponential backoff on 429 / 5xx / socket.timeout).
+    - Last line of defense: outer try/retry loop with a hard cap of 3
+      attempts on any non-retryable HttpError 5xx that slips through.
+    """
     from googleapiclient.http import MediaFileUpload
-    drive.files().create(
-        body={"name": name, "parents": [parent_id]},
-        media_body=MediaFileUpload(str(local_path), mimetype=mime),
-        supportsAllDrives=True, fields="id",
-    ).execute()
+    from googleapiclient.errors import HttpError as _HttpError
+    import time as _time
+    size = 0
+    try:
+        size = Path(str(local_path)).stat().st_size
+    except Exception:
+        pass
+    use_resumable = size > 5 * 1024 * 1024
+    media = MediaFileUpload(str(local_path), mimetype=mime, resumable=use_resumable)
+    last_err = None
+    for attempt in range(3):
+        try:
+            drive.files().create(
+                body={"name": name, "parents": [parent_id]},
+                media_body=media,
+                supportsAllDrives=True, fields="id",
+            ).execute(num_retries=5)
+            return
+        except _HttpError as e:
+            last_err = e
+            status = getattr(getattr(e, "resp", None), "status", 0) or 0
+            # Retry only on transient server errors. 4xx → fail fast.
+            if status not in (500, 502, 503, 504, 408, 429):
+                raise
+            sleep = 2 ** attempt  # 1s, 2s, 4s
+            print(f"  Drive upload {name}: HTTP {status} (attempt {attempt+1}/3) — sleeping {sleep}s")
+            _time.sleep(sleep)
+            # Re-create media on retry (file handle may be exhausted on resumable).
+            media = MediaFileUpload(str(local_path), mimetype=mime, resumable=use_resumable)
+    raise last_err  # all 3 attempts exhausted
 
 
 def upload_dir_contents(local_dir, parent_id, drive, skip_pattern=None):
+    """Upload every file in local_dir to parent_id. A single stubborn file
+    that exhausts retries does NOT abort the whole post — it logs + continues
+    so the rest of the carousel still ships.
+    """
     import re as _re
     skip_re = _re.compile(skip_pattern) if skip_pattern else None
+    failures = []
     for f in sorted(Path(local_dir).iterdir()):
         if not f.is_file() or f.name.startswith("."):
             continue
         if skip_re and skip_re.search(f.name):
             continue
-        upload_single_file(str(f), parent_id, f.name, _mime_for(f.suffix), drive)
+        try:
+            upload_single_file(str(f), parent_id, f.name, _mime_for(f.suffix), drive)
+        except Exception as e:
+            print(f"  ⚠ Drive upload failed for {f.name}: {e!r} — skipping, continuing post")
+            failures.append(f.name)
+    if failures:
+        print(f"  ⚠ {len(failures)} file(s) failed in {Path(local_dir).name}: {failures}")
 
 
 def create_story_doc(parent_folder_id, slug, version, topic, niche, brief, content, drive, drive_link, series_override=""):
@@ -689,7 +734,7 @@ def create_story_doc(parent_folder_id, slug, version, topic, niche, brief, conte
         },
         media_body=MediaInMemoryUpload(body.encode("utf-8"), mimetype="text/plain"),
         supportsAllDrives=True, fields="id,webViewLink",
-    ).execute()
+    ).execute(num_retries=5)
     return doc
 
 
@@ -1532,7 +1577,7 @@ def process_one_topic(topic_entry, run_date, drive):
                 q=f"'{motion_sub}' in parents and name='carousel_reel.mp4' and trashed=false",
                 supportsAllDrives=True, includeItemsFromAllDrives=True,
                 fields="files(id,webViewLink)",
-            ).execute().get("files", [])
+            ).execute(num_retries=5).get("files", [])
             if _reel_files:
                 reel_link = _reel_files[0].get("webViewLink", "")
                 print(f"  Reel:    {reel_link}")
@@ -1546,7 +1591,7 @@ def process_one_topic(topic_entry, run_date, drive):
             q=f"'{motion_sub}' in parents and mimeType='video/mp4' and trashed=false",
             supportsAllDrives=True, includeItemsFromAllDrives=True,
             fields="files(id,name)"
-        ).execute().get("files", [])
+        ).execute(num_retries=5).get("files", [])
         cover_mp4 = next((f for f in mp4s if "cover" in f["name"].lower()), mp4s[0] if mp4s else None)
         if cover_mp4:
             add_shortcut(cover_mp4["id"], version_name, sc["videos"], drive)
@@ -1561,7 +1606,7 @@ def process_one_topic(topic_entry, run_date, drive):
             body={"name": "image_suggestions.txt", "parents": [resources_sub]},
             media_body=MediaInMemoryUpload(img_sugg.encode("utf-8"), mimetype="text/plain"),
             supportsAllDrives=True, fields="id",
-        ).execute()
+        ).execute(num_retries=5)
         print("  image_suggestions.txt → resources/")
     except Exception as e:
         print(f"  image_suggestions.txt upload failed (non-fatal): {e}")
@@ -1586,7 +1631,7 @@ def process_one_topic(topic_entry, run_date, drive):
                 mimetype="application/json"
             ),
             supportsAllDrives=True, fields="id",
-        ).execute()
+        ).execute(num_retries=5)
         print("  media_provenance.json → resources/")
     except Exception as e:
         print(f"  media_provenance.json upload failed (non-fatal): {e}")
@@ -1803,7 +1848,7 @@ def process_one_topic(topic_entry, run_date, drive):
                     body={"name": "caption.txt", "parents": [version_folder_id]},
                     media_body=MediaInMemoryUpload(caption_txt.encode("utf-8"), mimetype="text/plain"),
                     supportsAllDrives=True, fields="id",
-                ).execute()
+                ).execute(num_retries=5)
                 print("  caption.txt → Drive version folder")
             except Exception as _cap_up_err:
                 print(f"  caption.txt Drive upload failed (non-fatal): {_cap_up_err}")
@@ -1883,7 +1928,7 @@ def run_motion_only(slug, niche, drive):
         q=f"'{parent}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
         fields="files(id,name)",
         supportsAllDrives=True, includeItemsFromAllDrives=True, corpora="allDrives",
-    ).execute()
+    ).execute(num_retries=5)
     pattern = _re.compile(rf"^v(\d+)_{_re.escape(slug)}$")
     best, best_n = None, 0
     for f in resp.get("files", []):
@@ -1903,7 +1948,7 @@ def run_motion_only(slug, niche, drive):
         q=f"'{version_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
         fields="files(id,name)",
         supportsAllDrives=True, includeItemsFromAllDrives=True, corpora="allDrives",
-    ).execute().get("files", [])
+    ).execute(num_retries=5).get("files", [])
     png_sub_id    = next((f["id"] for f in children if f["name"] == "png"),    None)
     motion_sub_id = next((f["id"] for f in children if f["name"] == "motion_remotion"), None)
 
@@ -1919,7 +1964,7 @@ def run_motion_only(slug, niche, drive):
         q=f"'{png_sub_id}' in parents and mimeType='image/png' and trashed=false",
         fields="files(id,name)",
         supportsAllDrives=True, includeItemsFromAllDrives=True, corpora="allDrives",
-    ).execute().get("files", [])
+    ).execute(num_retries=5).get("files", [])
     if not png_files:
         print(f"[motion-only] No PNGs in png/ subfolder")
         return None
