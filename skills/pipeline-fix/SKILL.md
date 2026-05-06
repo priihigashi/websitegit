@@ -563,3 +563,57 @@ PENDING ⏳ (next session):
 1. Test approval_handler → Buffer end-to-end (reply APPROVE to a preview email, confirm Buffer schedules)
 2. Run content_creator.yml manually — observe email preview, verify all 4 OPC templates render correctly
 3. Next pipeline-fix batch: check for new SH items in Master Checklist tracker
+
+---
+
+## SESSION 6 NOTES — 2026-05-05 (Audit + Gap Close)
+
+### Audit scope
+Full audit of all 10 SH tasks marked Done in sessions 1-5. Found 5 actual code gaps across 4 tasks. Two claimed gaps (SH-011, SH-041) were false — code already correct.
+
+### Gaps found and fixed (commit 95dd152)
+
+GAP 1 — SH-055: CSS variable direction wrong on all 19 templates.
+Previous session wrote `--P:NNpx;--slide-inset:var(--P)` — inert because layout CSS uses `var(--P)` directly, not `var(--slide-inset)`. Overriding `--slide-inset` on an element had zero effect.
+FIX: correct direction is `--slide-inset:NNpx;--P:var(--slide-inset)`. All 19 HTML templates now use this pattern. Verified with: `grep -l "slide-inset:[0-9]" docs/templates/` returns 19 files; no wrong-direction pattern remaining.
+
+GAP 2 — SH-013: readability rule not in 3 standalone generator functions.
+The rule was added to `OPC_COPY_RULES` and `BRAZIL_COPY_RULES` constants in carousel_builder.py, but `generate_progress_content()`, `generate_dados_content()`, and `generate_verdade_content()` build their own standalone Haiku prompts from scratch and never reference those constants.
+FIX: Added readability rule inline to each function's RULES section:
+  - generate_progress_content() → Rule 13 (EN): "8th-grade reading level. Max 16 words per sentence..."
+  - generate_dados_content() → Rule 10 (PT): "Nível de leitura 8ª série. Máximo 16 palavras por frase..."
+  - generate_verdade_content() → Rule 9 (PT): "Nível 8ª série. Máximo 16 palavras por frase..."
+Also fixed text_reviewer.py JSON schema (line 224): added `readability` and `internal_label_leakage` to the valid type list in the schema example — without this, Claude sees conflicting type lists and may not use those issue types.
+
+GAP 3 — SH-028: score_storytelling() not wired into Drive/manual review path.
+Was wired into check_built_post() (local build path, CONTENT_CREATOR_RUN) but NOT check_drive_folder() (Drive/manual path, REVIEW_DRIVE_FOLDERS). Storytelling scoring was completely absent from review_only mode.
+FIX: Added score_storytelling() call inside check_drive_folder() after cover.html download to /tmp. Uses _infer_niche_from_folder(folder_name, input_ref) for niche detection. Pattern mirrors check_built_post() exactly.
+
+GAP 4 — SH-036: silent return False when Pillow not installed.
+_crop_to_bounding_box() caught all exceptions and silently returned False — no warning that the crop was skipped due to missing dependency.
+FIX: Added explicit warning message to except block: "Warning: Pillow not available — _crop_to_bounding_box skipped (install Pillow)".
+
+GAP 5 — SH-048: _flush_alerts() had no fallback when gh CLI unavailable.
+Only Route A (gh workflow run send_email.yml) existed. In non-GitHub-Actions environments (local dev, test runs), gh CLI may be absent or unauthenticated.
+FIX: Added Route B smtplib.SMTP_SSL fallback — uses PRI_OP_GMAIL_APP_PASSWORD directly. If both fail, alerts logged to stdout only (never silently dropped).
+
+### False gaps (no code change needed)
+SH-011: Audit claimed "Retry content creator" step was missing `review_only_folder_id == ''` guard. Verified content_creator.yml lines 281 + 321 — BOTH steps already have the full two-condition guard. Gap was documented incorrectly.
+SH-041: Audit claimed USE_DALLE not documented in workflow. Verified lines 108 + 253 — BOTH env blocks already have `# Opt-in: change '' to 'true' to enable DALL-E 3 fallback` comment. Already complete.
+
+### Master Checklist updates
+All 8 rows updated (SH-011, SH-013, SH-015, SH-028, SH-036, SH-041, SH-048, SH-055):
+- What Was Done: updated with session 6 details
+- Evidence: added commit 95dd152
+- Next Action: "— complete" for all except SH-015 (GIPHY_API_KEY still a Priscila-only action)
+
+### SH-015 remaining action (Priscila only)
+GIPHY_API_KEY not in GitHub secrets. Code is complete and wired. Secret must be set manually:
+  gh secret set GIPHY_API_KEY --repo priihigashi/oak-park-ai-hub
+Without this, tier_giphy() silently skips on every pipeline run.
+
+PENDING ⏳ (next session):
+1. ⚠️ PRISCILA: gh secret set GIPHY_API_KEY --repo priihigashi/oak-park-ai-hub
+2. Test approval_handler → Buffer end-to-end (reply APPROVE to a preview email)
+3. Run content_creator.yml manually — verify all templates render + motion folders created
+4. Check Master Checklist for new SH items (P0 Critical: SH-018, SH-065, SH-002, SH-003, SH-006 still Blocked)
