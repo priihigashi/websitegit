@@ -1,3 +1,4 @@
+
 """
 photo_matcher.py — Match OPC carousel topics to real jobsite photos.
 
@@ -504,3 +505,4 @@ def validate_image_relevance(image_url: str, query: str, topic: str) -> bool:
         # Vision call failed — non-blocking, accept the image
         print(f"  validate_image_relevance: Vision API error (non-fatal, accepting) — {e}")
         return True
+
