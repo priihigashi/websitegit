@@ -1987,11 +1987,19 @@ def fetch_all_media(content, niche, work_dir, brief=""):
     # → DALL-E) for prompt-specific realistic images. Real-photo fallback
     # (Wiki CC → Pexels → Pixabay) only when AI exhausted — generic stock
     # frequently duplicates across slides for similar construction queries.
-    # Applies only to slides with visual_hint == "context-image"; bio-cards
-    # are rendered separately from mentioned_people[*].image_hint.
+    # Applies only to slides with visual_hint == "context-image" or "product-photo"
+    # (OPC tip/progress/illustrated/cutout all use product-photo on mid slides).
+    # bio-cards are rendered separately from mentioned_people[*].image_hint.
     for i, slide in enumerate(content.get("slides", []), start=2):
-        if slide.get("visual_hint") != "context-image":
-            continue
+        _slide_hint = slide.get("visual_hint", "")
+        # OPC: match catalog for both context-image AND product-photo slides.
+        # Non-OPC: only context-image (product-photo is not a used hint for news).
+        if niche == "opc":
+            if _slide_hint not in ("context-image", "product-photo"):
+                continue
+        else:
+            if _slide_hint != "context-image":
+                continue
         cq = slide.get("context_image_query", "").strip()
         if not cq:
             continue
