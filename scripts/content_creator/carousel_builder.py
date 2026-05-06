@@ -62,9 +62,19 @@ except Exception as _vv_err:
 def _vision_accept(local_path, query, label):
     """Return True if Vision says image matches query. Logs the verdict.
     Empty path or empty query short-circuits to True so we never block on
-    missing inputs."""
+    missing inputs.
+    SH-056: also rejects images from known AI-art domains when called for OPC."""
     if not local_path or not query:
         return True
+    # Reject AI-art domain URLs (lexica.art, midjourney.com, artstation.com, etc.)
+    # The local_path is a download destination; the original URL is encoded in the label.
+    if _is_ai_art_url(local_path):
+        print(f"  Vision REJECT ({label}): AI-art domain URL detected — not a real photo")
+        try:
+            __import__("os").unlink(local_path)
+        except Exception:
+            pass
+        return False
     try:
         ok, reason = _vision_validate(local_path, query)
         if ok:
@@ -79,6 +89,50 @@ def _vision_accept(local_path, query, label):
     except Exception as e:
         print(f"  Vision check error ({label}, non-fatal): {e}")
         return True
+
+
+# ── SH-056: OPC photorealistic guardrails ─────────────────────────────────────
+
+# Known AI-art/illustration hosting domains — images from these URLs are rejected
+# for OPC (real-photo rule). They are silently allowed for news/brazil/usa.
+_AI_ART_DOMAINS = frozenset([
+    "lexica.art",
+    "midjourney.com",
+    "artstation.com",
+    "deviantart.com",
+    "civitai.com",
+    "generated.photos",
+    "thispersondoesnotexist.com",
+    "stability.ai",
+    "nightcafe.studio",
+])
+
+# Suffix appended to OPC image search queries so stock providers return
+# photorealistic editorial photos rather than illustrations or 3D renders.
+_OPC_PHOTO_SUFFIX = " photorealistic real photo no illustration no cartoon no render"
+
+
+def _is_ai_art_url(url: str) -> bool:
+    """Return True if the URL is from a known AI-art domain (reject for OPC)."""
+    if not url:
+        return False
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(url).netloc.lower().lstrip("www.")
+        return any(host == d or host.endswith("." + d) for d in _AI_ART_DOMAINS)
+    except Exception:
+        return False
+
+
+def _opc_photo_query(query: str, niche: str) -> str:
+    """Append photorealistic suffix to stock-search queries for OPC builds.
+    Non-OPC niches are returned unchanged — their AI cascade is allowed."""
+    if niche != "opc":
+        return query
+    # Avoid doubling the suffix on repeated calls
+    if _OPC_PHOTO_SUFFIX.strip() in query:
+        return query
+    return (query + _OPC_PHOTO_SUFFIX)[:200]
 
 
 def _claude_with_fallback(prompt, *, max_tokens, timeout=60, context="", model="claude-sonnet-4-6"):
@@ -2108,25 +2162,27 @@ def fetch_all_media(content, niche, work_dir, brief=""):
 
         # Tier 2: real-photo fallback (Wiki CC → Pexels → Pixabay) — only when AI exhausted.
         # For OPC this is TIER 1 (AI tiers were skipped above) — Wikimedia → Pexels → Pixabay → STOP.
+        # SH-056: OPC queries get a photorealistic suffix to guide stock providers.
+        _cq_stock = _opc_photo_query(cq, niche)
         if not accepted:
-            img_path = _fetch_person_photo(cq, work_dir, fname)
-            if img_path and _vision_accept(img_path, cq, f"slide{i}/wikimedia"):
+            img_path = _fetch_person_photo(_cq_stock, work_dir, fname)
+            if img_path and _vision_accept(img_path, _cq_stock, f"slide{i}/wikimedia"):
                 print(f"  Slide {i}: Wikimedia fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "wikimedia", "cc", query=cq, prompt=ai_prompt)
                 accepted = True
             else:
                 img_path = ""
         if not accepted:
-            img_path = _fetch_pexels_image(cq, work_dir, fname)
-            if img_path and _vision_accept(img_path, cq, f"slide{i}/pexels"):
+            img_path = _fetch_pexels_image(_cq_stock, work_dir, fname)
+            if img_path and _vision_accept(img_path, _cq_stock, f"slide{i}/pexels"):
                 print(f"  Slide {i}: Pexels fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "pexels", "stock", query=cq, prompt=ai_prompt)
                 accepted = True
             else:
                 img_path = ""
         if not accepted:
-            img_path = _fetch_pixabay_image(cq, work_dir, fname)
-            if img_path and _vision_accept(img_path, cq, f"slide{i}/pixabay"):
+            img_path = _fetch_pixabay_image(_cq_stock, work_dir, fname)
+            if img_path and _vision_accept(img_path, _cq_stock, f"slide{i}/pixabay"):
                 print(f"  Slide {i}: Pixabay fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "pixabay", "stock", query=cq, prompt=ai_prompt)
                 accepted = True
