@@ -1,0 +1,27 @@
+name: SH-104 Retry — Frei Gilson clip mine
+
+# One-click retry of the SH-104 Phase 1 test run.
+# Use AFTER topping up Anthropic + Apify credits.
+# This dispatches video-research.yml in person_evidence_mining mode
+# with the locked Frei Gilson inputs from CLAUDE memory.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger video-research.yml with Frei Gilson inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run video-research.yml \
+            --repo ${{ github.repository }} \
+            -f mode=person_evidence_mining \
+            -f seed_url='https://www.instagram.com/reel/DXm0WjqAAS_/?igsh=Z3dkNnczbTVlbnNw' \
+            -f person_name='Frei Gilson' \
+            -f evidence_requirement='Same public person making statements that are unfair toward a group, morally contradictory, or needing context against public religious persona' \
+            -f target_clip_count=6 \
+            -f niche=brazil
+          echo "✅ video-research.yml dispatched. See: https://github.com/${{ github.repository }}/actions"
