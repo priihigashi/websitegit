@@ -1047,7 +1047,7 @@ def score_storytelling(html_path: str, niche: str) -> dict:
                 body = http_err.read().decode(errors="ignore")
             except Exception:
                 pass
-            if status in (529, 529) or "overloaded" in body.lower() or "credit" in body.lower():
+            if status in (429, 503, 529) or "overloaded" in body.lower() or "credit" in body.lower():
                 print(f"  [SH-028] ⚠ WARN: Anthropic credits/capacity issue (HTTP {status}) — storytelling score skipped")
             else:
                 print(f"  [SH-028] Storytelling score HTTP error {status} (non-fatal): {body[:120]}")

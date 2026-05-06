@@ -926,7 +926,7 @@ def find_supporting_clips(topic: str, slug: str, niche: str, clips_dir: str,
             "query": search_q,
             "per_page": str(min(10, max_clips * 3)),  # over-fetch to allow for failures
             "size": "medium",
-            "orientation": "landscape",
+            "orientation": "portrait",
         })
         req = urllib.request.Request(
             f"https://api.pexels.com/videos/search?{q}",
