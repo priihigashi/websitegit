@@ -511,13 +511,17 @@ def _send_email_via_smtplib(subject: str, body: str) -> bool:
 def _send_email_summary(person_name: str, niche: str, seed_url: str,
                         manifest_url: str, verified: list[dict], rejected: list[dict],
                         candidates_collected: int):
-    """Email summary with 3-route fallback per CLAUDE.md "EMAIL — 3 ROUTES":
-    Route A — Gmail MCP (DRAFT only, IDE-side; not callable from CI runner)
-    Route B — send_email.yml workflow (preferred from CI)
-    Route C — smtplib direct (last resort)
-    Route A is skipped here because this runs inside GitHub Actions where
-    MCP tools are not available. Route B preferred when gh CLI is auth'd
-    via GITHUB_TOKEN; C is the always-available fallback.
+    """Email summary — 2 send routes implemented in this CI runner.
+
+    CLAUDE.md catalogues 3 routes overall:
+      Route A — Gmail MCP DRAFT (IDE-only; NOT callable from a GitHub Actions
+                runner, so deliberately not implemented here).
+      Route B — send_email.yml workflow_dispatch via gh CLI (preferred from CI).
+      Route C — smtplib SMTP_SSL direct (always-available fallback).
+
+    Implemented here: B → C cascade. If both fail, _fail() records to the
+    🚨 Pipeline Failures tab. Route A is documented but absent because there
+    is no MCP host inside the runner.
     """
     subject = f"[SH-104] Evidence manifest ready — {person_name} — {niche}"
     top3_lines = []
@@ -560,7 +564,8 @@ NO render triggered. NO Buffer scheduling.
 
 — SH-104 / FLOW_person_evidence_mining
 """
-    # 3-route fallback — try workflow first (preferred from CI), then smtplib.
+    # 2-route cascade in CI (Route A / Gmail MCP is IDE-only, not implementable
+    # in a GitHub Actions runner). Route B preferred → Route C fallback.
     if _send_email_via_workflow(subject, body):
         _log("  Email summary dispatched via send_email.yml")
         return

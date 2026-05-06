@@ -81,6 +81,9 @@ jobs:
           PRI_OP_YT_COOKIES: ${{ secrets.PRI_OP_YT_COOKIES }}
           PRI_OP_IG_COOKIES: ${{ secrets.PRI_OP_IG_COOKIES }}
           APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
+          # IG candidate fallback (Tier 2 of the 3-route Instagram cascade).
+          # Without this, only Apify + DuckDuckGo HTML scrape are available.
+          SERP_API_KEY: ${{ secrets.SERP_API_KEY }}
           PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           # Stage workflow_dispatch inputs as env vars + quote on the
