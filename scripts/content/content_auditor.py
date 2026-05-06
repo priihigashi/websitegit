@@ -134,6 +134,16 @@ def _strip_tags(text: str) -> str:
     return text
 
 
+def _first_variant_html(html: str) -> str:
+    """The carousel builder stores two visual variants in one cover.html file.
+
+    Audit only the first variant; otherwise the same 5-slide carousel is read
+    as a fake 10-slide repeated story and the Structure agent fails it.
+    """
+    marker = "<!-- V3 -->"
+    return html.split(marker, 1)[0] if marker in html else html
+
+
 def _extract_slides_from_html(html: str) -> list[str]:
     """Extract text content from each .slide element.
 
@@ -141,6 +151,8 @@ def _extract_slides_from_html(html: str) -> list[str]:
     divs inside each slide are fully captured rather than truncated at the first
     inner closing tag.
     """
+    html = _first_variant_html(html)
+
     # Find positions of all slide-class opening tags
     slide_open_re = re.compile(
         r'<(?:div|section|article)[^>]*class=["\'][^"\']*\bslide\b[^"\']*["\'][^>]*>',
@@ -162,7 +174,7 @@ def _extract_slides_from_html(html: str) -> list[str]:
     # Segment HTML between consecutive slide openings — captures full nested content
     positions.append(len(html))
     texts = []
-    for i in range(min(len(positions) - 1, 10)):  # cap at 10 slides
+    for i in range(min(len(positions) - 1, 8)):  # one carousel variant only
         block = html[positions[i]:positions[i + 1]]
         t = _strip_tags(block).strip()
         if len(t) > 20:
@@ -428,7 +440,12 @@ def main():
                     "passed":    a["passed"],
                     "avg_score": a["avg_score"],
                     "agents": [
-                        {"name": ar["agent"], "verdict": ar["verdict"], "score": ar["score"]}
+                        {
+                            "name": ar["agent"],
+                            "verdict": ar["verdict"],
+                            "score": ar["score"],
+                            "full_response": ar.get("full_response", ""),
+                        }
                         for ar in a["agents"]
                     ],
                 }
