@@ -929,34 +929,24 @@ def process_replies():
                     continue
 
                 if BUFFER_KEY:
-                    _buffer_profile_id = os.environ.get("BUFFER_PROFILE_ID", "")
-                    if not _buffer_profile_id:
-                        _msg = "BUFFER_PROFILE_ID env var not set — Buffer scheduling skipped"
-                        print(f"  ⚠️ {_msg}")
-                        _log_pipeline_failure_to_sheet("buffer_schedule", _msg)
+                    # SH-029 fix: BUFFER_PROFILE_ID guard removed — schedule_to_buffer()
+                    # auto-discovers the Instagram profile from Buffer API /profiles.json.
+                    caption = post.get("topic", "")
+                    try:
+                        _buf_ok = schedule_to_buffer(variant, static_folder_id, caption=caption)
+                        if not _buf_ok:
+                            raise RuntimeError("schedule_to_buffer returned False")
+                        print(f"  Buffer scheduled OK: {post_id} ({variant})")
+                    except Exception as _buf_exc:
+                        _err_str = str(_buf_exc)
+                        _log_pipeline_failure_to_sheet("buffer_schedule", _err_str)
                         _send_failure_alert(
-                            "⚠️ Buffer scheduling skipped — BUFFER_PROFILE_ID missing",
-                            f"Post {post_id} was approved but could not be scheduled to Buffer "
-                            f"because the BUFFER_PROFILE_ID secret is not set in GitHub Actions. "
-                            f"Add it at github.com/priihigashi/oak-park-ai-hub/settings/secrets/actions.",
+                            f"❌ Buffer scheduling failed — {post_id}",
+                            f"Post {post_id} ({variant}) was approved but Buffer scheduling failed.\n"
+                            f"Error: {_err_str}\n"
+                            f"Static folder: https://drive.google.com/drive/folders/{static_folder_id}\n"
+                            f"Run: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{_GHA_RUN_ID}",
                         )
-                    else:
-                        caption = post.get("topic", "")
-                        try:
-                            _buf_ok = schedule_to_buffer(variant, static_folder_id, caption=caption)
-                            if not _buf_ok:
-                                raise RuntimeError("schedule_to_buffer returned False")
-                            print(f"  Buffer scheduled OK: {post_id} ({variant})")
-                        except Exception as _buf_exc:
-                            _err_str = str(_buf_exc)
-                            _log_pipeline_failure_to_sheet("buffer_schedule", _err_str)
-                            _send_failure_alert(
-                                f"❌ Buffer scheduling failed — {post_id}",
-                                f"Post {post_id} ({variant}) was approved but Buffer scheduling failed.\n"
-                                f"Error: {_err_str}\n"
-                                f"Static folder: https://drive.google.com/drive/folders/{static_folder_id}\n"
-                                f"Run: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{_GHA_RUN_ID}",
-                            )
 
                 copy_to_ready_folder(variant, static_folder_id, niche)
                 update_catalog(post_id, "approved")
