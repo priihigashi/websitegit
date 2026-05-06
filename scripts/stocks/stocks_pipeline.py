@@ -24,7 +24,10 @@ from pathlib import Path
 import gspread
 from google.oauth2.service_account import Credentials
 from openai import OpenAI
-import anthropic
+
+# LLM cascade: Claude → OpenAI → Gemini (never fails on credit exhaustion)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "capture"))
+from _llm_fallback import llm_text  # noqa: E402
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CONFIG
@@ -157,17 +160,12 @@ Rules:
 
 
 def analyze_transcript(transcript, notes=""):
-    client = anthropic.Anthropic()
     prompt = ANALYSIS_PROMPT.format(
         transcript=transcript,
         notes=notes or "(none)"
     )
-    response = client.messages.create(
-        model="claude-opus-4-5",
-        max_tokens=1500,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    raw = response.content[0].text.strip()
+    raw = llm_text(prompt, model_tier="sonnet", max_tokens=1500, context="stocks:analyze_transcript")
+    raw = raw.strip()
     raw = re.sub(r"^```[json]*\n?", "", raw)
     raw = re.sub(r"\n?```$", "", raw)
     return json.loads(raw)
@@ -203,18 +201,12 @@ Return ONLY the post text, ready to use.
 
 
 def rewrite_content(transcript, analysis, notes=""):
-    client = anthropic.Anthropic()
     prompt = REWRITE_PROMPT.format(
         analysis=json.dumps(analysis, indent=2, ensure_ascii=False),
         transcript_preview=transcript[:800],
         notes=notes or "(none)"
     )
-    response = client.messages.create(
-        model="claude-opus-4-5",
-        max_tokens=900,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.content[0].text.strip()
+    return llm_text(prompt, model_tier="sonnet", max_tokens=900, context="stocks:rewrite_content")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
