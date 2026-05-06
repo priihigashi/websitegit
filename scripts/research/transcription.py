@@ -82,8 +82,42 @@ def _ig_cookies_file() -> str:
     return _IG_COOKIES_PATH
 
 
+# Module-level last-error trace so callers can distinguish "no transcript"
+# from "Whisper down" / "yt-dlp down" without adding a callback to every
+# helper. transcribe_url() reads + clears this between dispatches.
+_LAST_ERROR: dict | None = None
+
+
+def _record_error(stage: str, error) -> None:
+    """Stash a structured error trace for the most recent failed step.
+    Read by transcribe_url() and surfaced to the runner via the result dict
+    so person_evidence_runner._fail() can log it to 🚨 Pipeline Failures."""
+    global _LAST_ERROR
+    msg = _scrub(str(error))[:400]
+    _LAST_ERROR = {"stage": stage, "error": msg}
+
+
+def _consume_last_error() -> dict | None:
+    global _LAST_ERROR
+    e = _LAST_ERROR
+    _LAST_ERROR = None
+    return e
+
+
+def _scrub(s: str) -> str:
+    """Strip query strings that may carry signed tokens / API keys before
+    logging. Cheap regex — not a full sanitiser, but prevents the obvious
+    leak of ?token=..., ?Signature=..., ?key=... in error messages."""
+    if not s:
+        return s
+    out = re.sub(r"([?&])(token|Signature|sig|key|apikey|api_key|access_token|auth)=[^&\s]+",
+                 r"\1\2=REDACTED", s, flags=re.IGNORECASE)
+    return out
+
+
 def _whisper_transcribe(audio_path: str) -> str:
     if not OPENAI_API_KEY:
+        _record_error("whisper", "no_openai_api_key")
         return ""
     try:
         from openai import OpenAI
@@ -94,7 +128,11 @@ def _whisper_transcribe(audio_path: str) -> str:
             )
         return resp if isinstance(resp, str) else getattr(resp, "text", "")
     except Exception as e:
-        print(f"    Whisper failed: {e}")
+        # Surface to the runner — was previously swallowed, making "no quote"
+        # indistinguishable from "Whisper API outage".
+        msg = _scrub(str(e))
+        _record_error("whisper", msg)
+        print(f"    Whisper failed: {msg[:200]}")
         return ""
 
 
@@ -120,10 +158,14 @@ def _ytdlp_audio(url: str, tmp_dir: str, extra_args: Optional[list] = None) -> s
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
     except Exception as e:
-        print(f"    yt-dlp error: {e}")
+        msg = _scrub(str(e))
+        _record_error("ytdlp_audio", msg)
+        print(f"    yt-dlp error: {msg[:200]}")
         return ""
     if r.returncode != 0:
-        print(f"    yt-dlp failed: {r.stderr[:200].strip()}")
+        err = _scrub(r.stderr or "").strip()
+        _record_error("ytdlp_audio", err[:300] or f"returncode_{r.returncode}")
+        print(f"    yt-dlp failed: {err[:200]}")
         return ""
     for f in os.listdir(tmp_dir):
         if f.endswith(".mp3"):
@@ -224,28 +266,35 @@ def _apify_yt_whisper(video_id: str) -> str:
                 return ""
             return _whisper_transcribe(path)
     except Exception as e:
-        msg = str(e)
+        msg = _scrub(str(e))
         if "limit" in msg.lower() and "403" in msg:
             _apify_limit_hit = True
+        _record_error("apify_yt", msg)
         print(f"    Apify YT failed: {msg[:200]}")
         return ""
 
 
 def transcribe_youtube(video_id: str) -> dict:
-    """4-tier YouTube cascade. Returns {transcript, source, error}."""
+    """4-tier YouTube cascade. Returns {transcript, source, error, error_trace}."""
     text = _yt_transcript_api(video_id)
     if text:
-        return {"transcript": text, "source": "youtube_transcript_api", "error": None}
+        _consume_last_error()
+        return {"transcript": text, "source": "youtube_transcript_api", "error": None, "error_trace": None}
     text = _ytdlp_whisper(video_id, ios=False)
     if text:
-        return {"transcript": text, "source": "ytdlp_whisper", "error": None}
+        _consume_last_error()
+        return {"transcript": text, "source": "ytdlp_whisper", "error": None, "error_trace": None}
     text = _ytdlp_whisper(video_id, ios=True)
     if text:
-        return {"transcript": text, "source": "ytdlp_ios_whisper", "error": None}
+        _consume_last_error()
+        return {"transcript": text, "source": "ytdlp_ios_whisper", "error": None, "error_trace": None}
     text = _apify_yt_whisper(video_id)
     if text:
-        return {"transcript": text, "source": "apify_whisper", "error": None}
-    return {"transcript": "", "source": "", "error": "all_tiers_exhausted"}
+        _consume_last_error()
+        return {"transcript": text, "source": "apify_whisper", "error": None, "error_trace": None}
+    trace = _consume_last_error()
+    return {"transcript": "", "source": "", "error": "all_tiers_exhausted",
+            "error_trace": trace}
 
 
 # ── Instagram transcript ─────────────────────────────────────────────────────
@@ -301,9 +350,11 @@ def _apify_ig_audio(reel_url: str) -> str:
                 return ""
             return _whisper_transcribe(path)
     except Exception as e:
-        if "limit" in str(e).lower() and "403" in str(e):
+        msg = _scrub(str(e))
+        if "limit" in msg.lower() and "403" in msg:
             _apify_limit_hit = True
-        print(f"    Apify IG failed: {str(e)[:200]}")
+        _record_error("apify_ig", msg)
+        print(f"    Apify IG failed: {msg[:200]}")
         return ""
 
 
@@ -314,11 +365,15 @@ def transcribe_instagram(reel_url: str) -> dict:
         if path:
             text = _whisper_transcribe(path)
             if text:
-                return {"transcript": text, "source": "ytdlp_ig_whisper", "error": None}
+                _consume_last_error()
+                return {"transcript": text, "source": "ytdlp_ig_whisper", "error": None, "error_trace": None}
     text = _apify_ig_audio(reel_url)
     if text:
-        return {"transcript": text, "source": "apify_ig_whisper", "error": None}
-    return {"transcript": "", "source": "", "error": "all_tiers_exhausted"}
+        _consume_last_error()
+        return {"transcript": text, "source": "apify_ig_whisper", "error": None, "error_trace": None}
+    trace = _consume_last_error()
+    return {"transcript": "", "source": "", "error": "all_tiers_exhausted",
+            "error_trace": trace}
 
 
 # ── TikTok / generic ─────────────────────────────────────────────────────────
@@ -329,8 +384,11 @@ def transcribe_generic(url: str) -> dict:
         if path:
             text = _whisper_transcribe(path)
             if text:
-                return {"transcript": text, "source": "ytdlp_whisper", "error": None}
-    return {"transcript": "", "source": "", "error": "all_tiers_exhausted"}
+                _consume_last_error()
+                return {"transcript": text, "source": "ytdlp_whisper", "error": None, "error_trace": None}
+    trace = _consume_last_error()
+    return {"transcript": "", "source": "", "error": "all_tiers_exhausted",
+            "error_trace": trace}
 
 
 # ── public dispatcher ────────────────────────────────────────────────────────
@@ -340,7 +398,7 @@ def transcribe_url(url: str) -> dict:
     url = url.strip()
     platform = "other"
     result = {"transcript": "", "source": "", "duration": None, "error": None,
-              "url": url, "platform": platform}
+              "error_trace": None, "url": url, "platform": platform}
 
     if _is_youtube(url):
         platform = "youtube"
@@ -362,6 +420,7 @@ def transcribe_url(url: str) -> dict:
     result["transcript"] = r.get("transcript", "")
     result["source"] = r.get("source", "")
     result["error"] = r.get("error")
+    result["error_trace"] = r.get("error_trace")
     if result["transcript"]:
         result["duration"] = _ytdlp_duration(url)
     return result

@@ -52,20 +52,34 @@ def audit_pre_render(manifest: dict) -> tuple[bool, list[str]]:
     if manifest.get("mode") != "person_evidence_mining":
         issues.append("manifest mode is not person_evidence_mining")
     person = manifest.get("person", {}) or {}
-    if not person.get("name"):
+    if not str(person.get("name", "")).strip():
         issues.append("manifest.person.name is empty")
-    if not manifest.get("seed", {}).get("url"):
+    if not str(manifest.get("seed", {}).get("url", "")).strip():
         issues.append("manifest.seed.url is empty")
     verified = manifest.get("verified_clips", []) or []
     if len(verified) < 3:
         issues.append(f"verified_clips count {len(verified)} < 3 minimum")
+    # Numeric-aware required keys: 0.0 is a legitimate match_score and must
+    # NOT be flagged as missing. String keys are checked via stripped value.
+    numeric_keys = {"match_score"}
     for i, vc in enumerate(verified):
         score = vc.get("score", {}) or {}
         cand = vc.get("candidate", {}) or {}
         for k in REQUIRED_PER_VERIFIED:
-            if not score.get(k) and score.get(k) != 0:
+            if k not in score:
                 issues.append(f"verified[{i}] missing score.{k}")
-        if not cand.get("url"):
+                continue
+            v = score[k]
+            if k in numeric_keys:
+                # Reject only None / non-numeric. 0.0 is valid (low match).
+                if v is None or not isinstance(v, (int, float)):
+                    issues.append(f"verified[{i}] invalid score.{k} (got {type(v).__name__})")
+            else:
+                # String-shaped keys (best_quote, timestamp_*, claim_type):
+                # whitespace-only counts as missing.
+                if not isinstance(v, str) or not v.strip():
+                    issues.append(f"verified[{i}] missing score.{k}")
+        if not str(cand.get("url", "")).strip():
             issues.append(f"verified[{i}] missing candidate.url")
         if not score.get("safe_to_use"):
             issues.append(f"verified[{i}] safe_to_use is false (filter before render)")

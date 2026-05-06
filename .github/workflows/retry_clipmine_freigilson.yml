@@ -8,6 +8,11 @@ name: SH-104 Retry — Frei Gilson clip mine
 on:
   workflow_dispatch:
 
+# Prevent accidental double-click / double-billing — second dispatch waits.
+concurrency:
+  group: sh104-retry-frei-gilson
+  cancel-in-progress: false
+
 jobs:
   retry:
     runs-on: ubuntu-latest

@@ -41,8 +41,8 @@ _TRIGGER_PATTERNS = [
     r"more\s+clips\s+of\s+this\s+person",
     r"\bsame\s+(?:person|guy|man|woman|speaker)\b",
     r"\buse\s+this\s+as\s+(?:the\s+)?hook\b",
-    r"mode\s*:\s*person_evidence_mining",
-    r"person_evidence_mining",
+    r"mode\s*:\s*person_evidence_mining\b",
+    r"\bperson_evidence_mining\b",
     r"\bclip[-\s]?min(?:ing|e)\b",
 ]
 _TRIGGER_RE = re.compile("|".join(_TRIGGER_PATTERNS), re.IGNORECASE)

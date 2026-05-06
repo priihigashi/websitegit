@@ -58,7 +58,16 @@ jobs:
           python-version: '3.11'
 
       - name: Install ffmpeg (required by yt-dlp post-processing)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+        run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Verify ffmpeg installed
+        run: |
+          set -e
+          command -v ffmpeg
+          ffmpeg -version | head -n 1
 
       - name: Install dependencies
         run: pip install anthropic youtube-transcript-api yt-dlp gspread google-auth google-api-python-client openai requests
@@ -74,22 +83,36 @@ jobs:
           APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
           PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
           GITHUB_RUN_ID: ${{ github.run_id }}
+          # Stage workflow_dispatch inputs as env vars + quote on the
+          # command line, instead of interpolating ${{ inputs.* }} directly
+          # into the shell. This closes CWE-94 (command injection via
+          # workflow_dispatch input). Risk is gated to dispatch-permitted
+          # users today, but bad hygiene to leave open.
+          INPUT_MODE: ${{ github.event.inputs.mode }}
+          INPUT_TOPIC: ${{ github.event.inputs.topic }}
+          INPUT_QUERIES: ${{ github.event.inputs.queries }}
+          INPUT_MAX_PER_QUERY: ${{ github.event.inputs.max_per_query }}
+          INPUT_NICHE: ${{ github.event.inputs.niche }}
+          INPUT_SEED_URL: ${{ github.event.inputs.seed_url }}
+          INPUT_PERSON_NAME: ${{ github.event.inputs.person_name }}
+          INPUT_EVIDENCE_REQUIREMENT: ${{ github.event.inputs.evidence_requirement }}
+          INPUT_TARGET_CLIP_COUNT: ${{ github.event.inputs.target_clip_count }}
         run: |
-          if [ "${{ github.event.inputs.mode }}" = "person_evidence_mining" ]; then
+          if [ "$INPUT_MODE" = "person_evidence_mining" ]; then
             python scripts/youtube_research.py \
               --mode person_evidence_mining \
-              --seed-url "${{ github.event.inputs.seed_url }}" \
-              --person-name "${{ github.event.inputs.person_name }}" \
-              --evidence-requirement "${{ github.event.inputs.evidence_requirement }}" \
-              --target-clip-count ${{ github.event.inputs.target_clip_count }} \
-              --niche "${{ github.event.inputs.niche }}"
+              --seed-url "$INPUT_SEED_URL" \
+              --person-name "$INPUT_PERSON_NAME" \
+              --evidence-requirement "$INPUT_EVIDENCE_REQUIREMENT" \
+              --target-clip-count "$INPUT_TARGET_CLIP_COUNT" \
+              --niche "$INPUT_NICHE"
           else
             python scripts/youtube_research.py \
               --mode general \
-              --topic "${{ github.event.inputs.topic }}" \
-              --queries "${{ github.event.inputs.queries }}" \
-              --max ${{ github.event.inputs.max_per_query }} \
-              --niche "${{ github.event.inputs.niche }}"
+              --topic "$INPUT_TOPIC" \
+              --queries "$INPUT_QUERIES" \
+              --max "$INPUT_MAX_PER_QUERY" \
+              --niche "$INPUT_NICHE"
           fi
 
       - name: Upload findings as artifact
@@ -104,20 +127,25 @@ jobs:
         if: failure()
         env:
           GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          GH_RUN_ID: ${{ github.run_id }}
+          INPUT_TOPIC: ${{ github.event.inputs.topic }}
+          INPUT_MODE: ${{ github.event.inputs.mode }}
         run: |
-          python3 - <<PYEOF
+          python3 - <<'PYEOF'
           import os, smtplib
           from email.message import EmailMessage
+          run_id = os.environ.get("GH_RUN_ID", "")
+          topic  = os.environ.get("INPUT_TOPIC", "") or os.environ.get("INPUT_MODE", "")
           msg = EmailMessage()
-          msg['Subject'] = '🚨 video-research.yml FAILED — run ${{ github.run_id }}'
+          msg['Subject'] = f"🚨 video-research.yml FAILED — run {run_id}"
           msg['From'] = 'priscila@oakpark-construction.com'
           msg['To']   = 'priscila@oakpark-construction.com'
           msg.set_content(
-              "video-research.yml run ${{ github.run_id }} exited non-zero.\n\n"
-              "Topic: ${{ github.event.inputs.topic }}\n"
-              "Logs:  https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}\n\n"
+              f"video-research.yml run {run_id} exited non-zero.\n\n"
+              f"Topic / mode: {topic}\n"
+              f"Logs:  https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{run_id}\n\n"
               "Failures recorded in: Ideas & Inbox → 🚨 Pipeline Failures tab\n"
-              "(filter by RUN_ID = ${{ github.run_id }})"
+              f"(filter by RUN_ID = {run_id})"
           )
           s = smtplib.SMTP_SSL('smtp.gmail.com', 465)
           s.login('priscila@oakpark-construction.com', os.environ['GMAIL_APP_PASSWORD'])

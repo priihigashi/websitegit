@@ -26,6 +26,12 @@ LOCKED scoring schema (per CLAUDE.md / SH-104 / FLOW_person_evidence_mining):
 
 NEVER auto-label "hate speech." Only the 6 categorical labels above.
 NEVER use Detoxify. Haiku/Sonnet rubric only.
+
+PHASE 2 PRIVACY (face-match — not yet built):
+  When face-embedding verification ships, embeddings MUST be in-memory only
+  for the duration of a single run, then discarded. Do NOT persist face
+  embeddings to Drive, Sheets, logs, JSON manifests, or workflow artifacts.
+  Phase 1 must NEVER pretend face-match has run — see _coerce_to_schema.
 """
 
 from __future__ import annotations
@@ -209,18 +215,54 @@ def _coerce_to_schema(data: dict) -> dict:
     out = _empty_score("validated")
     out["same_person"] = bool(data.get("same_person", False))
     out["person_confidence"] = _clamp_float(data.get("person_confidence"))
-    method = str(data.get("same_person_method", "metadata"))
-    out["same_person_method"] = method if method in ALLOWED_SAME_PERSON_METHODS else "metadata"
+
+    # Track context flags (joined into context_needed at the end).
+    extra_context: list[str] = []
+
+    # same_person_method: validate AND enforce Phase 1 face_match downgrade.
+    raw_method = str(data.get("same_person_method", "metadata"))
+    if raw_method not in ALLOWED_SAME_PERSON_METHODS:
+        method = "metadata"
+    elif raw_method == "face_match":
+        # Phase 1 has no visual face verification. Haiku may hallucinate this
+        # method — treat as not-yet-verified, downgrade to metadata, cap conf.
+        method = "metadata"
+        out["person_confidence"] = min(out["person_confidence"], 0.6)
+        extra_context.append("face_match_not_run_phase1")
+    else:
+        method = raw_method
+    out["same_person_method"] = method
+
     out["requirement_match"] = bool(data.get("requirement_match", False))
     out["match_score"] = _clamp_float(data.get("match_score"))
-    claim = str(data.get("claim_type", "needs-context"))
-    out["claim_type"] = claim if claim in ALLOWED_CLAIM_TYPES else "needs-context"
-    out["best_quote"] = str(data.get("best_quote", ""))[:1000]
+
+    # claim_type: enforce whitelist. Forbidden labels (incl. "hate-speech",
+    # "hate speech", "racist", etc.) must NEVER pass through as approved
+    # evidence — relabel to needs-context AND mark unsafe so reviewers see
+    # this clip flagged for human judgement.
+    raw_claim = str(data.get("claim_type", "needs-context")).strip()
+    invalid_claim_relabeled = False
+    if raw_claim in ALLOWED_CLAIM_TYPES:
+        out["claim_type"] = raw_claim
+    else:
+        out["claim_type"] = "needs-context"
+        invalid_claim_relabeled = True
+        extra_context.append("invalid_claim_type_relabeled")
+        # Preserve the original (truncated) label internally for reviewers.
+        out["_rejected_claim_type"] = raw_claim[:80]
+
+    # B9: pre-strip best_quote so " " whitespace doesn't survive truncation.
+    out["best_quote"] = str(data.get("best_quote", "")).strip()[:1000]
     out["timestamp_start"] = _coerce_mmss(data.get("timestamp_start"))
     out["timestamp_end"] = _coerce_mmss(data.get("timestamp_end"))
     tg = data.get("targeted_group")
     out["targeted_group"] = str(tg)[:120] if tg else None
-    out["context_needed"] = str(data.get("context_needed", ""))[:600]
+    base_ctx = str(data.get("context_needed", "")).strip()
+    if extra_context:
+        joined = " | ".join(extra_context)
+        out["context_needed"] = (f"{base_ctx} | {joined}".strip(" |"))[:600]
+    else:
+        out["context_needed"] = base_ctx[:600]
     out["safe_to_use"] = bool(data.get("safe_to_use", False))
     out["why"] = str(data.get("why", ""))[:600]
 
@@ -230,6 +272,9 @@ def _coerce_to_schema(data: dict) -> dict:
         out["requirement_match"] = False
     # Not same person -> not safe
     if not out["same_person"]:
+        out["safe_to_use"] = False
+    # Invalid claim_type was relabeled -> not safe (reviewer must see it)
+    if invalid_claim_relabeled:
         out["safe_to_use"] = False
     return out
 

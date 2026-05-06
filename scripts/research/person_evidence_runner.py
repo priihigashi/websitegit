@@ -161,6 +161,28 @@ def _sheet_svc():
     return build("sheets", "v4", credentials=creds) if creds else None
 
 
+def _norm_url(u: str) -> str:
+    """Stable key for dedup — strip query string + trailing slash, lowercase."""
+    return (u or "").split("?")[0].rstrip("/").lower()
+
+
+def _read_existing_rows(svc, sheet_id: str, tab: str, headers: list[str]) -> list[dict]:
+    """Return existing rows as dicts keyed by header. Empty list on any error."""
+    try:
+        res = svc.spreadsheets().values().get(
+            spreadsheetId=sheet_id, range=f"'{tab}'!A:Z"
+        ).execute()
+        rows = res.get("values", []) or []
+        out = []
+        for r in rows[1:]:
+            d = {h: (r[i] if i < len(r) else "") for i, h in enumerate(headers)}
+            out.append(d)
+        return out
+    except Exception as e:
+        _log(f"  ({tab}) read for dedup failed: {e}")
+        return []
+
+
 def _ensure_columns(svc, sheet_id: str, tab: str, required: list[str]) -> list[str]:
     """Guarantee `required` columns exist as headers. Adds at the end if missing.
     Returns full ordered header list."""
@@ -201,10 +223,27 @@ def _write_clip_collections(verified: list[dict], person_name: str,
         return
     today = datetime.now(timezone.utc).date().isoformat()
     topic = f"{person_name} evidence clip set"
+
+    # Idempotency guard — key = (normalized URL, person/topic). On retry,
+    # skip rows that already exist for this same clip + person.
+    existing = _read_existing_rows(svc, IDEAS_INBOX_ID, tab, headers)
+    person_norm = (person_name or "").strip().lower()
+    seen_keys = set()
+    for ex in existing:
+        if (ex.get("SOURCE", "").strip() == "person_evidence_mining"
+                and person_norm in (ex.get("TOPIC", "") or "").lower()):
+            seen_keys.add(_norm_url(ex.get("URL", "")))
+
     rows = []
+    skipped_dup = 0
     for v in verified:
         c = v.get("candidate", {})
         s = v.get("score", {})
+        url_key = _norm_url(c.get("url", ""))
+        if url_key and url_key in seen_keys:
+            skipped_dup += 1
+            continue
+        seen_keys.add(url_key)
         # Build a row keyed by header name (SCRIPTS ADD NEVER DELETE rule)
         row_dict = {
             "DATE": today,
@@ -224,7 +263,10 @@ def _write_clip_collections(verified: list[dict], person_name: str,
             "NOTES": s.get("why", "")[:300],
         }
         rows.append([row_dict.get(h, "") for h in headers])
+    if skipped_dup:
+        _log(f"  Clip Collections: skipped {skipped_dup} duplicate clip(s)")
     if not rows:
+        _log("  Clip Collections: nothing new to append")
         return
     try:
         svc.spreadsheets().values().append(
@@ -253,10 +295,11 @@ def _write_content_queue(person_name: str, niche: str, manifest_url: str,
     if not headers:
         return
     today = datetime.now(timezone.utc).date().isoformat()
+    title = f"{person_name} — evidence clip set (Phase 1 manifest)"
     row_dict = {
         "DATE": today,
         "NICHE": niche,
-        "TITLE": f"{person_name} — evidence clip set (Phase 1 manifest)",
+        "TITLE": title,
         "SOURCE": "person_evidence_mining",
         "STATUS": "Needs Research",
         "MANIFEST_URL": manifest_url,
@@ -265,14 +308,45 @@ def _write_content_queue(person_name: str, niche: str, manifest_url: str,
         "NOTES": "Phase 1 manifest only. Render gate: manual approval after review.",
     }
     row = [row_dict.get(h, "") for h in headers]
+
+    # Idempotency guard — key = (SOURCE=person_evidence_mining, TITLE, NICHE).
+    # On retry, UPDATE the existing row (refresh manifest_url + counts +
+    # status), don't append a duplicate. Skip update if status is Rejected.
     try:
-        svc.spreadsheets().values().append(
-            spreadsheetId=IDEAS_INBOX_ID,
-            range=f"'{tab}'!A:Z",
-            valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
-            body={"values": [row]},
+        res = svc.spreadsheets().values().get(
+            spreadsheetId=IDEAS_INBOX_ID, range=f"'{tab}'!A:Z"
         ).execute()
-        _log("  Content Queue: row appended (Needs Research)")
+        existing_rows = res.get("values", []) or []
+        target_row_idx = None  # 1-based row in sheet
+        for ri, r in enumerate(existing_rows[1:], start=2):
+            r_dict = {h: (r[i] if i < len(r) else "") for i, h in enumerate(headers)}
+            if (r_dict.get("SOURCE", "").strip() == "person_evidence_mining"
+                    and r_dict.get("TITLE", "").strip() == title
+                    and r_dict.get("NICHE", "").strip() == niche
+                    and r_dict.get("STATUS", "").strip().lower() != "rejected"):
+                target_row_idx = ri
+                break
+    except Exception as e:
+        _log(f"  Content Queue: dedup read failed ({e}) — will append")
+        target_row_idx = None
+
+    try:
+        if target_row_idx is not None:
+            svc.spreadsheets().values().update(
+                spreadsheetId=IDEAS_INBOX_ID,
+                range=f"'{tab}'!A{target_row_idx}:Z{target_row_idx}",
+                valueInputOption="USER_ENTERED",
+                body={"values": [row]},
+            ).execute()
+            _log(f"  Content Queue: row {target_row_idx} updated (Needs Research, retry)")
+        else:
+            svc.spreadsheets().values().append(
+                spreadsheetId=IDEAS_INBOX_ID,
+                range=f"'{tab}'!A:Z",
+                valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
+                body={"values": [row]},
+            ).execute()
+            _log("  Content Queue: row appended (Needs Research)")
     except Exception as e:
         _fail("content_queue_append", e)
 
@@ -419,7 +493,10 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
         _log(f"  Seed transcribed via {seed_result.get('source','?')}: "
              f"{len(seed_transcript)} chars")
         if seed_result.get("error"):
-            _fail("seed_transcribe", seed_result["error"])
+            trace = seed_result.get("error_trace")
+            stage = f"seed_transcribe:{trace.get('stage')}" if trace else "seed_transcribe"
+            detail = trace.get("error") if trace else seed_result["error"]
+            _fail(stage, detail)
     except Exception as e:
         _fail("seed_transcribe", e)
     seed_excerpt = seed_transcript[:1500]
@@ -457,7 +534,21 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
             continue
         transcript = t.get("transcript", "")
         if not transcript.strip():
-            rejected.append({"candidate": cand, "reason": t.get("error") or "no_transcript"})
+            # Distinguish "Whisper/yt-dlp failure" from "video had no speech".
+            # error_trace from transcription.py captures the last tier error
+            # so reviewers can tell infra-down from genuinely-empty.
+            trace = t.get("error_trace") or {}
+            stage_detail = trace.get("stage", "")
+            err_detail = trace.get("error", "")
+            reason = t.get("error") or "no_transcript"
+            if stage_detail:
+                reason = f"{reason} [{stage_detail}: {err_detail}]"
+                # Surface infra failures (Whisper/Apify/yt-dlp down) to the
+                # 🚨 Pipeline Failures tab so they're not silent.
+                if stage_detail in ("whisper", "apify_yt", "apify_ig", "ytdlp_audio"):
+                    _fail(f"transcribe_candidate:{stage_detail}", err_detail or reason)
+            rejected.append({"candidate": cand, "reason": reason,
+                             "error_trace": trace or None})
             continue
         transcribed_count += 1
         # Save transcript
