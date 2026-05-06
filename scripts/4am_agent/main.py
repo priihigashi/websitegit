@@ -316,7 +316,8 @@ def _check_system_alerts(log_pfx):
             "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
         }).encode()
         resp = json.loads(urllib.request.urlopen(
-            urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+            urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+            timeout=15).read())
         token = resp["access_token"]
     except Exception as e:
         print(f"[{log_pfx}]   Alert check auth failed: {e}")
@@ -329,7 +330,8 @@ def _check_system_alerts(log_pfx):
         gmail_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages?q={query}&maxResults=10"
         try:
             msgs = json.loads(urllib.request.urlopen(
-                urllib.request.Request(gmail_url, headers={"Authorization": f"Bearer {token}"})).read()).get("messages", [])
+                urllib.request.Request(gmail_url, headers={"Authorization": f"Bearer {token}"}),
+                timeout=20).read()).get("messages", [])
         except Exception:
             continue
 
@@ -337,7 +339,8 @@ def _check_system_alerts(log_pfx):
             detail_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg['id']}?format=full"
             try:
                 detail = json.loads(urllib.request.urlopen(
-                    urllib.request.Request(detail_url, headers={"Authorization": f"Bearer {token}"})).read())
+                    urllib.request.Request(detail_url, headers={"Authorization": f"Bearer {token}"}),
+                    timeout=20).read())
             except Exception:
                 continue
 
@@ -378,7 +381,8 @@ def _check_system_alerts(log_pfx):
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc}"
     try:
         rows = json.loads(urllib.request.urlopen(
-            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})).read()).get("values", [])
+            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"}),
+            timeout=15).read()).get("values", [])
     except Exception as e:
         print(f"[{log_pfx}]   Alert tab read failed: {e}")
         return
@@ -413,7 +417,8 @@ def _resolve_all_system_alerts(token):
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc}"
     try:
         rows = json.loads(urllib.request.urlopen(
-            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})).read()).get("values", [])
+            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"}),
+            timeout=15).read()).get("values", [])
     except Exception:
         return
     for i, row in enumerate(rows):
@@ -426,7 +431,8 @@ def _resolve_all_system_alerts(token):
             url2 = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc2}?valueInputOption=USER_ENTERED"
             urllib.request.urlopen(urllib.request.Request(url2,
                 data=json.dumps({"values": [["resolved"]]}).encode(), method="PUT",
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}))
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}),
+                timeout=15)
 
 
 def _record_pipeline_failure(log_pfx, error_msg, lessons, duration_s):
@@ -486,7 +492,7 @@ Do NOT edit here. Edit the local file.
         "grant_type":    "refresh_token",
     }).encode()
     resp = json.loads(urllib.request.urlopen(
-        "https://oauth2.googleapis.com/token", data=data
+        "https://oauth2.googleapis.com/token", data=data, timeout=15
     ).read())
     creds = Credentials(
         token=resp["access_token"],
