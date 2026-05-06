@@ -38,6 +38,11 @@ on:
         required: false
         default: false
         type: boolean
+      override_large_patch:
+        description: "Allow patches that remove >20 lines (bypasses NN-S2 deletion guard for this run only)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -96,6 +101,7 @@ jobs:
           DRY_RUN:              ${{ inputs.dry_run }}
           FORCE_RETRY:          ${{ inputs.force_retry }}
           ACK_PAUSE:            ${{ inputs.ack_pause }}
+          OVERRIDE_LARGE_PATCH: ${{ inputs.override_large_patch }}
           GH_RUN_ID:            ${{ github.run_id }}
           GH_RUN_URL:           ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
