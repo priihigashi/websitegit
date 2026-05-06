@@ -90,15 +90,30 @@ def _llm_text(prompt: str, max_tokens: int = 3000, model: str = "claude-sonnet-4
             return _resp.content[0].text
         except Exception as _ce:
             _msg = str(_ce)
+            _cls = type(_ce).__name__
             _is_credit_or_auth = (
                 "credit balance is too low" in _msg
                 or "insufficient_quota" in _msg
                 or "401" in _msg
-                or "AuthenticationError" in type(_ce).__name__
-                or "BadRequestError" in type(_ce).__name__
+                or "AuthenticationError" in _cls
+                or "BadRequestError" in _cls
             )
-            if _is_credit_or_auth:
-                print(f"  _llm_text: Claude credit/auth error → OpenAI fallback ({type(_ce).__name__})")
+            # SH-033 extension: also fall back on transient Anthropic errors
+            # (rate limit / overloaded / connection / timeout) so capture does
+            # not crash on a 429/529/network blip — these used to bubble up.
+            _is_transient = (
+                "RateLimitError"      in _cls
+                or "APIStatusError"   in _cls
+                or "OverloadedError"  in _cls
+                or "APIConnectionError" in _cls
+                or "APITimeoutError"  in _cls
+                or "overloaded"       in _msg.lower()
+                or " 429"             in _msg
+                or " 529"             in _msg
+            )
+            if _is_credit_or_auth or _is_transient:
+                _kind = "credit/auth" if _is_credit_or_auth else "transient"
+                print(f"  _llm_text: Claude {_kind} error → OpenAI fallback ({_cls})")
             else:
                 raise  # non-credit Claude errors bubble up as before
     if OPENAI_API_KEY:
