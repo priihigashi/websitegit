@@ -1023,7 +1023,21 @@ def score_storytelling(html_path: str, niche: str) -> dict:
                 "content-type": "application/json",
             },
         )
-        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        try:
+            raw_resp = urllib.request.urlopen(req, timeout=30).read()
+        except urllib.error.HTTPError as http_err:
+            status = http_err.code
+            body = ""
+            try:
+                body = http_err.read().decode(errors="ignore")
+            except Exception:
+                pass
+            if status in (529, 529) or "overloaded" in body.lower() or "credit" in body.lower():
+                print(f"  [SH-028] ⚠ WARN: Anthropic credits/capacity issue (HTTP {status}) — storytelling score skipped")
+            else:
+                print(f"  [SH-028] Storytelling score HTTP error {status} (non-fatal): {body[:120]}")
+            return {}
+        resp = json.loads(raw_resp)
         raw = resp["content"][0]["text"].strip()
         if raw.startswith("```"):
             raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()

@@ -104,6 +104,9 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
       BRAZIL_TEMPLATES_FOLDER: '1gDOjtW_X-_jWtu94pffbDaUsw6VGCKuA'
+      GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }}
+      # Opt-in: change '' to 'true' to enable DALL-E 3 fallback (Brazil/USA only; OPC is real-photos-only)
+      USE_DALLE: ''
 
     steps:
       - name: Checkout
@@ -245,6 +248,9 @@ jobs:
       CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
       BRAZIL_TEMPLATES_FOLDER: '1gDOjtW_X-_jWtu94pffbDaUsw6VGCKuA'
       CONTENT_CREATOR_RETRY: 'true'
+      GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }}
+      # Opt-in: change '' to 'true' to enable DALL-E 3 fallback (Brazil/USA only; OPC is real-photos-only)
+      USE_DALLE: ''
 
     steps:
       - name: Checkout

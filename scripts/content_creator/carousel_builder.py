@@ -20,6 +20,8 @@ PEXELS_KEY     = os.environ.get("PEXELS_API_KEY", "")
 PIXABAY_KEY    = os.environ.get("PIXABAY_API_KEY", "")
 REPLICATE_KEY  = os.environ.get("PRI_OP_REPLICATE_API_KEY", "")
 INFSH_KEY      = os.environ.get("PRI_OP_INFSH_API_KEY", "")
+# SH-041: DALL-E opt-in guard — must be explicitly set to activate (OPC always off regardless)
+_USE_DALLE     = os.environ.get("USE_DALLE", "").lower() in ("1", "true", "yes")
 APIFY_KEY      = os.environ.get("APIFY_API_KEY", "")
 
 # SH-055: configurable slide safety margin — override via SLIDE_INSET_PX env var
@@ -454,6 +456,7 @@ RULES:
 10. project_id: "PROJECT #OPC-{_today[:4]}-XXX" — replace XXX with a 3-digit random-ish number
 11. workers: list of 1-3 crew members with name + role (if brief has names use them; otherwise use generic roles like "Lead Carpenter" with placeholder name "T. Rivera")
 12. caption: 2-3 sentence Instagram caption. Hook = first line (must mention the stage or a specific task). End with 6-8 hashtags: #oakparkconstruction + material/trade-specific tags. NO generic #construction alone.
+13. READABILITY (SH-013): 8th-grade reading level. Max 16 words per sentence. No jargon without a plain-language explanation within 2 lines. Short sentences. Active voice.
 
 Return ONLY a valid JSON object:
 {{
@@ -714,6 +717,7 @@ MANDATORY RULES:
 7. The VERDICT slide is the most important — show the 3-way score as concrete percentages.
 8. Every factual slide needs a source name (Harvard, IMF, IBGE, etc.) visible in the text.
 9. Tone: journalistic, calm, not accusatory. "Vamos ver o que os dados dizem."
+10. READABILITY (SH-013): Nível de leitura 8ª série. Máximo 16 palavras por frase. Sem jargão sem explicação em 2 linhas. Voz ativa. Frases curtas.
 
 Return ONLY a valid JSON object with this exact structure:
 
@@ -959,6 +963,7 @@ REGRAS OBRIGATÓRIAS:
 6. Fontes: mínimo 2 outlets verificáveis (G1, Agência Brasil, Câmara.gov, Senado.leg, etc.).
 7. Tom: jornalístico, calmo, não acusatório. "Os dados mostram que..."
 8. NUNCA invente números. Se não souber, escreva "dado não disponível".
+9. LEGIBILIDADE (SH-013): Nível 8ª série. Máximo 16 palavras por frase. Voz ativa. Frases curtas. Sem jargão sem explicação.
 
 Retorne SOMENTE um JSON válido com esta estrutura exata:
 {{
@@ -1374,7 +1379,7 @@ def _fetch_slide_photos_brazil(content, work_dir):
 def _generate_ai_cover(prompt, work_dir, filename="cover.jpg"):
     """Generate image via DALL-E 3. Returns relative path or empty string.
     Falls back silently on any error — caller uses placeholder if empty."""
-    if not OPENAI_KEY or not prompt:
+    if not _USE_DALLE or not OPENAI_KEY or not prompt:
         return ""
     dest_path = Path(work_dir) / "resources" / "images" / filename
     dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1829,6 +1834,7 @@ def _crop_to_bounding_box(image_path) -> bool:
     try:
         from PIL import Image
     except Exception:
+        print("  Warning: Pillow not available — _crop_to_bounding_box skipped (install Pillow)")
         return False
     path = Path(image_path)
     if not path.exists() or path.suffix.lower() != ".png":
