@@ -36,6 +36,7 @@ def _run_actor(actor_id, input_data, timeout_s=300):
         status_resp = requests.get(
             f"{APIFY_BASE}/actor-runs/{run_id}",
             params={"token": APIFY_API_KEY},
+            timeout=15,
         ).json()
         if "error" in status_resp:
             raise RuntimeError(f"Apify status error: {status_resp['error']}")
@@ -48,6 +49,7 @@ def _run_actor(actor_id, input_data, timeout_s=300):
     items = requests.get(
         f"{APIFY_BASE}/actor-runs/{run_id}/dataset/items",
         params={"token": APIFY_API_KEY},
+        timeout=30,
     ).json()
     return items if isinstance(items, list) else []
 
@@ -127,7 +129,8 @@ def _fetch_inspo_urls():
             "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
         }).encode()
         resp = json.loads(urllib.request.urlopen(
-            urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+            urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+            timeout=15).read())
         token = resp["access_token"]
     except Exception as e:
         print(f"[debunk] _fetch_inspo_urls auth failed: {e}")
@@ -138,7 +141,8 @@ def _fetch_inspo_urls():
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc}"
     try:
         rows = json.loads(urllib.request.urlopen(
-            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})).read()
+            urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"}),
+            timeout=15).read()
         ).get("values", [])
         return {row[0].strip() for row in rows[1:] if row and row[0].strip()}
     except Exception as e:
