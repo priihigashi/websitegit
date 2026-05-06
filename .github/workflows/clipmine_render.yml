@@ -81,16 +81,19 @@ jobs:
       - name: Install Python deps
         run: pip install google-auth google-api-python-client requests
 
-      - name: Install Playwright (carousel mode)
-        if: ${{ github.event.inputs.mode != 'remotion' }}
-        run: |
-          npm install -g playwright @playwright/test
-          npx playwright install chromium --with-deps
-
-      - name: Install Remotion (remotion mode)
-        if: ${{ github.event.inputs.mode != 'carousel' }}
+      # One install covers both modes: scripts/remotion/package.json carries
+      # Remotion (runtime) AND Playwright (devDep, used by export_slides.js).
+      # Local install means `require('playwright')` resolves from
+      # scripts/remotion/node_modules even when invoked via the absolute
+      # script path from evidence_carousel.py.
+      - name: Install Node deps (Remotion + Playwright)
         working-directory: scripts/remotion
         run: npm install
+
+      - name: Install Playwright Chromium browser
+        if: ${{ github.event.inputs.mode != 'remotion' }}
+        working-directory: scripts/remotion
+        run: npx playwright install chromium --with-deps
 
       - name: Stage manifest (download from Drive or use fixture)
         env:
