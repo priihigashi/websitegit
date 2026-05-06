@@ -377,3 +377,130 @@ def batch_retag_stale_rows(rows, vision_client=None):
 
     # TODO: implement Vision API call when key is available
     raise NotImplementedError("Vision API re-tagging not yet implemented — wire VISION_API_KEY first")
+
+
+# ── SH-040: Image relevance validator ────────────────────────────────────────
+
+# Known bad URL patterns — images at these hosts or with these path fragments
+# are stock-watermark or placeholder images and should be rejected immediately.
+_BAD_URL_PATTERNS = [
+    "watermark",
+    "placeholder",
+    "default",
+    "no-image",
+    "noimage",
+    "blank",
+    "sample",
+    "dummy",
+    "lorem",
+    "gettyimages.com",
+    "istockphoto.com",
+    "shutterstock.com",  # direct CDN URLs often watermarked
+]
+
+# Small-dimension patterns in URL: e.g. /100x100/, ?w=50, _200x200_
+_SMALL_DIM_RE = re.compile(
+    r"[/_](\d{1,3})x(\d{1,3})[/_?]"
+)
+
+
+def _url_looks_watermarked_or_tiny(url: str) -> bool:
+    """Return True if the URL strongly suggests a watermarked or tiny placeholder."""
+    low = url.lower()
+    if any(pat in low for pat in _BAD_URL_PATTERNS):
+        return True
+    m = _SMALL_DIM_RE.search(url)
+    if m:
+        w, h = int(m.group(1)), int(m.group(2))
+        if w < 200 or h < 200:
+            return True
+    return False
+
+
+def validate_image_relevance(image_url: str, query: str, topic: str) -> bool:
+    """Validate that a sourced image is worth using before returning it to the pipeline.
+
+    Performs checks in escalating cost order:
+      1. URL heuristic — rejects known bad patterns (watermark domains, tiny dimensions,
+         placeholder filenames). Zero network cost.
+      2. If VISION_API_KEY env var is set, calls Google Cloud Vision API to confirm
+         relevance score ≥ 0.6 using label annotations matched against query keywords.
+         Falls back to True (accept) if Vision API call fails, so this is never blocking.
+
+    Args:
+        image_url: the URL or local file path of the image to validate.
+        query:     the search query / description used to source this image.
+        topic:     the broader carousel topic (used for Vision keyword matching).
+
+    Returns:
+        True  → accept (use this image)
+        False → reject (skip to next tier)
+    """
+    if not image_url:
+        return False
+
+    # Step 1: URL/filename heuristic — zero cost
+    if _url_looks_watermarked_or_tiny(image_url):
+        print(f"  validate_image_relevance: REJECT (bad URL pattern) — {image_url[:80]}")
+        return False
+
+    # Step 2: Vision API relevance check (only if key is wired)
+    vision_key = os.environ.get("VISION_API_KEY", "")
+    if not vision_key:
+        # No key — accept after passing heuristic
+        return True
+
+    try:
+        # Determine if image_url is a local path or a remote URL
+        is_local = not image_url.startswith("http")
+        if is_local:
+            import base64
+            with open(image_url, "rb") as f:
+                img_b64 = base64.b64encode(f.read()).decode()
+            image_field = {"content": img_b64}
+        else:
+            image_field = {"source": {"type": "URL", "imageUri": image_url}}
+
+        vision_payload = json.dumps({
+            "requests": [{
+                "image": image_field,
+                "features": [{"type": "LABEL_DETECTION", "maxResults": 10}],
+            }]
+        }).encode()
+        req = urllib.request.Request(
+            f"https://vision.googleapis.com/v1/images:annotate?key={vision_key}",
+            data=vision_payload,
+            headers={"Content-Type": "application/json"},
+        )
+        resp = json.loads(urllib.request.urlopen(req, timeout=10).read())
+        labels = resp.get("responses", [{}])[0].get("labelAnnotations", [])
+
+        # Build keyword set from query + topic
+        stop = {"the", "a", "an", "of", "for", "to", "in", "on", "with", "and", "or",
+                "is", "are", "how", "why", "what", "when", "your", "our", "their"}
+        keywords = set(
+            w for w in re.sub(r"[^\w\s]", " ", (query + " " + topic).lower()).split()
+            if w not in stop and len(w) > 2
+        )
+
+        # Check if any Vision label (score ≥ 0.6) matches a keyword
+        for label in labels:
+            score = label.get("score", 0)
+            description = label.get("description", "").lower()
+            if score >= 0.6 and any(kw in description or description in kw for kw in keywords):
+                print(
+                    f"  validate_image_relevance: ACCEPT (Vision match '{label['description']}' "
+                    f"score={score:.2f}) — {image_url[:60]}"
+                )
+                return True
+
+        print(
+            f"  validate_image_relevance: REJECT (no Vision label matches query) — "
+            f"labels={[l['description'] for l in labels[:5]]} query='{query[:40]}'"
+        )
+        return False
+
+    except Exception as e:
+        # Vision call failed — non-blocking, accept the image
+        print(f"  validate_image_relevance: Vision API error (non-fatal, accepting) — {e}")
+        return True
