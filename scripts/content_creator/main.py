@@ -1435,10 +1435,28 @@ def process_one_topic(topic_entry, run_date, drive):
         except Exception as e:
             print(f"  resources/images/ upload failed (non-fatal): {e}")
 
+    # SH-022: Auto-fetch supporting B-roll clips from Pexels before the upload step.
+    # find_supporting_clips() saves MP4s to <work>/resources/clips/ (max 3).
+    # They are uploaded to Drive in the clips_sub step below alongside fetched motion clips.
+    try:
+        from motion_sources import find_supporting_clips as _find_broll  # type: ignore
+        _broll_clips_dir = str(work / "resources" / "clips")
+        _broll_paths = _find_broll(topic, slug, niche, _broll_clips_dir, max_clips=3)
+        if _broll_paths:
+            print(f"  SH-022 B-roll: {len(_broll_paths)} supporting clip(s) saved to resources/clips/")
+    except Exception as _broll_err:
+        print(f"  SH-022 B-roll fetch failed (non-fatal): {_broll_err}")
+
     # Upload raw YouTube/Pexels clips downloaded by fetch_clips() into resources/clips/
     # Keeps source MP4s archived alongside images — Priscila can review the actual footage
     # that went into each motion slide, not just the composited output.
     local_clips = work / "clips"
+    # Also check resources/clips/ path written by find_supporting_clips() above
+    _resources_clips = work / "resources" / "clips"
+    _clips_source = local_clips if (local_clips.exists() and any(local_clips.iterdir())) \
+        else (_resources_clips if (_resources_clips.exists() and any(_resources_clips.iterdir())) else None)
+    if _clips_source and any(_clips_source.iterdir()):
+        local_clips = _clips_source
     if local_clips.exists() and any(local_clips.iterdir()):
         try:
             clips_sub = create_subfolder(resources_sub, "clips", drive)

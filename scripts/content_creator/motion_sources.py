@@ -874,6 +874,126 @@ def fetch_clip_with_fallback(slide_cfg: dict, work_dir: str, filename: str,
     return ""
 
 
+# ─── SH-022: Supporting clips auto-finder ────────────────────────────────────
+
+def find_supporting_clips(topic: str, slug: str, niche: str, clips_dir: str,
+                          max_clips: int = 3) -> List[str]:
+    """Search Pexels Video API for topic-related B-roll clips and download them.
+
+    Designed to be called from main.py process_one_topic() after the Drive
+    version folder is created, before motion rendering begins. The caller
+    uploads the clips_dir to Drive alongside png/ and motion/.
+
+    Args:
+        topic:     carousel topic string — used as the Pexels search query.
+        slug:      URL-safe post slug — used for filename prefixes.
+        niche:     niche string (opc / brazil / usa / ugc). Only "opc" sends
+                   a photorealistic suffix on the query.
+        clips_dir: absolute path to the clips output directory (will be created).
+                   Typically: <work_dir>/resources/clips/
+        max_clips: max number of clips to download (default 3, max 5).
+
+    Returns:
+        List of absolute file paths for successfully downloaded clips.
+        Empty list if PEXELS_API_KEY is not set or all downloads fail.
+
+    Notes:
+        - Only searches landscape and portrait HD videos (≥720p).
+        - Each downloaded clip gets a .source.txt sidecar with attribution.
+        - Silent-fail per clip — never raises.
+    """
+    if not PEXELS_KEY:
+        print("  find_supporting_clips: PEXELS_API_KEY not set — skipping B-roll fetch")
+        return []
+
+    clips_path = Path(clips_dir)
+    clips_path.mkdir(parents=True, exist_ok=True)
+
+    # Build a clean search query (strip generic words, add photorealistic for OPC)
+    stop_words = {"the", "a", "an", "of", "for", "to", "in", "on", "with", "and", "or",
+                  "is", "are", "how", "why", "what", "when", "tips", "guide", "using"}
+    topic_words = [w for w in topic.lower().split() if w not in stop_words and len(w) > 2]
+    search_q = " ".join(topic_words[:8]) or topic[:60]
+    # OPC always stays in photorealistic / construction context
+    if niche == "opc":
+        search_q = f"{search_q} construction residential"
+
+    print(f"  find_supporting_clips: searching Pexels for '{search_q[:60]}' (max {max_clips})")
+
+    downloaded: List[str] = []
+    try:
+        q = urllib.parse.urlencode({
+            "query": search_q,
+            "per_page": str(min(10, max_clips * 3)),  # over-fetch to allow for failures
+            "size": "medium",
+            "orientation": "landscape",
+        })
+        req = urllib.request.Request(
+            f"https://api.pexels.com/videos/search?{q}",
+            headers={"Authorization": PEXELS_KEY}
+        )
+        data = json.loads(urllib.request.urlopen(req, timeout=15).read())
+        videos = data.get("videos", [])
+        if not videos:
+            print(f"  find_supporting_clips: Pexels returned 0 results for '{search_q[:50]}'")
+            return []
+
+        for idx, v in enumerate(videos):
+            if len(downloaded) >= max_clips:
+                break
+            page_url = v.get("url", "")
+            photographer = v.get("user", {}).get("name", "Pexels")
+            duration = v.get("duration", 0)
+            if duration > MAX_CLIP_DURATION_S:
+                continue
+
+            # Prefer HD files; portrait orientation for 9:16 social
+            files = sorted(
+                v.get("video_files", []),
+                key=lambda x: (
+                    x.get("height", 0) < 720,   # prefer ≥720p
+                    x.get("height", 0) < x.get("width", 1),  # then portrait
+                    -x.get("height", 0),
+                ),
+            )
+            for vf in files:
+                if vf.get("file_type") != "video/mp4":
+                    continue
+                dl_url = vf.get("link", "")
+                if not dl_url:
+                    continue
+                fname = f"{slug}_broll_{idx+1:02d}.mp4"
+                dest = clips_path / fname
+                if dest.exists() and dest.stat().st_size > MIN_CLIP_BYTES:
+                    print(f"  find_supporting_clips: cached {fname}")
+                    downloaded.append(str(dest))
+                    break
+                raw = _http_get_bytes(dl_url, timeout=90)
+                if len(raw) < MIN_CLIP_BYTES:
+                    continue
+                dest.write_bytes(raw)
+                _write_sidecar(
+                    dest,
+                    source_tier="pexels_supporting_clip",
+                    source_url=page_url or dl_url,
+                    license_str="Pexels License (free use, attribution appreciated)",
+                    attribution=f"Video by {photographer} on Pexels",
+                    query=search_q,
+                )
+                print(
+                    f"  find_supporting_clips: downloaded {fname} "
+                    f"({len(raw)//1024}KB, {vf.get('height')}p) from Pexels"
+                )
+                downloaded.append(str(dest))
+                break  # next video
+
+    except Exception as e:
+        print(f"  find_supporting_clips: Pexels error (non-fatal): {e}")
+
+    print(f"  find_supporting_clips: {len(downloaded)}/{max_clips} B-roll clips ready")
+    return downloaded
+
+
 # ─── Module-level smoke test ──────────────────────────────────────────────────
 
 if __name__ == "__main__":  # pragma: no cover
