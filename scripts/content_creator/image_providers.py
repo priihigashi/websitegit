@@ -54,7 +54,8 @@ def _get_sheets_token() -> str:
         "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
     }).encode()
     resp = json.loads(urllib.request.urlopen(
-        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+        timeout=15,
     ).read())
     _oauth_cache["token"] = resp["access_token"]
     _oauth_cache["exp"] = time.time() + resp.get("expires_in", 3600) - 60
