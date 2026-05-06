@@ -28,7 +28,7 @@ def _creds():
         "grant_type":    "refresh_token",
     }).encode()
     resp = json.loads(urllib.request.urlopen(
-        "https://oauth2.googleapis.com/token", data=data
+        "https://oauth2.googleapis.com/token", data=data, timeout=15
     ).read())
     return Credentials(
         token=resp["access_token"],
