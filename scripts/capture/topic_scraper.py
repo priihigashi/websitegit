@@ -206,7 +206,10 @@ def download_audio(url: str, tmp_dir: str) -> str:
         "--audio-quality", "0", "--output", output,
         "--no-playlist", "--quiet", url,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("yt-dlp timed out after 300s")
     if result.returncode != 0:
         raise RuntimeError(f"yt-dlp failed: {result.stderr[:200]}")
     mp3 = os.path.join(tmp_dir, "audio.mp3")
