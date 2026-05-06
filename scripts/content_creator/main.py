@@ -1128,12 +1128,13 @@ def process_one_topic(topic_entry, run_date, drive):
             from topic_picker import fetch_drive_doc_content as _fetch_brief
             _fetched = _fetch_brief(brief)
             if _fetched:
-                print(f"  brief: fetched {len(_fetched)} chars from Drive doc ({brief[28:60]}...)")
+                print(f"  [SH-061] ✅ brief OK: {len(_fetched)} chars from Drive doc ({brief[28:60]}...)")
+                print(f"  [SH-061] brief preview: {_fetched[:120].replace(chr(10),' ')!r}")
                 brief = _fetched
             else:
-                print(f"  brief: Drive doc fetch returned empty — using URL as-is")
+                print(f"  [SH-061] ⚠ brief EMPTY: Drive doc fetch returned empty — using URL as-is")
         except Exception as _be:
-            print(f"  brief: fetch failed ({_be}) — using URL as-is")
+            print(f"  [SH-061] ❌ brief FAILED ({_be}) — using URL as-is")
     # FIX 5: FORMAT-019 brief gate — skip post if no capture brief exists
     if series_override == "DADOS OU AGENDA" and not brief.strip():
         print(f"  SKIP: no capture brief found for {post_id} — FORMAT-019 (Dados ou Agenda?) requires /capture first")
@@ -1813,13 +1814,19 @@ def main():
         if MANUAL_BRIEF:
             if "docs.google.com/document" in MANUAL_BRIEF or (MANUAL_BRIEF.startswith("https://") and "/d/" in MANUAL_BRIEF):
                 from topic_picker import fetch_drive_doc_content
-                resolved_brief = fetch_drive_doc_content(MANUAL_BRIEF) or MANUAL_BRIEF
-                print(f"  brief: fetched {len(resolved_brief)} chars from Drive doc")
+                _fetched_manual = fetch_drive_doc_content(MANUAL_BRIEF)
+                if _fetched_manual:
+                    resolved_brief = _fetched_manual
+                    print(f"  [SH-061] ✅ brief OK: {len(resolved_brief)} chars from Drive doc")
+                    print(f"  [SH-061] brief preview: {resolved_brief[:120].replace(chr(10),' ')!r}")
+                else:
+                    resolved_brief = MANUAL_BRIEF
+                    print(f"  [SH-061] ⚠ brief EMPTY: Drive doc returned empty — using URL as-is")
             else:
                 resolved_brief = MANUAL_BRIEF
-                print(f"  brief: using provided text ({len(resolved_brief)} chars)")
+                print(f"  [SH-061] brief: using provided text ({len(resolved_brief)} chars)")
         else:
-            print("  brief: none provided (MANUAL_BRIEF not set)")
+            print("  [SH-061] brief: none provided (MANUAL_BRIEF not set)")
 
         if MANUAL_TEMPLATE_SET == "all":
             if MANUAL_NICHE == "opc":
