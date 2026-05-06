@@ -1282,11 +1282,14 @@ def process_one_topic(topic_entry, run_date, drive):
     # Tier 2 — build_carousel_reel.sh (FFmpeg, always-succeeds floor)
     reel_built = False
     reel_link  = ""
+    reel_renderer = "failed"
     png_count = len(list(png_dir.glob("*.png")))
     if png_count >= 3:
         # Tier 1 — Remotion
         _remotion_reel = render_carousel_reel_remotion(png_dir, motion_dir, slug, clips)
-        reel_built = bool(_remotion_reel)
+        if _remotion_reel:
+            reel_built = True
+            reel_renderer = "remotion"
 
         # Tier 2 — FFmpeg fallback
         if not reel_built:
@@ -1299,9 +1302,15 @@ def process_one_topic(topic_entry, run_date, drive):
                     )
                     for _line in _reel_proc.stdout.strip().splitlines():
                         print(f"  {_line}")
-                    reel_built = (motion_dir / "carousel_reel.mp4").exists()
+                    if (motion_dir / "carousel_reel.mp4").exists():
+                        reel_built = True
+                        reel_renderer = "ffmpeg"
                 except Exception as _reel_err:
                     print(f"  [carousel_reel] FFmpeg fallback failed (non-fatal): {_reel_err}")
+
+        if not reel_built:
+            reel_renderer = "failed"
+            _send_alert(f"[REEL_FAILED] Both Remotion and FFmpeg failed for '{topic[:40]}' — no carousel_reel.mp4 produced.")
 
     # Media presence check (non-blocking) — alert if images/clips are missing
     media_ok, media_issues = _check_media_presence(
@@ -1638,6 +1647,7 @@ def process_one_topic(topic_entry, run_date, drive):
         "static_link": folder_link,
         "motion_link": motion_link,
         "reel_link": reel_link,
+        "reel_renderer": reel_renderer,  # remotion | ffmpeg | failed
         # cover thumbnails for first-pass preview email
         "cover_urls": cover_urls,
         # reply guide data

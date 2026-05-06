@@ -879,6 +879,37 @@ def process_replies():
                 _delete_old_versions(post_id, static_folder_id)
                 print(f"  Approved: {post_id} ({variant})")
 
+                # Copy carousel_reel.mp4 to Reels_Shorts folder for this niche
+                _reel_link = post.get("reel_link", "")
+                if _reel_link:
+                    try:
+                        import sys as _sys
+                        from pathlib import Path as _Path
+                        _sys.path.insert(0, str(_Path(__file__).parent.parent))
+                        from routing import reels_folder as _reels_folder
+                        _reels_dest = _reels_folder(niche)
+                        if _reels_dest:
+                            _drive_svc = _get_drive_service()
+                            _motion_fid = post.get("motion_folder_id", "")
+                            if _motion_fid:
+                                _reel_files = _drive_svc.files().list(
+                                    q=f"'{_motion_fid}' in parents and name='carousel_reel.mp4' and trashed=false",
+                                    supportsAllDrives=True, includeItemsFromAllDrives=True,
+                                    fields="files(id,name)",
+                                ).execute().get("files", [])
+                                if _reel_files:
+                                    _reel_fid = _reel_files[0]["id"]
+                                    _drive_svc.files().copy(
+                                        fileId=_reel_fid,
+                                        body={"name": f"{post_id}_carousel_reel.mp4", "parents": [_reels_dest]},
+                                        supportsAllDrives=True,
+                                    ).execute()
+                                    print(f"  Reel copied → Reels_Shorts/{niche}")
+                                else:
+                                    print(f"  [reel] carousel_reel.mp4 not found in motion folder — skipping Reels_Shorts copy")
+                    except Exception as _reel_copy_err:
+                        print(f"  [reel] Reels_Shorts copy failed (non-fatal): {_reel_copy_err}")
+
                 # Mirror status to correct In Production tab (Content Control)
                 try:
                     import sys
