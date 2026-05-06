@@ -149,10 +149,11 @@ Trigger: content_creator.yml runs at 2:30 AM daily. Manual trigger via GitHub Ac
 ---
 
 ## 3. CURRENT STATUS SNAPSHOT
-[Updated: 2026-05-01 — corrected from Pipeline Inventory doc]
+[Updated: 2026-05-06 — after 10-task SH batch + gap audit]
 
 PIPELINE IS BUILDING ✅ — carousels render, reviewer passes, Drive upload works, emails send.
-Remaining issues are QUALITY problems, not infrastructure failures.
+Buffer scheduling is now UNBLOCKED (SH-029 BUFFER_PROFILE_ID guard removed).
+Remaining issues are QUALITY problems + a few prior-session gaps (SH-013/SH-028/SH-015/SH-041/SH-011).
 
 WORKING ✅
 - Pipeline runs end-to-end: topic_picker → carousel_builder → PNG render → Drive upload → email preview
@@ -177,8 +178,11 @@ BROKEN / QUALITY ISSUES ❌
 (none remaining from previous audit — see DONE list)
 
 UNTESTED 🟡
-- approval_handler.py — Gmail reply detection → Buffer scheduling
+- approval_handler.py — Gmail reply detection → Buffer scheduling (NOW UNBLOCKED — guard removed 2026-05-06 b72f320)
 - Build history dedup — BUILT (ef7a018) but not yet triggered in prod
+- find_supporting_clips() (SH-022) — code wired, awaits next pipeline run for live test
+- run_weekly_catalog_audit() (SH-037) — wired into 4AM agent, fires next Sunday
+- _fetch_url_cache (SH-056) — populates only on Pexels/Pixabay paths; AI cascade providers don't register URLs (low value because OPC blocks all AI tiers anyway)
 
 ---
 
@@ -213,23 +217,41 @@ DONE THIS SESSION ✅ (2026-05-05 session 5)
 - SH-016: .clip-frame rounded corners + layered shadows + accent-ring (823754f)
 - SH-055: --margin CSS variable + SLIDE_INSET_PX configurable (e7d7f6b + 2607977)
 - SH-017: yt-dlp max 300s duration filter on all 3 download call sites (c24c000)
-- SH-015: tier_giphy() GIPHY→GIF→MP4 in motion_sources.py SOURCE_CHAIN (5638cbf) — CODE DONE, secret pending
+- SH-015: tier_giphy() GIPHY→GIF→MP4 in motion_sources.py SOURCE_CHAIN (5638cbf) + GIPHY_API_KEY env wired in workflow (4a1c710) — ACTIVE as soon as GIPHY_API_KEY secret is set
 - SH-020: label-leak checker in carousel_reviewer.py check_html_placeholders() (24ea1ce + af17b74)
-- SH-013: 8th-grade readability rule → OPC_COPY_RULES + BRAZIL_COPY_RULES (967534b + af17b74) — PARTIAL (3 prompt functions still missing, see gaps)
-- SH-028: score_storytelling() Haiku scorer wired into check_built_post() (b21482e) — PARTIAL (Drive review path not wired)
-- SH-011: review_only_folder_id input in content_creator.yml (7cf6834) — PARTIAL (retry job guard missing)
-- SH-041: DALL-E off by default via _USE_DALLE guard (fca9082) — CODE DONE, opt-in undocumented
+- SH-013: 8th-grade readability rule → OPC_COPY_RULES + BRAZIL_COPY_RULES (967534b + af17b74) — PARTIAL (3 prompt functions still missing, see PENDING #1)
+- SH-028: score_storytelling() Haiku scorer wired into check_built_post() (b21482e) + credit-depleted HTTP 529/overload WARN added (4a1c710) — PARTIAL (Drive review path still not wired, see PENDING #2)
+- SH-011: review_only_folder_id input in content_creator.yml (7cf6834) — PARTIAL (retry job guard missing, see PENDING #5)
+- SH-041: DALL-E off by default via _USE_DALLE guard (fca9082) + workflow env documented + legacy _generate_ai_cover() now also requires USE_DALLE=true (4a1c710) — FULLY GUARDED
 - SH-061: brief validation markers [SH-061] ✅/⚠/❌ in main.py (083040f)
 - Master Checklist updated — all 10 rows = Done with commit evidence + gap notes
 
-PENDING ⏳ (priority order — top = most impactful)
+GAP-CLOSING COMMIT (4a1c710 — addresses post-session audit):
+- content_creator.yml (both jobs): GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }} + USE_DALLE: '' with opt-in comment
+- carousel_builder.py: _USE_DALLE constant added; legacy _generate_ai_cover() now requires USE_DALLE=true (was bypassing image_providers.py guard)
+- carousel_reviewer.py: score_storytelling() catches HTTPError, surfaces ⚠ WARN on HTTP 529/overload/credit instead of silent skip
+
+DONE THIS SESSION ✅ (2026-05-06 — 10-task SH batch + gap audit)
+- SH-025: OPC_MATERIAL_REFERENCE wired into _opc_photo_query() for stock query enrichment (87b4fec)
+- SH-037: run_weekly_catalog_audit() added + called from 4AM agent every Sunday (69a2e66)
+- SH-038: TIER 0 OPC catalog extended to product-photo slides 2-4 (ba14867)
+- SH-039: DALL-E blocked for OPC — real photos only (ced297e)
+- SH-040: photo_matcher._url_looks_watermarked_or_tiny wired into _vision_accept (87b4fec)
+- SH-056: _fetch_url_cache tracks Pexels+Pixabay source URLs for AI-art domain check (87b4fec)
+- SH-057: cutout head-crop fixed (overflow:visible + object-position:top center + min-height:110%) (ea487b3, 97cc2f0)
+- SH-022: find_supporting_clips() in motion_sources.py + wired into main.py (807c8db)
+- SH-010: video-research.yml clips upload to Drive resources/clips/ via OAuth (1cc20c8)
+- SH-029: BUFFER_PROFILE_ID guard removed — schedule_to_buffer() auto-discovers profile (b72f320)
+
+PENDING ⏳ (priority order — top = most impactful — START HERE TOMORROW)
 1. SH-013 gap: add readability rule inline to generate_progress_content(), generate_dados_content(), generate_verdade_content() — 3 functions build own prompts, bypass OPC/BRAZIL_COPY_RULES. File: scripts/content_creator/carousel_builder.py
 2. SH-028 gap: wire score_storytelling() into check_drive_folder() after cover.html downloaded to /tmp. File: scripts/content_creator/carousel_reviewer.py
-3. SH-015 gap: add GIPHY_API_KEY to GitHub secrets (gh secret set GIPHY_API_KEY --repo priihigashi/oak-park-ai-hub) + add to content_creator.yml env block (both main + retry jobs)
-4. SH-041 gap: add commented USE_DALLE line to content_creator.yml env section so teams know how to opt in
-5. SH-011 gap: add && github.event.inputs.review_only_folder_id == '' to retry job "Retry content creator" step if condition (line ~274 in content_creator.yml)
-6. Test approval_handler.py → Buffer flow (ARCH FLAG 3 — must happen before daily automation is left running)
-7. Run content_creator.yml manually (Phase 3) — trigger one build, observe email preview
+3. Add GIPHY_API_KEY to GitHub secrets: `gh secret set GIPHY_API_KEY --repo priihigashi/oak-park-ai-hub` (workflow env already wired in 4a1c710 — secret is the LAST piece. Priscila must paste GIPHY developer dashboard key)
+4. SH-011 gap: add `&& github.event.inputs.review_only_folder_id == ''` to retry job "Retry content creator" step if condition (line ~277 in content_creator.yml). Low priority (retry only fires on failure)
+5. Test approval_handler.py → Buffer flow — UNBLOCKED 2026-05-06 (BUFFER_PROFILE_ID guard removed). Send a real APPROVE reply to a preview email, confirm Buffer schedules.
+6. Run content_creator.yml manually (Phase 3) — trigger one build, observe email preview, verify SH-025/038/039/056 actually engage on real OPC slides
+7. Verify SH-022 find_supporting_clips() pulls real Pexels videos on next prod run (PEXELS_API_KEY ✅ set)
+8. Verify SH-037 catalog audit runs next Sunday (4AM agent will print "[scraper] SH-037: Sunday — running photo catalog description audit")
 
 BLOCKED 🚫
 - Approval → Buffer flow — untested, needs manual test (reply APPROVE to preview email → confirm Buffer scheduling)
