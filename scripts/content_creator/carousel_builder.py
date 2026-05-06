@@ -226,6 +226,13 @@ MANDATORY RULES — follow these exactly:
 6. Tone: Direct, matter-of-fact, no jargon, no hype.
    - Write like a contractor explaining something to a homeowner over coffee.
    - No exclamation marks in slide text. One max in caption.
+
+7. READABILITY: Write at 8th-grade level or simpler.
+   - Max sentence length: 15 words. Break longer sentences in two.
+   - Use common words. BANNED: "utilize" (say "use"), "leverage" (say "use"),
+     "implement" (say "do"), "facilitate" (say "help"), "subsequently" (say "then"),
+     "aforementioned" (say "this"), "commence" (say "start"), "endeavor" (say "try").
+   - If a homeowner needs to Google the word, pick a simpler one.
 """
 
 BRAZIL_COPY_RULES = """
@@ -250,6 +257,12 @@ CAROUSEL STRUCTURE RULES (Brazil/News fact-check):
 10. Opposition confirmation = find 1 source from the political opposition that
     ALSO confirms the same fact. Cross-partisan agreement = strongest credibility.
     This kills the "this is partisan" rebuttal before it starts.
+
+11. READABILITY: Escreva em linguagem simples (nível ensino médio).
+    - Frases curtas — máximo 15 palavras por frase. Divida frases longas em duas.
+    - Palavras do dia a dia. PROIBIDO: termos técnicos sem explicação, jargão político
+      não explicado, siglas sem legenda. Se precisar de sigla, explique na primeira vez.
+    - Meta: qualquer pessoa de 14 anos deve entender sem consultar dicionário.
 11. Caption is written AFTER the carousel slides are finalized — never before.
     Caption complements the slides, it does not summarize them.
 12. CAPTION HASHTAG RULES (shadow-ban prevention):
