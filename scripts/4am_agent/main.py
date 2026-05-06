@@ -25,7 +25,7 @@ from pathlib import Path
 import pytz
 from datetime import datetime
 
-from scraper          import scrape_all_targets, scrape_website_articles
+from scraper          import scrape_all_targets, scrape_website_articles, run_weekly_catalog_audit
 from script_generator import pick_topics_and_write_scripts
 from broll_finder     import get_broll_for_script
 from sheets_writer    import (
@@ -97,6 +97,9 @@ def main():
                             print(f"[{log_pfx}]   Website/{niche}/{url}: {added} articles → Content Ideas (blog)")
                     except Exception as we:
                         print(f"[{log_pfx}]   WARNING: Website scrape failed for {url}: {we}")
+
+        # -- SH-037: Weekly Sunday photo catalog audit (non-fatal, runs before scraping) --
+        run_weekly_catalog_audit()
 
         # -- 2. Scrape (graceful fallback) --
         print(f"[{log_pfx}] Step 2: Scraping via Apify...")

@@ -396,6 +396,48 @@ def scrape_all_targets(targets):
     return all_results, total_scraped, total_rejected
 
 
+def run_weekly_catalog_audit():
+    """SH-037: Run photo catalog description audit on Sundays (weekday 6).
+    Calls audit_stale_catalog_rows() from photo_matcher to log stale descriptions.
+    batch_retag_stale_rows() is a stub until Vision API is wired — it logs counts only."""
+    import datetime as _dt
+    if _dt.datetime.today().weekday() != 6:  # 6 = Sunday
+        return
+    print("[scraper] SH-037: Sunday — running photo catalog description audit")
+    try:
+        import sys, os
+        _cc_dir = os.path.join(os.path.dirname(__file__), "..", "content_creator")
+        if _cc_dir not in sys.path:
+            sys.path.insert(0, _cc_dir)
+        from photo_matcher import audit_stale_catalog_rows, batch_retag_stale_rows  # type: ignore
+        SHEETS_TOKEN = os.environ.get("SHEETS_TOKEN", "")
+        if not SHEETS_TOKEN:
+            print("[scraper] SH-037: no SHEETS_TOKEN — skipping catalog audit")
+            return
+        import json
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+        data = json.loads(SHEETS_TOKEN)
+        creds = Credentials(
+            token=data.get("token") or data.get("access_token"),
+            refresh_token=data.get("refresh_token"),
+            token_uri=data.get("token_uri", "https://oauth2.googleapis.com/token"),
+            client_id=data.get("client_id"), client_secret=data.get("client_secret"),
+            scopes=["https://www.googleapis.com/auth/spreadsheets"],
+        )
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        sheet_svc = build("sheets", "v4", credentials=creds)
+        stale = audit_stale_catalog_rows(sheet_svc,
+                                         "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU",
+                                         "📸 Photo Catalog")
+        if stale:
+            batch_retag_stale_rows(stale)  # logs count; Vision API retag is pending
+    except Exception as _e:
+        print(f"[scraper] SH-037: catalog audit error (non-fatal): {_e}")
+
+
 def scrape_website_articles(url, niche):
     """
     Fetches article titles + links from a website URL.
