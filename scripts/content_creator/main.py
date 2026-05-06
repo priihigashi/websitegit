@@ -73,13 +73,33 @@ MANUAL_BRIEF = os.environ.get("MANUAL_BRIEF", "").strip()  # Google Docs URL or 
 TEST_OUTPUT_FOLDER = os.environ.get("TEST_OUTPUT_FOLDER", "").strip()
 
 
+# SH-048: alert digest — collect all failures, send ONE email at run end
+_PENDING_ALERTS: list[str] = []
+
+
 def _send_alert(msg: str):
-    """Fail-loud email alert when pipeline hits a crash path or produces zero output.
-    Uses gh CLI to trigger send_email.yml (uses PRI_OP_GMAIL_APP_PASSWORD)."""
+    """SH-048: Queue an alert. Flushed as one email at end of run by _flush_alerts().
+    Prevents inbox flood when multiple failures happen in the same pipeline run."""
+    print(f"\n🔴 ALERT (queued): {msg}")
+    _PENDING_ALERTS.append(msg)
+
+
+def _flush_alerts():
+    """Send all queued alerts as ONE digest email. Call once at the end of main()."""
+    if not _PENDING_ALERTS:
+        return
     try:
-        print(f"\n🔴 ALERT: {msg}")
-        subject = f"[content_creator] Pipeline alert — {datetime.now(ET).strftime('%Y-%m-%d %H:%M ET')}"
-        body = f"Pipeline hit a failure:\n\n{msg}\n\nCheck logs: https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/content_creator.yml"
+        run_time = datetime.now(ET).strftime('%Y-%m-%d %H:%M ET')
+        subject = f"[content_creator] {len(_PENDING_ALERTS)} pipeline alert(s) — {run_time}"
+        body_lines = [
+            f"Content Creator pipeline encountered {len(_PENDING_ALERTS)} alert(s) in this run:\n",
+        ]
+        for i, alert in enumerate(_PENDING_ALERTS, 1):
+            body_lines.append(f"--- Alert {i} ---\n{alert}\n")
+        body_lines.append(
+            "\nCheck logs: https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/content_creator.yml"
+        )
+        body = "\n".join(body_lines)
         subprocess.run(
             ["gh", "workflow", "run", "send_email.yml",
              "--repo", "priihigashi/oak-park-ai-hub",
@@ -88,8 +108,9 @@ def _send_alert(msg: str):
              "-f", f"body={body}"],
             check=False, timeout=30,
         )
+        print(f"  Alert digest sent: {len(_PENDING_ALERTS)} alert(s) bundled")
     except Exception as e:
-        print(f"  (alert send itself failed: {e})")
+        print(f"  (alert digest send itself failed: {e})")
 
 
 CLIP_THRESHOLD = 8  # Clip Collections count required before building a clips_needed topic
@@ -2044,4 +2065,7 @@ if __name__ == "__main__":
         tb = traceback.format_exc()
         print(f"\n🔴 UNCAUGHT: {e}\n{tb}")
         _send_alert(f"Uncaught crash in main():\n{e}\n\n{tb[-2000:]}")
-        sys.exit(1)
+    finally:
+        _flush_alerts()  # SH-048: send all queued alerts as one digest email
+        if _PENDING_ALERTS:
+            sys.exit(1)
