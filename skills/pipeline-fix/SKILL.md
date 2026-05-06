@@ -639,3 +639,97 @@ PENDING ⏳ (next session):
 2. Test approval_handler → Buffer end-to-end (reply APPROVE to a preview email)
 3. Run content_creator.yml manually — verify all templates render + motion folders created
 4. Check Master Checklist for new SH items (P0 Critical: SH-018, SH-065, SH-002, SH-003, SH-006 still Blocked)
+
+---
+
+## SESSION 7 NOTES — 2026-05-06 (Resilience-pass overnight audit)
+
+### Context
+Priscila asked for an overnight unattended pass on the pipeline spreadsheet. The
+sandbox had no `gh` CLI / SHEETS_TOKEN, so live Master Checklist updates weren't
+possible from the agent. Worked the documented PENDING list + audited the full
+pipeline cascade for transient-error robustness instead. The next pipeline_self_heal
+cron cycle (every 2h) will sync these commits to the Master Checklist tab via
+`pipeline_tracker_writer.py sync` as soon as it picks up changes from the queue.
+
+### Real bugs found and fixed (5 commits, branch claude/fix-pipeline-spreadsheet-fw8mc)
+
+GAP S7-1 — carousel_reviewer.py L1050: `(529, 529)` duplicate tuple (commit 0fa1b2e).
+Anthropic rate-limit (429) and service-unavailable (503) responses fell through
+the duplicate-only check and printed as a hard error instead of the soft-warn
+path. Now `(429, 503, 529)` covers all transient capacity issues.
+
+GAP S7-2 — motion_sources.py L929: `find_supporting_clips()` requested `landscape`
+clips from Pexels then sorted to "prefer portrait" — meaning portrait clips never
+appeared in the result set (commit 0fa1b2e). Carousels are 1080x1350 and reels
+are 9:16 (both portrait). Switched the API request to `portrait` so the file
+selector actually has portrait candidates. Other Pexels calls in this file
+already use portrait — this aligns with the rest of the codebase.
+
+GAP S7-3 — self_heal/orchestrator.py L1129-1140: only `anthropic.BadRequestError`
+and `AuthenticationError` were caught in the Claude→OpenAI fallback (commit dedcc8d).
+`RateLimitError`, `APIStatusError` (529 overloaded), `APIConnectionError`, and
+`APITimeoutError` all bubbled up and crashed the entire 2-hour cycle, leaving
+the picked task stuck IN-PROGRESS until the next manual intervention. Added the
+full transient-error set to the fallback so a single 429/529/timeout no longer
+takes the orchestrator down.
+
+GAP S7-4 — self_heal/orchestrator.py L1210: when the 3-attempt retry loop
+exited without a break (every smoke test red, or every patch rejected by the
+NN-S2 deletion guard), `final_outcome` stayed `UNKNOWN` (commit dedcc8d). The
+fix log + queue Last Result column then said "UNKNOWN" with no diagnostic.
+Now sets `FAILED_AFTER_RETRIES: <last error_log[:160]>` so the next session
+can see why the task didn't complete.
+
+GAP S7-5 — capture/capture_pipeline.py L91-115: `_llm_text()` (the SH-033
+in-pipeline credit-fallback helper) only re-routed to OpenAI on credit/auth
+errors. Rate limits, overloaded responses, connection errors, and timeouts
+all re-raised, crashing capture and leaving queue rows stuck (commit 31cbe0b).
+Added the same transient classification used by orchestrator.py +
+_llm_fallback.py so a 429/529/timeout falls through to OpenAI instead of
+killing the run. Catches both class-name patterns (`RateLimitError`,
+`APIStatusError`, `OverloadedError`, `APIConnectionError`, `APITimeoutError`)
+and string heuristics (`overloaded`, ` 429`, ` 529`).
+
+### Verified correct (no fix needed, ruled out from audit)
+- approval_handler.py L250 `_buffer_find_slot` BUFFER_KEY use → guarded by L277
+  `if not BUFFER_KEY: return False` in the only caller. False positive.
+- carousel_builder.py L91-92 `except Exception: pass` → intentional soft check
+  on photo_matcher import; falls through to `_vision_validate`. False positive.
+- capture_pipeline.py L97-98 `"AuthenticationError" in type(_ce).__name__` →
+  substring check on class name works correctly. False positive.
+- photo_matcher.py L150 `best_row[:10]` → guarded by L148 `if len(row) < 10:
+  return 0`. False positive.
+- self_heal/orchestrator.py L174-179 `for...else` → for-else fires correctly
+  on no-match; logs warning and returns. False positive.
+
+### Theme
+All 5 fixes are in the **transient-error resilience layer** — the pipeline
+already had 3-route cascades for content and image generation per NN-S8, but
+the seams between the layers (orchestrator's Claude call, capture's `_llm_text`,
+reviewer's storytelling scorer) had narrower exception nets than the cascades
+themselves. A single Anthropic 529 was crashing the whole step instead of
+falling through. Net effect: pipeline survives transient Anthropic outages
+end-to-end now.
+
+### Sheet sync
+Master Checklist not updated directly from this session (sandbox had no
+SHEETS_TOKEN). Next pipeline_self_heal cron cycle (every 2h via
+`scripts/pipeline_tracker_writer.py sync`) will pick up the commits and
+update tracker rows automatically. Manual sync available via:
+  python scripts/pipeline_tracker_writer.py done --sh-id SH-XXX \
+    --done "..." --evidence "commit 0fa1b2e|dedcc8d|31cbe0b"
+
+### Commits this session
+- 0fa1b2e — fix(pipeline): correct (529,529) typo + portrait orientation for B-roll
+- dedcc8d — fix(self_heal): broaden Anthropic error fallback + surface failed-retries
+- 31cbe0b — fix(capture): _llm_text falls back on transient Anthropic errors too
+
+### PENDING ⏳ (carries forward, unchanged)
+1. ⚠️ PRISCILA: gh secret set GIPHY_API_KEY --repo priihigashi/oak-park-ai-hub
+2. Test approval_handler → Buffer end-to-end (reply APPROVE to a preview email)
+3. Run content_creator.yml manually — verify all templates render + motion folders
+4. Check Master Checklist for new SH items (P0 Critical: SH-018, SH-065,
+   SH-002, SH-003, SH-006 still Blocked)
+5. Merge claude/fix-pipeline-spreadsheet-fw8mc → main once Priscila reviews
+   the 3 commits above
