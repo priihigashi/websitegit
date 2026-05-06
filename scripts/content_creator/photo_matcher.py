@@ -401,7 +401,7 @@ _BAD_URL_PATTERNS = [
 
 # Small-dimension patterns in URL: e.g. /100x100/, ?w=50, _200x200_
 _SMALL_DIM_RE = re.compile(
-    r"[/_](\d{1,3})x(\d{1,3})[/_?]"
+    r"[/_](\d{1,3})x(\d{1,3})[/_?"]
 )
 
 
