@@ -254,3 +254,126 @@ def match_before_after_pair(topic):
     if before_url or after_url:
         print(f"  photo_matcher: before/after pair found (scores: before={best_before}, after={best_after})")
     return before_url, after_url
+
+
+# ── SH-037: Catalog description audit ────────────────────────────────────────
+
+# Patterns considered generic/stale descriptions — not useful for matching.
+_STALE_DESCRIPTION_PATTERNS = re.compile(
+    r"^(image|photo|picture|img|dsc|screenshot|file|untitled|none|n/a|na|"
+    r"img[_\s]?\d+|dsc[_\s]?\d+|pic[_\s]?\d+|photo[_\s]?\d+)$",
+    re.IGNORECASE,
+)
+
+
+def audit_stale_catalog_rows(sheet_service, spreadsheet_id, tab_name):
+    """Read catalog rows and identify those with missing or generic descriptions.
+
+    A row is stale if its Description column (col F, index 5) is:
+      - blank / whitespace only
+      - a generic placeholder like "image", "photo", "IMG_1234", "DSC_5678"
+
+    Args:
+        sheet_service: a Google Sheets API service object (unused if we call
+                       the internal _read_catalog helper directly). Pass None
+                       to use the module-level token+sheet.
+        spreadsheet_id: the spreadsheet ID to read from (defaults to SHEET_ID).
+        tab_name: the tab name to read from (defaults to CATALOG_TAB).
+
+    Returns:
+        list of dicts with keys: row_index (1-based, including header),
+        filename, description, drive_url.
+        Empty list if catalog is unreachable or all rows are fine.
+
+    NOTE: Does NOT delete or modify any rows — read-only audit.
+    """
+    token = _get_token()
+    if not token:
+        print("  photo_matcher.audit_stale_catalog_rows: no token — cannot read catalog")
+        return []
+
+    # Allow callers to override the target sheet/tab via args
+    sid = spreadsheet_id or SHEET_ID
+    tname = tab_name or CATALOG_TAB
+
+    try:
+        import urllib.parse as _up
+        enc = _up.quote(f"'{tname}'!A:J", safe="!:'")
+        url = (f"https://sheets.googleapis.com/v4/spreadsheets/{sid}"
+               f"/values/{enc}?majorDimension=ROWS")
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        resp = json.loads(urllib.request.urlopen(req, timeout=10).read())
+        rows = resp.get("values", [])
+    except Exception as e:
+        print(f"  audit_stale_catalog_rows: catalog read failed — {e}")
+        return []
+
+    if not rows:
+        return []
+
+    stale = []
+    # Row 0 is header; data rows start at index 1 (row_index 2 in Sheets 1-based)
+    for i, row in enumerate(rows[1:], start=2):
+        # Pad row to at least 6 columns so index access is safe
+        padded = row + [""] * max(0, 6 - len(row))
+        filename = padded[3].strip()    # col D
+        drive_url = padded[4].strip()   # col E
+        description = padded[5].strip() # col F (AI Description)
+
+        # Blank description
+        if not description:
+            stale.append({
+                "row_index": i,
+                "filename": filename,
+                "description": description,
+                "drive_url": drive_url,
+                "reason": "blank",
+            })
+            continue
+
+        # Generic placeholder pattern
+        if _STALE_DESCRIPTION_PATTERNS.match(description):
+            stale.append({
+                "row_index": i,
+                "filename": filename,
+                "description": description,
+                "drive_url": drive_url,
+                "reason": "generic_placeholder",
+            })
+
+    print(f"  audit_stale_catalog_rows: {len(stale)} stale row(s) out of {len(rows)-1} total")
+    return stale
+
+
+def batch_retag_stale_rows(rows, vision_client=None):
+    """Stub: log stale rows that would be re-tagged when Vision API key is wired.
+
+    Args:
+        rows: list of dicts returned by audit_stale_catalog_rows().
+        vision_client: Google Vision API client (not yet wired — pass None).
+
+    Returns:
+        list of row_index values that would be re-tagged.
+
+    TODO: when VISION_API_KEY env var is available, call Vision API on each
+    row's drive_url to generate a real description, then write it back to
+    col F via Sheets batchUpdate. See reference_vision_api_sa.md for SA key.
+    """
+    if not rows:
+        print("  batch_retag_stale_rows: no stale rows to retag")
+        return []
+
+    if vision_client is None:
+        print(
+            f"  batch_retag_stale_rows: Vision API not wired — "
+            f"{len(rows)} row(s) need re-tagging (stub mode):"
+        )
+        for r in rows:
+            print(
+                f"    row {r['row_index']:>4}: {r['filename'][:50]!r:50s} "
+                f"reason={r['reason']} url={r['drive_url'][:60]}"
+            )
+        return [r["row_index"] for r in rows]
+
+    # TODO: implement Vision API call when key is available
+    raise NotImplementedError("Vision API re-tagging not yet implemented — wire VISION_API_KEY first")
