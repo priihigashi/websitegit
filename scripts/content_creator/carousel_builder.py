@@ -1421,6 +1421,7 @@ def _remove_background(img_rel_path, work_dir):
     out_path = src.parent / out_name
     out_rel = f"resources/images/{out_name}"
     if out_path.exists() and out_path.stat().st_size > 2000:
+        _crop_to_bounding_box(out_path)   # SH-036: remove transparent waste first
         _ensure_transparent_headroom(out_path)
         return out_rel
     try:
@@ -1470,6 +1471,7 @@ def _remove_background(img_rel_path, work_dir):
                 if out_url:
                     png_bytes = urllib.request.urlopen(out_url, timeout=20).read()
                     out_path.write_bytes(png_bytes)
+                    _crop_to_bounding_box(out_path)   # SH-036
                     _ensure_transparent_headroom(out_path)
                     print(f"  rembg ✅ → {out_name} ({len(png_bytes)//1024}KB)")
                     return out_rel
@@ -1782,6 +1784,41 @@ def _ensure_transparent_headroom(image_path, *, top_ratio=0.10, side_ratio=0.035
         return False
 
 
+def _crop_to_bounding_box(image_path) -> bool:
+    """SH-036: Crop a PNG to its non-transparent content bounding box.
+
+    Background-removal tools leave large transparent borders that cause the
+    subject to appear tiny when placed in a fixed-size CSS container.
+    Cropping to the alpha bounding box makes the subject fill the frame,
+    so object-position:center top correctly shows the face at the top.
+    Call this BEFORE _ensure_transparent_headroom so headroom is added
+    to the already-cropped image.
+    """
+    try:
+        from PIL import Image
+    except Exception:
+        return False
+    path = Path(image_path)
+    if not path.exists() or path.suffix.lower() != ".png":
+        return False
+    try:
+        with Image.open(path) as img:
+            rgba = img.convert("RGBA")
+            bbox = rgba.getchannel("A").getbbox()
+            if not bbox:
+                return False
+            left, top, right, bottom = bbox
+            if left == 0 and top == 0 and right == rgba.width and bottom == rgba.height:
+                return False  # already tight — nothing to crop
+            cropped = rgba.crop(bbox)
+            cropped.save(path)
+            print(f"  Cutout bbox crop: {path.name} {rgba.size} → {cropped.size}")
+            return True
+    except Exception as e:
+        print(f"  Cutout bbox crop failed for {path.name} (non-fatal): {e}")
+        return False
+
+
 def _generate_cutouts_for_cutout_template(content, paths, work_dir):
     """Auto-create no-background PNG cutouts for cutout template slides.
     Non-blocking: if all providers fail, template still uses regular images."""
@@ -1802,12 +1839,14 @@ def _generate_cutouts_for_cutout_template(content, paths, work_dir):
             continue
         out_abs = cut_dir / f"slide_{slide_idx}.png"
         if out_abs.exists() and out_abs.stat().st_size > 5000:
+            _crop_to_bounding_box(out_abs)  # SH-036
             _ensure_transparent_headroom(out_abs)
             continue
         ok = _remove_background_with_inference_sh(str(src_abs), str(out_abs))
         if not ok:
             ok = _remove_background_with_replicate(str(src_abs), str(out_abs))
         if ok:
+            _crop_to_bounding_box(out_abs)  # SH-036
             _ensure_transparent_headroom(out_abs)
             print(f"  Cutout generated: resources/cutouts/slide_{slide_idx}.png")
         else:
