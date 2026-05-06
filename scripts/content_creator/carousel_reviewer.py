@@ -963,6 +963,80 @@ def check_text_quality(html_path: str, niche: str) -> list[str]:
     return issues
 
 
+def score_storytelling(html_path: str, niche: str) -> dict:
+    """SH-028: Score storytelling quality 0-100 per slide via Haiku.
+
+    Returns {slide_scores: [{slide, score, reason}], overall: int, summary: str}.
+    Empty dict if API key missing or HTML unreadable.
+    """
+    if not ANTHROPIC_KEY:
+        return {}
+    try:
+        html = Path(html_path).read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return {}
+
+    # Extract per-slide headline text
+    slide_blocks = re.findall(
+        r'<div class="slide[^"]*"[^>]*>([\s\S]*?)(?=<div class="slide|\Z)', html
+    )
+    slide_texts = []
+    for i, block in enumerate(slide_blocks, start=1):
+        text = re.sub(r"<[^>]+>", " ", block)
+        text = re.sub(r"\s+", " ", text).strip()[:200]
+        if text:
+            slide_texts.append({"slide": i, "text": text})
+
+    if not slide_texts:
+        return {}
+
+    slides_payload = "\n".join(
+        f"Slide {s['slide']}: {s['text']}" for s in slide_texts
+    )
+    niche_label = "homeowner tips (OPC)" if niche == "opc" else "news/political fact-check"
+
+    prompt = (
+        f"You are reviewing an Instagram carousel for a {niche_label} account.\n"
+        "Score each slide's storytelling quality from 0 to 100:\n"
+        "90-100 = gripping, specific, pulls reader forward\n"
+        "70-89  = clear and useful, minor gaps\n"
+        "50-69  = generic or vague, could be any topic\n"
+        "0-49   = filler, confusing, or off-message\n\n"
+        f"{slides_payload}\n\n"
+        "Return JSON only — no markdown, no explanation outside JSON:\n"
+        '{"slide_scores":[{"slide":1,"score":85,"reason":"one sentence"},...], '
+        '"overall":78,"summary":"one sentence overall"}'
+    )
+
+    try:
+        payload = json.dumps({
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 400,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "x-api-key": ANTHROPIC_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+        )
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        raw = resp["content"][0]["text"].strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
+        data = json.loads(raw)
+        print(
+            f"  [SH-028] Storytelling overall={data.get('overall','?')}/100 — {data.get('summary','')[:80]}"
+        )
+        return data
+    except Exception as e:
+        print(f"  [SH-028] Storytelling score error (non-fatal): {e}")
+        return {}
+
+
 def check_built_post(result: dict) -> dict:
     """Run all checks on a single built post result dict.
     Returns {post_id, topic, niche, issues: [str], passed: bool}."""
@@ -1030,6 +1104,7 @@ def check_built_post(result: dict) -> dict:
         )
 
     # 6. Goal 1B — hook strength + copy coherence (Sonnet)
+    storytelling_scores: dict = {}
     if ANTHROPIC_KEY:
         _html_for_text = html_local if html_local.exists() else None
         if not _html_for_text:
@@ -1038,6 +1113,15 @@ def check_built_post(result: dict) -> dict:
                 break
         if _html_for_text and Path(_html_for_text).exists():
             all_issues.extend(check_text_quality(str(_html_for_text), niche))
+            # SH-028: storytelling quality score per slide
+            storytelling_scores = score_storytelling(str(_html_for_text), niche)
+            if storytelling_scores:
+                overall = storytelling_scores.get("overall", 0)
+                if overall < 60:
+                    all_issues.append(
+                        f"[storytelling] Overall quality score {overall}/100 — "
+                        f"{storytelling_scores.get('summary', '')[:100]}"
+                    )
 
     # 7. Auto-fix — runs in analyze_and_fix mode when Drive folder ID is available.
     # check_built_post() previously only detected issues; this closes the gap where
@@ -1078,6 +1162,7 @@ def check_built_post(result: dict) -> dict:
         "passed": passed,
         "drive_link": _drive_link,
         "autofix_summary": autofix_summary,
+        "storytelling_scores": storytelling_scores,
     }
 
 
@@ -1125,6 +1210,16 @@ def send_review_email(failed_posts: list[dict], all_posts: list[dict]):
                         f"         · [{ed.get('severity','?')}] {ed.get('slide','?')}: "
                         f"'{str(ed.get('original',''))[:40]}' → '{str(ed.get('suggested',''))[:40]}'"
                     )
+        # Storytelling scores (SH-028)
+        ss = p.get("storytelling_scores") or {}
+        if ss:
+            overall = ss.get("overall", "?")
+            lines.append(f"       ── storytelling {overall}/100: {ss.get('summary','')[:80]} ──")
+            for s in (ss.get("slide_scores") or [])[:8]:
+                lines.append(
+                    f"         · slide {s.get('slide','?')}: {s.get('score','?')}/100 — {s.get('reason','')[:60]}"
+                )
+
         # Append before/after image change log if Goal 1A ran.
         if afs and afs.get("details"):
             lines.append("       ── auto-fix change log ──")
