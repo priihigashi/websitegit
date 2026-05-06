@@ -365,8 +365,18 @@ Top verified quotes:
 
 Manifest: {manifest_url}
 
-Manifest ready for review. Reply APPROVE-RENDER to trigger Phase 3 render
-after Phase 2 (face-match gate) is built.
+────────────────────────────────────────────
+REPLY COMMANDS (just reply to this email with one line):
+
+  APPROVE MANIFEST          — accept manifest, ready for render
+  RENDER CAROUSEL           — render carousel from verified clips
+  RENDER REMOTION           — render Remotion video compilation
+  NEEDS MORE EVIDENCE       — pipeline re-runs with broader queries
+  REJECT MANIFEST           — discard, do not render
+
+Phase 3 render gate: APPROVE MANIFEST first, then RENDER CAROUSEL or
+RENDER REMOTION. Final preview approval still required before posting.
+────────────────────────────────────────────
 
 NO render triggered. NO Buffer scheduling.
 

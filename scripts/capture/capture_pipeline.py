@@ -4443,6 +4443,24 @@ def main():
         print(f"  Source: {metadata.get('source_url', '')}")
         print(f"{'='*50}")
 
+    # SH-104 Phase 1.5 — auto-dispatch person_evidence_mining when notes match.
+    # Non-blocking: any failure here logs to 🚨 Pipeline Failures but does NOT
+    # break the normal capture above.
+    try:
+        from person_evidence_dispatcher import maybe_dispatch_from_capture
+        _evidence_status = maybe_dispatch_from_capture(
+            notes=getattr(args, "notes", "") or "",
+            seed_url=args.url,
+            niche=args.project,
+            caption=(metadata or {}).get("caption", ""),
+            transcript=transcript or "",
+            creator_name=(metadata or {}).get("creator_name", ""),
+        )
+        if _evidence_status.get("triggered"):
+            print(f"\n[SH-104] evidence-mining status: {_evidence_status}")
+    except Exception as _e_em:
+        print(f"\n[SH-104] evidence-mining hook failed (non-fatal): {_e_em}")
+
 
 if __name__ == "__main__":
     _url_for_failure = sys.argv[1] if len(sys.argv) > 1 else ""
