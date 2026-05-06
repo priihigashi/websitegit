@@ -77,6 +77,10 @@ on:
         description: 'Comma-separated Drive folder links/IDs for review_only mode'
         required: false
         default: ''
+      review_only_folder_id:
+        description: 'Single Drive folder ID or link — auto-enables review_only mode (shortcut for review_drive_folders)'
+        required: false
+        default: ''
       kling_approve:
         description: 'Activate Kling AI animation for cover slides missing real clips (1=yes, leave blank=no)'
         required: false
@@ -132,7 +136,7 @@ jobs:
           echo "============================="
 
       - name: Run content creator
-        if: ${{ github.event.inputs.review_only != 'true' }}
+        if: ${{ github.event.inputs.review_only != 'true' && github.event.inputs.review_only_folder_id == '' }}
         working-directory: scripts/content_creator
         run: python main.py
         env:
@@ -154,8 +158,15 @@ jobs:
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
           ALERT_EMAIL: priscila@oakpark-construction.com
           WORK_DIR: /tmp/content_creator_run
-          REVIEW_DRIVE_FOLDERS: ${{ github.event.inputs.review_drive_folders || '' }}
         run: |
+          # SH-011: review_only_folder_id merges into REVIEW_DRIVE_FOLDERS automatically
+          FOLDER_ID="${{ github.event.inputs.review_only_folder_id }}"
+          BASE_FOLDERS="${{ github.event.inputs.review_drive_folders }}"
+          if [ -n "$FOLDER_ID" ]; then
+            export REVIEW_DRIVE_FOLDERS="${BASE_FOLDERS:+$BASE_FOLDERS,}$FOLDER_ID"
+          else
+            export REVIEW_DRIVE_FOLDERS="$BASE_FOLDERS"
+          fi
           RESULTS_FILE=/tmp/content_creator_run/results.json
           if [ -f "$RESULTS_FILE" ]; then
             export CONTENT_CREATOR_RUN=$(cat "$RESULTS_FILE")
@@ -281,8 +292,15 @@ jobs:
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
           ALERT_EMAIL: priscila@oakpark-construction.com
           WORK_DIR: /tmp/content_creator_run
-          REVIEW_DRIVE_FOLDERS: ${{ github.event.inputs.review_drive_folders || '' }}
         run: |
+          # SH-011: review_only_folder_id merges into REVIEW_DRIVE_FOLDERS automatically
+          FOLDER_ID="${{ github.event.inputs.review_only_folder_id }}"
+          BASE_FOLDERS="${{ github.event.inputs.review_drive_folders }}"
+          if [ -n "$FOLDER_ID" ]; then
+            export REVIEW_DRIVE_FOLDERS="${BASE_FOLDERS:+$BASE_FOLDERS,}$FOLDER_ID"
+          else
+            export REVIEW_DRIVE_FOLDERS="$BASE_FOLDERS"
+          fi
           RESULTS_FILE=/tmp/content_creator_run/results.json
           if [ -f "$RESULTS_FILE" ]; then
             export CONTENT_CREATOR_RUN=$(cat "$RESULTS_FILE")
