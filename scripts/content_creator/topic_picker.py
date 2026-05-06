@@ -29,7 +29,8 @@ def get_token():
         "grant_type": "refresh_token",
     }).encode()
     resp = json.loads(urllib.request.urlopen(
-        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+        timeout=15).read())
     _token_cache["token"] = resp["access_token"]
     _token_cache["exp"] = time.time() + resp.get("expires_in", 3500) - 60
     return resp["access_token"]
@@ -40,7 +41,7 @@ def sheet_get(range_str):
     enc = urllib.parse.quote(range_str, safe="!:'")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    return json.loads(urllib.request.urlopen(req).read()).get("values", [])
+    return json.loads(urllib.request.urlopen(req, timeout=15).read()).get("values", [])
 
 
 def fetch_drive_doc_content(doc_url_or_id: str) -> str:

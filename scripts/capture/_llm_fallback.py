@@ -208,7 +208,7 @@ def _try_dalle_image(prompt: str, size: str) -> bytes:
         n=1,
     )
     img_url = resp.data[0].url
-    return urllib.request.urlopen(img_url).read()
+    return urllib.request.urlopen(img_url, timeout=60).read()
 
 
 def _try_replicate_image(prompt: str, size: str) -> bytes:
@@ -227,7 +227,7 @@ def _try_replicate_image(prompt: str, size: str) -> bytes:
         img_url = output[0]
     else:
         img_url = str(output)
-    return urllib.request.urlopen(img_url).read()
+    return urllib.request.urlopen(img_url, timeout=60).read()
 
 
 def llm_image(prompt: str, *, size: str = "1024x1024", context: str = "", url: str = "") -> bytes:

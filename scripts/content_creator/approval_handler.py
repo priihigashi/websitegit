@@ -43,7 +43,8 @@ def get_gmail_token():
         "grant_type": "refresh_token",
     }).encode()
     resp = json.loads(urllib.request.urlopen(
-        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+        timeout=15).read())
     return resp["access_token"], td
 
 
@@ -56,7 +57,7 @@ def search_gmail_replies(token, after_date=None):
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
 
     try:
-        resp = json.loads(urllib.request.urlopen(req).read())
+        resp = json.loads(urllib.request.urlopen(req, timeout=20).read())
     except Exception as e:
         print(f"  Gmail search error: {e}")
         return []
@@ -68,7 +69,7 @@ def search_gmail_replies(token, after_date=None):
         msg_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg['id']}?format=full"
         req2 = urllib.request.Request(msg_url, headers={"Authorization": f"Bearer {token}"})
         try:
-            detail = json.loads(urllib.request.urlopen(req2).read())
+            detail = json.loads(urllib.request.urlopen(req2, timeout=20).read())
         except Exception:
             continue
 
@@ -481,7 +482,7 @@ def update_catalog(post_id, status, variant=None):
     enc = urllib.parse.quote(f"'{CATALOG_TAB}'!A:O", safe="!:'")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    rows = json.loads(urllib.request.urlopen(req).read()).get("values", [])
+    rows = json.loads(urllib.request.urlopen(req, timeout=20).read()).get("values", [])
 
     for i, row in enumerate(rows):
         if len(row) > 0 and row[0].strip() == post_id:

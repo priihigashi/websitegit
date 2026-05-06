@@ -97,7 +97,8 @@ def _get_oauth_token() -> str:
             "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
         }).encode()
         resp = json.loads(urllib.request.urlopen(
-            urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
+            urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+            timeout=15).read())
         return resp.get("access_token", "")
     except Exception:
         return ""

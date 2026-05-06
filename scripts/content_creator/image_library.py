@@ -35,7 +35,8 @@ def _oauth_token() -> str:
         "grant_type": "refresh_token",
     }).encode()
     resp = json.loads(urllib.request.urlopen(
-        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+        timeout=15,
     ).read())
     return resp["access_token"]
 
@@ -45,7 +46,7 @@ def _sheet_get(range_a1: str):
     enc = urllib.parse.quote(range_a1, safe="!:'")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {tok}"})
-    return json.loads(urllib.request.urlopen(req).read()).get("values", [])
+    return json.loads(urllib.request.urlopen(req, timeout=15).read()).get("values", [])
 
 
 def _sheet_append(range_a1: str, rows: list[list[str]]):
@@ -64,7 +65,7 @@ def _sheet_append(range_a1: str, rows: list[list[str]]):
             "Content-Type": "application/json",
         },
     )
-    urllib.request.urlopen(req)
+    urllib.request.urlopen(req, timeout=15)
 
 
 def _sheet_batch_update(data_ranges: list[dict]):
@@ -79,7 +80,7 @@ def _sheet_batch_update(data_ranges: list[dict]):
             "Content-Type": "application/json",
         },
     )
-    urllib.request.urlopen(req)
+    urllib.request.urlopen(req, timeout=15)
 
 
 def ensure_tab():

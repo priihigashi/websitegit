@@ -1224,7 +1224,7 @@ def _make_public_url(token, file_id):
         perm_body = json.dumps({"type": "anyone", "role": "reader"}).encode()
         req = urllib.request.Request(perm_url, data=perm_body, method="POST",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
-        urllib.request.urlopen(req).read()
+        urllib.request.urlopen(req, timeout=15).read()
     except Exception:
         pass
     return f"https://drive.google.com/uc?export=download&id={file_id}"
@@ -1239,7 +1239,7 @@ def _find_run_folder_for_slug(token, slug):
            f"?q={urllib.parse.quote(q)}&supportsAllDrives=true"
            f"&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=name%20desc")
     req   = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    files = json.loads(urllib.request.urlopen(req).read()).get("files", [])
+    files = json.loads(urllib.request.urlopen(req, timeout=15).read()).get("files", [])
     if not files:
         return None, None
     return files[0]["id"], files[0]["name"]   # highest version (desc sorted)

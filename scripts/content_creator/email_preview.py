@@ -31,7 +31,8 @@ def get_token():
         "grant_type": "refresh_token",
     }).encode()
     resp = json.loads(urllib.request.urlopen(
-        urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+        timeout=15,
     ).read())
     return resp["access_token"], td
 
@@ -60,7 +61,7 @@ def _send_via_workflow(subject, html_body):
             "Content-Type": "application/json",
         },
     )
-    urllib.request.urlopen(req)
+    urllib.request.urlopen(req, timeout=15)
     print(f"  Preview email triggered via send_email.yml: {subject}")
     return True
 

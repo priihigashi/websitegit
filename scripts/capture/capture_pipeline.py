@@ -276,7 +276,8 @@ def _yt_cookie_alert(resolved=False):
         url2 = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc2}?valueInputOption=USER_ENTERED"
         urllib.request.urlopen(urllib.request.Request(url2,
             data=json.dumps({"values": [[status]]}).encode(),
-            method="PUT", headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}))
+            method="PUT", headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}),
+            timeout=15)
     elif not resolved:
         enc3 = urllib.parse.quote(f"'{tab}'!A:C", safe="!:'")
         url3 = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc3}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS"
@@ -285,7 +286,8 @@ def _yt_cookie_alert(resolved=False):
                      "action_needed"]]
         urllib.request.urlopen(urllib.request.Request(url3,
             data=json.dumps({"values": row_data}).encode(),
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}))
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}),
+            timeout=15)
 
     if not resolved and GMAIL_PASSWORD:
         try:
