@@ -639,3 +639,118 @@ PENDING ⏳ (next session):
 2. Test approval_handler → Buffer end-to-end (reply APPROVE to a preview email)
 3. Run content_creator.yml manually — verify all templates render + motion folders created
 4. Check Master Checklist for new SH items (P0 Critical: SH-018, SH-065, SH-002, SH-003, SH-006 still Blocked)
+
+---
+
+## SESSION 7 NOTES — 2026-05-06 (HTTP timeout audit, Pass 1)
+
+### Scope
+Pipeline = ~25k LOC across scripts/. Prior sessions focused on SH-* tracker items and template/CSS fixes. This pass scanned for hang-forever bugs: HTTP calls and subprocess.run() with no explicit timeout=. A stalled connection on GitHub Actions chews the entire 90-min runner budget — same blast radius as a crash, harder to diagnose.
+
+### What was changed (7 commits, all on claude/fix-pipeline-spreadsheet-fw8mc-5mIor)
+
+S7-FIX01 (commit 9caca66) — image_providers.py:56-58
+  _get_sheets_token() OAuth refresh urlopen had no timeout. Hangs every
+  image-cascade slot whenever the Pipeline Failures logger fires.
+  Fix: timeout=15 (matches existing pattern on L81 of same file).
+
+S7-FIX02 (commit 117840b) — scheduled_capture_poll.py:82
+  _sheets_service() OAuth refresh urlopen had no timeout. Capture queue
+  drain (every 2h cron) would hang on stalled OAuth.
+  Fix: timeout=15.
+
+S7-FIX03 (commit 8097696) — topic_scraper.py:209
+  download_audio() called subprocess.run(yt-dlp ...) without timeout=.
+  A stalled host would hang the topic_scraper inside capture_pipeline.yml.
+  Fix: timeout=300 + try/except TimeoutExpired → RuntimeError so the
+  existing failure-path handles it cleanly.
+
+S7-FIX04 (commit a5b3d3a) — 4am_agent/main.py: 6 urlopen call sites
+  _check_system_alerts() and _push_claude_md_mirror() had OAuth refresh,
+  Gmail messages.list, Gmail messages.get, Sheets values.get×2, and
+  Sheets values.update all without timeout.
+  Fix: OAuth → timeout=15, Gmail → timeout=20, Sheets → timeout=15.
+  L234 + L244 already had timeouts; left untouched.
+
+S7-FIX05 (commit 8ddb0a1) — 4am_agent/self_healer.py: 9 GitHub-API
+  call sites + 1 OAuth refresh. _load_from_github, _push_to_github,
+  _create_pr (5 calls), _trigger_research, _haiku_fix all unprotected.
+  Fix: GET → timeout=20, PUT/POST with payload → timeout=30, OAuth
+  refresh → timeout=15. The self-heal cron is the autonomous loop —
+  hang here = no nightly fixes ever land.
+
+S7-FIX06 (commit 1994cf4) — 4am_agent/scraper.py + sheets_writer.py
+  scraper.py: Apify status poll (in a while loop — worst place for a
+  hang) and Apify dataset fetch had no timeouts. Plus _fetch_inspo_urls
+  OAuth refresh + sheet read.
+  sheets_writer.py: OAuth refresh.
+  Fix: Apify poll → timeout=15, dataset → timeout=30, OAuth → timeout=15.
+
+S7-FIX07 (commit 7d24f71) — 4am_agent/loose_end_detector.py:30
+  Same OAuth refresh hang pattern as the other 4am_agent files.
+  Fix: timeout=15.
+
+### Files scanned but already protected
+- broll_finder.py (Pexels/Pixabay/YouTube — all 3 had timeout=15)
+- notifier.py (ntfy.sh — timeout=10)
+- self_healer.py L341/L391 (already had timeouts before this pass)
+- 4am_agent/main.py L234/L244 (already had timeouts)
+- image_providers.py — every other urlopen had a timeout already
+  (only the OAuth-refresh path was the gap)
+
+### Files NOT yet scanned (carry-forward to next session)
+- scripts/content_creator/auto_fixer.py
+- scripts/4am_agent/runner.py + script_generator.py + chat_log_reader.py +
+  context_reader.py + pattern_learner.py
+- scripts/lib/sheet_schema.py
+- All .github/workflows/*.yml (none audited yet — risk of hardcoded
+  timeouts that don't match script timeouts, missing fail-safes, etc.)
+- scripts/capture/capture_pipeline.py (the big one — was touched in
+  earlier sessions but not specifically for timeout coverage)
+
+### Bug classes that yielded results
+- Pattern: OAuth-refresh urlopen with no timeout — found in 6 files.
+  Every script that talks to Google APIs has its own copy-pasted
+  _creds()/_service() function. The pattern is to inline the
+  oauth2.googleapis.com/token POST. Whoever wrote the pattern omitted
+  timeout=, so every copy inherited the bug. If a new script adds the
+  same _creds() boilerplate, it ships the same hang. Worth a future
+  refactor: lift _creds() into scripts/lib/_oauth.py with timeout
+  baked in.
+- Pattern: requests.{get,post,put} without timeout in self_healer.py.
+  Localized to GitHub API interactions; the rest of the codebase
+  generally has timeouts on requests.* calls. Outlier file, now fixed.
+
+### Bug classes NOT yielding results
+- Anthropic SDK calls — checked self_healer.py:45 (the only direct
+  client.messages.create on this audit pass). It uses llm_text from
+  scripts/capture/_llm_fallback.py when available, which has Claude
+  → OpenAI → Gemini cascade with broad except Exception per tier.
+  The direct messages.create path is fallback-of-fallback. No
+  transient-error gap to fix here.
+- Drive API supportsAllDrives — every Drive call sampled in this
+  pass already had it set. No NN-violations found.
+- Bare `except: pass` — found a few in image_providers.py:81-83
+  (Pipeline Failures logger), self_healer.py:96, scraper.py:132+145,
+  but each is intentional silent-fail (logger must not block caller,
+  per the comment on L83). Not bugs.
+
+### Verification
+- All edits used Edit tool against verified line numbers.
+- Each commit references the specific file + line + reason in the
+  message. NN-S2 (append-only / no rewrite) honored — only added the
+  timeout= parameter, no behavioral change.
+- Pattern matches existing protected calls in the same files
+  (timeout values chosen to match the local convention).
+
+### PENDING ⏳ (next session)
+1. ⚠️ PRISCILA: gh secret set GIPHY_API_KEY (carry-forward from session 6)
+2. Test approval_handler → Buffer end-to-end (carry-forward)
+3. Run content_creator.yml manually — observe email preview
+4. Continue HTTP-timeout audit on the files listed above (auto_fixer.py,
+   capture_pipeline.py, runner.py, script_generator.py, lib/sheet_schema.py)
+5. Workflow audit pass: scan .github/workflows/*.yml for hardcoded
+   step timeouts that contradict script-level timeouts
+6. P0 blocked SH items in Master Checklist (SH-018, SH-065, SH-002,
+   SH-003, SH-006) still need queue rows populated — flag to Priscila
+   if not already on her plate
