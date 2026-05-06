@@ -68,6 +68,44 @@ def _tokens(text: str) -> set[str]:
 
 # ─── Checks ──────────────────────────────────────────────────────────────────
 
+def _visible_html(html: str) -> str:
+    """Drop non-visible blocks so CSS/JS tokens don't trip copy checks."""
+    html = re.sub(r"<style[\s\S]*?</style>", " ", html, flags=re.IGNORECASE)
+    html = re.sub(r"<script[\s\S]*?</script>", " ", html, flags=re.IGNORECASE)
+    html = re.sub(r"<svg[\s\S]*?</svg>", " ", html, flags=re.IGNORECASE)
+    return html
+
+
+def _first_variant_html(html: str) -> str:
+    """Review only one variant from HTML files that contain v2 + v3 slides."""
+    marker = "<!-- V3 -->"
+    return html.split(marker, 1)[0] if marker in html else html
+
+
+def _slide_blocks_for_review(html: str, limit=None) -> list[str]:
+    visible = _visible_html(_first_variant_html(html))
+    blocks = re.findall(
+        r'<div class="slide(?:\s[^"]*)?"[^>]*>([\s\S]*?)(?=<div class="slide(?:\s|")|\Z)',
+        visible,
+    )
+    return blocks[:limit] if limit else blocks
+
+
+def _plain_text(fragment: str) -> str:
+    text = re.sub(r"<[^>]+>", " ", fragment or "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _extract_class_text(block: str, class_tokens: tuple[str, ...]) -> str:
+    token_alt = "|".join(re.escape(t) for t in class_tokens)
+    m = re.search(
+        rf'class="[^"]*(?:{token_alt})[^"]*"[^>]*>([\s\S]*?)</(?:div|p|h[1-6])',
+        block,
+        flags=re.IGNORECASE,
+    )
+    return _plain_text(m.group(1)) if m else ""
+
+
 def check_html_placeholders(html_path: str) -> list[str]:
     """Return list of issue strings found in the HTML file."""
     issues = []
@@ -91,7 +129,10 @@ def check_html_placeholders(html_path: str) -> list[str]:
             + "; ".join(ctx_matches[:3])
         )
 
-    # Label-leak: structural labels that Haiku sometimes emits verbatim into slide copy
+    visible_html = _visible_html(html)
+
+    # Label-leak: structural labels that Haiku sometimes emits verbatim into slide copy.
+    # Inspect visible markup only; CSS declarations like "--c-body:" are not copy.
     _LABEL_PATTERNS = [
         r'\bSlide\s+\d+\s*[:\-]',          # "Slide 1:", "Slide 2 -"
         r'\b(?:Hook|CTA|Body|Title|Intro|Outro|Headline|Subhead|Caption)\s*:',  # field names
@@ -101,7 +142,7 @@ def check_html_placeholders(html_path: str) -> list[str]:
     ]
     label_hits = []
     for pat in _LABEL_PATTERNS:
-        matches = re.findall(pat, html, re.IGNORECASE)
+        matches = re.findall(pat, visible_html, re.IGNORECASE)
         if matches:
             label_hits.extend(set(m.strip() for m in matches[:3]))
     if label_hits:
@@ -170,8 +211,14 @@ def check_html_placeholders(html_path: str) -> list[str]:
             if len(clean) > limit:
                 issues.append(f"Text overflow risk: .{cls} #{idx} is {len(clean)} chars (limit {limit}).")
 
-    # OPC-specific quality checks (prevent text-only middle slides)
-    if "Tip of the Week · Oak Park Construction" in html:
+    # OPC-specific quality checks for the legacy tip template. Smart slide-plan
+    # carousels mix standalone templates and won't always contain legacy
+    # .context-img-slot or .project-note blocks.
+    is_smart_opc = (
+        "OPC — Smart Plan" in html
+        or re.search(r'class="slide opc-(?:mp|fcg|is|st|bs|pm|dt)\b', html)
+    )
+    if "Tip of the Week · Oak Park Construction" in html and not is_smart_opc:
         slot_count = len(re.findall(r'class="context-img-slot"', html))
         if slot_count < 3:
             issues.append(
@@ -950,18 +997,29 @@ def check_text_quality(html_path: str, niche: str) -> list[str]:
     except Exception:
         return issues
 
-    # Extract cover headline + subhead (first match in document)
-    m_hl = re.search(r'class="[^"]*headline[^"]*"[^>]*>([\s\S]*?)</(?:div|p|h[1-6])', html)
-    m_sh = re.search(r'class="[^"]*subhead[^"]*"[^>]*>([\s\S]*?)</(?:div|p|span|h[1-6])', html)
-    headline = re.sub(r"<[^>]+>", "", m_hl.group(1)).strip() if m_hl else ""
-    subhead  = re.sub(r"<[^>]+>", "", m_sh.group(1)).strip() if m_sh else ""
+    slide_blocks = _slide_blocks_for_review(html, limit=5)
+    first_slide = slide_blocks[0] if slide_blocks else ""
 
-    # Extract all headlines in document order for coherence check
-    all_headlines = [
-        re.sub(r"<[^>]+>", "", h).strip()
-        for h in re.findall(r'class="[^"]*headline[^"]*"[^>]*>([\s\S]*?)</(?:div|p|h[1-6])', html)
-    ]
-    all_headlines = [h for h in all_headlines if h]
+    # Extract cover headline + subhead from the first slide only. Smart OPC
+    # cover templates use .cover-hl/.cover-hook instead of the legacy
+    # .headline/.subhead classes.
+    headline = (
+        _extract_class_text(first_slide, ("cover-hl", "headline"))
+        or _plain_text(first_slide)[:90]
+    )
+    subhead = _extract_class_text(first_slide, ("cover-hook", "subhead", "body-text"))
+
+    # Extract one narrative headline per slide from the first variant only.
+    # The HTML contains v2 and v3 variants; reviewing both makes the story look
+    # duplicated even when the visible carousel is fine.
+    all_headlines = []
+    for block in slide_blocks:
+        h = (
+            _extract_class_text(block, ("cover-hl", "profile-headline", "headline", "title", "pro-title"))
+            or _plain_text(block)[:90]
+        )
+        if h:
+            all_headlines.append(h)
 
     # Check A — hook strength
     hook_score, hook_reason = _score_hook_strength(headline, subhead, niche)
@@ -991,14 +1049,13 @@ def score_storytelling(html_path: str, niche: str) -> dict:
     except Exception:
         return {}
 
-    # Extract per-slide headline text
-    slide_blocks = re.findall(
-        r'<div class="slide[^"]*"[^>]*>([\s\S]*?)(?=<div class="slide|\Z)', html
-    )
+    # Extract per-slide visible text from one variant only. The builder stores
+    # both v2 and v3 variants in cover.html; scoring both creates a fake
+    # "slides repeat" failure.
+    slide_blocks = _slide_blocks_for_review(html, limit=5)
     slide_texts = []
     for i, block in enumerate(slide_blocks, start=1):
-        text = re.sub(r"<[^>]+>", " ", block)
-        text = re.sub(r"\s+", " ", text).strip()[:200]
+        text = _plain_text(block)[:200]
         if text:
             slide_texts.append({"slide": i, "text": text})
 

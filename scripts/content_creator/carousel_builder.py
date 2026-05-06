@@ -778,6 +778,36 @@ def _truncate_to_limit(value, limit):
     return value
 
 
+_OPC_AI_FIELD_LABEL_RE = re.compile(
+    r"^\s*(?:slide\s*\d+\s*[-:]\s*)?"
+    r"(?:hook|cta|body|title|intro|outro|headline|subhead|caption|quote|copy|text)\s*:\s*",
+    re.IGNORECASE,
+)
+
+
+def _clean_opc_generated_value(value, scalar: bool = False):
+    """Normalize LLM-filled template fields before they hit HTML.
+
+    This strips accidental field labels such as "body: ..." and turns scalar
+    fields that came back as one-item lists into plain strings.
+    """
+    if scalar and isinstance(value, list):
+        value = next((x for x in value if str(x).strip()), "")
+    if isinstance(value, str):
+        cleaned = value.strip()
+        for _ in range(2):
+            new = _OPC_AI_FIELD_LABEL_RE.sub("", cleaned).strip()
+            if new == cleaned:
+                break
+            cleaned = new
+        return cleaned
+    if isinstance(value, list):
+        return [_clean_opc_generated_value(x, scalar=False) for x in value]
+    if isinstance(value, dict):
+        return {k: _clean_opc_generated_value(v, scalar=False) for k, v in value.items()}
+    return value
+
+
 def _coerce_list_4(value, fallback):
     """Force a value to a 4-item list of strings, padding with fallback as needed."""
     if isinstance(value, list):
@@ -1044,7 +1074,11 @@ Return JSON ONLY, no preamble."""
         if isinstance(haiku_block, dict):
             for k, (_, limit) in OPC_STANDALONE_SCHEMAS[tid].items():
                 if k in haiku_block and haiku_block[k] not in (None, ""):
-                    merged[k] = _truncate_to_limit(haiku_block[k], limit)
+                    cleaned = _clean_opc_generated_value(haiku_block[k], scalar=limit > 0)
+                    merged[k] = _truncate_to_limit(cleaned, limit)
+        for k, (_, limit) in OPC_STANDALONE_SCHEMAS[tid].items():
+            if k in merged:
+                merged[k] = _clean_opc_generated_value(merged[k], scalar=limit > 0)
         # Coerce list fields to required cardinality.
         if tid == "opc_material_profile":
             merged["decision_factors"] = _coerce_list_4(
