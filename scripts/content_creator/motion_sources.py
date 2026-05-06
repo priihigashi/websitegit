@@ -42,6 +42,7 @@ CLIP_COLLECTIONS_SHEET_ID = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr
 
 MIN_CLIP_BYTES = 10_000          # reject anything smaller as a broken stub
 MAX_CLIP_BYTES = 50 * 1024 * 1024  # 50MB hard cap — don't pull full-length films
+MAX_CLIP_DURATION_S = 300        # 5 min max — skip feature films / long lectures
 
 
 def _write_sidecar(dest_path: Path, source_tier: str, source_url: str,
@@ -142,7 +143,9 @@ def tier_clip_collections(slide_cfg: dict, dest_path: Path) -> bool:
                     r = subprocess.run(
                         ["yt-dlp", "--no-warnings", "--no-playlist",
                          "--format", "mp4[height<=720]/best[height<=720]/best",
-                         "--max-downloads", "1", "--output", str(tmp_out), clip_url],
+                         "--max-downloads", "1",
+                         "--match-filter", f"duration < {MAX_CLIP_DURATION_S}",
+                         "--output", str(tmp_out), clip_url],
                         capture_output=True, timeout=90
                     )
                     produced = sorted(dest_path.parent.glob(dest_path.stem + ".cc.*"))
@@ -187,6 +190,7 @@ def _try_ytdlp_download(dest_path: Path, query: str, extra_args: Optional[list] 
         "--no-playlist",
         "--format", "mp4[height<=720]/best[height<=720]/best",
         "--max-downloads", "1",
+        "--match-filter", f"duration < {MAX_CLIP_DURATION_S}",
         "--output", str(tmp_out),
         f"ytsearch1:{query}",
     ]
@@ -329,7 +333,9 @@ def tier_apify_youtube(slide_cfg: dict, dest_path: Path) -> bool:
             subprocess.run(
                 ["yt-dlp", "--no-warnings", "--no-playlist",
                  "--format", "mp4[height<=720]/best[height<=720]/best",
-                 "--max-downloads", "1", "--output", str(tmp_out), video_url],
+                 "--max-downloads", "1",
+                 "--match-filter", f"duration < {MAX_CLIP_DURATION_S}",
+                 "--output", str(tmp_out), video_url],
                 capture_output=True, timeout=90
             )
             produced = sorted(dest_path.parent.glob(dest_path.stem + ".apyt.*"))
