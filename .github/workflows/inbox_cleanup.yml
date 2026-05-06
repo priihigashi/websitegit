@@ -1,0 +1,64 @@
+name: Inbox Cleanup + Bundler
+
+on:
+  schedule:
+    - cron: '0 11 * * *'   # daily 11:00 UTC = 7am ET cleanup
+    - cron: '0 17 * * *'   # daily 17:00 UTC = 1pm ET bundler
+    - cron: '0 23 * * *'   # daily 23:00 UTC = 7pm ET bundler
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'cleanup | bundler | both'
+        required: false
+        default: 'both'
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install google-auth google-auth-oauthlib google-api-python-client
+
+      - name: Set up gh CLI symlink (for bundler→send_email.yml trigger)
+        run: |
+          mkdir -p $HOME/bin
+          ln -s $(which gh) $HOME/bin/gh
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Run cleanup (Rules 1–6)
+        if: github.event.schedule == '0 11 * * *' || github.event.inputs.mode == 'cleanup' || github.event.inputs.mode == 'both' || github.event_name == 'workflow_dispatch'
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          python scripts/gmail_cleanup/inbox_cleanup_rules.py
+
+      - name: Run bundler
+        if: github.event.schedule == '0 17 * * *' || github.event.schedule == '0 23 * * *' || github.event.inputs.mode == 'bundler' || github.event.inputs.mode == 'both'
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/gmail_cleanup/gmail_bundler.py
+
+      - name: Failure alert email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: priscila@oakpark-construction.com
+          password: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          subject: "🚨 inbox_cleanup.yml FAILED — run ${{ github.run_id }}"
+          to: priscila@oakpark-construction.com
+          from: priscila@oakpark-construction.com
+          body: |
+            Inbox cleanup workflow failed.
+            Run: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}
