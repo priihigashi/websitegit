@@ -2,9 +2,10 @@
 pipeline_tracker_writer.py — sync Self-Heal Queue → Pipeline Fix Master Checklist
 
 Modes:
-  sync     : read all SH queue rows, update Master Checklist status for each SH-ID found
-  credit   : append one row to Credit Blocks tab (for API credit failures)
-  done     : mark a specific SH-ID as Done with evidence (direct update)
+  sync       : read all SH queue rows, update Master Checklist status for each SH-ID found
+  credit     : append one row to Credit Blocks tab (for API credit failures)
+  done       : mark a specific SH-ID as Done with evidence (direct update)
+  detail-doc : set/update the Detail Doc / Spec column for a specific SH-ID
 
 Usage:
   python scripts/pipeline_tracker_writer.py sync
@@ -14,6 +15,14 @@ Usage:
   python scripts/pipeline_tracker_writer.py done --sh-id SH-007 \
       --done "Manual fix: replaced _get_token() with OAuth refresh" \
       --evidence "commit 2193698"
+  python scripts/pipeline_tracker_writer.py detail-doc --sh-id SH-OPC-SMART-SLIDE-PICKER \
+      --doc "https://docs.google.com/document/d/..." \
+      --summary "Smart slide-by-slide template picker spec"
+
+Column-preservation contract:
+  sync/done modes write ONLY columns H (Status), J (What Was Done), K (Evidence),
+  P (Last Updated). They never touch other columns, so user-edited fields like
+  R (Detail Doc / Spec) are preserved across syncs.
 """
 
 import argparse
@@ -66,11 +75,15 @@ STATUS_MAP = {
 }
 
 # Master Checklist column indices (0-based)
-MC_COL_SH_ID   = 5   # F — Queue ID / SH-ID
-MC_COL_STATUS  = 7   # H — Status
-MC_COL_DONE    = 9   # J — What Was Done
-MC_COL_EVIDENCE= 10  # K — Evidence / Commit / Doc
-MC_COL_UPDATED = 15  # P — Last Updated
+MC_COL_SH_ID      = 5   # F — Queue ID / SH-ID
+MC_COL_STATUS     = 7   # H — Status
+MC_COL_TITLE      = 8   # I — Task Title
+MC_COL_DONE       = 9   # J — What Was Done
+MC_COL_EVIDENCE   = 10  # K — Evidence / Commit / Doc
+MC_COL_NEXT       = 11  # L — Next Action
+MC_COL_UPDATED    = 15  # P — Last Updated
+MC_COL_NOTES      = 16  # Q — Notes
+MC_COL_DETAIL_DOC = 17  # R — Detail Doc / Spec  (added 2026-05-06)
 
 
 def _sheets(creds):
@@ -103,7 +116,7 @@ def cmd_sync(svc):
     # Read Master Checklist
     mc = svc.spreadsheets().values().get(
         spreadsheetId=TRACKER_SS,
-        range=f"'{MC_TAB}'!A2:Q200",
+        range=f"'{MC_TAB}'!A2:R200",
     ).execute().get("values", [])
 
     updates = []
@@ -183,7 +196,7 @@ def cmd_done(svc, args):
 
     mc = svc.spreadsheets().values().get(
         spreadsheetId=TRACKER_SS,
-        range=f"'{MC_TAB}'!A2:Q200",
+        range=f"'{MC_TAB}'!A2:R200",
     ).execute().get("values", [])
 
     updates = []
@@ -212,6 +225,50 @@ def cmd_done(svc, args):
         print(f"done: {args.sh_id} marked Done in Master Checklist")
 
 
+# ── DETAIL-DOC mode ────────────────────────────────────────────────────────────
+def cmd_detail_doc(svc, args):
+    """Set the Detail Doc / Spec link (column R) for a specific SH-ID.
+    Optionally appends a short summary to the Notes column (Q).
+    Never touches other columns — preserves any in-progress work in the row."""
+    if not args.sh_id:
+        raise SystemExit("--sh-id required for detail-doc mode")
+    if not args.doc:
+        raise SystemExit("--doc required for detail-doc mode")
+
+    mc = svc.spreadsheets().values().get(
+        spreadsheetId=TRACKER_SS,
+        range=f"'{MC_TAB}'!A2:R200",
+    ).execute().get("values", [])
+
+    updates = []
+    found = False
+    for row_idx, row in enumerate(mc, start=2):
+        sh_id_cell = row[MC_COL_SH_ID].strip() if len(row) > MC_COL_SH_ID else ""
+        if sh_id_cell != args.sh_id:
+            continue
+        found = True
+        print(f"detail-doc: found {args.sh_id} at row {row_idx}")
+        updates.append({"range": f"'{MC_TAB}'!R{row_idx}", "values": [[args.doc]]})
+        if args.summary:
+            existing_notes = row[MC_COL_NOTES] if len(row) > MC_COL_NOTES else ""
+            stamp = f"[{TODAY}] spec: {args.summary}"
+            new_notes = f"{existing_notes}\n{stamp}".strip() if existing_notes else stamp
+            updates.append({"range": f"'{MC_TAB}'!Q{row_idx}", "values": [[new_notes[:1000]]]})
+        updates.append({"range": f"'{MC_TAB}'!P{row_idx}", "values": [[TODAY]]})
+        break
+
+    if not found:
+        print(f"detail-doc: SH-ID {args.sh_id!r} not found in Master Checklist")
+        print("           Add the row first, then re-run detail-doc.")
+        sys.exit(2)
+
+    svc.spreadsheets().values().batchUpdate(
+        spreadsheetId=TRACKER_SS,
+        body={"valueInputOption": "RAW", "data": updates},
+    ).execute()
+    print(f"detail-doc: {args.sh_id} → {args.doc}")
+
+
 # ── CLI ────────────────────────────────────────────────────────────────────────
 def main():
     p = argparse.ArgumentParser(description="Pipeline Fix Tracker writer")
@@ -231,6 +288,14 @@ def main():
     dn.add_argument("--done",     default="")
     dn.add_argument("--evidence", default="")
 
+    dd = sub.add_parser("detail-doc",
+                        help="Set Detail Doc / Spec link for a specific SH-ID")
+    dd.add_argument("--sh-id", required=True)
+    dd.add_argument("--doc",   required=True,
+                    help="Google Doc URL, Drive URL, repo path, or GitHub doc URL")
+    dd.add_argument("--summary", default="",
+                    help="Optional one-line summary appended to Notes (col Q)")
+
     args = p.parse_args()
     if not args.mode:
         p.print_help(); sys.exit(1)
@@ -244,6 +309,8 @@ def main():
         cmd_credit(svc, args)
     elif args.mode == "done":
         cmd_done(svc, args)
+    elif args.mode == "detail-doc":
+        cmd_detail_doc(svc, args)
 
 if __name__ == "__main__":
     main()

@@ -18,6 +18,44 @@ WHAT TO CARRY FORWARD (find and continue):
 
 ---
 
+## DETAIL DOC RULE — NON-NEGOTIABLE (added 2026-05-06)
+
+Every SH-ID row in Master Checklist may have a `Detail Doc / Spec` (column R). This is the ONLY source of truth for what the fix actually means. Row title + Next Action are summaries — they are not the spec.
+
+Before implementing ANY SH-ID row:
+
+1. Read the row from Pipeline Fix Master Checklist:
+   `https://docs.google.com/spreadsheets/d/1yh9C7KU9OlqCdHNDI9mbZ6ldqLA3bAR3uENXUh37bkQ`
+2. Check column R (`Detail Doc / Spec`). If it contains:
+   - a Google Doc link → open and read it (full content)
+   - a Drive folder/file link → open and read it
+   - a local repo path (e.g. `docs/specs/...md`) → read it
+   - a GitHub doc URL → fetch and read it
+3. Summarize the doc back in plain language BEFORE editing any code: intended fix, scope, files in scope, risks, acceptance criteria.
+4. If the row has NO detail doc and the task is complex (touches >1 file, >50 lines, or has multiple phases) → STOP. Create a detail doc first or ask Priscila to provide one. Use the helper:
+   ```
+   python scripts/pipeline_tracker_writer.py detail-doc \
+       --sh-id SH-XXX \
+       --doc "https://docs.google.com/document/d/..." \
+       --summary "Short one-line spec summary"
+   ```
+5. For simple one-line fixes (typo, single-cell value, single-line patch), proceed without a detail doc and update the row directly.
+6. NEVER implement from the row title alone when a detail doc exists — the doc supersedes the title.
+
+After the work:
+- Update column J `What Was Done`
+- Update column K `Evidence / Commit / Doc`
+- Update column L `Next Action` (or clear it if done)
+- Update column H `Status`
+- Update column P `Last Updated`
+
+The detail-doc column is preserved across `python scripts/pipeline_tracker_writer.py sync` runs — sync only writes columns H/J/K/P, never touches R.
+
+Detail doc destination (default): Pipeline Fix Drive folder
+`https://drive.google.com/drive/folders/1FHPkx8VA6c-Wmy6hI3uX_weSPwJPBp3z`
+
+---
+
 ## 1. MASTER REFERENCE INDEX
 
 ### Gallery (template viewer)
@@ -639,3 +677,84 @@ PENDING ⏳ (next session):
 2. Test approval_handler → Buffer end-to-end (reply APPROVE to a preview email)
 3. Run content_creator.yml manually — verify all templates render + motion folders created
 4. Check Master Checklist for new SH items (P0 Critical: SH-018, SH-065, SH-002, SH-003, SH-006 still Blocked)
+
+---
+
+## SESSION 7 NOTES — 2026-05-05 (verify-only — code verified, external blocks remain)
+
+### Purpose
+Verify a 4-fix report from a parallel session. No new code shipped today.
+
+### Verified ✅ (all 4 fixes already in main)
+1. **content_auditor.py** — `AGENTS` NameError gone. Line 408-409 uses `agent_count = len(_agents_for_niche(first_niche))`. py_compile passes. In commit `95dd152`.
+2. **carousel_reviewer.py** — `REVIEW_STRICT` env at line 43; `sys.exit(1)` on failures at line 1410; exception handler line 1422 also exits 1 in strict mode. In commit `95dd152`.
+3. **content_creator.yml** — `review_only_folder_id == ''` guard on all 4 blocks (lines 142, 183, 281, 321). In commit `7cf6834` + follow-ups. Session 6 had falsely flagged this as a gap; Session 7 confirms complete.
+4. **approval_handler.py** — `BUFFER_PROFILE_ID` guard removed at lines 931-933. `schedule_to_buffer()` auto-discovers IG profile via Buffer `/profiles.json`. In commit `b72f320`.
+
+### Drive image bytes verified
+Folder `1ZR8u1OPaEzNy6n6dDuDZ4UOaeuxogEfX` — PNGs are real `1080x1350`, 418KB-750KB. `resources/images` JPEGs 2.9MB-6.3MB (real bytes, not HTML redirect placeholders).
+
+### ⚠️ Discrepancy
+Report claimed *"I did not commit or push these patches"* — but `git status` is clean and all 4 are in `origin/main`. Report described already-committed work; no uncommitted local changes for those files.
+
+### 🔴 STILL OPEN — external API blocks (resume here tomorrow)
+
+**SH-101 — Apify YouTube + Instagram 403** (one fix unblocks both)
+- Cause: same `APIFY_API_KEY` powers both actors. Token expired / billing paused / actor access revoked.
+- Resume:
+  1. apify.com → Account → Integrations → check token + billing
+  2. Regenerate if needed; re-grant `apify~youtube-scraper` + `apify~instagram-scraper`
+  3. `~/bin/gh secret set APIFY_API_KEY --repo priihigashi/oak-park-ai-hub --body "<new>"`
+  4. Manual run `content_creator.yml`, watch for `[motion_sources] tier=youtube ok` log
+- File: `scripts/content_creator/motion_sources.py` (no code change)
+
+**SH-102 — Pexels API 403**
+- Cause: `PEXELS_API_KEY` invalid or rate-limited.
+- Resume: pexels.com/api → check quota → regenerate → `~/bin/gh secret set PEXELS_API_KEY ...` → re-run.
+
+**SH-103 — Vision validator 400 Bad Request** (CODE — Claude fixes tomorrow, not Priscila)
+- File: `scripts/content_creator/carousel_reviewer.py::_vision_accept()`
+- Likely: malformed `image_url` payload — missing `data:image/...;base64,` prefix, unsupported MIME, or >20MB.
+- Resume: read `_vision_accept`, reproduce 400 on a known-good local PNG, patch payload, push. Linked to SH-035.
+
+### Tracker rows added today
+- `Today Changes!A20:I23` — 4 verification rows
+- `Credit Blocks!A4:J7` — 4 open external API blocks
+
+### NEXT SESSION — exact resume order
+1. **Claude — fix SH-103** vision payload first (no Priscila action needed)
+2. **Priscila — rotate APIFY_API_KEY + PEXELS_API_KEY** (~5 min, accounts she owns)
+3. **Verify** — manual run `content_creator.yml`, confirm tiers stop 403-ing
+4. **Resume backlog** — SH-015 GIPHY secret, then approval → Buffer end-to-end test
+5. **Cleanup** — flip SH-101/102/103 rows to Done in Master Checklist with evidence
+
+---
+
+### SESSION 7 ADDENDUM — 2026-05-06 evening (workflow wiring + Vision clarification)
+
+**Commit `eeefd50` — `fix(content): wire vision and slide inset env vars`**
+Added to BOTH main create-content job env (line ~108) AND retry-on-failure job env (line ~255):
+- `VISION_API_KEY: ${{ secrets.VISION_API_KEY }}`
+- `SLIDE_INSET_PX: ${{ vars.SLIDE_INSET_PX || '40' }}`
+
+**CRITICAL clarification — don't conflate:**
+`VISION_API_KEY` = **Google Cloud Vision API**, used by `scripts/content_creator/photo_matcher.py::validate_image_relevance()` line 448. It is a pre-acceptance image-relevance scorer. NOT Anthropic Claude Vision.
+
+`_vision_validate()` / `_vision_accept()` in `carousel_reviewer.py` and `carousel_builder.py` use **Anthropic Claude Vision** via `ANTHROPIC_KEY` — separate auth, separate API. The HTTP 400 errors logged as `Vision OK (...): skipped (vision error: HTTP Error 400: Bad Request)` come from THIS Anthropic system, not Google.
+
+So: wiring `VISION_API_KEY` does NOT fix the HTTP 400 errors. SH-103 (the Anthropic payload fix) is still required and independent.
+
+**Secret status (verified `gh secret list` 2026-05-06 evening):**
+- `APIFY_API_KEY` ✅ exists (2026-04-06) — provider returns 403 → SH-101
+- `PEXELS_API_KEY` ✅ exists (2026-03-26) — provider returns 403 → SH-102
+- `VISION_API_KEY` ❌ MISSING — workflow wires it, Priscila must `gh secret set VISION_API_KEY` if Google Cloud Vision relevance check is desired
+- `GIPHY_API_KEY` ✅ exists (added 2026-05-06 02:07:53Z) — Priscila added during this session, closes SH-015
+
+**Two separate Vision issues to track:**
+- SH-103 (Anthropic Claude Vision HTTP 400) — code fix, payload diagnosis
+- SH-104 NEW — Google Cloud `VISION_API_KEY` secret missing — Priscila task, only matters if Google Vision relevance scoring is desired (low priority because URL heuristic already covers most cases)
+
+**Last 3 runs all green** — 25412084598, 25412034674, 25412034049. No `AGENTS` crash. No spurious red. Reel renders via Remotion (9445KB / 5 slides).
+
+**Tomorrow's first action (carry-forward):**
+SH-103 Anthropic Vision payload fix in `_vision_accept()` — print actual response body, audit message structure, likely missing `data:image/...;base64,` prefix or unsupported MIME. Then proceed to Priscila's APIFY/PEXELS key rotations.
