@@ -3578,7 +3578,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
 
 # Banned legacy template keys — must never appear in a slide plan or content dict.
 # Phase 5 reviewer gates also enforce this; the renderer raises immediately if seen.
-OPC_BANNED_TEMPLATE_KEYS = {"cutout", "illustrated"}
+OPC_BANNED_TEMPLATE_KEYS = {"cutout", "illustrated", "opc_cutout", "opc_illustrated"}
 
 
 def build_opc_from_slide_plan(content, slug, work_dir, media_paths=None):

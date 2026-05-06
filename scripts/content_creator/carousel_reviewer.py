@@ -1076,7 +1076,7 @@ def score_storytelling(html_path: str, niche: str) -> dict:
 # - slide count != 5
 # Vision-based image-text match remains gated on ANTHROPIC_KEY (existing behavior).
 
-OPC_BANNED_TEMPLATE_KEYS = {"cutout", "illustrated"}
+OPC_BANNED_TEMPLATE_KEYS = {"cutout", "illustrated", "opc_cutout", "opc_illustrated"}
 
 KNOWN_OPC_TEMPLATE_IDS = {
     "opc_tip_cover", "opc_tip_stat", "opc_tip_list", "opc_tip_explainer", "opc_tip_sources",

@@ -452,17 +452,16 @@ def build_recommendation(topic: str, brief: str, registry_path: Path = DEFAULT_R
 # plan_carousel_slides() returns a 5-slide plan with per-slide template_id, role,
 # content goal, image need, required content fields, and a production_safe flag.
 #
-# Templates fall into two buckets:
-# - Production-safe TODAY: opc_tip_cover/stat/list/explainer/sources (Phase 2 split
-#   the production tip builder into 5 callable component renderers).
-# - Plannable but NOT yet renderable: opc_duotone, opc_base, opc_statement,
-#   opc_material_profile, opc_item_spotlight, opc_four_card_grid,
-#   opc_progress_media. Their HTMLs exist in docs/templates/ but no Python
-#   builder exists in carousel_builder.py yet (Phase 6 — port standalones).
+# All 12 OPC template IDs the planner can emit are production-safe as of
+# Phase 6 (commit 690873f) — both the 5 tip components and the 7 standalones
+# (opc_duotone, opc_base, opc_statement, opc_material_profile,
+# opc_item_spotlight, opc_four_card_grid, opc_progress_media) have Python
+# builders in carousel_builder.py and scoped CSS in opc_standalones.css.
 #
-# The renderer (build_opc_from_slide_plan) is responsible for substituting the
-# closest tip component (fallback_template_id) for any slide whose template is
-# not production-safe. The planner just returns the truthful intent.
+# fallback_template_id is still emitted for each standalone as an emergency
+# escape hatch — build_opc_from_slide_plan() uses it only if the standalone's
+# entry is somehow missing from OPC_STANDALONE_COMPONENT_RENDERERS at runtime.
+# The reviewer flags any actual fallback as a bug (not a missing-builder case).
 
 PRODUCTION_SAFE_TEMPLATE_IDS = {
     "opc_tip_cover",
@@ -470,10 +469,19 @@ PRODUCTION_SAFE_TEMPLATE_IDS = {
     "opc_tip_list",
     "opc_tip_explainer",
     "opc_tip_sources",
+    # Phase 6 standalones — Python builders shipped 2026-05-06 (commit 690873f).
+    "opc_duotone",
+    "opc_base",
+    "opc_statement",
+    "opc_material_profile",
+    "opc_item_spotlight",
+    "opc_four_card_grid",
+    "opc_progress_media",
 }
 
-# Standalone template_id → safest tip component to use when its Python builder
-# is not yet implemented. The renderer reads this when production_safe=False.
+# Standalone template_id → safest tip component to use as a defensive
+# fallback. As of Phase 6 (2026-05-06) every standalone has a Python builder,
+# so this map is only consulted if a standalone goes missing at runtime.
 STANDALONE_TO_TIP_FALLBACK = {
     "opc_duotone":          "opc_tip_cover",
     "opc_base":             "opc_tip_cover",
@@ -664,7 +672,7 @@ def plan_carousel_slides(
         "slides": plan_slides,
         "safety_notes": [
             "Plan only — no rendering performed.",
-            "Slides marked production_safe=False fall back to fallback_template_id at render time until standalone Python builders ship (Phase 6).",
+            "All 7 standalone Python builders shipped in Phase 6 (commit 690873f); fallback_template_id is now a defensive escape hatch only.",
             "Banned legacy keys cutout/illustrated cannot appear in any slot.",
         ],
     }
