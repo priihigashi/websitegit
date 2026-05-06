@@ -265,6 +265,157 @@ def _update_content_queue_status(person_name: str, niche: str, new_status: str) 
     return False
 
 
+def _routing_capture_folder(niche: str) -> str:
+    """Resolve niche capture parent via routing.py. Returns "" on any failure."""
+    try:
+        import sys
+        from pathlib import Path as _Path
+        sys.path.insert(0, str(_Path(__file__).parent.parent))
+        import routing
+        return routing.capture_folder(niche) or routing.capture_folder("brazil") or ""
+    except Exception as exc:
+        print(f"  routing.capture_folder lookup failed: {exc}")
+        return ""
+
+
+def _find_latest_render_folder(drive, niche: str) -> dict:
+    """Newest clipmine_render_* folder under the niche's Captures parent.
+    Returns {"id": str, "name": str, "createdTime": str} or {} when none."""
+    parent = _routing_capture_folder(niche)
+    if not parent:
+        return {}
+    try:
+        res = drive.files().list(
+            q=(f"'{parent}' in parents and name contains 'clipmine_render_' "
+               f"and mimeType='application/vnd.google-apps.folder' and trashed=false"),
+            orderBy="createdTime desc",
+            pageSize=10,
+            fields="files(id,name,createdTime)",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+        ).execute().get("files", [])
+        return res[0] if res else {}
+    except Exception as exc:
+        print(f"  _find_latest_render_folder failed: {exc}")
+        return {}
+
+
+def _ensure_sh104_ready_folder(drive, niche: str) -> str:
+    """Find or create 'Ready to Post — SH-104' under the niche's Captures parent.
+    Distinct from OPC `Ready to Post` (which lives under OPC_TEMPLATES).
+    Returns folder ID or "" on failure."""
+    parent = _routing_capture_folder(niche)
+    if not parent:
+        return ""
+    name = "Ready to Post — SH-104"
+    try:
+        res = drive.files().list(
+            q=(f"'{parent}' in parents and name='{name}' "
+               f"and mimeType='application/vnd.google-apps.folder' and trashed=false"),
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+            fields="files(id)",
+        ).execute().get("files", [])
+        if res:
+            return res[0]["id"]
+        f = drive.files().create(
+            body={"name": name,
+                  "mimeType": "application/vnd.google-apps.folder",
+                  "parents": [parent]},
+            supportsAllDrives=True, fields="id",
+        ).execute()
+        return f["id"]
+    except Exception as exc:
+        print(f"  _ensure_sh104_ready_folder failed: {exc}")
+        return ""
+
+
+def _copy_sh104_render_to_ready(person_name: str, niche: str,
+                                 render_folder_id: str = "") -> dict:
+    """APPROVE PREVIEW side-effect — copy the latest clipmine_render_* contents
+    into a per-render subfolder of `Ready to Post — SH-104`.
+
+    Strategy:
+      1. If render_folder_id explicitly provided, use it.
+      2. Otherwise pick the newest clipmine_render_* folder for the niche
+         (orderBy createdTime desc).
+      3. Ensure the niche's `Ready to Post — SH-104` parent exists.
+      4. Create per-render subfolder named `<person> — YYYYMMDD-HHMM`.
+      5. Copy each non-folder file from render folder into that subfolder.
+
+    Returns audit dict with concrete IDs + counts so the caller can write
+    evidence-grade status updates.
+    """
+    audit = {
+        "copied": 0, "skipped_folders": 0, "errors": [],
+        "render_folder_id": render_folder_id, "render_folder_name": "",
+        "ready_folder_id": "", "ready_subfolder_id": "",
+        "ready_subfolder_name": "",
+    }
+    drive = _get_drive_service()
+
+    if not render_folder_id:
+        latest = _find_latest_render_folder(drive, niche)
+        if not latest:
+            audit["errors"].append("no_render_folder_found_for_niche")
+            return audit
+        audit["render_folder_id"] = latest["id"]
+        audit["render_folder_name"] = latest.get("name", "")
+        render_folder_id = latest["id"]
+    else:
+        try:
+            meta = drive.files().get(
+                fileId=render_folder_id, supportsAllDrives=True,
+                fields="name",
+            ).execute()
+            audit["render_folder_name"] = meta.get("name", "")
+        except Exception as exc:
+            audit["errors"].append(f"render_meta: {exc}")
+
+    ready_folder_id = _ensure_sh104_ready_folder(drive, niche)
+    if not ready_folder_id:
+        audit["errors"].append("could_not_create_ready_folder")
+        return audit
+    audit["ready_folder_id"] = ready_folder_id
+
+    sub_name = f"{(person_name or 'unknown').strip()} — {datetime.now(ET).strftime('%Y%m%d-%H%M')}".strip(" —")
+    audit["ready_subfolder_name"] = sub_name
+    try:
+        sub_id = drive.files().create(
+            body={"name": sub_name,
+                  "mimeType": "application/vnd.google-apps.folder",
+                  "parents": [ready_folder_id]},
+            supportsAllDrives=True, fields="id",
+        ).execute()["id"]
+        audit["ready_subfolder_id"] = sub_id
+    except Exception as exc:
+        audit["errors"].append(f"create_subfolder: {exc}")
+        return audit
+
+    try:
+        files = drive.files().list(
+            q=f"'{render_folder_id}' in parents and trashed=false",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+            fields="files(id,name,mimeType)",
+        ).execute().get("files", [])
+    except Exception as exc:
+        audit["errors"].append(f"list_render_files: {exc}")
+        return audit
+
+    for f in files:
+        if f.get("mimeType") == "application/vnd.google-apps.folder":
+            audit["skipped_folders"] += 1
+            continue
+        try:
+            drive.files().copy(
+                fileId=f["id"],
+                body={"name": f["name"], "parents": [sub_id]},
+                supportsAllDrives=True,
+            ).execute()
+            audit["copied"] += 1
+        except Exception as exc:
+            audit["errors"].append(f"{f['name']}: {exc}")
+    return audit
+
+
 def _find_manifest_url_for(person_name: str, niche: str) -> str:
     """Look up MANIFEST_URL in 📋 Content Queue by SOURCE+TITLE+NICHE."""
     try:
@@ -326,24 +477,47 @@ def _handle_sh104_reply(sh: dict, meta: dict, reply: dict) -> bool:
         return False
 
     if action == "needs_more_evidence":
-        # Re-trigger video-research with target_count + 4. Manifest URL holds
-        # seed_url + requirement only via the manifest itself. As a Phase 4
-        # simplification, we read seed/requirement from the SH-104 reply
-        # body if Priscila pasted them; otherwise log a note.
-        manifest_url = _find_manifest_url_for(person, niche)
-        if not manifest_url:
-            print("  needs_more_evidence: no manifest_url known")
-        # Without the original seed_url we cannot auto-retrigger; flag for
-        # manual workflow_dispatch with broader queries.
-        _update_content_queue_status(person, niche, "Needs More Evidence")
+        # NOT implemented as auto re-dispatch. Phase 4 keeps this as a
+        # status-only flag because re-triggering video-research.yml would
+        # need the original seed_url + requirement, which only live in the
+        # manifest JSON (not the Content Queue row). Marking the row tells
+        # Priscila to dispatch retry_clipmine_freigilson.yml (or a custom
+        # video-research.yml run with `target_clip_count + 4`) manually.
+        _update_content_queue_status(person, niche,
+            "Needs More Evidence — manual re-dispatch required")
         return True
 
     if action == "reject_manifest":
         return _update_content_queue_status(person, niche, "Rejected — Manifest")
 
     if action == "approve_preview":
-        # Preview email from clipmine_render.yml — finalise as ready.
-        return _update_content_queue_status(person, niche, "Approved — Render")
+        # Real side-effect: copy render assets to `Ready to Post — SH-104`.
+        # Status update reflects the concrete count + subfolder name so the
+        # sheet doesn't drift from Drive truth.
+        result = _copy_sh104_render_to_ready(person, niche)
+        if result["copied"] > 0:
+            sub = result.get("ready_subfolder_name", "")
+            _update_content_queue_status(
+                person, niche,
+                f"Approved — {result['copied']} files copied to "
+                f"Ready to Post — SH-104 / {sub}",
+            )
+            print(f"  APPROVE PREVIEW: copied={result['copied']} → "
+                  f"{result.get('ready_subfolder_id','')} ({sub})")
+            return True
+        # Copy failed — tell the truth in the sheet, alert Priscila so she
+        # can fix manually rather than leaving the row falsely "Approved".
+        err = "; ".join(result.get("errors", [])[:3]) or "unknown"
+        _update_content_queue_status(
+            person, niche,
+            f"Approved — Render (copy FAILED: {err[:80]})",
+        )
+        _log_pipeline_failure_to_sheet(
+            "approve_preview_copy_failed",
+            f"person={person} niche={niche} render_id={result.get('render_folder_id')} "
+            f"errors={result.get('errors')}",
+        )
+        return False
 
     if action == "render_change":
         return _update_content_queue_status(person, niche, "Render — Change Requested")

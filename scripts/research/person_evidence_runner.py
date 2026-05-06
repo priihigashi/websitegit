@@ -550,11 +550,15 @@ Manifest: {manifest_url}
 ────────────────────────────────────────────
 REPLY COMMANDS (just reply to this email with one line):
 
-  APPROVE MANIFEST          — accept manifest, ready for render
-  RENDER CAROUSEL           — render carousel from verified clips
-  RENDER REMOTION           — render Remotion video compilation
-  NEEDS MORE EVIDENCE       — pipeline re-runs with broader queries
-  REJECT MANIFEST           — discard, do not render
+  APPROVE MANIFEST          — mark manifest approved in Content Queue
+                              (no render auto-triggered)
+  RENDER CAROUSEL           — dispatch clipmine_render.yml mode=carousel
+  RENDER REMOTION           — dispatch clipmine_render.yml mode=remotion
+  NEEDS MORE EVIDENCE       — flag in Content Queue for MANUAL re-dispatch
+                              (does NOT auto-retrigger video-research.yml —
+                              re-run with broader queries / higher
+                              target_clip_count yourself)
+  REJECT MANIFEST           — mark Rejected in Content Queue
 
 Phase 3 render gate: APPROVE MANIFEST first, then RENDER CAROUSEL or
 RENDER REMOTION. Final preview approval still required before posting.
