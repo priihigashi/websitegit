@@ -728,6 +728,15 @@ update tracker rows automatically. Manual sync available via:
 - 5a1f646 — docs: priscila-only TODO email body for session 7
 - e825a13 — fix(pipeline): add timeout to 12 urlopen() calls across 8 files
 
+### Sheet auto-sync for session 7 fixes (commit pending)
+Master Checklist will get 8 new rows on the next pipeline_self_heal cron
+(every 2h). Mechanism: new `pipeline_tracker_writer.py append-session`
+mode reads `.github/session_fixes/pending.json` and appends one row per
+fix (S7-FIX1..S7-FIX8). After success the file self-renames to
+`synced-<utc>.json` so subsequent cron cycles are idempotent. The
+existing `sync` mode is unchanged — append-session runs after sync via a
+one-line addition to pipeline_self_heal.yml's Sync tracker step.
+
 ### Second pass — urlopen() timeout audit (commit e825a13)
 12 urllib.request.urlopen() calls had no timeout= parameter. Each one
 would hang indefinitely on a stalled TCP read — meaning a single API

@@ -212,6 +212,93 @@ def cmd_done(svc, args):
         print(f"done: {args.sh_id} marked Done in Master Checklist")
 
 
+# ── APPEND-SESSION mode ───────────────────────────────────────────────────────
+# Append rows to Master Checklist for ad-hoc fixes not tied to existing SH-IDs.
+# Reads .github/session_fixes/pending.json — schema:
+#   {
+#     "session_tag": "S7",
+#     "fixes": [
+#       {
+#         "id":         "S7-FIX1",          # ad-hoc ID, written to col F
+#         "title":      "short title",       # written to col B (or col G if G is title)
+#         "what_done":  "what was done",     # → col J
+#         "evidence":   "commit abcd1234",   # → col K
+#         "category":   "fix"|"docs"|"infra" # optional, written to col D
+#       },
+#       ...
+#     ]
+#   }
+# After successful append, the file is renamed to synced-YYYY-MM-DDTHHMMSS.json
+# so subsequent runs are idempotent. Missing file = silent no-op (exit 0).
+
+def cmd_append_session(svc):
+    import pathlib as _pl
+    pending_path = _pl.Path(".github/session_fixes/pending.json")
+    if not pending_path.exists():
+        print("append-session: no pending.json — nothing to sync")
+        return
+
+    try:
+        payload = json.loads(pending_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"append-session: pending.json parse error — {e} (skipping)")
+        return
+
+    fixes = payload.get("fixes") or []
+    if not fixes:
+        print("append-session: pending.json has no fixes — skipping")
+        return
+
+    session_tag = payload.get("session_tag", "S?")
+    print(f"append-session: syncing {len(fixes)} {session_tag} fixes → Master Checklist")
+
+    rows_to_append = []
+    for f in fixes:
+        # Layout matches Master Checklist columns A..P (16 columns).
+        # A=area, B=title, C=task type, D=category, E=priority, F=SH-ID,
+        # G=description, H=Status, I=ETA, J=What Was Done, K=Evidence,
+        # L=Notes, M=ETA owner, N=blank, O=blank, P=Last Updated
+        row = [
+            "Pipeline Fix",                  # A — area
+            (f.get("title") or "")[:200],    # B — title
+            "code-fix",                      # C — task type
+            f.get("category", "fix"),        # D — category
+            "P2-MED",                        # E — priority (default)
+            f.get("id", ""),                 # F — SH-ID (ad-hoc tag)
+            (f.get("what_done") or "")[:300],# G — description
+            "Done",                          # H — Status
+            "",                              # I — ETA
+            (f.get("what_done") or "")[:500],# J — What Was Done
+            f.get("evidence", "")[:200],     # K — Evidence
+            f"appended by append-session {TODAY}",  # L — Notes
+            "",                              # M
+            "",                              # N
+            "",                              # O
+            TODAY,                           # P — Last Updated
+        ]
+        rows_to_append.append(row)
+
+    svc.spreadsheets().values().append(
+        spreadsheetId=TRACKER_SS,
+        range=f"'{MC_TAB}'!A1",
+        valueInputOption="RAW",
+        insertDataOption="INSERT_ROWS",
+        body={"values": rows_to_append},
+    ).execute()
+    print(f"append-session: appended {len(rows_to_append)} row(s) to Master Checklist")
+
+    # Rename pending.json so the next cron run doesn't re-append the same rows.
+    ts = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H%M%S")
+    synced_path = pending_path.with_name(f"synced-{ts}.json")
+    try:
+        pending_path.rename(synced_path)
+        print(f"append-session: renamed pending.json → {synced_path.name}")
+    except Exception as e:
+        # Non-fatal: warn and clear contents instead so we don't double-append.
+        print(f"append-session: rename failed ({e}); clearing pending.json contents")
+        pending_path.write_text(json.dumps({"fixes": []}, indent=2), encoding="utf-8")
+
+
 # ── CLI ────────────────────────────────────────────────────────────────────────
 def main():
     p = argparse.ArgumentParser(description="Pipeline Fix Tracker writer")
@@ -231,6 +318,11 @@ def main():
     dn.add_argument("--done",     default="")
     dn.add_argument("--evidence", default="")
 
+    sub.add_parser(
+        "append-session",
+        help="Append ad-hoc fix rows from .github/session_fixes/pending.json",
+    )
+
     args = p.parse_args()
     if not args.mode:
         p.print_help(); sys.exit(1)
@@ -244,6 +336,8 @@ def main():
         cmd_credit(svc, args)
     elif args.mode == "done":
         cmd_done(svc, args)
+    elif args.mode == "append-session":
+        cmd_append_session(svc)
 
 if __name__ == "__main__":
     main()

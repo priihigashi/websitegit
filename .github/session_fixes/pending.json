@@ -1,0 +1,62 @@
+{
+  "session_tag": "S7",
+  "description": "Session 7 (2026-05-06) — overnight resilience pass on claude/fix-pipeline-spreadsheet-fw8mc. All fixes are additive transient-error handling + timeout= parameters. No behavior change on the success path.",
+  "fixes": [
+    {
+      "id": "S7-FIX1",
+      "title": "(529, 529) duplicate tuple in carousel_reviewer storytelling scorer",
+      "what_done": "carousel_reviewer.py L1050: replace (529, 529) duplicate-only tuple with (429, 503, 529) so Anthropic rate-limit and service-unavailable errors also trip the soft-warn path instead of being treated as hard errors.",
+      "evidence": "commit 0fa1b2e",
+      "category": "fix"
+    },
+    {
+      "id": "S7-FIX2",
+      "title": "find_supporting_clips() requesting wrong orientation",
+      "what_done": "motion_sources.py L929: switched the Pexels API request from landscape to portrait. Carousels are 1080x1350 and reels are 9:16 — the previous landscape-only request meant the file selector never had portrait candidates to pick.",
+      "evidence": "commit 0fa1b2e",
+      "category": "fix"
+    },
+    {
+      "id": "S7-FIX3",
+      "title": "Self-heal orchestrator narrow Anthropic exception net",
+      "what_done": "self_heal/orchestrator.py L1129-1140: extended Claude → OpenAI fallback to also catch RateLimitError, APIStatusError (529), APIConnectionError, APITimeoutError. Previously a 429/529/timeout crashed the whole 2-hour cycle.",
+      "evidence": "commit dedcc8d",
+      "category": "fix"
+    },
+    {
+      "id": "S7-FIX4",
+      "title": "Self-heal UNKNOWN final_outcome on retry exhaustion",
+      "what_done": "self_heal/orchestrator.py L1210: when 3-attempt loop exits without a break, surface FAILED_AFTER_RETRIES with last error_log instead of leaving final_outcome='UNKNOWN' in the queue Last Result column.",
+      "evidence": "commit dedcc8d",
+      "category": "fix"
+    },
+    {
+      "id": "S7-FIX5",
+      "title": "Capture _llm_text only fell back on credit/auth",
+      "what_done": "scripts/capture/capture_pipeline.py L91-115: extended _llm_text() classification to also fall back to OpenAI on RateLimitError, APIStatusError, OverloadedError, APIConnectionError, APITimeoutError, plus 429/529/overloaded string heuristics.",
+      "evidence": "commit 31cbe0b",
+      "category": "fix"
+    },
+    {
+      "id": "S7-FIX6",
+      "title": "Add timeout to 12 urllib.urlopen() calls (8 files)",
+      "what_done": "approval_handler.py (4 calls), image_library.py (4), email_preview.py (2), topic_picker.py (2), opc_proof_post.py (2), motion_sources.py (1), _llm_fallback.py (2), capture_pipeline.py (2): each urlopen() now has timeout= so a stalled connection cannot pin the GitHub Actions job at its 90-min job-level timeout.",
+      "evidence": "commit e825a13",
+      "category": "fix"
+    },
+    {
+      "id": "S7-FIX7",
+      "title": "Add timeout to 14 requests.get/put/post calls (4am_agent)",
+      "what_done": "chat_log_reader.py (3 calls), pattern_learner.py (5), scraper.py (2), self_healer.py (8): same pattern as S7-FIX6 but for the requests library in the 4AM agent module. Job-level 30-min timeout no longer the only safety net.",
+      "evidence": "commit c8e879d",
+      "category": "fix"
+    },
+    {
+      "id": "S7-FIX8",
+      "title": "Sheet auto-update infrastructure for ad-hoc fixes",
+      "what_done": "Added pipeline_tracker_writer.py append-session mode + 1-line hook in pipeline_self_heal.yml's Sync tracker step. Reads .github/session_fixes/pending.json, appends rows to Master Checklist, self-renames pending.json after success (idempotent). This row was created by that mechanism.",
+      "evidence": "commit (next)",
+      "category": "infra"
+    }
+  ]
+}

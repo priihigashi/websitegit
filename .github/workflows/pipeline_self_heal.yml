@@ -114,6 +114,9 @@ jobs:
         run: |
           pip install google-api-python-client google-auth -q
           python scripts/pipeline_tracker_writer.py sync || echo "tracker sync non-fatal error — continuing"
+          # Append any ad-hoc session fixes (no-op when pending.json is absent).
+          # File self-renames after success so this is idempotent across cycles.
+          python scripts/pipeline_tracker_writer.py append-session || echo "append-session non-fatal error — continuing"
 
       - name: Notify on failure
         if: failure()
