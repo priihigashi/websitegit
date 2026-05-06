@@ -59,22 +59,35 @@ except Exception as _vv_err:
     print(f"  Warning: vision_validator not loaded ({_vv_err})")
 
 
-def _vision_accept(local_path, query, label):
+def _vision_accept(local_path, query, label, *, source_url=""):
     """Return True if Vision says image matches query. Logs the verdict.
     Empty path or empty query short-circuits to True so we never block on
     missing inputs.
-    SH-056: also rejects images from known AI-art domains when called for OPC."""
+    SH-056: rejects images from known AI-art domains (checks source_url when available).
+    SH-040: also applies URL heuristic from photo_matcher (watermark domains, tiny imgs)."""
     if not local_path or not query:
         return True
-    # Reject AI-art domain URLs (lexica.art, midjourney.com, artstation.com, etc.)
-    # The local_path is a download destination; the original URL is encoded in the label.
-    if _is_ai_art_url(local_path):
-        print(f"  Vision REJECT ({label}): AI-art domain URL detected — not a real photo")
+    # SH-056: check original source URL for AI-art domains first; fall back to local path
+    url_to_check = source_url or _fetch_url_cache.get(str(local_path), local_path)
+    if _is_ai_art_url(url_to_check):
+        print(f"  Vision REJECT ({label}): AI-art domain URL — {url_to_check[:80]}")
         try:
             __import__("os").unlink(local_path)
         except Exception:
             pass
         return False
+    # SH-040: apply photo_matcher URL heuristic (watermark/tiny pattern check)
+    try:
+        from photo_matcher import _url_looks_watermarked_or_tiny as _pm_url_check  # type: ignore
+        if _pm_url_check(url_to_check):
+            print(f"  Vision REJECT ({label}): photo_matcher URL heuristic reject — {url_to_check[:80]}")
+            try:
+                __import__("os").unlink(local_path)
+            except Exception:
+                pass
+            return False
+    except Exception:
+        pass
     try:
         ok, reason = _vision_validate(local_path, query)
         if ok:
@@ -111,6 +124,10 @@ _AI_ART_DOMAINS = frozenset([
 # photorealistic editorial photos rather than illustrations or 3D renders.
 _OPC_PHOTO_SUFFIX = " photorealistic real photo no illustration no cartoon no render"
 
+# SH-056: maps local_path → original_url so _vision_accept can check the source domain.
+# Populated by _fetch_pexels_image, _fetch_pixabay_image, and other fetch helpers.
+_fetch_url_cache: dict = {}
+
 
 def _is_ai_art_url(url: str) -> bool:
     """Return True if the URL is from a known AI-art domain (reject for OPC)."""
@@ -126,12 +143,25 @@ def _is_ai_art_url(url: str) -> bool:
 
 def _opc_photo_query(query: str, niche: str) -> str:
     """Append photorealistic suffix to stock-search queries for OPC builds.
+    SH-025: also enriches query with a specific material reference term when the
+    topic mentions a known material category (paint, flooring, tile, etc.).
     Non-OPC niches are returned unchanged — their AI cascade is allowed."""
     if niche != "opc":
         return query
-    # Avoid doubling the suffix on repeated calls
     if _OPC_PHOTO_SUFFIX.strip() in query:
         return query
+    # SH-025: enrich with OPC_MATERIAL_REFERENCE when topic matches a material keyword
+    try:
+        from photo_matcher import OPC_MATERIAL_REFERENCE as _opc_mat  # type: ignore
+        q_lower = query.lower()
+        for _cat, _terms in _opc_mat.items():
+            cat_word = _cat.replace("_", " ")
+            if cat_word in q_lower or _cat in q_lower:
+                # Prepend the first specific reference term to narrow the stock search
+                query = _terms[0] + " " + query
+                break
+    except Exception:
+        pass
     return (query + _OPC_PHOTO_SUFFIX)[:200]
 
 
@@ -1510,6 +1540,7 @@ def _fetch_pexels_image(query, work_dir, filename):
         if len(raw) < 5000:
             return ""
         dest_path.write_bytes(raw)
+        _fetch_url_cache[str(dest_path)] = img_url  # SH-056: register for AI-art domain check
         print(f"  Pexels image fetched: {filename} ({len(raw)//1024}KB) ← '{query[:40]}'")
         return f"resources/images/{filename}"
     except Exception as e:
@@ -1547,6 +1578,7 @@ def _fetch_pixabay_image(query, work_dir, filename):
         if len(raw) < 5000:
             return ""
         dest_path.write_bytes(raw)
+        _fetch_url_cache[str(dest_path)] = img_url  # SH-056: register for AI-art domain check
         print(f"  Pixabay image fetched: {filename} ({len(raw)//1024}KB) ← '{query[:40]}'")
         return f"resources/images/{filename}"
     except Exception as e:
