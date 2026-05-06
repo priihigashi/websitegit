@@ -1,4 +1,8 @@
 
+:root {
+  --margin: 40px; /* global safe-margin — edge distance for corners, HUD elements, and absolute anchors */
+}
+
 * { margin:0; padding:0; box-sizing:border-box; }
 html, body { background:#1a1a1a; font-family:'Roboto Condensed', sans-serif; }
 body { display:flex; flex-direction:column; align-items:center; gap:32px; padding:32px; }
@@ -12,10 +16,10 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 
 /* ---- Corner brackets (OPC signature) ---- */
 .corner { position:absolute; width:28px; height:28px; z-index:10; }
-.corner.tl { top:40px; left:40px; border-top:2px solid var(--c-brk); border-left:2px solid var(--c-brk); }
-.corner.tr { top:40px; right:40px; border-top:2px solid var(--c-brk); border-right:2px solid var(--c-brk); }
-.corner.bl { bottom:40px; left:40px; border-bottom:2px solid var(--c-brk); border-left:2px solid var(--c-brk); }
-.corner.br { bottom:40px; right:40px; border-bottom:2px solid var(--c-brk); border-right:2px solid var(--c-brk); }
+.corner.tl { top:var(--margin); left:var(--margin); border-top:2px solid var(--c-brk); border-left:2px solid var(--c-brk); }
+.corner.tr { top:var(--margin); right:var(--margin); border-top:2px solid var(--c-brk); border-right:2px solid var(--c-brk); }
+.corner.bl { bottom:var(--margin); left:var(--margin); border-bottom:2px solid var(--c-brk); border-left:2px solid var(--c-brk); }
+.corner.br { bottom:var(--margin); right:var(--margin); border-bottom:2px solid var(--c-brk); border-right:2px solid var(--c-brk); }
 
 /* ---- Tag (small kicker) ---- */
 .tag {

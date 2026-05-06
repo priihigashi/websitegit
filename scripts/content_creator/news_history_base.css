@@ -17,6 +17,7 @@
   --sv-W:         1080px;
   --sv-H:         1350px;
   --sv-P:         108px;     /* standard padding */
+  --margin:       40px;      /* global safe-margin — edge distance for corners and HUD anchors */
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
