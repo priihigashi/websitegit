@@ -48,6 +48,17 @@ SERP_API_KEY  = os.environ.get("SERP_API_KEY", "")  # Free fallback when Apify d
 _apify_search_limit_hit = False
 
 
+def _apify_failure_disables_route(reason: str) -> bool:
+    """True only for account/provider-level failures shared by Apify actors."""
+    low = (reason or "").lower()
+    markers = (
+        "401", "402", "403", "429",
+        "auth", "unauthorized", "forbidden",
+        "credit", "billing", "quota", "provider-access", "limit",
+    )
+    return any(m in low for m in markers)
+
+
 # ── YouTube candidate search (yt-dlp ytsearchN) ──────────────────────────────
 
 def search_youtube_candidates(queries: list[str], max_per_query: int = 5,
@@ -254,25 +265,27 @@ def _ig_via_apify(queries: list[str], max_per_query: int = 5,
     }
     run_id, err = _apify_post_run(actor, payload)
     if err is not None:
-        low = err.lower()
-        if "403" in err or "402" in err or "credit" in low or "billing" in low or "quota" in low:
+        if _apify_failure_disables_route(err):
             _apify_search_limit_hit = True
-        state.mark_failed("apify", f"ig_hashtag_start:{actor}", err,
-                          on_failure=on_failure)
+            state.mark_failed("apify", f"ig_hashtag_start:{actor}", err,
+                              on_failure=on_failure)
+        else:
+            state.mark_stage_failed("apify", f"ig_hashtag_start:{actor}", err,
+                                    on_failure=on_failure)
         print(f"  Apify IG hashtag search start failed: {err[:300]}")
         return []
 
     status = _apify_poll_run(run_id)
     if status != "SUCCEEDED":
-        state.mark_failed("apify", "ig_hashtag_run", f"run_status:{status}",
-                          on_failure=on_failure)
+        state.mark_stage_failed("apify", "ig_hashtag_run", f"run_status:{status}",
+                                on_failure=on_failure)
         print(f"  Apify IG hashtag run ended: {status}")
         return []
 
     items = _apify_fetch_items(run_id)
     if not items:
-        state.mark_failed("apify", "ig_hashtag_dataset", "empty_dataset",
-                          on_failure=on_failure)
+        state.mark_stage_failed("apify", "ig_hashtag_dataset", "empty_dataset",
+                                on_failure=on_failure)
 
     results = []
     for item in items:

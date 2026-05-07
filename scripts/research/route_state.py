@@ -13,12 +13,16 @@ Per-route status values:
 The singleton is initialised lazily from FALLBACK_MODE env var on first
 get_state() call. reset_state() exists for test reuse.
 
-route_failures entries are non-fatal — they document which route a run had
-to fall away from. They are independent from PIPELINE_FAILURES (which DOES
-flip the workflow exit code). A pipeline implementer who wants the failure
-to also surface in the 🚨 Pipeline Failures sheet should pass an
-`on_failure` callback that writes there without appending to the fatal
-list.
+route_failures entries are non-fatal — they document which route/stage a run
+had to fall away from. They are independent from PIPELINE_FAILURES (which
+DOES flip the workflow exit code). A pipeline implementer who wants the
+failure to also surface in the 🚨 Pipeline Failures sheet should pass an
+`on_failure` callback that writes there without appending to the fatal list.
+
+Important SH-104 distinction: one Apify actor/stage can fail because of a bad
+schema, empty dataset, or proxy soft-fail while another Apify route remains
+usable. Only auth/billing/provider-access/limit failures should disable the
+whole Apify route.
 """
 
 from __future__ import annotations
@@ -77,9 +81,9 @@ class RouteState:
                 })
 
     def mark_failed(self, route: str, stage: str, reason,
-                    on_failure=None) -> None:
+                    on_failure=None, disable_route: bool = True) -> None:
         with self._lock:
-            if route in _TRACKED_ROUTES:
+            if route in _TRACKED_ROUTES and disable_route:
                 self.route_status[route] = "failed"
             self.route_failures.append({
                 "route": route, "stage": stage, "reason": str(reason)[:300],
@@ -89,6 +93,18 @@ class RouteState:
                 on_failure(f"{route}:{stage}", reason)
             except Exception:
                 pass
+
+    def mark_stage_failed(self, route: str, stage: str, reason,
+                          on_failure=None) -> None:
+        """Record a route/stage failure without disabling sibling stages.
+
+        Example: Apify hashtag discovery may 400 on actor input while Apify
+        directUrl lookup is still healthy and should remain available for
+        Instagram transcription.
+        """
+        self.mark_failed(
+            route, stage, reason, on_failure=on_failure, disable_route=False,
+        )
 
     def increment_manual(self, n: int = 1):
         with self._lock:

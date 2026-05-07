@@ -40,6 +40,17 @@ APIFY_BASE      = "https://api.apify.com/v2"
 _apify_limit_hit = False
 
 
+def _apify_failure_disables_route(reason: str) -> bool:
+    """True only for account/provider-level failures shared by Apify actors."""
+    low = (reason or "").lower()
+    markers = (
+        "401", "402", "403", "429",
+        "auth", "unauthorized", "forbidden",
+        "credit", "billing", "quota", "provider-access", "limit",
+    )
+    return any(m in low for m in markers)
+
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _is_youtube(url: str) -> bool:
@@ -268,10 +279,11 @@ def _apify_yt_whisper(video_id: str) -> str:
         params={"token": APIFY_API_KEY}, json_body=payload, timeout=30,
     )
     if err is not None:
-        low = err.lower()
-        if "403" in err or "402" in err or "credit" in low or "billing" in low:
+        if _apify_failure_disables_route(err):
             _apify_limit_hit = True
-        state.mark_failed("apify", "yt_audio_start", err)
+            state.mark_failed("apify", "yt_audio_start", err)
+        else:
+            state.mark_stage_failed("apify", "yt_audio_start", err)
         _record_error("apify_yt", err)
         print(f"    Apify YT start failed: {err[:300]}")
         return ""
@@ -289,7 +301,7 @@ def _apify_yt_whisper(video_id: str) -> str:
         if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
             break
     if status != "SUCCEEDED":
-        state.mark_failed("apify", "yt_audio_run", f"run_status:{status}")
+        state.mark_stage_failed("apify", "yt_audio_run", f"run_status:{status}")
         _record_error("apify_yt", f"run_status:{status}")
         return ""
     items_body, err = _apify_request(
@@ -299,15 +311,15 @@ def _apify_yt_whisper(video_id: str) -> str:
     )
     items = items_body if isinstance(items_body, list) else []
     if not items:
-        state.mark_failed("apify", "yt_audio_dataset", "empty_dataset")
+        state.mark_stage_failed("apify", "yt_audio_dataset", "empty_dataset")
         _record_error("apify_yt", "empty_dataset")
         return ""
     media = (items[0].get("mediaUrl") or items[0].get("videoUrl")
              or items[0].get("audioUrl") or "")
     if not media or "youtube.com" in str(media):
         keys_seen = sorted(items[0].keys())[:30]
-        state.mark_failed("apify", "yt_audio_no_media",
-                          f"keys_seen={keys_seen}")
+        state.mark_stage_failed("apify", "yt_audio_no_media",
+                                f"keys_seen={keys_seen}")
         _record_error("apify_yt", f"no_media_url; keys={keys_seen}")
         return ""
     try:
@@ -317,12 +329,12 @@ def _apify_yt_whisper(video_id: str) -> str:
                 with open(path, "wb") as f:
                     f.write(dl.read())
             if os.path.getsize(path) < 5_000:
-                state.mark_failed("apify", "yt_audio_tiny", "size<5k")
+                state.mark_stage_failed("apify", "yt_audio_tiny", "size<5k")
                 return ""
             return _whisper_transcribe(path)
     except Exception as e:
         msg = _scrub(str(e))
-        state.mark_failed("apify", "yt_audio_download", msg)
+        state.mark_stage_failed("apify", "yt_audio_download", msg)
         _record_error("apify_yt", msg)
         print(f"    Apify YT download failed: {msg[:200]}")
         return ""
@@ -544,10 +556,7 @@ def _apify_ig_audio(reel_url: str) -> str:
     print(f"    Apify IG default-proxy attempt: {status_label} ({detail[:200]})")
 
     # Mark quota/credit failures and bail (no point retrying).
-    low_detail = detail.lower()
-    if status_label == "start_failed" and (
-        "403" in detail or "402" in detail or "credit" in low_detail or "billing" in low_detail
-    ):
+    if status_label == "start_failed" and _apify_failure_disables_route(detail):
         _apify_limit_hit = True
         state.mark_failed("apify", "ig_audio_start_quota", detail)
         _record_error("apify_ig", detail)
@@ -556,7 +565,7 @@ def _apify_ig_audio(reel_url: str) -> str:
     # Only soft_fail warrants a residential retry. Other failures (no_media,
     # tiny_audio, download_failed, run_failed) are not proxy-fixable.
     if status_label != "soft_fail":
-        state.mark_failed("apify", f"ig_audio_{status_label}", detail)
+        state.mark_stage_failed("apify", f"ig_audio_{status_label}", detail)
         _record_error("apify_ig", f"{status_label}: {detail}")
         return ""
 
@@ -569,7 +578,7 @@ def _apify_ig_audio(reel_url: str) -> str:
         print(f"    Apify IG OK via RESIDENTIAL proxy (field='{detail}')")
         state.mark_used("apify")
         return text
-    state.mark_failed("apify", f"ig_audio_residential_{status_label}", detail)
+    state.mark_stage_failed("apify", f"ig_audio_residential_{status_label}", detail)
     _record_error("apify_ig", f"residential_{status_label}: {detail}")
     print(f"    Apify IG RESIDENTIAL also failed: {status_label} ({detail[:200]})")
     return ""
