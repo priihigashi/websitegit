@@ -229,56 +229,82 @@ def _score(row, keywords, phase_filter=None, service_filter=None, topic_text="")
     return int(raw * penalty)
 
 
-def match_opc_photo(topic, phase=None, service_type=None):
-    """Return (drive_url, description, service_type) for the best catalog match.
+def match_opc_photo_candidates(topic, phase=None, service_type=None, exclude_keys=None, limit=3):
+    """Return top-N catalog candidates for the topic, ordered by score (best first).
 
-    Args:
-        topic: the carousel topic text (e.g. "kitchen cabinet painting tips")
-        phase: optional "before" | "during" | "after" filter
-        service_type: optional service filter (e.g. "Kitchens")
+    Phase 1+2 (per-build dedup + try-next-on-reject):
+      - exclude_keys: set of filename (lowercased) and Drive URL strings already
+        used in this carousel. Rows matching either are skipped.
+      - limit: max candidates to return.
 
-    Returns:
-        dict with keys drive_url, description, service_type, quality — or None if no match.
+    Returns: list of dicts (same shape as match_opc_photo). Empty list if none.
     """
     token = _get_token()
     if not token:
         print("  photo_matcher: no SHEETS_TOKEN — skipping real-photo match")
-        return None
+        return []
 
     try:
         rows = _read_catalog(token)
     except Exception as e:
         print(f"  photo_matcher: catalog read failed — {e}")
-        return None
+        return []
 
-    # Extract meaningful keywords from topic (drop common stop words)
+    excl = set()
+    for k in (exclude_keys or set()):
+        if isinstance(k, str) and k:
+            excl.add(k.strip().lower())
+
     stop = {"the", "a", "an", "of", "for", "to", "in", "on", "with", "and", "or",
             "is", "are", "how", "why", "what", "when", "your", "our", "their"}
     keywords = [w for w in re.sub(r"[^\w\s]", " ", topic.lower()).split() if w not in stop and len(w) > 2]
 
-    best_score = 0
-    best_row = None
+    scored = []
     for row in rows:
+        # Skip rows already used in this build (filename or Drive URL match).
+        try:
+            fname_key = (row[3] or "").strip().lower()
+            drive_key = (row[4] or "").strip().lower()
+        except Exception:
+            fname_key, drive_key = "", ""
+        if (fname_key and fname_key in excl) or (drive_key and drive_key in excl):
+            continue
+
         score = _score(row, keywords, phase_filter=phase, service_filter=service_type, topic_text=topic)
-        if score > best_score:
-            best_score = score
-            best_row = row
+        if score > 0:
+            scored.append((score, row))
 
-    if not best_row or best_score == 0:
-        print(f"  photo_matcher: no match for '{topic[:50]}' (min_quality={MIN_QUALITY})")
-        return None
+    if not scored:
+        print(f"  photo_matcher: no match for '{topic[:50]}' (min_quality={MIN_QUALITY}, excluded={len(excl)})")
+        return []
 
-    _, project, svc, filename, drive_url, description, phase_val, quality_raw, _, _ = best_row[:10]
-    result = {
-        "drive_url": drive_url.strip(),
-        "description": description.strip(),
-        "service_type": svc.strip(),
-        "phase": phase_val.strip(),
-        "quality": quality_raw.strip(),
-        "filename": filename.strip(),
-    }
-    print(f"  photo_matcher: matched '{filename}' ({svc}, q={quality_raw}, score={best_score})")
-    return result
+    scored.sort(key=lambda t: t[0], reverse=True)
+    out = []
+    for score, row in scored[:max(1, int(limit))]:
+        _, project, svc, filename, drive_url, description, phase_val, quality_raw, _, _ = row[:10]
+        out.append({
+            "drive_url": drive_url.strip(),
+            "description": description.strip(),
+            "service_type": svc.strip(),
+            "phase": phase_val.strip(),
+            "quality": quality_raw.strip(),
+            "filename": filename.strip(),
+            "_score": score,
+        })
+    print(f"  photo_matcher: {len(out)} candidate(s) for '{topic[:50]}' "
+          f"(top filename='{out[0]['filename']}', top score={out[0]['_score']}, excluded={len(excl)})")
+    return out
+
+
+def match_opc_photo(topic, phase=None, service_type=None, exclude_keys=None):
+    """Compatibility wrapper — returns the single best candidate or None.
+
+    New callers should prefer match_opc_photo_candidates() so they can iterate
+    when Vision rejects the top match.
+    """
+    cands = match_opc_photo_candidates(topic, phase=phase, service_type=service_type,
+                                       exclude_keys=exclude_keys, limit=1)
+    return cands[0] if cands else None
 
 
 def match_before_after_pair(topic):

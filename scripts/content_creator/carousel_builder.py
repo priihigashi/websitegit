@@ -2454,6 +2454,10 @@ def fetch_all_media(content, niche, work_dir, brief=""):
         }
     }
 
+    # Phase 1: per-build dedup — never reuse the same catalog photo across
+    # cover + slides 2-4 unless no alternative exists.
+    used_opc_photo_keys = set()
+
     # ── TIER 0 — OPC Photo Catalog (real jobsite photos, highest priority) ──
     # Checks the 159+ tagged photos before any stock/AI image is fetched.
     # Sets cover + one mid-slide from the same service category.
@@ -2466,12 +2470,15 @@ def fetch_all_media(content, niche, work_dir, brief=""):
             topic_text = content.get("headline", "") or content.get("topic", "")
             img_dir = Path(work_dir) / "resources" / "images"
             img_dir.mkdir(parents=True, exist_ok=True)
-            match = match_opc_photo(topic_text)
+            match = match_opc_photo(topic_text, exclude_keys=used_opc_photo_keys)
             if match and match.get("drive_url"):
                 dest = str(img_dir / "opc_catalog_cover.jpg")
                 dl = _download_drive_photo(match["drive_url"], dest)
                 if dl:
                     paths["cover"] = dl
+                    # Phase 1: mark this photo as used so slides 2-4 can't reuse it.
+                    used_opc_photo_keys.add((match.get("filename", "") or "").strip().lower())
+                    used_opc_photo_keys.add((match.get("drive_url", "") or "").strip().lower())
                     paths["provenance"]["cover"] = {
                         "path": dl, "provider": "opc_catalog",
                         "source_type": "real_photo",
@@ -2662,20 +2669,36 @@ def fetch_all_media(content, niche, work_dir, brief=""):
         # ── TIER 0 (OPC only) — Photo Catalog (real jobsite photos) ─────────
         # Checked BEFORE any AI or stock spend. Matches by keyword against the
         # AI description + service type + filename in the 158-row catalog.
+        # Phase 1+2: ask for top-3 candidates with dedup; if Vision rejects the
+        # best, try candidate 2 then 3 before falling to stock/AI.
         if niche == "opc" and not accepted:
             try:
-                from photo_matcher import match_opc_photo as _opc_match_slide  # type: ignore
-                opc_hit = _opc_match_slide(cq)
-                if opc_hit and opc_hit.get("drive_url"):
-                    _img_dir = Path(work_dir) / "resources" / "images"
-                    _img_dir.mkdir(parents=True, exist_ok=True)
-                    _dl = _download_drive_photo(opc_hit["drive_url"], str(_img_dir / fname))
+                from photo_matcher import match_opc_photo_candidates as _opc_candidates  # type: ignore
+                _img_dir = Path(work_dir) / "resources" / "images"
+                _img_dir.mkdir(parents=True, exist_ok=True)
+                for _idx, opc_hit in enumerate(
+                    _opc_candidates(cq, exclude_keys=used_opc_photo_keys, limit=3), start=1
+                ):
+                    if not opc_hit.get("drive_url"):
+                        continue
+                    _try_fname = fname if _idx == 1 else f"slide{i}_cand{_idx}_{re.sub(r'[^a-z0-9]+','_',(opc_hit.get('filename','') or '').lower()).strip('_')[:30] or 'opc'}.jpg"
+                    _dl = _download_drive_photo(opc_hit["drive_url"], str(_img_dir / _try_fname))
+                    _fname_key = (opc_hit.get("filename", "") or "").strip().lower()
+                    _drive_key = (opc_hit.get("drive_url", "") or "").strip().lower()
                     if _dl and _vision_accept(_dl, cq, f"slide{i}/opc_catalog"):
                         _set_slide(i, _dl, "opc_catalog", "real_photo", query=cq,
                                    service_type=opc_hit.get("service_type", ""))
                         accepted = True
+                        used_opc_photo_keys.add(_fname_key)
+                        used_opc_photo_keys.add(_drive_key)
                         print(f"  [photo_matcher] slide{i}: {opc_hit.get('filename')} "
-                              f"({opc_hit.get('service_type')}, q={opc_hit.get('quality')})")
+                              f"(cand{_idx}, {opc_hit.get('service_type')}, q={opc_hit.get('quality')})")
+                        break
+                    else:
+                        # Vision rejected this candidate — exclude it from later slides too.
+                        used_opc_photo_keys.add(_fname_key)
+                        used_opc_photo_keys.add(_drive_key)
+                        print(f"  [photo_matcher] slide{i} cand{_idx} rejected: {opc_hit.get('filename')}")
             except Exception as _opc_e:
                 _log_failure(f"photo_matcher/slide{i}", _opc_e)
 
@@ -2781,20 +2804,32 @@ def fetch_all_media(content, niche, work_dir, brief=""):
             _alt_fname = f"slide{i}_{_alt_slug}.jpg"
             _cq_alt_stock = _opc_photo_query(cq_alt, niche)
 
-            # Retry catalog (OPC only) with alt query
+            # Retry catalog (OPC only) with alt query — also dedup-aware
             if niche == "opc":
                 try:
-                    from photo_matcher import match_opc_photo as _opc_match_alt  # type: ignore
-                    _alt_hit = _opc_match_alt(cq_alt)
-                    if _alt_hit and _alt_hit.get("drive_url"):
-                        _img_dir = Path(work_dir) / "resources" / "images"
-                        _img_dir.mkdir(parents=True, exist_ok=True)
-                        _dl = _download_drive_photo(_alt_hit["drive_url"], str(_img_dir / _alt_fname))
+                    from photo_matcher import match_opc_photo_candidates as _opc_alt_candidates  # type: ignore
+                    _img_dir = Path(work_dir) / "resources" / "images"
+                    _img_dir.mkdir(parents=True, exist_ok=True)
+                    for _aidx, _alt_hit in enumerate(
+                        _opc_alt_candidates(cq_alt, exclude_keys=used_opc_photo_keys, limit=3), start=1
+                    ):
+                        if not _alt_hit.get("drive_url"):
+                            continue
+                        _try_alt_fname = _alt_fname if _aidx == 1 else f"slide{i}_alt{_aidx}_{re.sub(r'[^a-z0-9]+','_',(_alt_hit.get('filename','') or '').lower()).strip('_')[:30] or 'opc'}.jpg"
+                        _dl = _download_drive_photo(_alt_hit["drive_url"], str(_img_dir / _try_alt_fname))
+                        _fname_key = (_alt_hit.get("filename", "") or "").strip().lower()
+                        _drive_key = (_alt_hit.get("drive_url", "") or "").strip().lower()
                         if _dl and _vision_accept(_dl, cq_alt, f"slide{i}/opc_catalog_alt"):
                             _set_slide(i, _dl, "opc_catalog", "real_photo", query=cq_alt,
                                        service_type=_alt_hit.get("service_type", ""))
                             accepted = True
-                            print(f"  [photo_matcher alt] slide{i}: {_alt_hit.get('filename')}")
+                            used_opc_photo_keys.add(_fname_key)
+                            used_opc_photo_keys.add(_drive_key)
+                            print(f"  [photo_matcher alt] slide{i}: {_alt_hit.get('filename')} (cand{_aidx})")
+                            break
+                        else:
+                            used_opc_photo_keys.add(_fname_key)
+                            used_opc_photo_keys.add(_drive_key)
                 except Exception:
                     pass
 
