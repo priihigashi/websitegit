@@ -116,6 +116,7 @@ def search_youtube_candidates(queries: list[str], max_per_query: int = 5,
 
 def search_instagram_candidates(queries: list[str], max_per_query: int = 5,
                                  person_name: str = "",
+                                 seed_url: str = "",
                                  on_failure=None) -> list[dict]:
     """Instagram candidate search — 3-route cascade.
 
@@ -130,7 +131,11 @@ def search_instagram_candidates(queries: list[str], max_per_query: int = 5,
     state = get_state()
     primary: list[dict] = []
     if state.should_try_apify() and APIFY_API_KEY:
-        primary = _ig_via_apify(queries, max_per_query, on_failure=on_failure)
+        primary = _ig_via_username_from_seed(
+            seed_url, max_per_query=max_per_query, on_failure=on_failure,
+        )
+        primary.extend(_ig_via_apify(queries, max_per_query, on_failure=on_failure))
+        primary = dedupe_candidates(primary)
     if primary:
         return primary
     # Fallback ladder runs when Apify returned nothing OR was unavailable.
@@ -227,6 +232,162 @@ def _apify_fetch_items(run_id: str) -> list:
         return []
 
 
+_IG_VIDEO_KEYS = (
+    "videoUrl", "video_url", "videoUrlBackup", "downloadedVideo",
+    "videoUrlMain", "media_url", "mediaUrl", "audioUrl",
+)
+
+
+def _item_has_video_media(item: dict) -> bool:
+    """True when an Apify IG item exposes an actual video/audio field.
+    `displayUrl` is deliberately excluded: it is usually an image thumbnail
+    and caused Whisper invalid-format failures in live SH-104 runs."""
+    if not isinstance(item, dict):
+        return False
+    if item.get("videoDuration") or item.get("videoViewCount"):
+        return True
+    for k in _IG_VIDEO_KEYS:
+        v = item.get(k)
+        if isinstance(v, str) and v.startswith(("http://", "https://")):
+            return True
+        if isinstance(v, list) and v:
+            for child in v:
+                if isinstance(child, str) and child.startswith(("http://", "https://")):
+                    return True
+                if isinstance(child, dict) and _item_has_video_media(child):
+                    return True
+    for child in item.get("childPosts") or []:
+        if isinstance(child, dict) and _item_has_video_media(child):
+            return True
+    return False
+
+
+def _candidate_from_ig_item(item: dict, query: str) -> dict | None:
+    url = item.get("url") or item.get("postUrl") or ""
+    if not url and item.get("shortCode"):
+        url = f"https://www.instagram.com/reel/{item['shortCode']}/"
+    if not url:
+        return None
+    return {
+        "platform": "instagram",
+        "id": item.get("shortCode") or item.get("id", ""),
+        "url": url,
+        "title": (item.get("caption") or "")[:200],
+        "uploader": item.get("ownerUsername") or item.get("username", ""),
+        "duration": item.get("videoDuration"),
+        "upload_date": (item.get("timestamp", "") or "")[:10].replace("-", ""),
+        "query": query,
+    }
+
+
+def _ig_seed_owner_username(seed_url: str, on_failure=None) -> str:
+    """Resolve the public seed Reel to its owner username via directUrls."""
+    state = get_state()
+    if not seed_url or "instagram.com" not in seed_url:
+        return ""
+    if not state.should_try_apify() or not APIFY_API_KEY:
+        return ""
+    actor = "apify~instagram-scraper"
+    payload = {
+        "directUrls": [seed_url.split("?")[0]],
+        "resultsType": "posts",
+        "resultsLimit": 1,
+        "addParentData": False,
+        "proxy": {"useApifyProxy": True},
+    }
+    run_id, err = _apify_post_run(actor, payload)
+    if err is not None:
+        if _apify_failure_disables_route(err):
+            state.mark_failed("apify", f"ig_seed_owner_start:{actor}", err,
+                              on_failure=on_failure)
+        else:
+            state.mark_stage_failed("apify", f"ig_seed_owner_start:{actor}", err,
+                                    on_failure=on_failure)
+        print(f"  Apify IG seed owner lookup failed: {err[:300]}")
+        return ""
+    status = _apify_poll_run(run_id, max_attempts=12)
+    if status != "SUCCEEDED":
+        state.mark_stage_failed("apify", "ig_seed_owner_run", f"run_status:{status}",
+                                on_failure=on_failure)
+        return ""
+    items = _apify_fetch_items(run_id)
+    if not items:
+        state.mark_stage_failed("apify", "ig_seed_owner_dataset", "empty_dataset",
+                                on_failure=on_failure)
+        return ""
+    item = items[0] if isinstance(items[0], dict) else {}
+    owner = item.get("owner") if isinstance(item.get("owner"), dict) else {}
+    username = item.get("ownerUsername") or item.get("username") or owner.get("username") or ""
+    username = (username or "").strip().lstrip("@")
+    if username:
+        state.mark_used("apify")
+        print(f"  Instagram seed owner: @{username}")
+    return username
+
+
+def _ig_via_username_from_seed(seed_url: str, max_per_query: int = 5,
+                               on_failure=None) -> list[dict]:
+    username = _ig_seed_owner_username(seed_url, on_failure=on_failure)
+    if not username:
+        return []
+    return _ig_via_username([username], max_per_query=max_per_query,
+                            on_failure=on_failure)
+
+
+def _ig_via_username(usernames: list[str], max_per_query: int = 5,
+                     on_failure=None) -> list[dict]:
+    """Apify instagram-reel-scraper username discovery.
+
+    Smoke-tested schema:
+        {"username": ["handle_without_at"], "resultsLimit": N}
+    """
+    state = get_state()
+    if not state.should_try_apify() or not APIFY_API_KEY:
+        return []
+    handles = []
+    for u in usernames:
+        h = (u or "").strip().lstrip("@")
+        if h and h not in handles:
+            handles.append(h)
+    if not handles:
+        return []
+    actor = "apify~instagram-reel-scraper"
+    payload = {
+        "username": handles[:3],
+        "resultsLimit": max_per_query * len(handles[:3]),
+    }
+    run_id, err = _apify_post_run(actor, payload)
+    if err is not None:
+        if _apify_failure_disables_route(err):
+            state.mark_failed("apify", f"ig_username_start:{actor}", err,
+                              on_failure=on_failure)
+        else:
+            state.mark_stage_failed("apify", f"ig_username_start:{actor}", err,
+                                    on_failure=on_failure)
+        print(f"  Apify IG username search start failed: {err[:300]}")
+        return []
+    status = _apify_poll_run(run_id)
+    if status != "SUCCEEDED":
+        state.mark_stage_failed("apify", "ig_username_run", f"run_status:{status}",
+                                on_failure=on_failure)
+        print(f"  Apify IG username run ended: {status}")
+        return []
+    items = _apify_fetch_items(run_id)
+    results = []
+    for item in items:
+        if not isinstance(item, dict) or item.get("error"):
+            continue
+        if not _item_has_video_media(item):
+            continue
+        cand = _candidate_from_ig_item(item, f"seed-owner:{','.join(handles[:3])}")
+        if cand:
+            results.append(cand)
+    if results:
+        state.mark_used("apify")
+        print(f"  Instagram username reels: {len(results)}")
+    return results
+
+
 def _ig_via_apify(queries: list[str], max_per_query: int = 5,
                    on_failure=None) -> list[dict]:
     """Apify Instagram hashtag discovery — verified actor schema.
@@ -291,21 +452,13 @@ def _ig_via_apify(queries: list[str], max_per_query: int = 5,
 
     results = []
     for item in items:
-        url = item.get("url") or item.get("postUrl") or ""
-        if not url and item.get("shortCode"):
-            url = f"https://www.instagram.com/reel/{item['shortCode']}/"
-        if not url:
+        if not _item_has_video_media(item):
             continue
-        results.append({
-            "platform": "instagram",
-            "id": item.get("shortCode") or item.get("id", ""),
-            "url": url,
-            "title": (item.get("caption") or "")[:200],
-            "uploader": item.get("ownerUsername", ""),
-            "duration": item.get("videoDuration"),
-            "upload_date": (item.get("timestamp", "") or "")[:10].replace("-", ""),
-            "query": ",".join(item.get("hashtags", [])[:3]) or "(hashtag-batch)",
-        })
+        cand = _candidate_from_ig_item(
+            item, ",".join(item.get("hashtags", [])[:3]) or "(hashtag-batch)",
+        )
+        if cand:
+            results.append(cand)
     if results:
         state.mark_used("apify")
     return results
@@ -541,6 +694,7 @@ def generate_query_buckets(person_name: str, requirement: str,
 # ── orchestrator ─────────────────────────────────────────────────────────────
 
 def collect_candidates(person_name: str, requirement: str, seed_excerpt: str = "",
+                       seed_url: str = "",
                        target_count: int = 6,
                        on_failure=None) -> tuple[list[dict], dict]:
     """Generate queries -> search both platforms -> dedupe.
@@ -579,6 +733,7 @@ def collect_candidates(person_name: str, requirement: str, seed_excerpt: str = "
         if ig_queries:
             raw_ig = search_instagram_candidates(
                 ig_queries[:8], max_per_query=5, person_name=person_name,
+                seed_url=seed_url,
                 on_failure=on_failure,
             )
             print(f"  Instagram candidates: {len(raw_ig)}")

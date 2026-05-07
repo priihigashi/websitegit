@@ -369,15 +369,13 @@ def transcribe_youtube(video_id: str) -> dict:
 
 _IG_MEDIA_FIELDS = (
     "videoUrl", "video_url", "videoUrlBackup", "downloadedVideo",
-    "videoUrlMain", "media_url", "displayUrl",  # displayUrl last — image fallback (no audio)
+    "videoUrlMain", "media_url", "mediaUrl",
 )
 
 
 def _extract_ig_media_url(item: dict) -> tuple[str, str]:
-    """Return (url, source_field). Walks the known set of media URL keys
-    Apify's IG actors emit. videoUrl/displayUrl naming varies by actor +
-    post type (single reel, carousel, story-replay) so we try them all
-    rather than hardcoding one. Returns ('', '') if none usable for audio."""
+    """Return (url, source_field) for transcriptable IG media fields.
+    Thumbnail fields such as displayUrl are intentionally excluded."""
     if not isinstance(item, dict):
         return "", ""
     for k in _IG_MEDIA_FIELDS:
@@ -389,10 +387,23 @@ def _extract_ig_media_url(item: dict) -> tuple[str, str]:
             if isinstance(first, str) and first.startswith(("http://", "https://")):
                 return first, k
             if isinstance(first, dict):
-                for sub in ("url", "src", "videoUrl"):
+                for sub in ("videoUrl", "video_url", "downloadedVideo", "mediaUrl"):
                     if isinstance(first.get(sub), str):
                         return first[sub], f"{k}[0].{sub}"
+    for i, child in enumerate(item.get("childPosts") or []):
+        if isinstance(child, dict):
+            url, field = _extract_ig_media_url(child)
+            if url:
+                return url, f"childPosts[{i}].{field}"
     return "", ""
+
+
+def _content_type_is_transcriptable(content_type: str) -> bool:
+    ctype = (content_type or "").split(";", 1)[0].strip().lower()
+    return ctype.startswith("video/") or ctype.startswith("audio/") or ctype in {
+        "application/octet-stream",
+        "binary/octet-stream",
+    }
 
 
 def _apify_request(method: str, path: str, *, params: dict | None = None,
@@ -515,6 +526,9 @@ def _ig_audio_one_attempt(reel_url: str, proxy_groups: list[str] | None) -> tupl
         with tempfile.TemporaryDirectory() as td:
             path = os.path.join(td, "audio.mp4")
             with urllib.request.urlopen(video_url, timeout=120) as dl:
+                ctype = dl.headers.get("content-type", "")
+                if not _content_type_is_transcriptable(ctype):
+                    return "", "unsupported_media_type", f"{ctype or 'unknown'} via {src_field}"
                 with open(path, "wb") as f:
                     f.write(dl.read())
             if os.path.getsize(path) < 5_000:

@@ -105,6 +105,40 @@ class ApifyRouteStateTests(unittest.TestCase):
             "HTTP 403 [insufficient-permissions] Insufficient permissions for the Actor"
         ))
 
+    def test_instagram_display_url_is_not_transcript_media(self):
+        item = {
+            "displayUrl": "https://example.com/thumb.jpg",
+            "shortCode": "IMGONLY",
+        }
+
+        self.assertEqual(transcription._extract_ig_media_url(item), ("", ""))
+        self.assertFalse(cc._item_has_video_media(item))
+
+    def test_instagram_video_item_is_candidate_media(self):
+        item = {
+            "videoUrl": "https://example.com/video.mp4",
+            "shortCode": "VID123",
+            "url": "https://www.instagram.com/reel/VID123/",
+        }
+
+        self.assertTrue(cc._item_has_video_media(item))
+        self.assertEqual(
+            transcription._extract_ig_media_url(item),
+            ("https://example.com/video.mp4", "videoUrl"),
+        )
+
+    def test_instagram_child_post_video_is_transcript_media(self):
+        item = {
+            "displayUrl": "https://example.com/thumb.jpg",
+            "childPosts": [{"videoUrl": "https://example.com/child.mp4"}],
+        }
+
+        self.assertTrue(cc._item_has_video_media(item))
+        self.assertEqual(
+            transcription._extract_ig_media_url(item),
+            ("https://example.com/child.mp4", "childPosts[0].videoUrl"),
+        )
+
     @patch("candidate_collectors.APIFY_API_KEY", "apify_api_test")
     @patch("candidate_collectors._apify_post_run")
     def test_no_paid_mode_does_not_call_apify(self, post_run):

@@ -663,6 +663,7 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
         person_name=person_name,
         requirement=evidence_requirement,
         seed_excerpt=seed_excerpt,
+        seed_url=seed_url,
         target_count=target_clip_count,
         on_failure=_log_route_failure,
     )
