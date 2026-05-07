@@ -270,7 +270,10 @@ def _apify_yt_whisper(video_id: str) -> str:
         if not APIFY_API_KEY:
             state.mark_unavailable("apify", "no_api_key")
         return ""
-    actor = "bernardo~youtube-scraper"
+    # Actor swap 2026-05-07: bernardo~youtube-scraper returns HTTP 404 (does not
+    # exist on Apify Store). Verified streamers~youtube-scraper is public + works
+    # with the same startUrls payload shape. See SH-104 handoff.
+    actor = "streamers~youtube-scraper"
     payload = {
         "startUrls": [{"url": f"https://www.youtube.com/watch?v={video_id}"}],
         "maxResults": 1,

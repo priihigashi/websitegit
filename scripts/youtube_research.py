@@ -225,7 +225,10 @@ def _try_apify_youtube_audio(video_id: str) -> str:
         return ""
 
     print("    Trying Apify YouTube download...")
-    actor_id = "bernardo~youtube-scraper"
+    # Actor swap 2026-05-07: bernardo~youtube-scraper returns HTTP 404 (does not
+    # exist on Apify Store). Using streamers~youtube-scraper (public, accessible,
+    # same startUrls payload shape).
+    actor_id = "streamers~youtube-scraper"
     input_data = {
         "startUrls": [{"url": f"https://www.youtube.com/watch?v={video_id}"}],
         "maxResults": 1,
