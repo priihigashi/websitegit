@@ -1,0 +1,24 @@
+name: SH-104 Anthropic diagnostic
+
+# Safe diagnostic only. Does not expose the key and does not block SH-104's
+# OpenAI fallback route.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: sh104-anthropic-diag
+  cancel-in-progress: false
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run Anthropic diagnostic
+        env:
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
+        run: python3 scripts/research/_anthropic_diag.py
