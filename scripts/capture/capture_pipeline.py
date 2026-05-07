@@ -3183,9 +3183,8 @@ def translate_to_pt(text: str) -> str:
     Uses the same urllib pattern as build_render_props.py. Non-fatal — returns
     the original text unchanged if translation fails or key is missing.
     """
-    if not CLAUDE_KEY_4_CONTENT or not text.strip():
+    if not text.strip():
         return text
-    import urllib.request as _urllib_request
     prompt = (
         "Translate this English content brief to Brazilian Portuguese (PT-BR). "
         "Keep the same structure, section headers, and formatting. "
@@ -3193,25 +3192,13 @@ def translate_to_pt(text: str) -> str:
         "Output ONLY the translated text, no commentary.\n\n"
         + text
     )
-    payload = json.dumps({
-        "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 4000,
-        "messages": [{"role": "user", "content": prompt}],
-    }).encode()
     try:
-        req = _urllib_request.Request(
-            "https://api.anthropic.com/v1/messages",
-            data=payload,
-            headers={
-                "x-api-key": CLAUDE_KEY_4_CONTENT,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-        )
-        resp = json.loads(_urllib_request.urlopen(req, timeout=60).read())
-        translated = resp["content"][0]["text"]
-        print(f"  PT-BR translation: {len(translated)} chars")
-        return translated
+        translated = _llm_text(prompt, max_tokens=4000, model="claude-haiku-4-5-20251001") or ""
+        if translated.strip():
+            print(f"  PT-BR translation: {len(translated)} chars")
+            return translated
+        print("  WARNING: PT translation returned empty (non-fatal) — keeping English")
+        return text
     except Exception as e:
         print(f"  WARNING: PT translation failed (non-fatal): {e}")
         return text
@@ -3906,40 +3893,29 @@ def detect_project(transcript: str, caption: str, notes: str) -> tuple:
         '{"project": "book|brazil|usa|opc|ugc|stocks|higashi", "confidence": 0.0-1.0, "reason": "one-sentence why"}'
     )
 
-    import urllib.request as _urllib_request
-    payload = json.dumps({
-        "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 200,
-        "messages": [{"role": "user", "content": prompt}],
-    }).encode()
-
     try:
-        req = _urllib_request.Request(
-            "https://api.anthropic.com/v1/messages",
-            data=payload,
-            headers={
-                "x-api-key": CLAUDE_KEY_4_CONTENT,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-        )
-        resp = json.loads(_urllib_request.urlopen(req, timeout=30).read())
-        raw = resp["content"][0]["text"].strip()
+        raw = (_llm_text(prompt, max_tokens=200, model="claude-haiku-4-5-20251001") or "").strip()
+        if not raw:
+            return ("unrouted", 0.0, "Classifier failed: all LLM tiers returned empty")
         # Strip accidental markdown fence
         if raw.startswith("```"):
             raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw).strip()
+        # Some models prepend prose — extract the JSON object
+        m_json = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m_json:
+            raw = m_json.group()
         parsed = json.loads(raw)
         proj = (parsed.get("project") or "").lower().strip()
         conf = float(parsed.get("confidence") or 0.0)
         reason = parsed.get("reason") or ""
 
         if proj not in VALID_PROJECTS:
-            return ("unrouted", 0.0, f"Claude returned invalid project '{proj}'")
+            return ("unrouted", 0.0, f"Classifier returned invalid project '{proj}'")
         if conf < 0.70:
-            return ("unrouted", conf, f"low confidence ({conf:.2f}) — Claude said {proj}: {reason}")
+            return ("unrouted", conf, f"low confidence ({conf:.2f}) — classifier said {proj}: {reason}")
         return (proj, conf, reason)
     except Exception as e:
-        return ("unrouted", 0.0, f"Claude classify failed: {e}")
+        return ("unrouted", 0.0, f"Classifier failed: {e}")
 
 
 def run_unrouted(args, transcript: str, video_path: str = "", metadata: dict = None,
