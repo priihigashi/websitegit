@@ -1531,61 +1531,29 @@ def _extract_video_keyframes(file_path: str, tmp_dir: str, n: int = 6) -> list:
 
 
 def _describe_with_claude_vision(image_sources: list, context: str = "") -> str:
-    """Send up to 8 images to Claude Haiku Vision → returns scene description string.
+    """Vision describe — Claude Haiku → GPT-4o → Gemini 1.5 Flash cascade via llm_vision.
 
-    image_sources: list of local file paths (JPEG) OR remote URLs.
-    Returns "" on any failure — never raises.
+    image_sources: list of local file paths (JPEG/PNG) OR remote URLs.
+    Returns "" on any failure — never raises (matches prior contract).
     """
-    if not CLAUDE_KEY_4_CONTENT:
-        print("  _describe_with_claude_vision: CLAUDE_KEY_4_CONTENT not set — skipping")
-        return ""
     if not image_sources:
         return ""
-
+    prompt = (
+        "Describe what you see in these images. Include:\n"
+        "- Any visible text (signs, overlays, captions, headlines)\n"
+        "- People shown (names if visible, roles, public figures)\n"
+        "- Location or setting\n"
+        "- Topic or subject matter\n"
+        "- Language of any text\n"
+        "Be specific. This description will be used to classify the content niche "
+        "(Brazil news, USA news, Oak Park construction, stocks, etc.)."
+        + (f"\n\nContext from caption: {context[:300]}" if context else "")
+    )
     try:
-        import anthropic as _anthropic
-        client = _anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
-
-        content_blocks = []
-        for src in image_sources[:8]:
-            if src.startswith("http://") or src.startswith("https://"):
-                content_blocks.append({
-                    "type": "image",
-                    "source": {"type": "url", "url": src},
-                })
-            elif os.path.exists(src):
-                with open(src, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode("utf-8")
-                content_blocks.append({
-                    "type": "image",
-                    "source": {"type": "base64", "media_type": "image/jpeg", "data": b64},
-                })
-
-        if not content_blocks:
-            return ""
-
-        content_blocks.append({
-            "type": "text",
-            "text": (
-                "Describe what you see in these images. Include:\n"
-                "- Any visible text (signs, overlays, captions, headlines)\n"
-                "- People shown (names if visible, roles, public figures)\n"
-                "- Location or setting\n"
-                "- Topic or subject matter\n"
-                "- Language of any text\n"
-                "Be specific. This description will be used to classify the content niche "
-                "(Brazil news, USA news, Oak Park construction, stocks, etc.)."
-                + (f"\n\nContext from caption: {context[:300]}" if context else "")
-            ),
-        })
-
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=600,
-            messages=[{"role": "user", "content": content_blocks}],
-        )
-        description = resp.content[0].text.strip()
-        print(f"  Claude Vision description ({len(description)} chars, {len(content_blocks)-1} images)")
+        from _llm_fallback import llm_vision
+        description = llm_vision(image_sources, prompt, max_tokens=600, context="capture_pipeline:vision")
+        if description:
+            print(f"  Vision description ({len(description)} chars, {len(image_sources[:8])} images)")
         return description
     except Exception as e:
         print(f"  WARNING _describe_with_claude_vision (non-fatal): {e}")
@@ -2976,12 +2944,8 @@ Rules:
 - manual = finding a specific asset/clip/image that requires human search"""
 
     try:
-        parse_resp = client.messages.create(
-            model="claude-haiku-4-5-20251001", max_tokens=800,
-            messages=[{"role": "user", "content": parse_prompt}]
-        )
-        raw = parse_resp.content[0].text.strip()
-        m = _re.search(r'\{.*\}', raw, _re.DOTALL)
+        raw = (_llm_text(parse_prompt, max_tokens=800, model="claude-haiku-4-5-20251001") or "").strip()
+        m = _re.search(r'\{.*\}', raw, _re.DOTALL) if raw else None
         if not m:
             print(f"  research_from_notes: could not parse JSON — skipping research")
             return empty
@@ -3036,11 +3000,9 @@ Video transcript context:
 This will be embedded directly into a content brief. Be direct and factual."""
 
         try:
-            resp = client.messages.create(
-                model="claude-sonnet-4-6", max_tokens=1500,
-                messages=[{"role": "user", "content": research_prompt}]
-            )
-            result = resp.content[0].text.strip()
+            result = (_llm_text(research_prompt, max_tokens=1500, model="claude-sonnet-4-6") or "").strip()
+            if not result:
+                raise RuntimeError("All LLM tiers (Claude + OpenAI) returned empty")
             research_tasks.append({"question": question, "result": result})
             print(f"  Researched: {question[:70]}...")
         except Exception as e:
