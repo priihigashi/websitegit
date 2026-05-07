@@ -61,7 +61,26 @@ except Exception as _vv_err:
     print(f"  Warning: vision_validator not loaded ({_vv_err})")
 
 
-def _is_valid_image_file(path) -> bool:
+def _resolve_local_image_path(path, work_dir=None):
+    """Resolve carousel-relative image paths before validation.
+
+    Stock/image-provider helpers return paths like resources/images/foo.jpg
+    while the files live under the per-run carousel work_dir. Catalog downloads
+    already return absolute paths. Keep both shapes working.
+    """
+    from pathlib import Path as _P
+
+    p = _P(str(path))
+    if p.exists():
+        return p
+    if work_dir and not p.is_absolute():
+        candidate = _P(str(work_dir)) / p
+        if candidate.exists():
+            return candidate
+    return p
+
+
+def _is_valid_image_file(path, work_dir=None) -> bool:
     """Phase 3: verify a generated/downloaded image is real before trusting it.
 
     Returns True only if file exists, has non-trivial size, and Pillow can
@@ -72,22 +91,21 @@ def _is_valid_image_file(path) -> bool:
     if not path:
         return False
     try:
-        from pathlib import Path as _P
-        p = _P(str(path))
+        p = _resolve_local_image_path(path, work_dir=work_dir)
         if not p.exists() or p.stat().st_size < 15_000:
             return False
     except Exception:
         return False
     try:
         from PIL import Image  # type: ignore
-        with Image.open(str(path)) as im:
+        with Image.open(str(p)) as im:
             im.verify()
         return True
     except Exception:
         return False
 
 
-def _vision_accept(local_path, query, label, *, source_url=""):
+def _vision_accept(local_path, query, label, *, source_url="", work_dir=None):
     """Return True if Vision says image matches query. Logs the verdict.
     Empty path or empty query short-circuits to True so we never block on
     missing inputs.
@@ -97,16 +115,22 @@ def _vision_accept(local_path, query, label, *, source_url=""):
     prevents 'Vision OK skipped (file not found)' from silently passing."""
     if not local_path or not query:
         return True
+    resolved_path = _resolve_local_image_path(local_path, work_dir=work_dir)
     # Phase 3: hard pre-check — file must be real on disk.
-    if not _is_valid_image_file(local_path):
+    if not _is_valid_image_file(resolved_path):
         print(f"  Vision REJECT ({label}): file missing/corrupt/too small — {str(local_path)[-80:]}")
         return False
     # SH-056: check original source URL for AI-art domains first; fall back to local path
-    url_to_check = source_url or _fetch_url_cache.get(str(local_path), local_path)
+    url_to_check = (
+        source_url
+        or _fetch_url_cache.get(str(resolved_path))
+        or _fetch_url_cache.get(str(local_path))
+        or str(resolved_path)
+    )
     if _is_ai_art_url(url_to_check):
         print(f"  Vision REJECT ({label}): AI-art domain URL — {url_to_check[:80]}")
         try:
-            __import__("os").unlink(local_path)
+            __import__("os").unlink(resolved_path)
         except Exception:
             pass
         return False
@@ -116,20 +140,20 @@ def _vision_accept(local_path, query, label, *, source_url=""):
         if _pm_url_check(url_to_check):
             print(f"  Vision REJECT ({label}): photo_matcher URL heuristic reject — {url_to_check[:80]}")
             try:
-                __import__("os").unlink(local_path)
+                __import__("os").unlink(resolved_path)
             except Exception:
                 pass
             return False
     except Exception:
         pass
     try:
-        ok, reason = _vision_validate(local_path, query)
+        ok, reason = _vision_validate(str(resolved_path), query)
         if ok:
             print(f"  Vision OK ({label}): {reason[:120]}")
         else:
             print(f"  Vision REJECT ({label}): {reason[:120]}")
             try:
-                __import__("os").unlink(local_path)
+                __import__("os").unlink(resolved_path)
             except Exception:
                 pass
         return ok
@@ -2566,7 +2590,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 lib_hit = _search_library(search_q, niche)
                 if lib_hit:
                     rel = _enhance_library_image(lib_hit.get("drive_url", ""), work_dir, cover_fname, search_q)
-                    if rel and _vision_accept(rel, search_q, "cover/library"):
+                    if rel and _vision_accept(rel, search_q, "cover/library", work_dir=work_dir):
                         _set_cover(rel, "library", "library", query=search_q, prompt="scene-lock enhance from library")
                         if _mark_library_used:
                             _mark_library_used(lib_hit.get("row_idx", 0), f"{niche}:{search_q[:40]}")
@@ -2592,27 +2616,27 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 cover_fname = _make_img_filename(search_q, "ai", 1)
                 _skip_prov = ["dall-e-3"] if niche == "opc" else []
                 c, used_prov = _gen_ai_image(fresh_prompt, work_dir, cover_fname, skip_providers=_skip_prov)
-                if c and _vision_accept(c, search_q, f"cover/{used_prov}"):
+                if c and _vision_accept(c, search_q, f"cover/{used_prov}", work_dir=work_dir):
                     _set_cover(c, used_prov, "ai", query=search_q, prompt=fresh_prompt)
             elif ai_prompt:
                 # Legacy fallback when image_providers not available.
                 # OPC: DALL-E is forbidden — real photos only (SH-039). Skip all AI tiers.
                 if not (niche == "opc"):
                     c = _generate_gemini_image(ai_prompt, work_dir, cover_fname)
-                    if c and _vision_accept(c, search_q, "cover/gemini"):
+                    if c and _vision_accept(c, search_q, "cover/gemini", work_dir=work_dir):
                         _set_cover(c, "gemini", "ai", query=search_q, prompt=ai_prompt)
                 if not paths["cover"] and not (niche == "opc"):
                     c = _generate_seedream_image(ai_prompt, work_dir, cover_fname)
-                    if c and _vision_accept(c, search_q, "cover/seedream"):
+                    if c and _vision_accept(c, search_q, "cover/seedream", work_dir=work_dir):
                         _set_cover(c, "seedream", "ai", query=search_q, prompt=ai_prompt)
                 # DALL-E: explicitly skipped for OPC (real-photo only — SH-039)
                 if not paths["cover"] and not (niche == "opc"):
                     c = _generate_ai_cover(ai_prompt, work_dir, cover_fname)
-                    if c and _vision_accept(c, search_q, "cover/dall-e-3"):
+                    if c and _vision_accept(c, search_q, "cover/dall-e-3", work_dir=work_dir):
                         _set_cover(c, "dall-e-3", "ai", query=search_q, prompt=ai_prompt)
                 if not paths["cover"] and not (niche == "opc"):
                     c = _generate_replicate_sdxl(ai_prompt, work_dir, cover_fname)
-                    if c and _vision_accept(c, search_q, "cover/sdxl"):
+                    if c and _vision_accept(c, search_q, "cover/sdxl", work_dir=work_dir):
                         _set_cover(c, "sdxl", "ai", query=search_q, prompt=ai_prompt)
                 if not paths["cover"] and niche == "opc":
                     print(
@@ -2626,15 +2650,15 @@ def fetch_all_media(content, niche, work_dir, brief=""):
         if not paths["cover"] and search_q:
             c = _fetch_person_photo(search_q, work_dir, cover_fname)
             # Wiki for non-persons gets Vision check; person path is exact-name match (skip)
-            if c and (subject_type == "person" or _vision_accept(c, search_q, "cover/wikimedia")):
+            if c and (subject_type == "person" or _vision_accept(c, search_q, "cover/wikimedia", work_dir=work_dir)):
                 _set_cover(c, "wikimedia", "cc", query=search_q)
             if not paths["cover"] and subject_type != "person":
                 c = _fetch_pexels_image(search_q, work_dir, cover_fname)
-                if c and _vision_accept(c, search_q, "cover/pexels"):
+                if c and _vision_accept(c, search_q, "cover/pexels", work_dir=work_dir):
                     _set_cover(c, "pexels", "stock", query=search_q)
             if not paths["cover"] and subject_type != "person":
                 c = _fetch_pixabay_image(search_q, work_dir, cover_fname)
-                if c and _vision_accept(c, search_q, "cover/pixabay"):
+                if c and _vision_accept(c, search_q, "cover/pixabay", work_dir=work_dir):
                     _set_cover(c, "pixabay", "stock", query=search_q)
 
         # Person photo missed all CC tiers → contextual Pexels fallback (no face, topic context).
@@ -2717,7 +2741,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                     _dl = _download_drive_photo(opc_hit["drive_url"], str(_img_dir / _try_fname))
                     _fname_key = (opc_hit.get("filename", "") or "").strip().lower()
                     _drive_key = (opc_hit.get("drive_url", "") or "").strip().lower()
-                    if _dl and _vision_accept(_dl, cq, f"slide{i}/opc_catalog"):
+                    if _dl and _vision_accept(_dl, cq, f"slide{i}/opc_catalog", work_dir=work_dir):
                         _set_slide(i, _dl, "opc_catalog", "real_photo", query=cq,
                                    service_type=opc_hit.get("service_type", ""))
                         accepted = True
@@ -2740,7 +2764,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 lib_hit = _search_library(cq, niche)
                 if lib_hit:
                     rel = _enhance_library_image(lib_hit.get("drive_url", ""), work_dir, fname, cq)
-                    if rel and _vision_accept(rel, cq, f"slide{i}/library"):
+                    if rel and _vision_accept(rel, cq, f"slide{i}/library", work_dir=work_dir):
                         _set_slide(i, rel, "library", "library", query=cq, prompt="scene-lock enhance from library")
                         accepted = True
                         if _mark_library_used:
@@ -2757,7 +2781,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
             fname = _make_img_filename(cq, "ai", i)
             _skip_prov = ["dall-e-3"] if niche == "opc" else []
             img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname, skip_providers=_skip_prov)
-            if img_path and _vision_accept(img_path, cq, f"slide{i}/{used_prov}"):
+            if img_path and _vision_accept(img_path, cq, f"slide{i}/{used_prov}", work_dir=work_dir):
                 print(f"  Slide {i}: {used_prov} image for '{cq[:50]}'")
                 _set_slide(i, img_path, used_prov, "ai", query=cq, prompt=fresh_prompt)
                 accepted = True
@@ -2768,21 +2792,21 @@ def fetch_all_media(content, niche, work_dir, brief=""):
             # OPC: skip DALL-E (AI-generated photos not allowed for OPC — real photos only).
             if not (niche == "opc"):
                 img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
-                if img_path and _vision_accept(img_path, cq, f"slide{i}/gemini"):
+                if img_path and _vision_accept(img_path, cq, f"slide{i}/gemini", work_dir=work_dir):
                     _set_slide(i, img_path, "gemini", "ai", query=cq, prompt=ai_prompt)
                     accepted = True
                 else:
                     img_path = ""
             if not accepted and not (niche == "opc"):
                 img_path = _generate_seedream_image(ai_prompt, work_dir, fname)
-                if img_path and _vision_accept(img_path, cq, f"slide{i}/seedream"):
+                if img_path and _vision_accept(img_path, cq, f"slide{i}/seedream", work_dir=work_dir):
                     _set_slide(i, img_path, "seedream", "ai", query=cq, prompt=ai_prompt)
                     accepted = True
                 else:
                     img_path = ""
             if not accepted and not (niche == "opc"):
                 img_path = _generate_replicate_sdxl(ai_prompt, work_dir, fname)
-                if img_path and _vision_accept(img_path, cq, f"slide{i}/sdxl"):
+                if img_path and _vision_accept(img_path, cq, f"slide{i}/sdxl", work_dir=work_dir):
                     _set_slide(i, img_path, "sdxl", "ai", query=cq, prompt=ai_prompt)
                     accepted = True
                 else:
@@ -2790,7 +2814,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
             # DALL-E: explicitly skipped for OPC (real-photo rule SH-039)
             if not accepted and not (niche == "opc"):
                 img_path = _generate_ai_cover(ai_prompt, work_dir, fname)
-                if img_path and _vision_accept(img_path, cq, f"slide{i}/dall-e-3"):
+                if img_path and _vision_accept(img_path, cq, f"slide{i}/dall-e-3", work_dir=work_dir):
                     _set_slide(i, img_path, "dall-e-3", "ai", query=cq, prompt=ai_prompt)
                     accepted = True
                 else:
@@ -2802,7 +2826,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
         _cq_stock = _opc_photo_query(cq, niche)
         if not accepted:
             img_path = _fetch_person_photo(_cq_stock, work_dir, fname)
-            if img_path and _vision_accept(img_path, _cq_stock, f"slide{i}/wikimedia"):
+            if img_path and _vision_accept(img_path, _cq_stock, f"slide{i}/wikimedia", work_dir=work_dir):
                 print(f"  Slide {i}: Wikimedia fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "wikimedia", "cc", query=cq, prompt=ai_prompt)
                 accepted = True
@@ -2810,7 +2834,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 img_path = ""
         if not accepted:
             img_path = _fetch_pexels_image(_cq_stock, work_dir, fname)
-            if img_path and _vision_accept(img_path, _cq_stock, f"slide{i}/pexels"):
+            if img_path and _vision_accept(img_path, _cq_stock, f"slide{i}/pexels", work_dir=work_dir):
                 print(f"  Slide {i}: Pexels fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "pexels", "stock", query=cq, prompt=ai_prompt)
                 accepted = True
@@ -2818,7 +2842,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 img_path = ""
         if not accepted:
             img_path = _fetch_pixabay_image(_cq_stock, work_dir, fname)
-            if img_path and _vision_accept(img_path, _cq_stock, f"slide{i}/pixabay"):
+            if img_path and _vision_accept(img_path, _cq_stock, f"slide{i}/pixabay", work_dir=work_dir):
                 print(f"  Slide {i}: Pixabay fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "pixabay", "stock", query=cq, prompt=ai_prompt)
                 accepted = True
@@ -2851,7 +2875,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                         _dl = _download_drive_photo(_alt_hit["drive_url"], str(_img_dir / _try_alt_fname))
                         _fname_key = (_alt_hit.get("filename", "") or "").strip().lower()
                         _drive_key = (_alt_hit.get("drive_url", "") or "").strip().lower()
-                        if _dl and _vision_accept(_dl, cq_alt, f"slide{i}/opc_catalog_alt"):
+                        if _dl and _vision_accept(_dl, cq_alt, f"slide{i}/opc_catalog_alt", work_dir=work_dir):
                             _set_slide(i, _dl, "opc_catalog", "real_photo", query=cq_alt,
                                        service_type=_alt_hit.get("service_type", ""))
                             accepted = True
@@ -2868,7 +2892,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
             # Retry Wikimedia with alt
             if not accepted:
                 _alt_path = _fetch_person_photo(_cq_alt_stock, work_dir, _alt_fname)
-                if _alt_path and _vision_accept(_alt_path, _cq_alt_stock, f"slide{i}/wikimedia_alt"):
+                if _alt_path and _vision_accept(_alt_path, _cq_alt_stock, f"slide{i}/wikimedia_alt", work_dir=work_dir):
                     print(f"  Slide {i}: Wikimedia alt for '{cq_alt[:50]}'")
                     _set_slide(i, _alt_path, "wikimedia", "cc", query=cq_alt, prompt=ai_prompt)
                     accepted = True
@@ -2876,7 +2900,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
             # Retry Pexels with alt
             if not accepted:
                 _alt_path = _fetch_pexels_image(_cq_alt_stock, work_dir, _alt_fname)
-                if _alt_path and _vision_accept(_alt_path, _cq_alt_stock, f"slide{i}/pexels_alt"):
+                if _alt_path and _vision_accept(_alt_path, _cq_alt_stock, f"slide{i}/pexels_alt", work_dir=work_dir):
                     print(f"  Slide {i}: Pexels alt for '{cq_alt[:50]}'")
                     _set_slide(i, _alt_path, "pexels", "stock", query=cq_alt, prompt=ai_prompt)
                     accepted = True
@@ -2884,7 +2908,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
             # Retry Pixabay with alt
             if not accepted:
                 _alt_path = _fetch_pixabay_image(_cq_alt_stock, work_dir, _alt_fname)
-                if _alt_path and _vision_accept(_alt_path, _cq_alt_stock, f"slide{i}/pixabay_alt"):
+                if _alt_path and _vision_accept(_alt_path, _cq_alt_stock, f"slide{i}/pixabay_alt", work_dir=work_dir):
                     print(f"  Slide {i}: Pixabay alt for '{cq_alt[:50]}'")
                     _set_slide(i, _alt_path, "pixabay", "stock", query=cq_alt, prompt=ai_prompt)
                     accepted = True
