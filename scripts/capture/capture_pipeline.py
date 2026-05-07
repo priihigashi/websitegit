@@ -2713,6 +2713,8 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
     create_calendar_task(args.story_id, args.project, args.url, doc_url, transcript[:400], args.notes or "")
 
     # Upload video to niche Captures folder so Remotion can reference it (not lost in tmpdir)
+    # Instagram serves VP9-in-MP4 → Drive's preview transcoder is slow (5-30 min lag) and
+    # QuickTime won't natively play VP9. Transcode to H.264/AAC for instant playback.
     video_drive_url = ""
     if video_path and os.path.exists(video_path):
         try:
@@ -2728,10 +2730,40 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
                 client_secret=token_data.get("client_secret"),
             )
             drive = build("drive", "v3", credentials=creds)
-            size_mb = os.path.getsize(video_path) / (1024 * 1024)
+
+            # Transcode to H.264 + AAC for universal Drive/QuickTime playback (skip if already h264).
+            upload_path = video_path
+            try:
+                _probe = subprocess.run(
+                    ["ffprobe", "-v", "error", "-select_streams", "v:0",
+                     "-show_entries", "stream=codec_name", "-of", "csv=p=0", video_path],
+                    capture_output=True, text=True, timeout=30,
+                )
+                _vcodec = (_probe.stdout or "").strip().lower()
+                if _vcodec and _vcodec != "h264":
+                    h264_path = os.path.join(os.path.dirname(video_path), f"{Path(video_path).stem}_h264.mp4")
+                    print(f"  Transcoding {_vcodec} → H.264 for instant playback...")
+                    _r = subprocess.run(
+                        ["ffmpeg", "-y", "-loglevel", "error",
+                         "-i", video_path,
+                         "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p",
+                         "-c:a", "aac", "-b:a", "128k",
+                         "-movflags", "+faststart",
+                         h264_path],
+                        capture_output=True, text=True, timeout=600,
+                    )
+                    if _r.returncode == 0 and os.path.exists(h264_path) and os.path.getsize(h264_path) > 1024:
+                        upload_path = h264_path
+                        print(f"  H.264 transcode OK ({os.path.getsize(h264_path)/1024/1024:.1f} MB)")
+                    else:
+                        print(f"  H.264 transcode failed (non-fatal) — uploading original {_vcodec}")
+            except Exception as _te:
+                print(f"  H.264 transcode skipped (non-fatal): {_te}")
+
+            size_mb = os.path.getsize(upload_path) / (1024 * 1024)
             print(f"  Uploading video to Captures folder ({size_mb:.1f} MB)...")
             file_meta = {"name": f"{args.story_id}_original.mp4", "parents": [_story_folder_id]}
-            media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
+            media = MediaFileUpload(upload_path, mimetype="video/mp4", resumable=True)
             result = drive.files().create(
                 body=file_meta, media_body=media, supportsAllDrives=True, fields="id,webViewLink"
             ).execute()
