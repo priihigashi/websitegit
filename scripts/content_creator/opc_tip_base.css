@@ -366,8 +366,15 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   color:#F0EBE3;
 }
 .v2.slide-cover .headline .accent { color:#CBCC10; }
-.v2 .slide-sources .bg-photo { filter:grayscale(1) contrast(1.08) brightness(0.88); }
-.v2 .slide-sources .bg-photo::after { background:linear-gradient(180deg, rgba(240,235,227,0.22) 0%, rgba(240,235,227,0.86) 100%); }
+/* Sources slide: mirror the cover's three-layer background recipe so cream
+   variant slide 5 reads the same as slide 1 (text was hard to read at the
+   top of slide 5 because the gradient bottomed out at 22% cream there). */
+.v2 .slide-sources .bg-photo { filter:grayscale(1) contrast(1.1) brightness(0.85); }
+.v2 .slide-sources .bg-photo::after { background:linear-gradient(180deg, rgba(240,235,227,0.25) 0%, rgba(240,235,227,0.85) 100%); }
+.v2.slide-sources::before {
+  content:''; position:absolute; inset:0; z-index:2;
+  background:rgba(240,235,227,0.6); pointer-events:none;
+}
 .v2 .save-cta, .v2 .handle, .v2 .tip-label { color:#0A0A0A; }
 .v2 .headline .accent, .v2 .stat-big, .v2 .list-num, .v2 .src-num, .v2 .arrow { color:#0A0A0A; }
 .v2 .sticker-placeholder { color:#0A0A0A; }
