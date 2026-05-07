@@ -72,6 +72,41 @@ SENSITIVE_CLAIM_TYPES = {
     "hypocrisy",
 }
 
+THIRD_PARTY_NARRATION_PATTERNS = [
+    r"\bfoi denunciad[oa]s?\b",
+    r"\bfoi acusado\b",
+    r"\bfoi processado\b",
+    r"\bfoi alvo\b",
+    r"\bdeclara(?:ç|c)[õo]es consideradas\b",
+    r"\bminist[eé]rio p[uú]blico\b",
+    r"\bmp[-\s]?sp\b",
+    r"\bo sacerdote\b.*\bfoi\b",
+    r"\bo padre\b.*\bfoi\b",
+    r"\bele quer\b",
+    r"\bele coloca\b",
+    r"\bele defende\b",
+    r"\bele disse que\b",
+    r"\bdisse que ele\b",
+    r"\bsegundo\b.+\bele\b",
+    r"\bden[uú]ncia\b",
+    r"\bacusa(?:ç|c)[ãa]o\b",
+    r"\bcritic[ao]\b.*\bele\b",
+]
+
+CONTRADICTION_SUPPORT_PATTERNS = [
+    r"\bcontradiz\b",
+    r"\bcontradi(?:ç|c)[ãa]o\b",
+    r"\bhipocrisia\b",
+    r"\bhip[oó]crita\b",
+    r"\bposi(?:ç|c)[ãa]o anterior\b",
+    r"\bantes\b.*\bagora\b",
+    r"\bprevious\b",
+    r"\bpast position\b",
+    r"\bprior position\b",
+    r"\bpreviously\b",
+    r"\bcurrent statement\b",
+]
+
 
 # ── rubric prompt ────────────────────────────────────────────────────────────
 
@@ -101,26 +136,41 @@ CANDIDATE TRANSCRIPT:
 RULES — FOLLOW EXACTLY:
 
 1. SAME PERSON DETERMINATION (transcript+metadata only — no external knowledge):
-   - If title or channel/handle clearly contains the person's name -> same_person=true with method "title" or "channel".
-   - If transcript shows first-person speech matching the requirement context -> "transcript".
-   - If only inferential -> mark same_person=false. Do NOT guess.
+   - same_person=true ONLY when the evidence quote is spoken by PERSON OF INTEREST,
+     or the transcript contains a clearly embedded direct quote from them.
+   - Title/channel/name mentions are discovery signals, NOT enough by themselves
+     for a verified clip when the quote is third-party narration or criticism.
+   - News narration, criticism, commentary, or "X was denounced/reported/accused"
+     ABOUT the person is a context source, not a verified same-person clip.
+   - If the transcript says "he/they want..." or a journalist/critic is describing
+     the person rather than the person speaking, mark same_person=false.
+   - If only inferential or speaker attribution is unclear -> mark same_person=false.
+     Do NOT guess.
 
 2. REQUIREMENT MATCH:
    - Quote MUST come from the transcript verbatim (or near-verbatim with minor cleanup).
+   - Quote MUST be the public person's own statement, not a journalist's or
+     critic's summary about them.
    - If you cannot find a quote in the transcript that matches the requirement -> requirement_match=false, best_quote="", safe_to_use=false.
 
 3. CLAIM TYPE (pick ONE — these are the ONLY allowed values):
    - "group-targeting"        : statement specifically directed at an identifiable group.
    - "dehumanizing"           : language that strips humanity from a group/person.
    - "unfair-generalization"  : sweeping claim about a group not supported by evidence.
-   - "moral-contradiction"    : statement that contradicts the public moral persona.
-   - "hypocrisy"              : statement contradicts past public position by same person.
+   - "moral-contradiction"    : statement has transcript-grounded tension with the
+                                person's public moral/religious persona. The word
+                                "contrário" or standard doctrine is NOT enough.
+   - "hypocrisy"              : statement contradicts a past public position by the
+                                same person, visible in the transcript or seed context.
    - "needs-context"          : ambiguous — meaning depends on context not visible in transcript.
 
    You MAY NOT use the label "hate speech" or any other label. If unsure -> "needs-context".
 
 4. SAFETY:
    - safe_to_use=true ONLY when: same_person=true AND requirement_match=true AND quote is unambiguous AND context_needed is non-blocking.
+   - safe_to_use=false for third-party commentary/news clips about the person.
+   - safe_to_use=false when moral-contradiction/hypocrisy lacks the prior-vs-current
+     or persona-vs-statement evidence needed to explain the contradiction.
    - When in doubt -> safe_to_use=false and explain in "why".
 
 5. TIMESTAMPS:
@@ -279,7 +329,74 @@ def _coerce_to_schema(data: dict) -> dict:
     # Invalid claim_type was relabeled -> not safe (reviewer must see it)
     if invalid_claim_relabeled:
         out["safe_to_use"] = False
+    _apply_speaker_and_claim_guardrails(out)
     return out
+
+
+def _apply_speaker_and_claim_guardrails(out: dict) -> None:
+    """Reject credibility-risky scorer outputs after LLM coercion.
+
+    This pass intentionally errs toward review/rejection. A news or commentary
+    clip can still be a research lead, but it must not count as a verified clip
+    of the subject person making the evidence statement.
+    """
+    quote = out.get("best_quote", "") or ""
+    why = out.get("why", "") or ""
+    context = out.get("context_needed", "") or ""
+    combined = " ".join([quote, why, context]).lower()
+
+    if _looks_like_third_party_narration(combined):
+        out["same_person"] = False
+        out["requirement_match"] = False
+        out["safe_to_use"] = False
+        out["person_confidence"] = min(out.get("person_confidence", 0.0), 0.4)
+        out["match_score"] = min(out.get("match_score", 0.0), 0.4)
+        out["claim_type"] = "needs-context"
+        out["context_needed"] = _append_context(
+            out.get("context_needed", ""),
+            "third_party_or_news_narration_not_verified_speaker",
+        )
+        out["why"] = (
+            "Clip appears to discuss or report on the person rather than "
+            "capture the person making the evidence statement."
+        )
+        return
+
+    if out.get("claim_type") in {"moral-contradiction", "hypocrisy"}:
+        if not _has_contradiction_support(combined):
+            out["requirement_match"] = False
+            out["safe_to_use"] = False
+            out["match_score"] = min(out.get("match_score", 0.0), 0.5)
+            out["context_needed"] = _append_context(
+                out.get("context_needed", ""),
+                "unsupported_contradiction_requires_prior_or_persona_context",
+            )
+            if not out.get("why"):
+                out["why"] = (
+                    "Transcript does not show enough prior-vs-current or "
+                    "persona-vs-statement evidence for this contradiction label."
+                )
+
+
+def _looks_like_third_party_narration(text: str) -> bool:
+    return any(
+        re.search(pattern, text, flags=re.IGNORECASE)
+        for pattern in THIRD_PARTY_NARRATION_PATTERNS
+    )
+
+
+def _has_contradiction_support(text: str) -> bool:
+    return any(
+        re.search(pattern, text, flags=re.IGNORECASE)
+        for pattern in CONTRADICTION_SUPPORT_PATTERNS
+    )
+
+
+def _append_context(existing: str, marker: str) -> str:
+    existing = (existing or "").strip()
+    if marker in existing:
+        return existing[:600]
+    return (f"{existing} | {marker}".strip(" |"))[:600]
 
 
 def _clamp_float(v) -> float:

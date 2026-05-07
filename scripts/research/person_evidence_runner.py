@@ -21,6 +21,7 @@ import re
 import sys
 import traceback
 import urllib.parse
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -86,6 +87,27 @@ def _outcome_status(candidates_transcribed: int, verified_count: int) -> str:
     if verified_count < 3:
         return "Needs Research — Evidence Weak"
     return "Ready for Manifest Review"
+
+
+def _quote_similarity(a: str, b: str) -> float:
+    """Return near-duplicate similarity for verified quote gatekeeping."""
+    a_norm = re.sub(r"[^a-z0-9áàâãéêíóôõúüçñ]+", " ", (a or "").lower()).strip()
+    b_norm = re.sub(r"[^a-z0-9áàâãéêíóôõúüçñ]+", " ", (b or "").lower()).strip()
+    if not a_norm or not b_norm:
+        return 0.0
+    return SequenceMatcher(None, a_norm, b_norm).ratio()
+
+
+def _duplicate_verified_quote_reason(score: dict, verified: list[dict]) -> str:
+    """Near-identical best_quote entries count once toward the 3+ review gate."""
+    quote = score.get("best_quote", "") if isinstance(score, dict) else ""
+    if not quote.strip():
+        return ""
+    for item in verified or []:
+        prev = (item.get("score") or {}).get("best_quote", "")
+        if _quote_similarity(quote, prev) >= 0.86:
+            return "duplicate_verified_quote"
+    return ""
 
 
 def _log(msg: str):
@@ -795,6 +817,15 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
         ok, reasons = validate_score(score)
         # Honor safe_to_use too — even if validation passes, unsafe goes to rejected
         if ok and score.get("safe_to_use"):
+            dup_reason = _duplicate_verified_quote_reason(score, verified)
+            if dup_reason:
+                rejected.append({
+                    "candidate": cand,
+                    "reason": dup_reason,
+                    "score": score,
+                })
+                _log(f"  ⊘ rejected: {dup_reason}")
+                continue
             verified.append({"candidate": cand, "score": score})
             _log(f"  ✅ verified [{score['claim_type']}] match={score['match_score']:.2f}")
         else:

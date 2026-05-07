@@ -235,6 +235,102 @@ class ApifyRouteStateTests(unittest.TestCase):
         self.assertEqual(runner._a1_col(27), "AA")
         self.assertEqual(runner._header_range("📋 Content Queue", headers), "'📋 Content Queue'!A:AD")
 
+    def test_news_narration_is_not_verified_speaker(self):
+        score = evidence_scoring._coerce_to_schema({
+            "same_person": True,
+            "person_confidence": 1.0,
+            "same_person_method": "transcript",
+            "requirement_match": True,
+            "match_score": 1.0,
+            "claim_type": "group-targeting",
+            "best_quote": (
+                "O sacerdote católico Frei Gilson foi denunciado ao Ministério "
+                "Público por declarações consideradas discriminatórias."
+            ),
+            "timestamp_start": "00:00",
+            "timestamp_end": "00:10",
+            "targeted_group": "women",
+            "context_needed": "",
+            "safe_to_use": True,
+            "why": "The transcript names Frei Gilson.",
+        })
+
+        self.assertFalse(score["same_person"])
+        self.assertFalse(score["requirement_match"])
+        self.assertFalse(score["safe_to_use"])
+        self.assertEqual(score["claim_type"], "needs-context")
+        self.assertIn("third_party_or_news_narration", score["context_needed"])
+
+    def test_critic_commentary_is_not_verified_speaker(self):
+        score = evidence_scoring._coerce_to_schema({
+            "same_person": True,
+            "person_confidence": 1.0,
+            "same_person_method": "transcript",
+            "requirement_match": True,
+            "match_score": 1.0,
+            "claim_type": "moral-contradiction",
+            "best_quote": (
+                "ele quer colocar sempre as mulheres nesse lugar de "
+                "subserviência, como se ela fosse menor."
+            ),
+            "timestamp_start": "00:00",
+            "timestamp_end": "00:10",
+            "targeted_group": "women",
+            "context_needed": "",
+            "safe_to_use": True,
+            "why": "A critic describes what Frei Gilson wants.",
+        })
+
+        self.assertFalse(score["same_person"])
+        self.assertFalse(score["safe_to_use"])
+        self.assertIn("third_party_or_news_narration", score["context_needed"])
+
+    def test_unsupported_moral_contradiction_is_unsafe(self):
+        score = evidence_scoring._coerce_to_schema({
+            "same_person": True,
+            "person_confidence": 1.0,
+            "same_person_method": "transcript",
+            "requirement_match": True,
+            "match_score": 1.0,
+            "claim_type": "moral-contradiction",
+            "best_quote": (
+                "Então aquele que serve Jesus não pode querer só que todo "
+                "mundo goste dele. Jesus disse totalmente o contrário."
+            ),
+            "timestamp_start": "00:00",
+            "timestamp_end": "00:30",
+            "targeted_group": None,
+            "context_needed": "",
+            "safe_to_use": True,
+            "why": "The quote uses the word contrário.",
+        })
+
+        self.assertTrue(score["same_person"])
+        self.assertFalse(score["requirement_match"])
+        self.assertFalse(score["safe_to_use"])
+        self.assertIn("unsupported_contradiction", score["context_needed"])
+
+    def test_duplicate_verified_quote_is_rejected(self):
+        verified = [{
+            "score": {
+                "best_quote": (
+                    "Aquele que serve Jesus, ele não pode querer só que todo "
+                    "mundo goste dele."
+                )
+            }
+        }]
+        score = {
+            "best_quote": (
+                "Então aquele que serve Jesus ele não pode querer só que todo "
+                "mundo goste dele."
+            )
+        }
+
+        self.assertEqual(
+            runner._duplicate_verified_quote_reason(score, verified),
+            "duplicate_verified_quote",
+        )
+
     @patch("candidate_collectors.APIFY_API_KEY", "apify_api_test")
     @patch("candidate_collectors._apify_post_run")
     def test_no_paid_mode_does_not_call_apify(self, post_run):
