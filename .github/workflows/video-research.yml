@@ -70,19 +70,15 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install ffmpeg (required by yt-dlp post-processing)
-        timeout-minutes: 5
+      - name: Check ffmpeg (required by yt-dlp post-processing)
+        timeout-minutes: 1
         run: |
           set -e
-          for attempt in 1 2 3; do
-            if timeout 120s sudo apt-get update -qq \
-              && timeout 180s sudo apt-get install -y -qq ffmpeg; then
-              exit 0
-            fi
-            echo "apt ffmpeg install attempt ${attempt} failed or timed out"
-            sleep 10
-          done
-          echo "ffmpeg install failed after retries"
+          if command -v ffmpeg; then
+            ffmpeg -version | head -n 1
+            exit 0
+          fi
+          echo "ffmpeg_missing_on_runner: hosted image did not provide ffmpeg; skipping apt-get to avoid runner hang"
           exit 1
 
       - name: Verify ffmpeg installed
