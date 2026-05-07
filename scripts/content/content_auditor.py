@@ -28,8 +28,15 @@ RUN_RESULTS_JSON = os.environ.get("CONTENT_CREATOR_RUN", "[]")
 WORK_DIR         = Path(os.environ.get("WORK_DIR", "/tmp/content_creator_run"))
 DRY_RUN          = "--dry-run" in sys.argv
 
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
-API_URL     = "https://api.anthropic.com/v1/messages"
+# SH-OPC-SMART-SLIDE-PICKER Phase 10: Sonnet primary for content audit.
+# Haiku consistently produced low scores on schema-strict OPC content + missed
+# label-leak issues that Sonnet catches. Audit cost is small (3 calls per
+# carousel) so the upgrade is justified. HAIKU_MODEL kept as alias for any
+# backward-compat callers.
+SONNET_MODEL = "claude-sonnet-4-6"
+HAIKU_MODEL  = SONNET_MODEL  # legacy alias — points to Sonnet now
+AUDIT_MODEL  = SONNET_MODEL
+API_URL      = "https://api.anthropic.com/v1/messages"
 
 
 # ─── System prompts (each agent has a distinct expert lens) ───────────────────

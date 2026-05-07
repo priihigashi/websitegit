@@ -1,5 +1,5 @@
 """
-vision_validator.py — shared Claude Haiku Vision check for image-vs-content match.
+vision_validator.py — shared Claude Vision check for image-vs-content match.
 
 Single-source-of-truth helper used by every pipeline that places an image into
 a slide:
@@ -17,21 +17,56 @@ Usage:
 Returns (is_relevant, reason). When the API key is missing or the call fails,
 returns (True, "skipped") so the pipeline never blocks on a transient Vision
 outage — the image still ships, but the failure reason is logged.
+
+Phase 10 (SH-OPC-SMART-SLIDE-PICKER):
+- Sonnet 4.6 primary (Haiku missed kitchen-on-concrete in prior runs).
+- Auto-downscale images >4.5MB so OPC catalog DSLR JPEGs stop 400-ing.
+- HTTPError surfaces real response body for diagnosability.
 """
 from __future__ import annotations
 
 import base64
 import json
 import os
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Tuple
 
 ANTHROPIC_KEY = os.environ.get("CLAUDE_KEY_4_CONTENT") or os.environ.get("ANTHROPIC_API_KEY", "")
 
+# Anthropic Vision API limits:
+#   - Max raw image size: 5 MB (base64 payload <= ~6.7 MB)
+#   - Max dimensions: 8000 × 8000 px (recommended ≤1568 on long edge)
+# OPC catalog JPEGs are 4-8 MB DSLR shots — every Vision call 400'd in
+# workflow runs 25463127290 + 25464355273 because of this.
+_MAX_IMG_BYTES = 4_500_000  # 10% headroom under 5 MB hard limit
+
+
+def _downscale_to_under_limit(image_bytes: bytes, mime: str) -> Tuple[bytes, str]:
+    """If image_bytes exceeds the limit, try to downscale via Pillow. If
+    Pillow is missing OR downscale fails, return b'' to signal skip."""
+    if len(image_bytes) <= _MAX_IMG_BYTES:
+        return image_bytes, mime
+    try:
+        from PIL import Image
+        from io import BytesIO
+    except Exception:
+        return b"", mime
+    try:
+        img = Image.open(BytesIO(image_bytes))
+        if img.mode in ("RGBA", "P", "LA"):
+            img = img.convert("RGB")
+        img.thumbnail((1568, 1568), Image.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=82, optimize=True)
+        return buf.getvalue(), "image/jpeg"
+    except Exception:
+        return b"", mime
+
 
 def validate_image_bytes(image_bytes: bytes, filename: str, query: str) -> Tuple[bool, str]:
-    """Send (image, query) to Claude Haiku Vision. Return (is_relevant, reason)."""
+    """Send (image, query) to Claude Vision. Return (is_relevant, reason)."""
     if not ANTHROPIC_KEY:
         return True, "skipped (no ANTHROPIC_KEY)"
     if len(image_bytes) < 5000:
@@ -40,9 +75,13 @@ def validate_image_bytes(image_bytes: bytes, filename: str, query: str) -> Tuple
         return True, "skipped (no query to match against)"
 
     mime = "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png"
+    image_bytes, mime = _downscale_to_under_limit(image_bytes, mime)
+    if not image_bytes:
+        return True, "skipped (oversize, no Pillow to downscale)"
     b64 = base64.b64encode(image_bytes).decode()
     payload = json.dumps({
-        "model": "claude-haiku-4-5-20251001",
+        # Phase 10 — Sonnet for image-text semantic match.
+        "model": "claude-sonnet-4-6",
         "max_tokens": 80,
         "messages": [{
             "role": "user",
@@ -51,7 +90,8 @@ def validate_image_bytes(image_bytes: bytes, filename: str, query: str) -> Tuple
                 {"type": "text", "text": (
                     f"Does this image visually represent: '{query}'?\n"
                     f"YES if it clearly shows the correct subject, action, or setting.\n"
-                    f"NO if it shows something completely unrelated.\n"
+                    f"NO if it shows something completely unrelated (e.g. kitchen photo "
+                    f"on a concrete/structural topic).\n"
                     f"Start with YES or NO, then one short sentence."
                 )},
             ],
@@ -69,6 +109,12 @@ def validate_image_bytes(image_bytes: bytes, filename: str, query: str) -> Tuple
         )
         resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
         verdict = resp["content"][0]["text"].strip()
+    except urllib.error.HTTPError as e:
+        try:
+            body = e.read().decode("utf-8", errors="replace")[:300]
+        except Exception:
+            body = "(no body)"
+        return True, f"skipped (vision HTTP {e.code}: {body})"
     except Exception as e:
         return True, f"skipped (vision error: {e})"
 

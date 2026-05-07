@@ -143,7 +143,64 @@ def _read_catalog(token):
     return rows[1:]
 
 
-def _score(row, keywords, phase_filter=None, service_filter=None):
+# Phase 10 — category mismatch penalty. If a topic is clearly STRUCTURAL
+# (concrete, CMU, rebar, foundation, formwork, slab, footing, drainage,
+# waterproofing) but the catalog photo's service category is interior
+# (Kitchens, Bathrooms, Cabinets, Tile, Countertops, Flooring), heavily
+# penalize the match. Same for the reverse — kitchen topics shouldn't grab
+# foundation/exterior photos.
+STRUCTURAL_TOPIC_TOKENS = {
+    "concrete", "cmu", "rebar", "foundation", "formwork", "slab",
+    "footing", "drainage", "waterproof", "block wall", "masonry",
+    "stem wall", "tie beam", "tilt-up", "post-tension",
+}
+INTERIOR_TOPIC_TOKENS = {
+    "kitchen", "cabinet", "countertop", "tile", "shower", "tub",
+    "vanity", "backsplash", "bathroom", "flooring", "epoxy",
+    "lighting", "fixture", "faucet",
+}
+STRUCTURAL_SERVICES = {
+    "foundations", "concrete", "exterior", "drainage", "outdoor",
+    "site work", "structural", "masonry",
+}
+INTERIOR_SERVICES = {
+    "kitchens", "kitchen", "bathrooms", "bathroom", "cabinets",
+    "tile", "countertops", "flooring", "interiors",
+}
+
+
+def _topic_buckets(topic):
+    """Classify topic text into 'structural', 'interior', or None."""
+    t = (topic or "").lower()
+    if any(tok in t for tok in STRUCTURAL_TOPIC_TOKENS):
+        return "structural"
+    if any(tok in t for tok in INTERIOR_TOPIC_TOKENS):
+        return "interior"
+    return None
+
+
+def _service_bucket(service):
+    s = (service or "").lower()
+    if any(tok in s for tok in STRUCTURAL_SERVICES):
+        return "structural"
+    if any(tok in s for tok in INTERIOR_SERVICES):
+        return "interior"
+    return None
+
+
+def _category_penalty(topic, service):
+    """Return penalty multiplier in [0.0, 1.0]. 1.0 = no penalty, 0.0 = blocked."""
+    tb = _topic_buckets(topic)
+    sb = _service_bucket(service)
+    if tb is None or sb is None:
+        return 1.0  # cannot classify either side — don't penalize
+    if tb == sb:
+        return 1.2  # bonus for category match
+    # Clear mismatch: structural topic + interior photo (or reverse).
+    return 0.05  # near-zero — only used if literally nothing else scores positive
+
+
+def _score(row, keywords, phase_filter=None, service_filter=None, topic_text=""):
     """Return a match score (higher = better). 0 = disqualified."""
     if len(row) < 10:
         return 0
@@ -166,7 +223,10 @@ def _score(row, keywords, phase_filter=None, service_filter=None):
 
     haystack = f"{service} {description} {filename} {project}".lower()
     hits = sum(1 for kw in keywords if kw.lower() in haystack)
-    return hits * 10 + quality  # quality breaks ties
+    raw = hits * 10 + quality  # quality breaks ties
+    # Phase 10 — category-mismatch penalty using the topic text (not just kws).
+    penalty = _category_penalty(topic_text or " ".join(keywords), service)
+    return int(raw * penalty)
 
 
 def match_opc_photo(topic, phase=None, service_type=None):
@@ -199,7 +259,7 @@ def match_opc_photo(topic, phase=None, service_type=None):
     best_score = 0
     best_row = None
     for row in rows:
-        score = _score(row, keywords, phase_filter=phase, service_filter=service_type)
+        score = _score(row, keywords, phase_filter=phase, service_filter=service_type, topic_text=topic)
         if score > best_score:
             best_score = score
             best_row = row
@@ -239,7 +299,7 @@ def match_before_after_pair(topic):
     best_before = best_after = 0
 
     for row in rows:
-        score = _score(row, keywords)
+        score = _score(row, keywords, topic_text=topic)
         if score == 0:
             continue
         phase = row[6].strip().lower() if len(row) > 6 else ""

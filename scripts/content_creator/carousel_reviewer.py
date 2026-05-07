@@ -514,15 +514,114 @@ def _resolve_version_root(drive, folder_id: str) -> str:
 _AI_PROVIDERS = {"gemini", "seedream", "dall-e-3", "sdxl"}
 
 
-def _check_provenance(prov: dict) -> list[str]:
-    """Read media_provenance.json dict and flag AI-sourced images.
+# Phase 10 — wrong-image gate. Topics about structural work (concrete/CMU/
+# rebar/foundation/formwork) MUST NOT pair with interior catalog photos
+# (Kitchens/Bathrooms/Cabinets). photo_matcher applies a category-mismatch
+# penalty at SCORING time but if no other photo qualified, a wrong-category
+# match can still ship. Reviewer is the last gate.
+_STRUCTURAL_TOPIC_TOKENS = {
+    "concrete", "cmu", "rebar", "foundation", "formwork", "slab",
+    "footing", "drainage", "waterproof", "block wall", "masonry",
+    "stem wall", "tie beam",
+}
+_INTERIOR_CATALOG_CATEGORIES = {
+    "kitchens", "kitchen", "bathrooms", "bathroom", "cabinets",
+    "tile", "countertops", "flooring", "interiors",
+}
+
+
+# Phase 10 — sources-vs-claims gate. Any slide containing a $, %, or "X years"
+# claim must have a credible source on the sources slide. "Credible" = at
+# least one source naming an external authority (FBC, ACI, NAHB, ASCE, IBC,
+# IRC, EPA, OSHA, Houzz, NAHB, Remodeling Magazine, Census, BLS, CDC, USDA,
+# DOE). OPC self-citation alone is NOT enough when numbers are present.
+_NUMERIC_CLAIM_RE = re.compile(r"\$\s*\d|\d+\s*%|\d+\s*(?:-|–|—)\s*\d+\s*%|\d+\+?\s*years?", re.IGNORECASE)
+_CREDIBLE_SOURCE_TOKENS = {
+    "fbc", "florida building code", "irc", "ibc", "icc",
+    "aci", "asce", "asme", "osha", "epa", "doe",
+    "nahb", "houzz", "remodeling magazine", "remodeling.com",
+    "census", "bls", "cdc", "usda", "energy star", "ashrae",
+    "national association", "department of",
+}
+
+
+def _flatten_text_from_content(content: dict) -> str:
+    """Concatenate all string values from content dict + nested standalones."""
+    out = []
+    for k, v in (content or {}).items():
+        if k.startswith("_"):
+            continue
+        if isinstance(v, str):
+            out.append(v)
+        elif isinstance(v, list):
+            for x in v:
+                if isinstance(x, str):
+                    out.append(x)
+                elif isinstance(x, dict):
+                    for vv in x.values():
+                        if isinstance(vv, str):
+                            out.append(vv)
+        elif isinstance(v, dict):
+            for vv in v.values():
+                if isinstance(vv, str):
+                    out.append(vv)
+                elif isinstance(vv, list):
+                    out.extend(s for s in vv if isinstance(s, str))
+    return " ".join(out)
+
+
+def check_sources_match_claims(content: dict) -> list[str]:
+    """If slides contain $/%/years claims, the sources slide MUST cite at
+    least one credible external authority. OPC self-data alone is NOT enough.
+    """
+    if not isinstance(content, dict):
+        return []
+    text = _flatten_text_from_content(content)
+    has_numeric = bool(_NUMERIC_CLAIM_RE.search(text))
+    if not has_numeric:
+        return []
+    sources = content.get("sources") or []
+    if isinstance(sources, str):
+        sources = [sources]
+    src_blob = " ".join(s.lower() for s in sources if isinstance(s, str))
+    if not src_blob.strip():
+        return [
+            "[content] slides contain numeric claims ($/%/years) but sources "
+            "list is empty — every cost/stat needs a cited source."
+        ]
+    has_credible = any(tok in src_blob for tok in _CREDIBLE_SOURCE_TOKENS)
+    only_opc = all(
+        ("oak park" in s.lower() or "opc" in s.lower())
+        for s in sources if isinstance(s, str) and s.strip()
+    )
+    if only_opc and not has_credible:
+        return [
+            "[content] numeric claims appear but the only source is OPC self-data — "
+            "add at least one external authority (FBC, ACI, NAHB, Houzz, etc.) "
+            "or downgrade the claim to non-numeric wording."
+        ]
+    if not has_credible:
+        return [
+            "[content] numeric claims present but no credible external source "
+            f"in the sources slide ({len(sources)} entries, none cite FBC/ACI/"
+            "NAHB/etc.). Either add a real source or remove the number."
+        ]
+    return []
+
+
+def _check_provenance(prov: dict, topic: str = "") -> list[str]:
+    """Read media_provenance.json dict and flag AI-sourced images +
+    category mismatches (Phase 10 wrong-image gate).
 
     Per IMAGE_QUALITY_RULES.md:
       - Any slide with source_type=="ai" means all real-photo tiers (Wikimedia/Pexels/Pixabay) missed.
         These are flagged with [fix_type=regenerate] — the fix is always to improve the query and re-fetch.
       - Cover with source_type=="ai" AND subject_type=="person" is a CRITICAL violation (editorial rule).
+      - Phase 10: structural topic + interior catalog photo (Kitchens etc) → wrong-image.
     """
     issues = []
+    topic_l = (topic or "").lower()
+    is_structural_topic = any(tok in topic_l for tok in _STRUCTURAL_TOPIC_TOKENS)
 
     # Cover check
     cover = prov.get("cover", {})
@@ -554,6 +653,31 @@ def _check_provenance(prov: dict) -> list[str]:
                 f"[fix_type=regenerate] Slide {slide_key}: AI image ({provider}) used — "
                 f"real-photo tiers missed. Make query more specific: '{query[:60]}'"
             )
+
+    # Phase 10 — wrong-category gate. If the topic is structural and any
+    # opc_catalog photo lands in an interior category (Kitchens etc), flag it.
+    if is_structural_topic:
+        def _flag_if_wrong_cat(slot_label, sd):
+            if not isinstance(sd, dict):
+                return
+            if sd.get("provider", "").lower() != "opc_catalog":
+                return
+            # provenance "query" stores the description on opc_catalog rows; the
+            # service category isn't directly persisted today. Heuristic: if
+            # the description contains any interior token, treat as wrong cat.
+            desc = (sd.get("query", "") or "").lower()
+            for cat in _INTERIOR_CATALOG_CATEGORIES:
+                if cat in desc:
+                    issues.append(
+                        f"[fix_type=wrong-image] {slot_label}: structural topic '{topic[:40]}' "
+                        f"got interior catalog photo (matched '{cat}'). photo_matcher "
+                        f"category penalty should have caught this — escalating now. "
+                        f"Description: '{desc[:80]}'"
+                    )
+                    break
+        _flag_if_wrong_cat("Cover", cover)
+        for slide_key, slide_data in slides.items():
+            _flag_if_wrong_cat(f"Slide {slide_key}", slide_data)
 
     # Summary ratio warning (kept for dashboards/email scannability)
     all_providers = []
@@ -846,7 +970,10 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
         if prov_file:
             try:
                 prov = json.loads(_download_drive_text(drive, prov_file["id"]))
-                issues.extend(_check_provenance(prov))
+                # Phase 10 — pass topic for wrong-image category gate. Drive
+                # path doesn't have direct topic so derive from folder name.
+                _drive_topic = (input_ref or "").replace("-", " ").replace("_", " ")
+                issues.extend(_check_provenance(prov, topic=_drive_topic))
                 try:
                     # Library opportunity signal: if a slide is AI, suggest reuse candidate.
                     for sk, sv in (prov.get("slides", {}) or {}).items():
@@ -1401,6 +1528,9 @@ def check_built_post(result: dict) -> dict:
     # render/PNG/Drive cost. No-op for posts that don't use the planner.
     if niche == "opc":
         all_issues.extend(check_slide_plan(result.get("content", {}) or {}))
+        # Phase 10 — sources-vs-claims gate. If $/%/years appear on any
+        # slide, the sources list must cite a credible external authority.
+        all_issues.extend(check_sources_match_claims(result.get("content", {}) or {}))
 
     # 1. HTML placeholder check — look for cover.html in version folder (local path)
     # The content_creator already cleaned up work_dir, so we check Drive link heuristically.
@@ -1434,7 +1564,7 @@ def check_built_post(result: dict) -> dict:
     if prov_path.exists():
         try:
             _prov_data = json.loads(prov_path.read_text(encoding="utf-8"))
-            all_issues.extend(_check_provenance(_prov_data))
+            all_issues.extend(_check_provenance(_prov_data, topic=topic))
         except Exception as e:
             all_issues.append(f"media_provenance.json read/parse failed: {e}")
 

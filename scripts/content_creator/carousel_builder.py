@@ -309,9 +309,19 @@ MANDATORY RULES — follow these exactly:
    - The authority comes from the knowledge, not from claiming experience.
 
 5. Every cost range or statistic needs a qualified source.
-   - Industry data must cite the org (Houzz, NAHB, Remodeling Magazine).
+   - Industry data must cite the org (Houzz, NAHB, Remodeling Magazine,
+     ICC/IBC, ACI, ASCE, Florida Building Code/FBC, IRC).
    - Use "according to [source]" or put the source on the slide itself.
-   - OPC's own job data can be cited as "South Florida contractor data, 2023-2025"
+   - DO NOT cite "Oak Park Construction — South Florida contractor data
+     2023-2025" UNLESS that exact data point came from a real OPC job log.
+     If you don't have it, downgrade the claim to non-numeric wording or
+     cite a real industry source (FBC, ACI, NAHB).
+   - SOURCES SLIDE = the receipts. Every $, %, "years" claim that appears
+     on any slide MUST have a matching source on the sources slide. If a
+     claim doesn't have a real source, REMOVE THE NUMBER, don't invent
+     a source.
+   - BANNED: vague unsourced "studies show", "industry average", "experts
+     say". If you can't name the source, drop the claim.
 
 6. Tone: Direct, matter-of-fact, no jargon, no hype.
    - Write like a contractor explaining something to a homeowner over coffee.
@@ -496,7 +506,11 @@ Return ONLY a valid JSON object:
 
     for attempt in range(2):
         try:
-            resp = _call_claude(prompt, model="claude-haiku-4-5-20251001")
+            # SH-OPC-SMART-SLIDE-PICKER Phase 10: Sonnet primary for smart-path
+            # OPC content. Haiku is too weak for schema-strict template content.
+            # Falls back to OpenAI/Gemini via _call_claude cascade if Anthropic
+            # is rate-limited / out of credits.
+            resp = _call_claude(prompt, model="claude-sonnet-4-6")
             raw = resp.strip()
             if raw.startswith("```"):
                 raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
