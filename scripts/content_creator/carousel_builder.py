@@ -508,9 +508,12 @@ Return ONLY a valid JSON object:
         try:
             # SH-OPC-SMART-SLIDE-PICKER Phase 10: Sonnet primary for smart-path
             # OPC content. Haiku is too weak for schema-strict template content.
-            # Falls back to OpenAI/Gemini via _call_claude cascade if Anthropic
-            # is rate-limited / out of credits.
-            resp = _call_claude(prompt, model="claude-sonnet-4-6")
+            # Falls back to OpenAI/Gemini via the cascade if Anthropic is
+            # rate-limited / out of credits.
+            resp = _claude_with_fallback(
+                prompt, max_tokens=1500, timeout=45,
+                context="generate_progress_content", model="claude-sonnet-4-6",
+            )
             raw = resp.strip()
             if raw.startswith("```"):
                 raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
@@ -2465,6 +2468,9 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                         "path": dl, "provider": "opc_catalog",
                         "source_type": "real_photo",
                         "query": match.get("description", ""),
+                        # Phase 11/M1 — persist service_type for reviewer
+                        # wrong-image gate Tier-1 lookup.
+                        "service_type": match.get("service_type", ""),
                         "prompt": "",
                     }
                     print(f"  [photo_matcher] cover: {match.get('filename')} ({match.get('service_type')})")
@@ -2479,7 +2485,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
             "prompt": prompt,
         }
 
-    def _set_slide(slide_idx, rel_path, provider, source_type, query="", prompt=""):
+    def _set_slide(slide_idx, rel_path, provider, source_type, query="", prompt="", service_type=""):
         paths["slides"][slide_idx] = rel_path
         paths["provenance"]["slides"][str(slide_idx)] = {
             "path": rel_path,
@@ -2487,6 +2493,8 @@ def fetch_all_media(content, niche, work_dir, brief=""):
             "source_type": source_type,
             "query": query,
             "prompt": prompt,
+            # Phase 11/M1 — present only when known (e.g. opc_catalog matches).
+            "service_type": service_type,
         }
 
     # ── COVER IMAGE CASCADE ────────────────────────────────────────────────
@@ -2655,7 +2663,8 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                     _img_dir.mkdir(parents=True, exist_ok=True)
                     _dl = _download_drive_photo(opc_hit["drive_url"], str(_img_dir / fname))
                     if _dl and _vision_accept(_dl, cq, f"slide{i}/opc_catalog"):
-                        _set_slide(i, _dl, "opc_catalog", "real_photo", query=cq)
+                        _set_slide(i, _dl, "opc_catalog", "real_photo", query=cq,
+                                   service_type=opc_hit.get("service_type", ""))
                         accepted = True
                         print(f"  [photo_matcher] slide{i}: {opc_hit.get('filename')} "
                               f"({opc_hit.get('service_type')}, q={opc_hit.get('quality')})")

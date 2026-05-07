@@ -68,8 +68,10 @@ def _downscale_to_under_limit(image_bytes: bytes, mime: str) -> Tuple[bytes, str
 
 def validate_image_bytes(image_bytes: bytes, filename: str, query: str) -> Tuple[bool, str]:
     """Send (image, query) to Claude Vision. Return (is_relevant, reason)."""
-    if not ANTHROPIC_KEY:
-        return True, "skipped (no ANTHROPIC_KEY)"
+    # Phase 11/C2 — accept OpenAI-only deployments. If neither key is set,
+    # we have no provider — skip. If only OPENAI_KEY, route directly there.
+    if not ANTHROPIC_KEY and not OPENAI_KEY:
+        return True, "skipped (no vision key — neither ANTHROPIC nor OPENAI)"
     if len(image_bytes) < 5000:
         return True, "skipped (image < 5kb)"
     if not query or len(query.strip()) < 3:
@@ -78,8 +80,14 @@ def validate_image_bytes(image_bytes: bytes, filename: str, query: str) -> Tuple
     mime = "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png"
     image_bytes, mime = _downscale_to_under_limit(image_bytes, mime)
     if not image_bytes:
+        # Phase 10/M5 — log instead of silent skip.
+        print("  [vision] oversize image — Pillow missing or downscale failed; skipping")
         return True, "skipped (oversize, no Pillow to downscale)"
     b64 = base64.b64encode(image_bytes).decode()
+
+    # OpenAI-only path: skip Anthropic entirely.
+    if not ANTHROPIC_KEY and OPENAI_KEY:
+        return _validate_via_openai(b64, mime, query)
     payload = json.dumps({
         # Phase 10 — Sonnet for image-text semantic match.
         "model": "claude-sonnet-4-6",
@@ -115,9 +123,10 @@ def validate_image_bytes(image_bytes: bytes, filename: str, query: str) -> Tuple
             body = e.read().decode("utf-8", errors="replace")[:300]
         except Exception:
             body = "(no body)"
-        # Phase 10/11 — Anthropic credits/capacity (400 with low_balance, 429,
-        # or 529) → fall back to OpenAI gpt-4o vision so the gate keeps working.
-        if e.code in (400, 401, 402, 429, 529) and OPENAI_KEY:
+        # Phase 10/11/C3 — fallback to OpenAI on credits/capacity (4xx auth/
+        # billing) AND on 5xx server errors (500 internal, 502 bad gateway,
+        # 503 unavailable, 504 timeout, 529 overload).
+        if e.code in (400, 401, 402, 429, 500, 502, 503, 504, 529) and OPENAI_KEY:
             ok, reason = _validate_via_openai(b64, mime, query)
             return ok, reason
         return True, f"skipped (vision HTTP {e.code}: {body})"

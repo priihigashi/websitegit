@@ -306,8 +306,10 @@ def call_haiku(system_prompt: str, user_content: str, agent_name: str) -> dict:
             text = (data.get("content") or [{}])[0].get("text", "")
         except urllib.error.HTTPError as e:
             err_body = e.read().decode(errors="ignore")[:200]
-            # Phase 11 — credit/capacity fallback to OpenAI gpt-4o.
-            if e.code in (400, 401, 402, 429, 529) and OPENAI_KEY:
+            # Phase 11/C3 — fallback on credits/capacity (4xx) AND 5xx
+            # server errors so a transient Anthropic outage doesn't blank
+            # the audit row.
+            if e.code in (400, 401, 402, 429, 500, 502, 503, 504, 529) and OPENAI_KEY:
                 try:
                     text = _call_openai_chat(system_prompt, user_content)
                     used = "openai-fallback"

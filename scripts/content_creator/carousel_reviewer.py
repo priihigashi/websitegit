@@ -535,7 +535,17 @@ _INTERIOR_CATALOG_CATEGORIES = {
 # least one source naming an external authority (FBC, ACI, NAHB, ASCE, IBC,
 # IRC, EPA, OSHA, Houzz, NAHB, Remodeling Magazine, Census, BLS, CDC, USDA,
 # DOE). OPC self-citation alone is NOT enough when numbers are present.
-_NUMERIC_CLAIM_RE = re.compile(r"\$\s*\d|\d+\s*%|\d+\s*(?:-|–|—)\s*\d+\s*%|\d+\+?\s*years?", re.IGNORECASE)
+# Phase 11/M2 — only flag claim-shaped numerics, not calendar years.
+# - $ amounts: $X, $X-$Y, $XK, $X.XK
+# - percentages: NN%, NN-NN%
+# - durability claims: "30+ years", "30 to 50 years" — but NOT 4-digit
+#   calendar years (1900-2099) which appear in source citations.
+_NUMERIC_CLAIM_RE = re.compile(
+    r"\$\s*\d"                                # any dollar amount
+    r"|\d+(?:\.\d+)?\s*%"                      # percentage
+    r"|(?<![12]\d{3})\b\d{1,3}\+?\s*years?\b", # "30+ years" but not "2024 years" (calendar)
+    re.IGNORECASE,
+)
 _CREDIBLE_SOURCE_TOKENS = {
     "fbc", "florida building code", "irc", "ibc", "icc",
     "aci", "asce", "asme", "osha", "epa", "doe",
@@ -654,27 +664,39 @@ def _check_provenance(prov: dict, topic: str = "") -> list[str]:
                 f"real-photo tiers missed. Make query more specific: '{query[:60]}'"
             )
 
-    # Phase 10 — wrong-category gate. If the topic is structural and any
-    # opc_catalog photo lands in an interior category (Kitchens etc), flag it.
+    # Phase 10/M1 — wrong-category gate. If the topic is structural and an
+    # opc_catalog photo's description suggests interior category, flag it.
+    # Prefer service_type when present; fall back to description heuristic
+    # but require STRONG signal (≥2 interior tokens AND no structural tokens)
+    # to avoid false-positives on descriptions like "kitchen demo before slab"
+    # (which is actually a structural project that happens to mention kitchen).
     if is_structural_topic:
         def _flag_if_wrong_cat(slot_label, sd):
             if not isinstance(sd, dict):
                 return
             if sd.get("provider", "").lower() != "opc_catalog":
                 return
-            # provenance "query" stores the description on opc_catalog rows; the
-            # service category isn't directly persisted today. Heuristic: if
-            # the description contains any interior token, treat as wrong cat.
-            desc = (sd.get("query", "") or "").lower()
-            for cat in _INTERIOR_CATALOG_CATEGORIES:
-                if cat in desc:
+            # Tier 1 — explicit service_type wins (added in Phase 10 prov writer).
+            svc = (sd.get("service_type") or sd.get("service") or "").strip().lower()
+            if svc:
+                if any(c in svc for c in _INTERIOR_CATALOG_CATEGORIES):
                     issues.append(
-                        f"[fix_type=wrong-image] {slot_label}: structural topic '{topic[:40]}' "
-                        f"got interior catalog photo (matched '{cat}'). photo_matcher "
-                        f"category penalty should have caught this — escalating now. "
-                        f"Description: '{desc[:80]}'"
+                        f"[fix_type=wrong-image] {slot_label}: structural topic "
+                        f"'{topic[:40]}' got interior service '{svc}' photo."
                     )
-                    break
+                return  # service_type was authoritative — done
+            # Tier 2 — heuristic from description. Require ≥2 interior tokens
+            # AND zero structural tokens to confidently flag.
+            desc = (sd.get("query", "") or "").lower()
+            interior_hits = sum(1 for c in _INTERIOR_CATALOG_CATEGORIES if c in desc)
+            structural_hits = sum(1 for s in _STRUCTURAL_TOPIC_TOKENS if s in desc)
+            if interior_hits >= 2 and structural_hits == 0:
+                issues.append(
+                    f"[fix_type=wrong-image] {slot_label}: structural topic "
+                    f"'{topic[:40]}' got interior catalog photo "
+                    f"({interior_hits} interior tokens, 0 structural). "
+                    f"Description: '{desc[:80]}'"
+                )
         _flag_if_wrong_cat("Cover", cover)
         for slide_key, slide_data in slides.items():
             _flag_if_wrong_cat(f"Slide {slide_key}", slide_data)
@@ -706,7 +728,7 @@ def _vision_check_image(image_bytes: bytes, filename: str, query: str) -> str:
         mime = "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png"
         b64 = base64.b64encode(image_bytes).decode()
         payload = json.dumps({
-            "model": "claude-haiku-4-5-20251001",
+            "model": "claude-sonnet-4-6",  # Phase 10 — Sonnet for vision/text quality
             "max_tokens": 80,
             "messages": [{
                 "role": "user",
@@ -1209,7 +1231,7 @@ def score_storytelling(html_path: str, niche: str) -> dict:
 
     try:
         payload = json.dumps({
-            "model": "claude-haiku-4-5-20251001",
+            "model": "claude-sonnet-4-6",  # Phase 10 — Sonnet for vision/text quality
             "max_tokens": 400,
             "messages": [{"role": "user", "content": prompt}],
         }).encode()
