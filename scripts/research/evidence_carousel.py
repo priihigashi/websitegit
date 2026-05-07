@@ -266,11 +266,30 @@ def _esc(s) -> str:
 # ── public API ──────────────────────────────────────────────────────────────
 
 def build_carousel_html(spec: dict, work_dir: str) -> str:
-    """Write cover.html. Returns its path."""
+    """Write cover.html. Returns its path.
+
+    Niche-aware template selection (SH-104 row 7.7):
+      - brazil → scripts/research/templates/brazil_chosen.py
+                 (cover=standalone, biography=biography, evidence=duotone V2,
+                  sources=brand-derived). Auto-injects biography slide as #2.
+      - other  → legacy inline _HTML (until per-niche modules ship)
+    """
     work = Path(work_dir)
     work.mkdir(parents=True, exist_ok=True)
     niche = spec.get("niche", "brazil")
     lang = "pt-BR" if niche == "brazil" else "en"
+
+    # Brand-locked path (niche=brazil): use chosen-templates module
+    if niche == "brazil":
+        # Import lazily so legacy fallback still works on minimal checkouts
+        sys.path.insert(0, str(_HERE))
+        from templates.brazil_chosen import build_carousel_html as _brazil_compose
+        html = _brazil_compose(spec, lang=lang)
+        out = work / "cover.html"
+        out.write_text(html, encoding="utf-8")
+        return str(out)
+
+    # Legacy inline path (other niches — replaced as their templates ship)
     slides_html_parts = []
     for slide in spec.get("slides", []) or []:
         kind = slide.get("type")
