@@ -155,7 +155,7 @@ def _flush_alerts():
 CLIP_THRESHOLD = 8  # Clip Collections count required before building a clips_needed topic
 
 
-def _validate_media_images(media_paths: dict, post_id: str) -> tuple[dict, list[str]]:
+def _validate_media_images(media_paths: dict, post_id: str, base_dir: str | Path = "") -> tuple[dict, list[str]]:
     """Verify fetched image files are decodable before HTML render.
     Returns (possibly-mutated media_paths, issues).
     """
@@ -163,8 +163,18 @@ def _validate_media_images(media_paths: dict, post_id: str) -> tuple[dict, list[
     if not isinstance(media_paths, dict):
         return media_paths, issues
 
-    def _ok(path_str: str) -> bool:
+    def _resolve(path_str: str) -> Path:
         p = Path(path_str or "")
+        if p.exists():
+            return p
+        if base_dir and path_str and not p.is_absolute():
+            candidate = Path(base_dir) / p
+            if candidate.exists():
+                return candidate
+        return p
+
+    def _ok(path_str: str) -> bool:
+        p = _resolve(path_str)
         if not p.exists() or not p.is_file():
             return False
         try:
@@ -1370,7 +1380,7 @@ def process_one_topic(topic_entry, run_date, drive):
             media_paths = fetch_template_aware_media(content, niche, str(work), media_paths, brief=brief)
         except Exception as exc:
             print(f"  template-aware media fetch failed: {exc!r}")
-    media_paths, media_issues = _validate_media_images(media_paths, post_id)
+    media_paths, media_issues = _validate_media_images(media_paths, post_id, base_dir=work)
     if media_issues:
         # One retry pass can recover transient/corrupt fetches from upstream providers.
         print("  Media validation failed — retrying fetch_all_media once...")
@@ -1380,7 +1390,7 @@ def process_one_topic(topic_entry, run_date, drive):
                 media_paths = fetch_template_aware_media(content, niche, str(work), media_paths, brief=brief)
             except Exception as exc:
                 print(f"  template-aware media fetch (retry) failed: {exc!r}")
-        media_paths, media_issues_retry = _validate_media_images(media_paths, post_id)
+        media_paths, media_issues_retry = _validate_media_images(media_paths, post_id, base_dir=work)
         if media_issues_retry:
             _send_alert(
                 f"Corrupt/unreadable resource image(s) for '{topic[:40]}':\n"
