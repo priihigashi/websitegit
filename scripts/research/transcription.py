@@ -263,51 +263,68 @@ def _apify_yt_whisper(video_id: str) -> str:
         "maxResults": 1,
         "proxy": {"useApifyProxy": True},
     }
+    body, err = _apify_request(
+        "POST", f"/acts/{actor}/runs",
+        params={"token": APIFY_API_KEY}, json_body=payload, timeout=30,
+    )
+    if err is not None:
+        low = err.lower()
+        if "403" in err or "402" in err or "credit" in low or "billing" in low:
+            _apify_limit_hit = True
+        state.mark_failed("apify", "yt_audio_start", err)
+        _record_error("apify_yt", err)
+        print(f"    Apify YT start failed: {err[:300]}")
+        return ""
+    run_id = body["data"]["id"]
+    status = ""
+    for _ in range(18):
+        time.sleep(10)
+        s, err = _apify_request(
+            "GET", f"/actor-runs/{run_id}",
+            params={"token": APIFY_API_KEY}, timeout=15,
+        )
+        if err or not isinstance(s, dict):
+            continue
+        status = s.get("data", {}).get("status", "")
+        if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
+            break
+    if status != "SUCCEEDED":
+        state.mark_failed("apify", "yt_audio_run", f"run_status:{status}")
+        _record_error("apify_yt", f"run_status:{status}")
+        return ""
+    items_body, err = _apify_request(
+        "GET", f"/actor-runs/{run_id}/dataset/items",
+        params={"token": APIFY_API_KEY, "limit": 1, "format": "json"},
+        timeout=30,
+    )
+    items = items_body if isinstance(items_body, list) else []
+    if not items:
+        state.mark_failed("apify", "yt_audio_dataset", "empty_dataset")
+        _record_error("apify_yt", "empty_dataset")
+        return ""
+    media = (items[0].get("mediaUrl") or items[0].get("videoUrl")
+             or items[0].get("audioUrl") or "")
+    if not media or "youtube.com" in str(media):
+        keys_seen = sorted(items[0].keys())[:30]
+        state.mark_failed("apify", "yt_audio_no_media",
+                          f"keys_seen={keys_seen}")
+        _record_error("apify_yt", f"no_media_url; keys={keys_seen}")
+        return ""
     try:
-        run = json.loads(urllib.request.urlopen(
-            urllib.request.Request(
-                f"{APIFY_BASE}/acts/{actor}/runs?token={APIFY_API_KEY}",
-                data=json.dumps(payload).encode(),
-                headers={"Content-Type": "application/json"},
-            ), timeout=30
-        ).read())
-        run_id = run["data"]["id"]
-        status = ""
-        for _ in range(18):
-            time.sleep(10)
-            s = json.loads(urllib.request.urlopen(
-                f"{APIFY_BASE}/actor-runs/{run_id}?token={APIFY_API_KEY}", timeout=15
-            ).read())
-            status = s["data"]["status"]
-            if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
-                break
-        if status != "SUCCEEDED":
-            return ""
-        items = json.loads(urllib.request.urlopen(
-            f"{APIFY_BASE}/actor-runs/{run_id}/dataset/items?token={APIFY_API_KEY}&limit=1&format=json",
-            timeout=30
-        ).read())
-        if not items:
-            return ""
-        media = (items[0].get("mediaUrl") or items[0].get("videoUrl")
-                 or items[0].get("audioUrl") or "")
-        if not media or "youtube.com" in str(media):
-            return ""
         with tempfile.TemporaryDirectory() as td:
             path = os.path.join(td, "audio.mp3")
             with urllib.request.urlopen(media, timeout=120) as dl:
                 with open(path, "wb") as f:
                     f.write(dl.read())
             if os.path.getsize(path) < 5_000:
+                state.mark_failed("apify", "yt_audio_tiny", "size<5k")
                 return ""
             return _whisper_transcribe(path)
     except Exception as e:
         msg = _scrub(str(e))
-        if "limit" in msg.lower() and "403" in msg:
-            _apify_limit_hit = True
-        state.mark_failed("apify", "yt_audio", msg)
+        state.mark_failed("apify", "yt_audio_download", msg)
         _record_error("apify_yt", msg)
-        print(f"    Apify YT failed: {msg[:200]}")
+        print(f"    Apify YT download failed: {msg[:200]}")
         return ""
 
 
@@ -336,8 +353,79 @@ def transcribe_youtube(video_id: str) -> dict:
 
 # ── Instagram transcript ─────────────────────────────────────────────────────
 
+_IG_MEDIA_FIELDS = (
+    "videoUrl", "video_url", "videoUrlBackup", "downloadedVideo",
+    "videoUrlMain", "media_url", "displayUrl",  # displayUrl last — image fallback (no audio)
+)
+
+
+def _extract_ig_media_url(item: dict) -> tuple[str, str]:
+    """Return (url, source_field). Walks the known set of media URL keys
+    Apify's IG actors emit. videoUrl/displayUrl naming varies by actor +
+    post type (single reel, carousel, story-replay) so we try them all
+    rather than hardcoding one. Returns ('', '') if none usable for audio."""
+    if not isinstance(item, dict):
+        return "", ""
+    for k in _IG_MEDIA_FIELDS:
+        v = item.get(k)
+        if isinstance(v, str) and v.startswith(("http://", "https://")):
+            return v, k
+        if isinstance(v, list) and v:
+            first = v[0]
+            if isinstance(first, str) and first.startswith(("http://", "https://")):
+                return first, k
+            if isinstance(first, dict):
+                for sub in ("url", "src", "videoUrl"):
+                    if isinstance(first.get(sub), str):
+                        return first[sub], f"{k}[0].{sub}"
+    return "", ""
+
+
+def _apify_request(method: str, path: str, *, params: dict | None = None,
+                   json_body: dict | None = None, timeout: int = 30):
+    """Thin wrapper: returns (json_or_text, error_msg). error_msg surfaces
+    Apify's JSON `error.message` field instead of a bare HTTP status code,
+    so quota/credit issues are distinguishable from schema/input bugs."""
+    try:
+        import requests
+    except ImportError:
+        return None, "requests_not_installed"
+    try:
+        if method == "POST":
+            resp = requests.post(f"{APIFY_BASE}{path}", params=params or {},
+                                 json=json_body, timeout=timeout)
+        else:
+            resp = requests.get(f"{APIFY_BASE}{path}", params=params or {},
+                                timeout=timeout)
+    except Exception as e:
+        return None, _scrub(str(e))[:400]
+    try:
+        body = resp.json()
+    except Exception:
+        body = None
+    if resp.status_code >= 400 or (isinstance(body, dict) and "error" in body):
+        if isinstance(body, dict) and "error" in body:
+            err = body["error"]
+            msg = (f"HTTP {resp.status_code} [{err.get('type','?')}] "
+                   f"{err.get('message','?')}")
+        else:
+            msg = f"HTTP {resp.status_code} {(resp.text or '')[:300]}"
+        return None, _scrub(msg)[:400]
+    return body, None
+
+
 def _apify_ig_audio(reel_url: str) -> str:
-    """Apify instagram-scraper -> videoUrl -> Whisper."""
+    """Apify instagram-scraper -> mediaUrl -> Whisper.
+
+    Used as a transcription fallback when yt-dlp gets rate-limited or
+    login-walled on a public reel (common from GitHub runner IPs).
+
+    Tries the full set of known media URL fields rather than just
+    `videoUrl` — some actors return `video_url`, `videoUrlBackup`, or
+    embed the URL inside an array under `downloadedVideo`. Logs which
+    field actually carried a usable URL so debugging future actor schema
+    drift is fast.
+    """
     global _apify_limit_hit
     state = get_state()
     if not state.should_try_apify():
@@ -354,50 +442,79 @@ def _apify_ig_audio(reel_url: str) -> str:
         "addParentData": False,
         "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["DATACENTER"]},
     }
+    body, err = _apify_request(
+        "POST", f"/acts/{actor}/runs",
+        params={"token": APIFY_API_KEY}, json_body=payload, timeout=30,
+    )
+    if err is not None:
+        low = err.lower()
+        if "403" in err or "402" in err or "credit" in low or "billing" in low:
+            _apify_limit_hit = True
+        state.mark_failed("apify", "ig_audio_start", err)
+        _record_error("apify_ig", err)
+        print(f"    Apify IG start failed: {err[:300]}")
+        return ""
+    run_id = body["data"]["id"]
+
+    status = ""
+    for _ in range(12):
+        time.sleep(10)
+        s, err = _apify_request(
+            "GET", f"/actor-runs/{run_id}",
+            params={"token": APIFY_API_KEY}, timeout=15,
+        )
+        if err or not isinstance(s, dict):
+            continue
+        status = s.get("data", {}).get("status", "")
+        if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
+            break
+    if status != "SUCCEEDED":
+        state.mark_failed("apify", "ig_audio_run", f"run_status:{status}")
+        _record_error("apify_ig", f"run_status:{status}")
+        print(f"    Apify IG run ended: {status}")
+        return ""
+
+    items_body, err = _apify_request(
+        "GET", f"/actor-runs/{run_id}/dataset/items",
+        params={"token": APIFY_API_KEY, "limit": 1, "format": "json"},
+        timeout=30,
+    )
+    items = items_body if isinstance(items_body, list) else []
+    if not items:
+        state.mark_failed("apify", "ig_audio_dataset", "empty_dataset")
+        _record_error("apify_ig", "empty_dataset")
+        print("    Apify IG dataset empty")
+        return ""
+
+    video_url, src_field = _extract_ig_media_url(items[0])
+    if not video_url:
+        # Actor SUCCEEDED but no usable media URL — likely a carousel image
+        # post or an actor schema change. Log fields seen so we can adapt.
+        keys_seen = sorted(items[0].keys())[:30]
+        state.mark_failed("apify", "ig_audio_no_media",
+                          f"keys_seen={keys_seen}")
+        _record_error("apify_ig", f"no_media_url; keys={keys_seen}")
+        print(f"    Apify IG: no media URL found. keys={keys_seen}")
+        return ""
+
+    print(f"    Apify IG media URL via field='{src_field}'")
     try:
-        run = json.loads(urllib.request.urlopen(
-            urllib.request.Request(
-                f"{APIFY_BASE}/acts/{actor}/runs?token={APIFY_API_KEY}",
-                data=json.dumps(payload).encode(),
-                headers={"Content-Type": "application/json"},
-            ), timeout=30
-        ).read())
-        run_id = run["data"]["id"]
-        status = ""
-        for _ in range(12):
-            time.sleep(10)
-            s = json.loads(urllib.request.urlopen(
-                f"{APIFY_BASE}/actor-runs/{run_id}?token={APIFY_API_KEY}", timeout=15
-            ).read())
-            status = s["data"]["status"]
-            if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
-                break
-        if status != "SUCCEEDED":
-            return ""
-        items = json.loads(urllib.request.urlopen(
-            f"{APIFY_BASE}/actor-runs/{run_id}/dataset/items?token={APIFY_API_KEY}&limit=1&format=json",
-            timeout=30
-        ).read())
-        if not items:
-            return ""
-        video_url = items[0].get("videoUrl", "")
-        if not video_url:
-            return ""
         with tempfile.TemporaryDirectory() as td:
             path = os.path.join(td, "audio.mp4")
             with urllib.request.urlopen(video_url, timeout=120) as dl:
                 with open(path, "wb") as f:
                     f.write(dl.read())
             if os.path.getsize(path) < 5_000:
+                state.mark_failed("apify", "ig_audio_tiny",
+                                  f"size<5k via {src_field}")
+                _record_error("apify_ig", f"audio_tiny via {src_field}")
                 return ""
             return _whisper_transcribe(path)
     except Exception as e:
         msg = _scrub(str(e))
-        if "limit" in msg.lower() and "403" in msg:
-            _apify_limit_hit = True
-        state.mark_failed("apify", "ig_audio", msg)
+        state.mark_failed("apify", "ig_audio_download", msg)
         _record_error("apify_ig", msg)
-        print(f"    Apify IG failed: {msg[:200]}")
+        print(f"    Apify IG download failed: {msg[:200]}")
         return ""
 
 

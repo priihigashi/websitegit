@@ -1,0 +1,35 @@
+name: SH-104 Apify smoke test
+
+# Quick connectivity check for the Apify routing fix.
+# Verifies actor input schema, run lifecycle, dataset shape, and media URL
+# detection — without running the full clip-mine pipeline. No Whisper/LLM/
+# Sheet/Drive writes. Use to confirm the 400 Bad Request is gone.
+
+on:
+  workflow_dispatch:
+    inputs:
+      reel_url:
+        description: 'Public IG reel URL to probe'
+        required: true
+        default: 'https://www.instagram.com/reel/DXm0WjqAAS_/'
+
+concurrency:
+  group: sh104-apify-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install minimal deps
+        run: pip install requests
+      - name: Run smoke test
+        env:
+          APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
+          INPUT_REEL_URL: ${{ github.event.inputs.reel_url }}
+        run: |
+          python3 scripts/research/_apify_smoke.py "$INPUT_REEL_URL"

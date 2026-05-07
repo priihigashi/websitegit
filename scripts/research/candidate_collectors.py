@@ -136,15 +136,98 @@ def search_instagram_candidates(queries: list[str], max_per_query: int = 5,
     return primary
 
 
+def _scrub_apify(s: str) -> str:
+    """Strip Apify tokens before logging the body of an error response."""
+    if not s:
+        return s
+    return re.sub(r"(token=)[^&\s\"']+", r"\1REDACTED", s, flags=re.IGNORECASE)
+
+
+def _apify_post_run(actor: str, payload: dict, timeout_s: int = 30):
+    """Start an Apify actor run via `requests`. Returns (run_id, error_body).
+    On non-2xx, error_body contains the JSON message Apify returned (scrubbed)
+    instead of just `HTTP 4xx`. Caller decides whether to retry / fall through.
+    """
+    try:
+        import requests
+    except ImportError:
+        return None, "requests_not_installed"
+    try:
+        resp = requests.post(
+            f"{APIFY_BASE}/acts/{actor}/runs",
+            params={"token": APIFY_API_KEY},
+            json=payload, timeout=timeout_s,
+        )
+    except Exception as e:
+        return None, _scrub_apify(str(e))[:400]
+    # Try to surface Apify's JSON error body (it carries actionable detail
+    # like "Field input.username is required" — opaque "HTTP 400" doesn't).
+    body_text = ""
+    try:
+        body = resp.json()
+    except Exception:
+        body = None
+        body_text = (resp.text or "")[:400]
+    if resp.status_code >= 400 or (isinstance(body, dict) and "error" in body):
+        if isinstance(body, dict) and "error" in body:
+            err = body["error"]
+            msg = (f"HTTP {resp.status_code} [{err.get('type','?')}] "
+                   f"{err.get('message','?')}")
+        else:
+            msg = f"HTTP {resp.status_code} {body_text or '(no body)'}"
+        return None, _scrub_apify(msg)[:400]
+    if not isinstance(body, dict) or "data" not in body or "id" not in body.get("data", {}):
+        return None, _scrub_apify(f"unexpected_response: {str(body)[:200]}")
+    return body["data"]["id"], None
+
+
+def _apify_poll_run(run_id: str, max_attempts: int = 18) -> str:
+    try:
+        import requests
+    except ImportError:
+        return ""
+    status = ""
+    for _ in range(max_attempts):
+        time.sleep(10)
+        try:
+            s = requests.get(
+                f"{APIFY_BASE}/actor-runs/{run_id}",
+                params={"token": APIFY_API_KEY}, timeout=15,
+            ).json()
+        except Exception:
+            continue
+        status = s.get("data", {}).get("status", "")
+        if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
+            break
+    return status
+
+
+def _apify_fetch_items(run_id: str) -> list:
+    try:
+        import requests
+        items = requests.get(
+            f"{APIFY_BASE}/actor-runs/{run_id}/dataset/items",
+            params={"token": APIFY_API_KEY, "format": "json"}, timeout=30,
+        ).json()
+        return items if isinstance(items, list) else []
+    except Exception:
+        return []
+
+
 def _ig_via_apify(queries: list[str], max_per_query: int = 5,
                    on_failure=None) -> list[dict]:
-    """Apify instagram-reel-scraper by hashtag.
-    Strips spaces/# from queries to make hashtag-friendly tokens.
-    Returns up to max_per_query reels per hashtag.
+    """Apify Instagram hashtag discovery — verified actor schema.
 
-    Honors fallback_mode via route_state — skips entirely when Apify is
-    disabled, marks the route as failed/unavailable so the manifest reports
-    why the cascade fell through to SerpAPI/DuckDuckGo.
+    Uses `apify~instagram-hashtag-scraper` with payload:
+        {"hashtags": ["frei", "gilson"], "resultsLimit": N}
+
+    This matches the schema used by scripts/4am_agent/scraper.py
+    (scrape_instagram_hashtag) which is known-good. The previous
+    `apify~instagram-reel-scraper` payload was wrong: that actor expects
+    {"username": "..."} not hashtags, so it returned HTTP 400 every run.
+
+    Returns up to max_per_query reels per hashtag. Honors fallback_mode
+    via route_state.
     """
     global _apify_search_limit_hit
     state = get_state()
@@ -156,7 +239,7 @@ def _ig_via_apify(queries: list[str], max_per_query: int = 5,
     if _apify_search_limit_hit:
         return []
 
-    actor = "apify~instagram-reel-scraper"
+    actor = "apify~instagram-hashtag-scraper"
     hashtags = []
     for q in queries:
         h = q.strip().replace("#", "").replace(" ", "")
@@ -166,57 +249,33 @@ def _ig_via_apify(queries: list[str], max_per_query: int = 5,
         return []
 
     payload = {
-        "hashtags": hashtags[:8],   # Apify caps usefulness around 5-8 tags per run
+        "hashtags": hashtags[:8],
         "resultsLimit": max_per_query * len(hashtags[:8]),
     }
-    try:
-        run = json.loads(urllib.request.urlopen(
-            urllib.request.Request(
-                f"{APIFY_BASE}/acts/{actor}/runs?token={APIFY_API_KEY}",
-                data=json.dumps(payload).encode(),
-                headers={"Content-Type": "application/json"},
-            ), timeout=30
-        ).read())
-        run_id = run["data"]["id"]
-    except Exception as e:
-        msg = str(e)
-        if "403" in msg or "402" in msg or "limit" in msg.lower():
+    run_id, err = _apify_post_run(actor, payload)
+    if err is not None:
+        low = err.lower()
+        if "403" in err or "402" in err or "credit" in low or "billing" in low or "quota" in low:
             _apify_search_limit_hit = True
-        state.mark_failed("apify", "ig_search", msg[:300], on_failure=on_failure)
-        print(f"  Apify IG search start failed: {msg[:200]}")
+        state.mark_failed("apify", f"ig_hashtag_start:{actor}", err,
+                          on_failure=on_failure)
+        print(f"  Apify IG hashtag search start failed: {err[:300]}")
         return []
 
-    status = ""
-    for _ in range(18):
-        time.sleep(10)
-        try:
-            s = json.loads(urllib.request.urlopen(
-                f"{APIFY_BASE}/actor-runs/{run_id}?token={APIFY_API_KEY}", timeout=15
-            ).read())
-            status = s["data"]["status"]
-        except Exception:
-            continue
-        if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
-            break
+    status = _apify_poll_run(run_id)
     if status != "SUCCEEDED":
-        state.mark_failed("apify", "ig_search", f"run_status:{status}",
+        state.mark_failed("apify", "ig_hashtag_run", f"run_status:{status}",
                           on_failure=on_failure)
-        print(f"  Apify IG search ended: {status}")
+        print(f"  Apify IG hashtag run ended: {status}")
         return []
 
-    try:
-        items = json.loads(urllib.request.urlopen(
-            f"{APIFY_BASE}/actor-runs/{run_id}/dataset/items?token={APIFY_API_KEY}&format=json",
-            timeout=30
-        ).read())
-    except Exception as e:
-        state.mark_failed("apify", "ig_dataset", str(e)[:300],
+    items = _apify_fetch_items(run_id)
+    if not items:
+        state.mark_failed("apify", "ig_hashtag_dataset", "empty_dataset",
                           on_failure=on_failure)
-        print(f"  Apify IG dataset fetch failed: {e}")
-        return []
 
     results = []
-    for item in items or []:
+    for item in items:
         url = item.get("url") or item.get("postUrl") or ""
         if not url and item.get("shortCode"):
             url = f"https://www.instagram.com/reel/{item['shortCode']}/"
@@ -229,7 +288,7 @@ def _ig_via_apify(queries: list[str], max_per_query: int = 5,
             "title": (item.get("caption") or "")[:200],
             "uploader": item.get("ownerUsername", ""),
             "duration": item.get("videoDuration"),
-            "upload_date": item.get("timestamp", "")[:10].replace("-", ""),
+            "upload_date": (item.get("timestamp", "") or "")[:10].replace("-", ""),
             "query": ",".join(item.get("hashtags", [])[:3]) or "(hashtag-batch)",
         })
     if results:
