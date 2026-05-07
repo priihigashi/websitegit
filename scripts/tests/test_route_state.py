@@ -14,6 +14,7 @@ _REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_REPO / "scripts" / "research"))
 
 import candidate_collectors as cc  # noqa: E402
+import evidence_scoring  # noqa: E402
 import route_state  # noqa: E402
 import transcription  # noqa: E402
 
@@ -138,6 +139,47 @@ class ApifyRouteStateTests(unittest.TestCase):
             transcription._extract_ig_media_url(item),
             ("https://example.com/child.mp4", "childPosts[0].videoUrl"),
         )
+
+    def test_manifest_status_evidence_weak(self):
+        manifest = evidence_scoring.build_manifest(
+            seed_url="https://www.instagram.com/reel/SEED/",
+            person_name="Frei Gilson",
+            person_confidence=1.0,
+            person_method="user_passed",
+            requirement="same person evidence",
+            niche="brazil",
+            queries={},
+            candidates_collected=13,
+            candidates_transcribed=8,
+            verified=[],
+            rejected=[{"reason": "requirement_not_matched"}],
+            target_count=6,
+        )
+
+        self.assertEqual(manifest["status"], "Needs Research — Evidence Weak")
+        self.assertFalse(manifest["ready_for_render"])
+        self.assertEqual(manifest["diagnostics"]["transcribed_count"], 8)
+
+    def test_manifest_status_ready_for_review(self):
+        verified = [{"score": {"claim_type": "needs-context"}}] * 3
+        manifest = evidence_scoring.build_manifest(
+            seed_url="https://www.instagram.com/reel/SEED/",
+            person_name="Frei Gilson",
+            person_confidence=1.0,
+            person_method="user_passed",
+            requirement="same person evidence",
+            niche="brazil",
+            queries={},
+            candidates_collected=3,
+            candidates_transcribed=3,
+            verified=verified,
+            rejected=[],
+            target_count=3,
+        )
+
+        self.assertEqual(manifest["status"], "Ready for Manifest Review")
+        self.assertTrue(manifest["ready_for_render"])
+        self.assertTrue(manifest["build_gates"]["ready_for_render"])
 
     @patch("candidate_collectors.APIFY_API_KEY", "apify_api_test")
     @patch("candidate_collectors._apify_post_run")

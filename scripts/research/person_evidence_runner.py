@@ -80,6 +80,14 @@ SENSITIVE_CLAIM_TYPES = {
 SHEET_REDACT_PLACEHOLDER = "[review-required: see manifest]"
 
 
+def _outcome_status(candidates_transcribed: int, verified_count: int) -> str:
+    if candidates_transcribed < 3:
+        return "Needs Research — Transcription Blocked"
+    if verified_count < 3:
+        return "Needs Research — Evidence Weak"
+    return "Ready for Manifest Review"
+
+
 def _log(msg: str):
     print(msg, flush=True)
     RUN_LOG_LINES.append(f"[{datetime.now(timezone.utc).isoformat()}] {msg}")
@@ -360,8 +368,9 @@ def _write_clip_collections(verified: list[dict], person_name: str,
 
 
 def _write_content_queue(person_name: str, niche: str, manifest_url: str,
-                         verified_count: int, target_count: int):
-    """Append a row to 📋 Content Queue with status=Needs Research."""
+                         verified_count: int, target_count: int,
+                         transcribed_count: int):
+    """Append/update 📋 Content Queue with outcome-specific SH-104 status."""
     svc = _sheet_svc()
     if not svc:
         return
@@ -375,16 +384,17 @@ def _write_content_queue(person_name: str, niche: str, manifest_url: str,
         return
     today = datetime.now(timezone.utc).date().isoformat()
     title = f"{person_name} — evidence clip set (Phase 1 manifest)"
+    status = _outcome_status(transcribed_count, verified_count)
     row_dict = {
         "DATE": today,
         "NICHE": niche,
         "TITLE": title,
         "SOURCE": "person_evidence_mining",
-        "STATUS": "Needs Research",
+        "STATUS": status,
         "MANIFEST_URL": manifest_url,
         "VERIFIED_COUNT": verified_count,
         "TARGET_COUNT": target_count,
-        "NOTES": "Phase 1 manifest only. Render gate: manual approval after review.",
+        "NOTES": f"Transcribed={transcribed_count}. Phase 1 manifest only. Render gate: manual approval after review.",
     }
     row = [row_dict.get(h, "") for h in headers]
 
@@ -417,7 +427,7 @@ def _write_content_queue(person_name: str, niche: str, manifest_url: str,
                 valueInputOption="USER_ENTERED",
                 body={"values": [row]},
             ).execute()
-            _log(f"  Content Queue: row {target_row_idx} updated (Needs Research, retry)")
+            _log(f"  Content Queue: row {target_row_idx} updated ({status}, retry)")
         else:
             svc.spreadsheets().values().append(
                 spreadsheetId=IDEAS_INBOX_ID,
@@ -425,7 +435,7 @@ def _write_content_queue(person_name: str, niche: str, manifest_url: str,
                 valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
                 body={"values": [row]},
             ).execute()
-            _log("  Content Queue: row appended (Needs Research)")
+            _log(f"  Content Queue: row appended ({status})")
     except Exception as e:
         _fail("content_queue_append", e)
 
@@ -536,7 +546,7 @@ def _send_email_via_smtplib(subject: str, body: str) -> bool:
 
 def _send_email_summary(person_name: str, niche: str, seed_url: str,
                         manifest_url: str, verified: list[dict], rejected: list[dict],
-                        candidates_collected: int):
+                        candidates_collected: int, candidates_transcribed: int):
     """Email summary — 2 send routes implemented in this CI runner.
 
     CLAUDE.md catalogues 3 routes overall:
@@ -550,9 +560,9 @@ def _send_email_summary(person_name: str, niche: str, seed_url: str,
     is no MCP host inside the runner.
     """
     state_snap = get_state().snapshot()
-    needs_research = len(verified) < 3
-    subject_tag = "Needs Research" if needs_research else "Manifest ready"
-    subject = f"[SH-104] {subject_tag} — {person_name} — {niche}"
+    status = _outcome_status(candidates_transcribed, len(verified))
+    needs_research = status.startswith("Needs Research")
+    subject = f"[SH-104] {status} — {person_name} — {niche}"
     top3_lines = []
     for v in verified[:3]:
         s = v.get("score", {})
@@ -572,7 +582,7 @@ def _send_email_summary(person_name: str, niche: str, seed_url: str,
         f"manual={rs.get('manual_candidates',0)}"
     )
     needs_research_block = (
-        "\n⚠️  NEEDS RESEARCH — fewer than 3 verified clips.\n"
+        f"\n⚠️  {status.upper()}.\n"
         "    Manifest is preserved. Render gate stays manual.\n"
         "    Re-run with broader requirement or paste manual candidate URLs.\n"
         if needs_research else ""
@@ -584,6 +594,7 @@ Niche: {niche}
 Seed: {seed_url}
 
 Candidates collected: {candidates_collected}
+Candidates transcribed: {candidates_transcribed}
 Verified: {len(verified)}
 Rejected: {len(rejected)}
 
@@ -837,12 +848,12 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
     # 8) Sheet writes
     _write_clip_collections(verified, person_name, niche, manifest_link or "")
     _write_content_queue(person_name, niche, manifest_link or "",
-                         len(verified), target_clip_count)
+                         len(verified), target_clip_count, transcribed_count)
     _update_inspiration_library(seed_url, manifest_link or "")
 
     # 9) Email summary
     _send_email_summary(person_name, niche, seed_url, manifest_link or "(no link)",
-                        verified, rejected, len(candidates))
+                        verified, rejected, len(candidates), transcribed_count)
 
     _log(f"\n=== DONE ===")
     _log(f"  verified={len(verified)} rejected={len(rejected)} "
@@ -851,8 +862,11 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
     _log(f"  fallback_mode={snap['fallback_mode']} routes={snap['route_status']}")
     if snap["route_failures"]:
         _log(f"  route_fallbacks={len(snap['route_failures'])} (non-fatal — see manifest)")
-    if len(verified) < 3:
-        _log(f"  ⚠️  Verified < 3 → STATUS=Needs Research (workflow exit still 0).")
+    status = _outcome_status(transcribed_count, len(verified))
+    if status.startswith("Needs Research"):
+        _log(f"  ⚠️  STATUS={status} (workflow exit still 0).")
+    else:
+        _log(f"  STATUS={status}")
     _log(f"  Phase 1 manifest only. Manual review required before render.")
 
     # Exit code policy: only FATAL failures (drive/sheet code errors etc.)

@@ -39,6 +39,7 @@ import json
 import os
 import re
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -322,8 +323,7 @@ def validate_score(score: dict) -> tuple[bool, list[str]]:
 
 def apply_build_gates(verified: list[dict], rejected: list[dict],
                       target_count: int = 6) -> dict:
-    """Determine if manifest is ready for render (Phase 3).
-    Phase 1 always returns ready_for_render=False — manual review required."""
+    """Determine if manifest is ready for manifest review / render trigger."""
     requires_approval = any(
         v.get("score", {}).get("claim_type") in SENSITIVE_CLAIM_TYPES
         for v in verified
@@ -338,10 +338,43 @@ def apply_build_gates(verified: list[dict], rejected: list[dict],
         "verified_count": len(verified),
         "rejected_count": len(rejected),
         "target_count": target_count,
-        "ready_for_render": False,
+        "ready_for_render": len(verified) >= 3,
         "requires_manual_approval": True,
         "reason": " | ".join(reason_parts),
     }
+
+
+def _manifest_status(candidates_collected: int, candidates_transcribed: int,
+                     verified_count: int) -> tuple[str, str, str]:
+    if candidates_transcribed < 3:
+        return (
+            "Needs Research — Transcription Blocked",
+            "media retrieval/transcription",
+            "Check transcript route failures, provider actor media fields, or paste manual candidate URLs.",
+        )
+    if verified_count < 3:
+        return (
+            "Needs Research — Evidence Weak",
+            "evidence mismatch",
+            "Use broader or more targeted candidate URLs; current transcripts did not satisfy same-person/requirement rubric.",
+        )
+    return (
+        "Ready for Manifest Review",
+        "",
+        "Review manifest quotes, then trigger carousel or Remotion render if acceptable.",
+    )
+
+
+def _failure_summary(rejected: list[dict]) -> dict:
+    counts = Counter()
+    for item in rejected or []:
+        trace = item.get("error_trace") or {}
+        if trace.get("stage"):
+            key = str(trace.get("stage"))[:80]
+        else:
+            key = str(item.get("reason") or "rejected")[:80]
+        counts[key] += 1
+    return dict(counts.most_common(10))
 
 
 # ── manifest writer ──────────────────────────────────────────────────────────
@@ -353,11 +386,16 @@ def build_manifest(seed_url: str, person_name: str, person_confidence: float,
                    rejected: list[dict], seed_excerpt: str = "",
                    run_id: str = "", target_count: int = 6) -> dict:
     """Assemble evidence_manifest.json payload (does not write to disk)."""
+    status, blocker, next_action = _manifest_status(
+        candidates_collected, candidates_transcribed, len(verified),
+    )
     return {
         "mode": "person_evidence_mining",
         "schema_version": 1,
         "run_id": run_id or os.environ.get("GITHUB_RUN_ID", ""),
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "status": status,
+        "ready_for_render": len(verified) >= 3,
         "seed": {
             "url": seed_url,
             "role": "intro_hook",
@@ -376,6 +414,14 @@ def build_manifest(seed_url: str, person_name: str, person_confidence: float,
         "candidates_transcribed": candidates_transcribed,
         "verified_clips": verified,
         "rejected_candidates": rejected,
+        "diagnostics": {
+            "candidate_count": candidates_collected,
+            "transcribed_count": candidates_transcribed,
+            "verified_count": len(verified),
+            "transcription_failure_summary": _failure_summary(rejected),
+            "primary_blocker": blocker,
+            "recommended_next_action": next_action,
+        },
         "build_gates": apply_build_gates(verified, rejected, target_count),
     }
 
