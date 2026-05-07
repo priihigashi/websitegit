@@ -58,6 +58,22 @@ on:
         description: '(person_evidence_mining) Optional manual candidate URLs (one per line) — prepended to discovered candidates'
         required: false
         default: ''
+      discovery_notes:
+        description: '(person_evidence_mining) Free-text context about the person (e.g. "attacks left, controversial views on women, denounced to MP-SP"). AI extracts topic keywords.'
+        required: false
+        default: ''
+      keyword_hints:
+        description: '(person_evidence_mining) Comma-separated topic keywords (e.g. "esquerda, mulheres, lgbt"). Combined with name + controversy vocab.'
+        required: false
+        default: ''
+      discovery_language:
+        description: '(person_evidence_mining) Default vocabulary language: pt (Brazilian) or en (English)'
+        required: false
+        type: choice
+        options:
+          - pt
+          - en
+        default: pt
 
 jobs:
   research:
@@ -139,6 +155,9 @@ jobs:
           # auto = default (Apify+Anthropic first, cascade on failure).
           FALLBACK_MODE: ${{ github.event.inputs.fallback_mode }}
           CANDIDATE_URLS: ${{ github.event.inputs.candidate_urls }}
+          DISCOVERY_NOTES: ${{ github.event.inputs.discovery_notes }}
+          DISCOVERY_KEYWORD_HINTS: ${{ github.event.inputs.keyword_hints }}
+          DISCOVERY_LANGUAGE: ${{ github.event.inputs.discovery_language }}
           PYTHONUNBUFFERED: '1'
         run: |
           if [ "$INPUT_MODE" = "person_evidence_mining" ]; then

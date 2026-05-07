@@ -707,13 +707,31 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
                                evidence_requirement: str,
                                target_clip_count: int = 6,
                                niche: str = "brazil") -> int:
-    """Returns process exit code (0 ok, 1 if any failures recorded)."""
+    """Returns process exit code (0 ok, 1 if any failures recorded).
+
+    Reads optional discovery hints from env (set by video-research.yml):
+      DISCOVERY_NOTES        — free-text user context (Haiku extracts topics)
+      DISCOVERY_KEYWORD_HINTS — comma-separated explicit topic keywords
+      DISCOVERY_LANGUAGE      — "pt" (default) or "en"
+    """
     _log(f"=== person_evidence_mining ===")
     _log(f"  seed_url: {seed_url}")
     _log(f"  person_name: {person_name}")
     _log(f"  niche: {niche}")
     _log(f"  target_clip_count: {target_clip_count}")
     _log(f"  evidence_requirement: {evidence_requirement[:200]}")
+
+    notes = (os.environ.get("DISCOVERY_NOTES") or "").strip()
+    hints_raw = (os.environ.get("DISCOVERY_KEYWORD_HINTS") or "").strip()
+    keyword_hints = [h.strip() for h in re.split(r"[,;\n]+", hints_raw) if h.strip()] or None
+    language = (os.environ.get("DISCOVERY_LANGUAGE") or "pt").lower()
+    if language not in ("pt", "en"):
+        language = "pt"
+    if notes:
+        _log(f"  notes: {notes[:160]}")
+    if keyword_hints:
+        _log(f"  keyword_hints: {keyword_hints}")
+    _log(f"  language: {language}")
 
     # 1) Transcribe seed — soft failure: if the seed itself can't be transcribed,
     # the run still proceeds with empty seed_excerpt. The manifest will reflect
@@ -740,6 +758,9 @@ def run_person_evidence_mining(seed_url: str, person_name: str,
         seed_excerpt=seed_excerpt,
         seed_url=seed_url,
         target_count=target_clip_count,
+        notes=notes,
+        keyword_hints=keyword_hints,
+        language=language,
         on_failure=_log_route_failure,
     )
     _log(f"  Total candidates from search: {len(candidates)}")

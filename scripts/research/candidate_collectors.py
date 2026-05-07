@@ -751,6 +751,68 @@ def dedupe_candidates(items: list[dict]) -> list[dict]:
 
 # ── Query bucket generation (Claude Haiku) ───────────────────────────────────
 
+# ── Discovery vocabulary — controversy-revealing keywords by language ────────
+# Priority order: most-effective first. crítica/criticism = last (per Priscila
+# 2026-05-07: generic, lower hit rate than scandal/denounced framings).
+
+CONTROVERSY_KEYWORDS_PT = [
+    "polêmica", "denunciado", "escândalo", "ataque", "perseguição", "crítica",
+]
+CONTROVERSY_KEYWORDS_EN = [
+    "scandal", "controversy", "accused", "attack", "criticized",
+]
+
+# Topic anchors — broad categories the AI auto-suggests when user notes don't
+# call them out. These get combined with controversy keywords + person name.
+TOPIC_ANCHORS_PT = [
+    "mulheres", "lgbt", "esquerda", "direita", "racismo", "religião",
+]
+TOPIC_ANCHORS_EN = [
+    "women", "lgbt", "left-wing", "right-wing", "racism", "religion",
+]
+
+
+def _build_default_query_set(person_name: str, hints: list[str] | None,
+                              language: str = "pt") -> dict:
+    """Construct the fallback/default query buckets without an LLM.
+
+    person_name: subject of investigation
+    hints: explicit topic keywords from the user (notes-extracted or override)
+    language: "pt" or "en" — picks the controversy/topic vocab
+
+    Returns a query bucket dict. The fallback is designed to be GOOD ENOUGH
+    that an LLM-down day still produces useful searches, not just `<name>`.
+    """
+    pn = person_name.strip()
+    pn_slug = re.sub(r"[^a-z0-9]", "", pn.lower())
+    controversy = CONTROVERSY_KEYWORDS_EN if language == "en" else CONTROVERSY_KEYWORDS_PT
+    topics = list(hints or []) or (
+        TOPIC_ANCHORS_EN if language == "en" else TOPIC_ANCHORS_PT
+    )
+    yt = [pn]
+    # Layer 1: name + each controversy keyword
+    yt.extend(f"{pn} {kw}" for kw in controversy)
+    # Layer 2: name + each topic + best controversy keyword
+    primary_kw = controversy[0] if controversy else ""
+    for topic in topics[:6]:
+        yt.append(f"{pn} {topic}")
+        if primary_kw:
+            yt.append(f"{pn} {topic} {primary_kw}")
+    ig = [pn_slug]
+    ig.extend(f"{pn_slug}{kw.replace(' ','').replace('-','')}"
+              for kw in controversy[:3])
+    ig.extend(re.sub(r"[^a-z0-9]", "", t.lower()) for t in topics[:4])
+    return {
+        "youtube_queries": yt[:14],
+        "instagram_queries": [s for s in ig if s][:10],
+        "exact_phrase_queries": [],
+        "negative_queries": [],
+        "context_queries": [f"{pn} entrevista", f"{pn} discurso"]
+                            if language == "pt"
+                            else [f"{pn} interview", f"{pn} speech"],
+    }
+
+
 _QUERY_BUCKET_PROMPT = """You are generating search queries to find clips of a public figure where transcript evidence MAY support a claim. You are NOT making the claim — only generating discovery queries.
 
 PERSON: {person_name}
@@ -758,14 +820,28 @@ PERSON: {person_name}
 EVIDENCE REQUIREMENT (what we are looking for in transcripts):
 {requirement}
 
+USER NOTES (free-text context the user provided about this person — extract topic keywords from here):
+{notes}
+
+EXPLICIT KEYWORD HINTS (user-supplied topic terms — must combine with name):
+{hints}
+
 SEED CONTEXT (excerpt from the seed clip — for tone/topic anchor only):
 {seed_excerpt}
+
+DEFAULT CONTROVERSY VOCABULARY (combine each with person name):
+Portuguese: polêmica, denunciado, escândalo, ataque, perseguição, crítica
+English:    scandal, controversy, accused, attack, criticized
+
+DEFAULT TOPIC ANCHORS (use when notes/hints don't specify a topic):
+Portuguese: mulheres, lgbt, esquerda, direita, racismo, religião
+English:    women, lgbt, left-wing, right-wing, racism, religion
 
 Generate search queries in 5 buckets. Output ONLY valid JSON, no commentary:
 
 {{
-  "youtube_queries": ["6-10 broad-discovery queries combining person name + topic keywords. Mix Portuguese and topic-neutral framing. NO accusatory phrasing."],
-  "instagram_queries": ["6-10 hashtag-friendly tokens. lowercase. no spaces. focus on the person's name handle if known + topic hashtags people would use."],
+  "youtube_queries": ["8-12 queries. MUST include: name+each controversy keyword, name+each topic keyword, name+(topic+controversy) combinations. Pull topic terms from USER NOTES or HINTS first; if notes/hints are blank, use TOPIC ANCHORS."],
+  "instagram_queries": ["6-10 hashtag-friendly tokens. lowercase. no spaces. handle guesses + topic hashtags. NEUTRAL phrasing."],
   "exact_phrase_queries": ["3-5 quoted phrases that fact-checkers/critics commonly use when documenting this person on this topic. NEUTRAL phrasing."],
   "negative_queries": ["3-5 patterns to EXCLUDE — people with similar names, unrelated topics, parodies."],
   "context_queries": ["3-5 broader context queries — interviews, sermons, public appearances where the topic might come up incidentally."]
@@ -776,35 +852,32 @@ Rules:
 - Prefer Portuguese for Brazilian figures, Spanish for Hispanic, English for US figures.
 - Do not include profanity, slurs, or defamatory phrasing in queries.
 - Hashtags: stripped of # and spaces.
+- ALWAYS combine person name with at least one controversy keyword AND at least one topic anchor.
 - Output STRICTLY the JSON object. No prose."""
 
 
 def generate_query_buckets(person_name: str, requirement: str,
                            seed_excerpt: str = "",
+                           notes: str = "",
+                           keyword_hints: list[str] | None = None,
+                           language: str = "pt",
                            on_failure=None) -> dict:
     """Generate 5 query buckets via the LLM router (Anthropic Haiku → OpenAI
-    cascade). Falls back to a small hand-built default if every LLM route is
-    unavailable. Always returns a complete dict with all 5 keys."""
-    fallback = {
-        "youtube_queries": [
-            f"{person_name}",
-            f"{person_name} polêmica",
-            f"{person_name} entrevista",
-            f"{person_name} sermão",
-            f"{person_name} fala sobre",
-        ],
-        "instagram_queries": [
-            re.sub(r"[^a-z0-9]", "", person_name.lower()),
-            re.sub(r"[^a-z0-9]", "", person_name.lower()) + "polemica",
-        ],
-        "exact_phrase_queries": [],
-        "negative_queries": [],
-        "context_queries": [f"{person_name} discurso", f"{person_name} pregação"],
-    }
+    cascade). Falls back to a rich default when LLM is unavailable.
+
+    notes: free-text user context — Haiku extracts topic keywords.
+    keyword_hints: explicit topic terms (override / supplement notes).
+    language: "pt" or "en" — picks the default vocab.
+
+    Always returns a complete dict with all 5 keys.
+    """
+    fallback = _build_default_query_set(person_name, keyword_hints, language)
 
     prompt = _QUERY_BUCKET_PROMPT.format(
         person_name=person_name,
         requirement=requirement[:1000],
+        notes=(notes or "(none)")[:800],
+        hints=(", ".join(keyword_hints) if keyword_hints else "(none)"),
         seed_excerpt=(seed_excerpt or "(none)")[:800],
     )
     try:
@@ -831,13 +904,20 @@ def generate_query_buckets(person_name: str, requirement: str,
 def collect_candidates(person_name: str, requirement: str, seed_excerpt: str = "",
                        seed_url: str = "",
                        target_count: int = 6,
+                       notes: str = "",
+                       keyword_hints: list[str] | None = None,
+                       language: str = "pt",
                        on_failure=None) -> tuple[list[dict], dict]:
     """Generate queries -> search both platforms -> dedupe.
     Tries to collect at least 3-5x target_count to leave room for rejection.
 
+    notes: free-text user context (auto-extracted topic keywords by LLM).
+    keyword_hints: explicit topic terms — supplements notes.
+    language: "pt" / "en" — picks default vocab.
     on_failure: optional callable(stage:str, error:str) for log_pipeline_failure wiring.
 
-    Returns (candidates, queries_used)."""
+    Returns (candidates, queries_used).
+    """
     def _fail(stage, err):
         if on_failure:
             try:
@@ -846,6 +926,9 @@ def collect_candidates(person_name: str, requirement: str, seed_excerpt: str = "
                 pass
 
     queries = generate_query_buckets(person_name, requirement, seed_excerpt,
+                                     notes=notes,
+                                     keyword_hints=keyword_hints,
+                                     language=language,
                                      on_failure=on_failure)
 
     yt_queries = (queries.get("youtube_queries", [])
