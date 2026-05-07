@@ -61,14 +61,46 @@ except Exception as _vv_err:
     print(f"  Warning: vision_validator not loaded ({_vv_err})")
 
 
+def _is_valid_image_file(path) -> bool:
+    """Phase 3: verify a generated/downloaded image is real before trusting it.
+
+    Returns True only if file exists, has non-trivial size, and Pillow can
+    open + verify it. Used to gate Vision acceptance so corrupt/missing AI
+    output (Seedream/NB2 'success' that wrote nothing) doesn't silently
+    become an empty slot.
+    """
+    if not path:
+        return False
+    try:
+        from pathlib import Path as _P
+        p = _P(str(path))
+        if not p.exists() or p.stat().st_size < 15_000:
+            return False
+    except Exception:
+        return False
+    try:
+        from PIL import Image  # type: ignore
+        with Image.open(str(path)) as im:
+            im.verify()
+        return True
+    except Exception:
+        return False
+
+
 def _vision_accept(local_path, query, label, *, source_url=""):
     """Return True if Vision says image matches query. Logs the verdict.
     Empty path or empty query short-circuits to True so we never block on
     missing inputs.
     SH-056: rejects images from known AI-art domains (checks source_url when available).
-    SH-040: also applies URL heuristic from photo_matcher (watermark domains, tiny imgs)."""
+    SH-040: also applies URL heuristic from photo_matcher (watermark domains, tiny imgs).
+    Phase 3: also rejects when the file does not exist or is unreadable —
+    prevents 'Vision OK skipped (file not found)' from silently passing."""
     if not local_path or not query:
         return True
+    # Phase 3: hard pre-check — file must be real on disk.
+    if not _is_valid_image_file(local_path):
+        print(f"  Vision REJECT ({label}): file missing/corrupt/too small — {str(local_path)[-80:]}")
+        return False
     # SH-056: check original source URL for AI-art domains first; fall back to local path
     url_to_check = source_url or _fetch_url_cache.get(str(local_path), local_path)
     if _is_ai_art_url(url_to_check):
