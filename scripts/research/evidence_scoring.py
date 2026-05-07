@@ -73,6 +73,7 @@ SENSITIVE_CLAIM_TYPES = {
 }
 
 THIRD_PARTY_NARRATION_PATTERNS = [
+    # ── Portuguese ───────────────────────────────────────────────────────────
     r"\bfoi denunciad[oa]s?\b",
     r"\bfoi acusado\b",
     r"\bfoi processado\b",
@@ -88,23 +89,60 @@ THIRD_PARTY_NARRATION_PATTERNS = [
     r"\bele disse que\b",
     r"\bdisse que ele\b",
     r"\bsegundo\b.+\bele\b",
-    r"\bden[uú]ncia\b",
-    r"\bacusa(?:ç|c)[ãa]o\b",
+    # Anchored "denúncia" — only fires in narrative reporting context, not when
+    # subject mentions the word inside their own statement.
+    r"\b(?:foi|sofreu|recebeu)\s+(?:uma\s+)?den[uú]ncia\b",
+    r"\bden[uú]ncia\s+(?:contra|sobre|feita|registrada|formal)\b",
+    r"\bden[uú]ncia\s+ao\s+minist[eé]rio\b",
+    r"\b(?:foi|sofreu|recebeu)\s+(?:uma\s+)?acusa(?:ç|c)[ãa]o\b",
+    r"\bacusa(?:ç|c)[ãa]o\s+(?:contra|formal|criminal)\b",
     r"\bcritic[ao]\b.*\bele\b",
+    # ── English mirrors (for EN-language news/commentary clips) ─────────────
+    r"\bwas reported\b",
+    r"\bwas accused\b",
+    r"\bwas denounced\b",
+    r"\bwas charged\b",
+    r"\bwas sued\b",
+    r"\bfaced\s+(?:a\s+)?(?:complaint|charge|lawsuit|investigation)\b",
+    r"\b(?:a\s+)?complaint\s+(?:was\s+)?(?:filed|made)\s+against\b",
+    r"\baccording to (?:him|her|them|the priest|the pastor|reports?)\b",
+    r"\bsources?\s+say\b",
+    r"\bcritics?\s+(?:say|claim|argue)\b",
+    r"\bhe\s+(?:wants|claims|says|believes|argues|defends|attacks)\s+\w+",
+    r"\bshe\s+(?:wants|claims|says|believes|argues|defends|attacks)\s+\w+",
+    r"\bthe\s+(?:priest|pastor|cleric|cardinal|bishop|imam|rabbi)\s+(?:was|has been)\b",
+    r"\bpublic ministry\b",
+    r"\bdeemed\s+discriminatory\b",
+    r"\bconsidered\s+discriminatory\b",
 ]
 
 CONTRADICTION_SUPPORT_PATTERNS = [
+    # ── Portuguese ───────────────────────────────────────────────────────────
     r"\bcontradiz\b",
     r"\bcontradi(?:ç|c)[ãa]o\b",
     r"\bhipocrisia\b",
     r"\bhip[oó]crita\b",
     r"\bposi(?:ç|c)[ãa]o anterior\b",
+    r"\bdisse antes\b",
+    r"\bj[áa] (?:disse|defendeu|pregava)\b.*\bagora\b",
     r"\bantes\b.*\bagora\b",
+    r"\bmudou de (?:posi(?:ç|c)[ãa]o|opini[ãa]o|ideia)\b",
+    r"\bvoltou atr[áa]s\b",
+    # ── English mirrors ─────────────────────────────────────────────────────
+    r"\bcontradicts?\b",
+    r"\bcontradiction\b",
+    r"\bhypocrisy\b",
+    r"\bhypocrite\b",
     r"\bprevious\b",
     r"\bpast position\b",
     r"\bprior position\b",
     r"\bpreviously\b",
     r"\bcurrent statement\b",
+    r"\bused to (?:say|preach|teach|argue|claim)\b",
+    r"\bonce (?:said|preached|taught|argued|claimed)\b",
+    r"\bchanged\s+(?:his|her|their)\s+(?:position|stance|mind|tune)\b",
+    r"\bdoubled back\b",
+    r"\bflip[- ]?flopped?\b",
 ]
 
 

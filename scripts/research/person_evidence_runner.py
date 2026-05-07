@@ -89,24 +89,52 @@ def _outcome_status(candidates_transcribed: int, verified_count: int) -> str:
     return "Ready for Manifest Review"
 
 
+def _normalize_quote(s: str) -> str:
+    """Lowercase + strip punctuation/whitespace for similarity comparison."""
+    return re.sub(r"[^a-z0-9áàâãéêíóôõúüçñ]+", " ", (s or "").lower()).strip()
+
+
 def _quote_similarity(a: str, b: str) -> float:
     """Return near-duplicate similarity for verified quote gatekeeping."""
-    a_norm = re.sub(r"[^a-z0-9áàâãéêíóôõúüçñ]+", " ", (a or "").lower()).strip()
-    b_norm = re.sub(r"[^a-z0-9áàâãéêíóôõúüçñ]+", " ", (b or "").lower()).strip()
+    a_norm = _normalize_quote(a)
+    b_norm = _normalize_quote(b)
     if not a_norm or not b_norm:
         return 0.0
     return SequenceMatcher(None, a_norm, b_norm).ratio()
 
 
+def _quote_substring_overlap(a: str, b: str) -> float:
+    """Return the fraction of the SHORTER quote that appears verbatim in the
+    LONGER one. Catches "same core quote with extra opening/trailing context"
+    cases that pure similarity ratio misses (e.g. one clip adds a preface
+    sentence to the same quote)."""
+    a_norm = _normalize_quote(a)
+    b_norm = _normalize_quote(b)
+    if not a_norm or not b_norm:
+        return 0.0
+    shorter, longer = (a_norm, b_norm) if len(a_norm) <= len(b_norm) else (b_norm, a_norm)
+    # Find the longest matching substring of the shorter quote inside the longer.
+    matcher = SequenceMatcher(None, shorter, longer)
+    block = matcher.find_longest_match(0, len(shorter), 0, len(longer))
+    return block.size / len(shorter) if shorter else 0.0
+
+
 def _duplicate_verified_quote_reason(score: dict, verified: list[dict]) -> str:
-    """Near-identical best_quote entries count once toward the 3+ review gate."""
+    """Near-identical best_quote entries count once toward the 3+ review gate.
+
+    Two-signal dedupe: full-string similarity OR substring overlap. Catches both
+    "same quote rephrased" (high ratio) and "same core sentence with extra
+    framing" (high overlap, lower ratio).
+    """
     quote = score.get("best_quote", "") if isinstance(score, dict) else ""
     if not quote.strip():
         return ""
     for item in verified or []:
         prev = (item.get("score") or {}).get("best_quote", "")
-        if _quote_similarity(quote, prev) >= 0.86:
+        if _quote_similarity(quote, prev) >= 0.78:
             return "duplicate_verified_quote"
+        if _quote_substring_overlap(quote, prev) >= 0.70:
+            return "duplicate_verified_quote_substring"
     return ""
 
 
