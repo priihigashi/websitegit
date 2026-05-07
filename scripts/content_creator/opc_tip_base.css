@@ -58,9 +58,9 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
 
 /* ---- Big-number row (stat slide) ---- */
 .stat-big {
-  font-family:'Anton', sans-serif; font-size:clamp(140px, 29vw, 322px); line-height:0.92;
-  color:#CBCC10; margin-top:210px; margin-bottom:34px; letter-spacing:-0.025em;
-  overflow:visible; max-width:100%;
+  font-family:'Anton', sans-serif; font-size:clamp(118px, 22vw, 248px); line-height:0.9;
+  color:#CBCC10; margin-top:150px; margin-bottom:28px; letter-spacing:-0.025em;
+  overflow:visible; max-width:620px;
 }
 .stat-label {
   font-family:'JetBrains Mono', monospace; font-size:24px; font-weight:700;
@@ -305,10 +305,32 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   margin-top:16px;
 }
 
-/* Stat slide: use the upper canvas instead of leaving a dead top gap. */
+/* Stat slide: reserve the bottom HUD lane so 3-line stats don't collide with footer/legal copy. */
 .slide-stat .tag { margin-bottom:0; }
-.slide-stat .project-note { margin-bottom:150px; max-width:760px; }
-.slide-stat .stat-label { margin-bottom:8px; max-width:760px; }
+.slide-stat .stat-big,
+.slide-stat .stat-label,
+.slide-stat .project-note {
+  position:relative;
+  z-index:2;
+}
+.slide-stat .project-note { margin-bottom:170px; max-width:600px; }
+.slide-stat .stat-label { margin-bottom:8px; max-width:600px; }
+.slide-stat .context-img-slot {
+  position:absolute;
+  right:108px;
+  top:252px;
+  width:300px;
+  height:430px;
+  min-height:0;
+  max-height:none;
+  margin:0;
+  z-index:1;
+}
+.slide-stat .context-img-slot .ctx-fallback,
+.slide-stat .ctx-placeholder-inner {
+  min-height:0;
+  height:100%;
+}
 
 /* =========================================================== */
 /* ============ VARIANT 1 — OBSIDIAN (primary dark) =========== */

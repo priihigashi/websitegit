@@ -196,13 +196,24 @@ def check_html_placeholders(html_path: str) -> list[str]:
         )
         if cover_text and not has_hook_signal:
             issues.append("Cover hook weak: no question, number, claim/fact cue, or urgency word detected.")
-    # Stat clipping threshold: templates use clamp() + overflow:hidden + auto-shrink
-    # (SH-016/SH-055). 12 chars flagged real outputs like "UP TO $20K EXTRA" (16) and
-    # "UP TO 40% MORE" (14) which CSS clamps safely. Real risk starts >=22 chars.
+    # Stat slide guard: length alone is a weak proxy, but long stat copy with the
+    # old oversized CSS can crowd into the footer/legal lane.
     for idx, stat_txt in enumerate(re.findall(r'<[^>]+class="[^"]*stat-big[^"]*"[^>]*>([\s\S]*?)</[^>]+>', html), start=1):
         clean = re.sub(r"<[^>]+>", "", stat_txt).strip()
         if len(clean) >= 22:
             issues.append(f"Stat clipping risk: stat-big {idx} is {len(clean)} chars ('{clean[:24]}').")
+    if "slide-stat" in html:
+        m_stat_css = re.search(r"\.stat-big\s*\{([\s\S]*?)\}", html)
+        stat_css = m_stat_css.group(1) if m_stat_css else ""
+        m_max = re.search(r"clamp\([^,]+,[^,]+,\s*([0-9]+)px\)", stat_css)
+        m_top = re.search(r"margin-top\s*:\s*([0-9]+)px", stat_css)
+        max_px = int(m_max.group(1)) if m_max else 0
+        top_px = int(m_top.group(1)) if m_top else 0
+        if max_px > 280 or top_px > 190:
+            issues.append(
+                f"Stat layout risk: .stat-big max/top is {max_px}px/{top_px}px; "
+                "3-line stats can collide with the footer/legal lane."
+            )
     for cls, limit in (
         ("headline", 70),
         ("body-text", 180),
