@@ -901,6 +901,93 @@ def generate_query_buckets(person_name: str, requirement: str,
 
 # ── orchestrator ─────────────────────────────────────────────────────────────
 
+# ── TikTok candidate search (Apify clockworks~tiktok-scraper) ───────────────
+
+def _tt_via_apify(queries: list[str], max_per_query: int = 4,
+                  on_failure=None) -> list[dict]:
+    """TikTok keyword-search discovery via Apify clockworks~tiktok-scraper.
+
+    Verified 2026-05-07 — public actor, accepts:
+        {"searchQueries": [...], "resultsPerPage": N,
+         "shouldDownloadVideos": false}
+
+    Returns webVideoUrl + caption + uploader as candidate dicts. Transcription
+    happens via yt-dlp later (transcribe_generic for tiktok URLs is free).
+    Honors fallback_mode via route_state.
+    """
+    state = get_state()
+    if not state.should_try_apify():
+        return []
+    if not APIFY_API_KEY:
+        state.mark_unavailable("apify", "no_api_key")
+        return []
+    if not queries:
+        return []
+
+    actor = "clockworks~tiktok-scraper"
+    payload = {
+        "searchQueries": queries[:6],
+        "resultsPerPage": max_per_query,
+        "shouldDownloadVideos": False,
+        "shouldDownloadCovers": False,
+        "shouldDownloadSubtitles": False,
+        "proxyCountryCode": "None",
+    }
+    run_id, err = _apify_post_run(actor, payload)
+    if err is not None:
+        if _apify_failure_disables_route(err):
+            state.mark_failed("apify", f"tt_search_start:{actor}", err,
+                              on_failure=on_failure)
+        else:
+            state.mark_stage_failed("apify", f"tt_search_start:{actor}", err,
+                                    on_failure=on_failure)
+        print(f"  Apify TikTok search start failed: {err[:300]}")
+        return []
+
+    status = _apify_poll_run(run_id)
+    if status != "SUCCEEDED":
+        state.mark_stage_failed("apify", "tt_search_run", f"run_status:{status}",
+                                on_failure=on_failure)
+        print(f"  Apify TikTok run ended: {status}")
+        return []
+
+    items = _apify_fetch_items(run_id)
+    if not items:
+        state.mark_stage_failed("apify", "tt_search_dataset", "empty_dataset",
+                                on_failure=on_failure)
+        return []
+
+    results: list[dict] = []
+    for item in items:
+        url = item.get("webVideoUrl") or ""
+        if not url:
+            continue
+        author = item.get("authorMeta") or {}
+        cand = {
+            "video_id": str(item.get("id", "")),
+            "url": url,
+            "title": (item.get("text", "") or "")[:200],
+            "uploader": author.get("name", "") or author.get("nickName", ""),
+            "platform": "tiktok",
+            "duration": (item.get("videoMeta") or {}).get("duration"),
+            "upload_date": item.get("createTimeISO", "")[:10],
+            "query": item.get("searchQuery", ""),
+            "route": "tt_search",
+        }
+        results.append(cand)
+    if results:
+        state.mark_used("apify")
+        print(f"  TikTok candidates: {len(results)}")
+    return results
+
+
+def search_tiktok_candidates(queries: list[str], max_per_query: int = 4,
+                             on_failure=None) -> list[dict]:
+    """Public wrapper kept symmetrical with search_youtube_candidates and
+    search_instagram_candidates. TikTok-only, no web fallback today."""
+    return _tt_via_apify(queries, max_per_query=max_per_query, on_failure=on_failure)
+
+
 def collect_candidates(person_name: str, requirement: str, seed_excerpt: str = "",
                        seed_url: str = "",
                        target_count: int = 6,
@@ -958,6 +1045,23 @@ def collect_candidates(person_name: str, requirement: str, seed_excerpt: str = "
     except Exception as e:
         _fail("instagram_search", e)
 
-    candidates = dedupe_candidates(raw_yt + raw_ig)
+    # TikTok discovery — keyword-based search. Uses YT-style natural-language
+    # queries because TikTok search treats them like Google (matches captions,
+    # author names, hashtags). yt-dlp handles TikTok transcription downstream
+    # for FREE, so per-candidate cost on TikTok hits is just OpenAI Whisper.
+    raw_tt = []
+    try:
+        # Reuse yt_queries (name + topic + controversy combinations) — these
+        # work well for TikTok. Cap at 6 to keep dataset small.
+        if yt_queries:
+            raw_tt = search_tiktok_candidates(
+                yt_queries[:6], max_per_query=4,
+                on_failure=on_failure,
+            )
+            print(f"  TikTok candidates: {len(raw_tt)}")
+    except Exception as e:
+        _fail("tiktok_search", e)
+
+    candidates = dedupe_candidates(raw_yt + raw_ig + raw_tt)
     print(f"  After dedupe: {len(candidates)} unique candidates")
     return candidates, queries
