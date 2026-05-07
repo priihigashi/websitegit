@@ -239,49 +239,115 @@ def extract_content_brief(result: dict) -> str:
 
 # ─── Claude Haiku API call ────────────────────────────────────────────────────
 
+OPENAI_KEY = os.environ.get("OPENAI_API_KEY", "")
+
+
+def _call_openai_chat(system_prompt: str, user_content: str) -> str:
+    """Phase 11 — fallback when Anthropic 400/401/429/529 on credits/capacity.
+    Returns text or raises."""
+    if not OPENAI_KEY:
+        raise RuntimeError("OPENAI_API_KEY not set")
+    payload = json.dumps({
+        "model": "gpt-4o",
+        "max_tokens": 600,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": user_content},
+        ],
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {OPENAI_KEY}",
+            "Content-Type":  "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=45) as resp:
+        data = json.loads(resp.read())
+    return data["choices"][0]["message"]["content"]
+
+
 def call_haiku(system_prompt: str, user_content: str, agent_name: str) -> dict:
-    """Call Claude Haiku via Anthropic Messages API.
+    """Call Claude Sonnet (Phase 10) via Anthropic Messages API with OpenAI
+    fallback on credits/capacity failure (Phase 11).
     Returns: {agent, score, verdict, full_response, error}
     """
-    if not ANTHROPIC_KEY:
+    if not ANTHROPIC_KEY and not OPENAI_KEY:
         return {
             "agent": agent_name, "score": None, "verdict": "SKIP",
-            "full_response": "CLAUDE_KEY_4_CONTENT not set — skipping agent",
+            "full_response": "Neither CLAUDE_KEY_4_CONTENT nor OPENAI_API_KEY set — skipping agent",
             "error": "no key",
         }
 
-    payload = json.dumps({
-        "model": HAIKU_MODEL,
-        "max_tokens": 600,
-        "system": system_prompt,
-        "messages": [{"role": "user", "content": user_content}],
-    }).encode()
+    text = ""
+    used = "sonnet"
+    if ANTHROPIC_KEY:
+        payload = json.dumps({
+            "model": SONNET_MODEL,
+            "max_tokens": 600,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": user_content}],
+        }).encode()
 
-    req = urllib.request.Request(
-        API_URL,
-        data=payload,
-        headers={
-            "x-api-key": ANTHROPIC_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-    )
+        req = urllib.request.Request(
+            API_URL,
+            data=payload,
+            headers={
+                "x-api-key": ANTHROPIC_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+        )
 
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read())
-        text = (data.get("content") or [{}])[0].get("text", "")
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode(errors="ignore")[:200]
-        return {
-            "agent": agent_name, "score": None, "verdict": "ERROR",
-            "full_response": f"HTTP {e.code}: {err_body}", "error": str(e),
-        }
-    except Exception as e:
-        return {
-            "agent": agent_name, "score": None, "verdict": "ERROR",
-            "full_response": str(e), "error": str(e),
-        }
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read())
+            text = (data.get("content") or [{}])[0].get("text", "")
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode(errors="ignore")[:200]
+            # Phase 11 — credit/capacity fallback to OpenAI gpt-4o.
+            if e.code in (400, 401, 402, 429, 529) and OPENAI_KEY:
+                try:
+                    text = _call_openai_chat(system_prompt, user_content)
+                    used = "openai-fallback"
+                except Exception as oe:
+                    return {
+                        "agent": agent_name, "score": None, "verdict": "ERROR",
+                        "full_response": f"Anthropic HTTP {e.code}: {err_body} | OpenAI fallback failed: {oe}",
+                        "error": str(oe),
+                    }
+            else:
+                return {
+                    "agent": agent_name, "score": None, "verdict": "ERROR",
+                    "full_response": f"HTTP {e.code}: {err_body}", "error": str(e),
+                }
+        except Exception as e:
+            if OPENAI_KEY:
+                try:
+                    text = _call_openai_chat(system_prompt, user_content)
+                    used = "openai-fallback"
+                except Exception as oe:
+                    return {
+                        "agent": agent_name, "score": None, "verdict": "ERROR",
+                        "full_response": f"Anthropic err: {e} | OpenAI fallback err: {oe}",
+                        "error": str(oe),
+                    }
+            else:
+                return {
+                    "agent": agent_name, "score": None, "verdict": "ERROR",
+                    "full_response": str(e), "error": str(e),
+                }
+    else:
+        # No Anthropic key but OpenAI is set — go directly to OpenAI.
+        try:
+            text = _call_openai_chat(system_prompt, user_content)
+            used = "openai-only"
+        except Exception as e:
+            return {
+                "agent": agent_name, "score": None, "verdict": "ERROR",
+                "full_response": f"OpenAI error: {e}", "error": str(e),
+            }
 
     # Parse score and verdict from response text
     score_m   = re.search(r'OVERALL SCORE:\s*(\d+(?:\.\d+)?)', text, re.IGNORECASE)
@@ -301,6 +367,7 @@ def call_haiku(system_prompt: str, user_content: str, agent_name: str) -> dict:
         "verdict": verdict,
         "full_response": text,
         "error": None,
+        "model_used": used,
     }
 
 

@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Tuple
 
 ANTHROPIC_KEY = os.environ.get("CLAUDE_KEY_4_CONTENT") or os.environ.get("ANTHROPIC_API_KEY", "")
+OPENAI_KEY    = os.environ.get("OPENAI_API_KEY", "")
 
 # Anthropic Vision API limits:
 #   - Max raw image size: 5 MB (base64 payload <= ~6.7 MB)
@@ -114,12 +115,61 @@ def validate_image_bytes(image_bytes: bytes, filename: str, query: str) -> Tuple
             body = e.read().decode("utf-8", errors="replace")[:300]
         except Exception:
             body = "(no body)"
+        # Phase 10/11 — Anthropic credits/capacity (400 with low_balance, 429,
+        # or 529) → fall back to OpenAI gpt-4o vision so the gate keeps working.
+        if e.code in (400, 401, 402, 429, 529) and OPENAI_KEY:
+            ok, reason = _validate_via_openai(b64, mime, query)
+            return ok, reason
         return True, f"skipped (vision HTTP {e.code}: {body})"
     except Exception as e:
+        if OPENAI_KEY:
+            try:
+                return _validate_via_openai(b64, mime, query)
+            except Exception:
+                pass
         return True, f"skipped (vision error: {e})"
 
     is_relevant = not verdict.upper().startswith("NO")
     return is_relevant, verdict[:200]
+
+
+def _validate_via_openai(b64_data: str, mime: str, query: str) -> Tuple[bool, str]:
+    """Fallback when Anthropic Vision 400/429/529. Uses OpenAI gpt-4o-mini
+    vision, same yes/no contract."""
+    payload = json.dumps({
+        "model": "gpt-4o-mini",
+        "max_tokens": 80,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "image_url",
+                 "image_url": {"url": f"data:{mime};base64,{b64_data}"}},
+                {"type": "text",
+                 "text": (
+                    f"Does this image visually represent: '{query}'?\n"
+                    f"YES if it clearly shows the correct subject/action/setting.\n"
+                    f"NO if it shows something completely unrelated (e.g. kitchen "
+                    f"photo on a concrete/structural topic).\n"
+                    f"Start with YES or NO, then one short sentence."
+                 )},
+            ],
+        }],
+    }).encode()
+    try:
+        req = urllib.request.Request(
+            "https://api.openai.com/v1/chat/completions",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {OPENAI_KEY}",
+                "Content-Type": "application/json",
+            },
+        )
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        verdict = resp["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        return True, f"skipped (openai vision error: {e})"
+    is_relevant = not verdict.upper().startswith("NO")
+    return is_relevant, f"[openai-fallback] {verdict[:180]}"
 
 
 def validate_image(local_path: str, query: str) -> Tuple[bool, str]:
