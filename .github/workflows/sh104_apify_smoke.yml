@@ -1,17 +1,38 @@
 name: SH-104 Apify smoke test
 
-# Quick connectivity check for the Apify routing fix.
-# Verifies actor input schema, run lifecycle, dataset shape, and media URL
-# detection — without running the full clip-mine pipeline. No Whisper/LLM/
-# Sheet/Drive writes. Use to confirm the 400 Bad Request is gone.
+# Quick connectivity check for SH-104 Apify routes.
+# Verifies actor input schema, run lifecycle, dataset shape, URL/media field
+# detection, and safe provider errors — without running the full clip-mine
+# pipeline. No Whisper/LLM/Sheet/Drive writes.
 
 on:
   workflow_dispatch:
     inputs:
       reel_url:
-        description: 'Public IG reel URL to probe'
-        required: true
+        description: 'Public IG Reel URL for mode=direct_url'
+        required: false
         default: 'https://www.instagram.com/reel/DXm0WjqAAS_/'
+      mode:
+        description: 'Route to test: direct_url, hashtag, or username'
+        required: true
+        type: choice
+        options:
+          - direct_url
+          - hashtag
+          - username
+        default: direct_url
+      hashtag:
+        description: 'Hashtag for mode=hashtag (without or with #)'
+        required: false
+        default: 'freigilson'
+      username:
+        description: 'Instagram username for mode=username (without or with @)'
+        required: false
+        default: 'freigilson'
+      results_limit:
+        description: 'Dataset items to request for hashtag/username modes'
+        required: false
+        default: '3'
 
 concurrency:
   group: sh104-apify-smoke
@@ -30,6 +51,15 @@ jobs:
       - name: Run smoke test
         env:
           APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
+          INPUT_MODE: ${{ github.event.inputs.mode }}
           INPUT_REEL_URL: ${{ github.event.inputs.reel_url }}
+          INPUT_HASHTAG: ${{ github.event.inputs.hashtag }}
+          INPUT_USERNAME: ${{ github.event.inputs.username }}
+          INPUT_RESULTS_LIMIT: ${{ github.event.inputs.results_limit }}
         run: |
-          python3 scripts/research/_apify_smoke.py "$INPUT_REEL_URL"
+          python3 scripts/research/_apify_smoke.py \
+            --mode "$INPUT_MODE" \
+            --reel-url "$INPUT_REEL_URL" \
+            --hashtag "$INPUT_HASHTAG" \
+            --username "$INPUT_USERNAME" \
+            --results-limit "$INPUT_RESULTS_LIMIT"
