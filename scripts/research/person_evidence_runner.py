@@ -223,11 +223,25 @@ def _norm_url(u: str) -> str:
     return (u or "").split("?")[0].rstrip("/").lower()
 
 
+def _a1_col(n: int) -> str:
+    """1-based column number -> A1 column letters."""
+    out = ""
+    while n:
+        n, rem = divmod(n - 1, 26)
+        out = chr(65 + rem) + out
+    return out or "A"
+
+
+def _header_range(tab: str, headers: list[str]) -> str:
+    end = _a1_col(max(1, len(headers)))
+    return f"'{tab}'!A:{end}"
+
+
 def _read_existing_rows(svc, sheet_id: str, tab: str, headers: list[str]) -> list[dict]:
     """Return existing rows as dicts keyed by header. Empty list on any error."""
     try:
         res = svc.spreadsheets().values().get(
-            spreadsheetId=sheet_id, range=f"'{tab}'!A:Z"
+            spreadsheetId=sheet_id, range=_header_range(tab, headers)
         ).execute()
         rows = res.get("values", []) or []
         out = []
@@ -403,7 +417,7 @@ def _write_content_queue(person_name: str, niche: str, manifest_url: str,
     # status), don't append a duplicate. Skip update if status is Rejected.
     try:
         res = svc.spreadsheets().values().get(
-            spreadsheetId=IDEAS_INBOX_ID, range=f"'{tab}'!A:Z"
+            spreadsheetId=IDEAS_INBOX_ID, range=_header_range(tab, headers)
         ).execute()
         existing_rows = res.get("values", []) or []
         target_row_idx = None  # 1-based row in sheet
@@ -423,7 +437,7 @@ def _write_content_queue(person_name: str, niche: str, manifest_url: str,
         if target_row_idx is not None:
             svc.spreadsheets().values().update(
                 spreadsheetId=IDEAS_INBOX_ID,
-                range=f"'{tab}'!A{target_row_idx}:Z{target_row_idx}",
+                range=f"'{tab}'!A{target_row_idx}:{_a1_col(len(headers))}{target_row_idx}",
                 valueInputOption="USER_ENTERED",
                 body={"values": [row]},
             ).execute()
@@ -431,7 +445,7 @@ def _write_content_queue(person_name: str, niche: str, manifest_url: str,
         else:
             svc.spreadsheets().values().append(
                 spreadsheetId=IDEAS_INBOX_ID,
-                range=f"'{tab}'!A:Z",
+                range=_header_range(tab, headers),
                 valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
                 body={"values": [row]},
             ).execute()

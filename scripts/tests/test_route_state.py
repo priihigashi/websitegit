@@ -15,6 +15,7 @@ sys.path.insert(0, str(_REPO / "scripts" / "research"))
 
 import candidate_collectors as cc  # noqa: E402
 import evidence_scoring  # noqa: E402
+import person_evidence_runner as runner  # noqa: E402
 import route_state  # noqa: E402
 import transcription  # noqa: E402
 
@@ -225,6 +226,14 @@ class ApifyRouteStateTests(unittest.TestCase):
         self.assertEqual(manifest["status"], "Ready for Manifest Review")
         self.assertTrue(manifest["ready_for_render"])
         self.assertTrue(manifest["build_gates"]["ready_for_render"])
+
+    def test_content_queue_range_extends_past_z(self):
+        headers = [f"H{i}" for i in range(30)]
+
+        self.assertEqual(runner._a1_col(1), "A")
+        self.assertEqual(runner._a1_col(26), "Z")
+        self.assertEqual(runner._a1_col(27), "AA")
+        self.assertEqual(runner._header_range("📋 Content Queue", headers), "'📋 Content Queue'!A:AD")
 
     @patch("candidate_collectors.APIFY_API_KEY", "apify_api_test")
     @patch("candidate_collectors._apify_post_run")
