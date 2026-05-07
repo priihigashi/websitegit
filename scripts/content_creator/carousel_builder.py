@@ -389,6 +389,21 @@ MANDATORY RULES — follow these exactly:
      "implement" (say "do"), "facilitate" (say "help"), "subsequently" (say "then"),
      "aforementioned" (say "this"), "commence" (say "start"), "endeavor" (say "try").
    - If a homeowner needs to Google the word, pick a simpler one.
+
+8. HEADLINE FRAMING (NON-NEGOTIABLE):
+   - NEVER use question framings: "What is X?" / "Why is X?" / "How is X?" /
+     "Is X worth it?" / "What's X?" — anything that ends in a question mark
+     or opens with What/Why/How/Is.
+   - headline_main = the subject NAME in ALL CAPS (e.g. "CONCRETE",
+     "POURED CONCRETE", "PAVERS", "SHIPLAP", "REBAR").
+   - headline_italic = a sharp 2-5 word descriptor that gives the angle
+     (e.g. "the bonded backbone", "20-year guaranteed", "the cost king",
+     "Florida-built since '78").
+   - Together they form a noun phrase, NOT a question. Example output:
+     "CONCRETE" + italic "the bonded backbone".
+   - This applies to opc_material_profile, opc_item_spotlight, opc_base,
+     opc_statement. NEVER include a question mark in headline_main or
+     headline_italic for these templates.
 """
 
 BRAZIL_COPY_RULES = """
@@ -713,11 +728,38 @@ Rules:
 - slide4_body must describe what is happening in the visual (not generic advice)
 - context_image_query: BANNED words that make queries too generic and WILL fail stock search — never use alone or as the whole query: "construction", "house", "home", "building", "renovation", "contractor", "kitchen", "bathroom", "outdoor", "indoor", "work", "project". Always combine with material type + location (e.g. "oak park illinois", "south florida", "residential") + action verb (installation, pour, framing, remodel). Minimum 4 words per query. A generic query means the pipeline falls back to AI images — avoid this.
 - context_image_query UNIQUENESS: Each slide's context_image_query MUST describe a DIFFERENT visual subject. Slides 2, 3, and 4 must each have a distinct query. NEVER reuse or rephrase a query from another slide. If you find yourself writing the same query twice, stop and change one of them to show a different material, location, or action.
-- context_image_query_alt: ALWAYS provide a simpler fallback query alongside the main one. The main query is the IDEAL specific match. The _alt is the SAFETY NET — much broader, generic terms that stock libraries actually have, BUT still tied to the slide subject. The _alt should be DELIBERATELY easier to find — think 'what would a search return many results for'.
-  Example for a slide about soil testing:
-    main: "geotechnical engineer inspecting residential building site soil sample"  (specific, ~7 words, niche subject — may return 0 photos)
-    _alt: "construction site soil ground residential"  (broad, common terms — stock libraries have many of these)
-  The _alt MUST stay on-topic. For a slide about soil, the alt should still mention soil/ground/foundation/dirt — never drift to roofing, kitchens, or anything off-topic just to find any image. Rule of thumb: if the main query has 5-7 words with specific brand/material/location, the _alt has 3-5 words with common substitutes."""
+- context_image_query_alt — STOCK-LIBRARY-FRIENDLY (NON-NEGOTIABLE):
+  ALWAYS provide a simpler fallback query alongside the main one. The main query is the IDEAL specific match. The _alt is the SAFETY NET that has to actually return real photos from Pexels/Pixabay/Wikimedia.
+
+  GOOD alts (stock libraries have many of these — your test: would a generic search return >20 results?):
+    "construction worker on site"
+    "concrete pour residential"
+    "kitchen cabinet white"
+    "asphalt shingle roof installation"
+    "bathroom tile shower wall"
+    "wood deck backyard"
+    "framing wood stud wall"
+    "soil ground residential foundation"
+
+  BAD alts (stock libraries don't have these — too narrow, too specific, too jargon-y):
+    "geotechnical engineer inspecting residential site"   ← profession + activity — almost no stock photos exist
+    "soil testing equipment residential lot"              ← niche equipment — empty results
+    "contractor measuring shower door frameless"          ← specific action + product — won't match
+    "GAF asphalt shingle warranty inspection"             ← brand + paperwork — never on stock libraries
+    "permit inspector approving foundation pour"          ← role + verb — fictional photo
+
+  ON-TOPIC RULE — the _alt MUST stay tied to the slide subject:
+    Slide about SOIL/foundation → _alt mentions soil/ground/foundation/dirt. NEVER drift to roofing, kitchens, or unrelated trades.
+    Slide about TILE → _alt mentions tile/bathroom/wall/floor. NEVER drift to concrete or roofing.
+    Slide about HURRICANE WINDOWS → _alt mentions windows/glass/storm/impact. NEVER drift to siding or insulation.
+
+  EXAMPLE COMPARISON for a soil-testing slide:
+    main: "geotechnical engineer inspecting residential building site soil sample" (specific, ~7 words, niche — may return 0 photos)
+    _alt: "construction site soil ground residential"  (broad common terms — stock libraries return many — STILL on-topic)
+
+  TEST BEFORE EMITTING: silently ask yourself "would a Pexels search for this _alt return more than 20 results, AND would those results still relate to my slide subject?" If either answer is no, simplify or refocus the _alt.
+
+  Rule of thumb: if the main query has 5-7 words with specific brand/material/location, the _alt has 3-5 words with common substitutes — but those substitutes MUST stay in the same subject lane."""
 
     for attempt in range(2):
         _prompt = prompt
@@ -773,8 +815,8 @@ Rules:
 OPC_STANDALONE_SCHEMAS = {
     "opc_material_profile": {
         "label":            ("eyebrow above headline, ALL CAPS · OPC suffix",  30),
-        "headline_main":    ("first half of question headline (e.g. 'What is')", 12),
-        "headline_italic":  ("second half of headline, the SUBJECT (e.g. 'rebar?', 'shiplap?')", 22),
+        "headline_main":    ("subject NAME in ALL CAPS — NEVER a question. e.g. 'CONCRETE', 'REBAR', 'SHIPLAP', 'POURED CONCRETE'. NEVER 'What is', 'Why is', 'How is'.", 12),
+        "headline_italic":  ("sharp 2-5 word descriptor giving the angle. NEVER ends in '?'. e.g. 'the bonded backbone', '20-year guaranteed', 'the cost king', 'Florida-built since 78'. Together with headline_main forms a noun phrase, NEVER a question.", 22),
         "best_for":         ("1 short phrase — what this material is best for", 40),
         "not_ideal":        ("1 short phrase — where this material falls short", 40),
         "durability":       ("lifespan in years (e.g. '30+ years', '8-15 years')", 30),
@@ -797,8 +839,8 @@ OPC_STANDALONE_SCHEMAS = {
     "opc_item_spotlight": {
         "tag":        ("eyebrow tag · OPC suffix", 30),
         "category":   ("ALL CAPS category line (e.g. 'PRODUCT · MATERIAL · TECHNIQUE')", 40),
-        "headline_main":   ("first half (e.g. 'Spotlight on')", 14),
-        "headline_italic": ("second half italic, the ITEM (e.g. 'this faucet.')", 22),
+        "headline_main":   ("ALL CAPS item NAME — the spotlighted product/material in 1-3 words. NEVER a question, NEVER 'Spotlight on'. e.g. 'FRAMELESS GLASS', 'OAK FLOORING', 'GAF SHINGLE'.", 14),
+        "headline_italic": ("sharp italic descriptor giving the angle. NEVER ends in '?'. e.g. 'the South Florida pick', 'cabinet-grade only', 'IRC-compliant'.", 22),
         "subhead":    ("1 short framing line", 80),
         "fact_1_title": ("ALL CAPS short title", 18),
         "fact_1_desc":  ("1 line detail (max 80 chars)", 80),
@@ -819,8 +861,8 @@ OPC_STANDALONE_SCHEMAS = {
     },
     "opc_base": {
         "tag":           ("OPC / TIP eyebrow", 25),
-        "headline_main": ("first half of cover headline (e.g. \"WHAT'S\")", 12),
-        "headline_italic": ("second half italic (e.g. 'HIDING IN THIS WALL?')", 22),
+        "headline_main": ("ALL CAPS subject NAME — the topic of the tip in 1-3 words. NEVER 'WHAT'S', NEVER a question opener. e.g. 'HIDDEN COSTS', 'WALL CRACKS', 'PERMIT TRAPS', 'CONCRETE PRO'.", 12),
+        "headline_italic": ("sharp italic angle in 2-5 words. NEVER ends in '?'. e.g. 'before they hit you', 'what inspectors flag', 'the 20-year version'.", 22),
         "cover_hook":    ("1 short subhead (max 80 chars)", 80),
         "byline":        ("MIKE · ROLE format", 25),
         "stamp_text":    ("badge text on sticker portrait, e.g. 'TIP', '#001'", 12),
@@ -950,8 +992,8 @@ def _derive_standalone_from_tip(template_id, tip_content):
             factors.append(extra_pool[len(factors) % len(extra_pool)])
         return {
             "label":            f"{accent_token} PROFILE · OAK PARK",
-            "headline_main":    "What is",
-            "headline_italic":  f"{accent.lower() or 'this'}?",
+            "headline_main":    accent_token or "MATERIAL",
+            "headline_italic":  "the South Florida pick",
             "best_for":         (subhead.split(".")[0] if subhead else f"{accent_token} use cases")[:40],
             "not_ideal":        (s4_hl.title() if s4_hl else f"Wrong-spec {accent.lower()}")[:40],
             "durability":       "30+ years",
@@ -983,8 +1025,8 @@ def _derive_standalone_from_tip(template_id, tip_content):
         return {
             "tag":             f"{accent_token} SPOTLIGHT · OAK PARK",
             "category":        "PRODUCT · MATERIAL · TECHNIQUE",
-            "headline_main":   "Spotlight on",
-            "headline_italic": f"{accent.lower() or 'this detail'}.",
+            "headline_main":   accent_token or "THIS DETAIL",
+            "headline_italic": "Florida-built only",
             "subhead":         (subhead or "")[:80],
             "fact_1_title":    str(f1.get("title", accent_token))[:18].upper(),
             "fact_1_desc":     str(f1.get("sub", ""))[:80],
@@ -1007,8 +1049,8 @@ def _derive_standalone_from_tip(template_id, tip_content):
     if template_id == "opc_base":
         return {
             "tag":             f"OAK PARK · {accent_token}",
-            "headline_main":   hl_main.upper() or "WHAT'S",
-            "headline_italic": hl_em.upper() or "AT STAKE.",
+            "headline_main":   (hl_main.upper().rstrip("?") if hl_main else accent_token) or "THE TIP",
+            "headline_italic": (hl_em.upper().rstrip("?") if hl_em else "what inspectors flag"),
             "cover_hook":      (subhead or "")[:80],
             "byline":          "MIKE · OPC FOUNDER",
             "stamp_text":      accent_token[:12] or "TIP",
@@ -1120,6 +1162,30 @@ CRITICAL RULES:
 - For opc_progress_media: tag should reflect the actual project type. caption_pills follow project timeline (BEFORE/DURING/AFTER is the safe default).
 - For opc_material_profile.decision_factors: pull 4 short tokens from slide3_items[].title (first word, ≤12 chars each).
 - For opc_four_card_grid.card_titles + card_copies: if 4 items aren't naturally available, derive 4 distinct decision points from the topic.
+
+FOUR_CARD_GRID — UNIFIED COMPARISON FRAME (NON-NEGOTIABLE):
+- For comparison topics ("X vs Y", "A or B", "Which wins"): ALL 4 cards MUST follow ONE structure. Pick exactly ONE pattern and apply it to every card:
+  (A) HEAD-TO-HEAD per card — every card compares BOTH subjects inside its body. Card title = the dimension. Card copy = "Subject A: <data> / Subject B: <data>".
+      GOOD example for "Concrete vs Pavers":
+        card 1: title "DURABILITY" / copy "Concrete: 20-30y. Pavers: 25-50y when reset."
+        card 2: title "INSTALL" / copy "Concrete: 1-2 days pour + cure. Pavers: 3-5 days hand-set."
+        card 3: title "REPAIR" / copy "Concrete: replace slab section. Pavers: lift and reset individual stones."
+        card 4: title "COST" / copy "Concrete: $6-$12/sqft. Pavers: $10-$30/sqft installed."
+  (B) WINNER-PER-DIMENSION — every card declares the winner upfront in the title.
+      GOOD example for "Concrete vs Pavers":
+        card 1: title "DURABILITY · PAVERS WIN" / copy "25-50y when reset; concrete typically 20-30y."
+        card 2: title "INSTALL SPEED · CONCRETE WINS" / copy "1-2 days pour vs 3-5 days hand-set."
+        card 3: title "REPAIR · PAVERS WIN" / copy "Lift and reset individual stones; concrete needs slab work."
+        card 4: title "BUDGET · CONCRETE WINS" / copy "$6-$12/sqft vs $10-$30/sqft installed."
+
+  BAD example (NEVER ship this — drifting subjects):
+    card 1: title "DURABILITY" / copy "Concrete lasts 20-30 years."  ← only about Subject A
+    card 2: title "AESTHETICS" / copy "Pavers offer diverse design choices." ← only about Subject B
+    card 3: title "WARRANTY" / copy "Concrete typically comes with a 5-year warranty." ← back to A
+    card 4: title "DRAINAGE" / copy "Pavers allow water to permeate." ← back to B
+  This drift is BANNED. The reader cannot tell what the slide is recommending.
+
+- For NON-comparison topics (single subject, e.g. "Hurricane Window Installation"): all 4 cards must focus on the SAME subject from 4 distinct angles — the standard quartet is COST, INSTALL, MAINTENANCE, LONGEVITY. Other valid quartets: SPEC, CODE, RISK, STYLE. Never mix unrelated angles (e.g. don't pair COST with HISTORY).
 - For opc_statement.quote_body: quote Mike, no quotation marks in the value (the template adds them).
 - ALL CAPS where the schema says ALL CAPS.
 - No emojis. No markdown.
@@ -3910,8 +3976,8 @@ def render_opc_material_profile(content, v_class, *, slide_num, media_paths=None
     Text-only by design (image_need='none')."""
     SID = "opc_material_profile"
     label    = _opc_field(content, SID, "label",            "MATERIAL PROFILE · OPC")
-    hl_main  = _opc_field(content, SID, "headline_main",    _opc_field(content, SID, "headline", "What is")) or "What is"
-    hl_em    = _opc_field(content, SID, "headline_italic",  "this material?")
+    hl_main  = _opc_field(content, SID, "headline_main",    _opc_field(content, SID, "headline", "MATERIAL")) or "MATERIAL"
+    hl_em    = _opc_field(content, SID, "headline_italic",  "the South Florida pick")
     f_best   = _opc_field(content, SID, "best_for",         "—")
     f_not    = _opc_field(content, SID, "not_ideal",        "—")
     f_dur    = _opc_field(content, SID, "durability",       "—")
@@ -4001,8 +4067,8 @@ def render_opc_item_spotlight(content, v_class, *, slide_num, media_paths=None):
     SID = "opc_item_spotlight"
     tag       = _opc_field(content, SID, "tag",             "Item spotlight · OPC")
     category  = _opc_field(content, SID, "category",        "PRODUCT · MATERIAL · TECHNIQUE")
-    hl_main   = _opc_field(content, SID, "headline_main",   "Spotlight on")
-    hl_em     = _opc_field(content, SID, "headline_italic", "this item.")
+    hl_main   = _opc_field(content, SID, "headline_main",   "THIS DETAIL")
+    hl_em     = _opc_field(content, SID, "headline_italic", "Florida-built only")
     sub       = _opc_field(content, SID, "subhead",         "")
     fact1_t   = _opc_field(content, SID, "fact_1_title", "Fact one")
     fact1_d   = _opc_field(content, SID, "fact_1_desc",  "—")
@@ -4089,8 +4155,8 @@ def render_opc_base(content, v_class, *, slide_num, media_paths=None):
     """opc_base — clean cover with bg photo + sticker portrait + 2-line title."""
     SID = "opc_base"
     tag        = _opc_field(content, SID, "tag",             "OPC / TIP #001")
-    hl_main    = _opc_field(content, SID, "headline_main",   _opc_field(content, SID, "headline", "What's"))
-    hl_em      = _opc_field(content, SID, "headline_italic", "hiding")
+    hl_main    = _opc_field(content, SID, "headline_main",   _opc_field(content, SID, "headline", "THE TIP"))
+    hl_em      = _opc_field(content, SID, "headline_italic", "what inspectors flag")
     cover_hook = _opc_field(content, SID, "cover_hook",      _opc_field(content, SID, "subhead", "")) or ""
     stamp_text = _opc_field(content, SID, "stamp_text",      "TIP · #001")
     byline     = _opc_field(content, SID, "byline",          "MIKE · <em>OPC FOUNDER</em>")
