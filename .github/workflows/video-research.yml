@@ -106,6 +106,7 @@ jobs:
         run: pip install anthropic youtube-transcript-api yt-dlp gspread google-auth google-api-python-client openai requests
 
       - name: Run research
+        timeout-minutes: 35
         env:
           CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
@@ -138,9 +139,10 @@ jobs:
           # auto = default (Apify+Anthropic first, cascade on failure).
           FALLBACK_MODE: ${{ github.event.inputs.fallback_mode }}
           CANDIDATE_URLS: ${{ github.event.inputs.candidate_urls }}
+          PYTHONUNBUFFERED: '1'
         run: |
           if [ "$INPUT_MODE" = "person_evidence_mining" ]; then
-            python scripts/youtube_research.py \
+            python -u scripts/youtube_research.py \
               --mode person_evidence_mining \
               --seed-url "$INPUT_SEED_URL" \
               --person-name "$INPUT_PERSON_NAME" \
@@ -148,7 +150,7 @@ jobs:
               --target-clip-count "$INPUT_TARGET_CLIP_COUNT" \
               --niche "$INPUT_NICHE"
           else
-            python scripts/youtube_research.py \
+            python -u scripts/youtube_research.py \
               --mode general \
               --topic "$INPUT_TOPIC" \
               --queries "$INPUT_QUERIES" \
