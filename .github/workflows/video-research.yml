@@ -70,16 +70,31 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Check ffmpeg (required by yt-dlp post-processing)
-        timeout-minutes: 1
+      - name: Install ffmpeg from Python wheel (required by yt-dlp post-processing)
+        timeout-minutes: 3
         run: |
           set -e
           if command -v ffmpeg; then
             ffmpeg -version | head -n 1
             exit 0
           fi
-          echo "ffmpeg_missing_on_runner: hosted image did not provide ffmpeg; skipping apt-get to avoid runner hang"
-          exit 1
+          python -m pip install imageio-ffmpeg
+          python - <<'PY'
+          import os, shutil
+          import imageio_ffmpeg
+
+          src = imageio_ffmpeg.get_ffmpeg_exe()
+          dst_dir = os.path.expanduser("~/.local/bin")
+          os.makedirs(dst_dir, exist_ok=True)
+          dst = os.path.join(dst_dir, "ffmpeg")
+          if os.path.exists(dst):
+              os.remove(dst)
+          shutil.copy2(src, dst)
+          os.chmod(dst, 0o755)
+          with open(os.environ["GITHUB_PATH"], "a") as f:
+              f.write(dst_dir + "\n")
+          print(f"ffmpeg installed from imageio-ffmpeg: {dst}")
+          PY
 
       - name: Verify ffmpeg installed
         run: |
