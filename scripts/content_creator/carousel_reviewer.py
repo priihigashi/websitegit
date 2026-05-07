@@ -1069,31 +1069,75 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
 # ─── Goal 1B — Text quality checks (Sonnet) ─────────────────────────────────
 
 def _sonnet_score(prompt: str) -> tuple[int, str]:
-    """Call claude-sonnet-4-6, parse a 1-3 score from the reply.
-    Returns (score, reason_text). score=0 means API error/skip."""
-    if not ANTHROPIC_KEY:
-        return 0, "no API key"
+    """Call Sonnet, parse a 1-3 score. Returns (score, reason).
+    Phase 11.2 — falls back to OpenAI gpt-4o on Anthropic credits/capacity/5xx."""
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not ANTHROPIC_KEY and not openai_key:
+        return 0, "no API key (neither ANTHROPIC nor OPENAI)"
+
+    text = ""
+    if ANTHROPIC_KEY:
+        try:
+            payload = json.dumps({
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 80,
+                "messages": [{"role": "user", "content": prompt}],
+            }).encode()
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=payload,
+                headers={
+                    "x-api-key": ANTHROPIC_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+            )
+            resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+            text = resp["content"][0]["text"].strip()
+        except urllib.error.HTTPError as e:
+            if e.code in (400, 401, 402, 429, 500, 502, 503, 504, 529) and openai_key:
+                text = _openai_score(prompt)
+                if not text:
+                    return 0, f"Anthropic HTTP {e.code} + OpenAI fallback failed"
+            else:
+                return 0, f"Anthropic HTTP {e.code}"
+        except Exception as e:
+            if openai_key:
+                text = _openai_score(prompt)
+                if not text:
+                    return 0, f"Anthropic err: {e} + OpenAI fallback failed"
+            else:
+                return 0, f"error: {e}"
+    else:
+        text = _openai_score(prompt)
+        if not text:
+            return 0, "OpenAI fallback failed"
+
+    m = re.search(r"\b([123])\b", text)
+    return (int(m.group(1)) if m else 1), text
+
+
+def _openai_score(prompt: str) -> str:
+    """OpenAI gpt-4o fallback for _sonnet_score. Returns response text or ''."""
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not openai_key:
+        return ""
     try:
         payload = json.dumps({
-            "model": "claude-sonnet-4-6",
+            "model": "gpt-4o",
             "max_tokens": 80,
             "messages": [{"role": "user", "content": prompt}],
         }).encode()
         req = urllib.request.Request(
-            "https://api.anthropic.com/v1/messages",
+            "https://api.openai.com/v1/chat/completions",
             data=payload,
-            headers={
-                "x-api-key": ANTHROPIC_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
+            headers={"Authorization": f"Bearer {openai_key}",
+                     "Content-Type": "application/json"},
         )
         resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
-        text = resp["content"][0]["text"].strip()
-        m = re.search(r"\b([123])\b", text)
-        return (int(m.group(1)) if m else 1), text
-    except Exception as e:
-        return 0, f"error: {e}"
+        return resp["choices"][0]["message"]["content"].strip()
+    except Exception:
+        return ""
 
 
 def _score_hook_strength(headline: str, subhead: str, niche: str) -> tuple[int, str]:
@@ -1244,8 +1288,11 @@ def score_storytelling(html_path: str, niche: str) -> dict:
                 "content-type": "application/json",
             },
         )
+        raw = ""
         try:
             raw_resp = urllib.request.urlopen(req, timeout=30).read()
+            resp = json.loads(raw_resp)
+            raw = resp["content"][0]["text"].strip()
         except urllib.error.HTTPError as http_err:
             status = http_err.code
             body = ""
@@ -1253,13 +1300,34 @@ def score_storytelling(html_path: str, niche: str) -> dict:
                 body = http_err.read().decode(errors="ignore")
             except Exception:
                 pass
-            if status in (529, 529) or "overloaded" in body.lower() or "credit" in body.lower():
-                print(f"  [SH-028] ⚠ WARN: Anthropic credits/capacity issue (HTTP {status}) — storytelling score skipped")
+            # Phase 11.2 — credits/capacity/5xx fallback to OpenAI gpt-4o so the
+            # storytelling score keeps working when Anthropic balance is dry.
+            openai_key = os.environ.get("OPENAI_API_KEY", "")
+            if status in (400, 401, 402, 429, 500, 502, 503, 504, 529) and openai_key:
+                try:
+                    oai_payload = json.dumps({
+                        "model": "gpt-4o",
+                        "max_tokens": 400,
+                        "messages": [{"role": "user", "content": prompt}],
+                    }).encode()
+                    oai_req = urllib.request.Request(
+                        "https://api.openai.com/v1/chat/completions",
+                        data=oai_payload,
+                        headers={"Authorization": f"Bearer {openai_key}",
+                                 "Content-Type": "application/json"},
+                    )
+                    oai_resp = json.loads(urllib.request.urlopen(oai_req, timeout=30).read())
+                    raw = oai_resp["choices"][0]["message"]["content"].strip()
+                    print(f"  [SH-028] Storytelling: Anthropic HTTP {status} → OpenAI fallback")
+                except Exception as oai_err:
+                    print(f"  [SH-028] Anthropic HTTP {status} + OpenAI fallback failed: {oai_err}")
+                    return {}
             else:
-                print(f"  [SH-028] Storytelling score HTTP error {status} (non-fatal): {body[:120]}")
-            return {}
-        resp = json.loads(raw_resp)
-        raw = resp["content"][0]["text"].strip()
+                if status == 529 or "overloaded" in body.lower() or "credit" in body.lower():
+                    print(f"  [SH-028] ⚠ WARN: Anthropic credits/capacity issue (HTTP {status}) — storytelling score skipped")
+                else:
+                    print(f"  [SH-028] Storytelling score HTTP error {status} (non-fatal): {body[:120]}")
+                return {}
         if raw.startswith("```"):
             raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
         data = json.loads(raw)
