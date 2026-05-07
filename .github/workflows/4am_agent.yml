@@ -2,7 +2,7 @@ name: 4AM Content Agent
 
 on:
   schedule:
-    - cron: "0 8 * * *"
+    - cron: "0 8 */2 * *"   # every other day 4 AM ET (cost cut from daily — 2026-05-07)
   workflow_dispatch:
 
 permissions:

@@ -2,19 +2,17 @@ name: Scheduled Capture Poll
 
 on:
   schedule:
-    # 3x daily: 8 AM, 1 PM, 7 PM ET (both DST variants)
+    # 2x daily: 8 AM + 1 PM ET (both DST variants — daily cap dedupes seasonal pair)
     - cron: "0 12 * * *"   # 8 AM EDT / 9 AM EST
     - cron: "0 13 * * *"   # 8 AM EST / 9 AM EDT
     - cron: "0 17 * * *"   # 1 PM EDT / 2 PM EST
     - cron: "0 18 * * *"   # 1 PM EST / 2 PM EDT
-    - cron: "0 23 * * *"   # 7 PM EDT / 8 PM EST
-    - cron: "0 0 * * *"    # 7 PM EST / 8 PM EDT
   workflow_dispatch:
     inputs:
       max_dispatch:
         description: "Max capture dispatches this run"
         required: false
-        default: "5"
+        default: "2"
         type: string
 
 jobs:
@@ -49,7 +47,7 @@ jobs:
           CAPTURE_SHEET_ID: "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
           CAPTURE_DROP_TAB: "🎯 Drop Links"
           CAPTURE_FALLBACK_TAB: "📥 Inspiration Library"
-          CAPTURE_MAX_DISPATCH: ${{ inputs.max_dispatch || '5' }}
-          CAPTURE_DAILY_DISPATCH_LIMIT: "6"
-          CAPTURE_OPC_FIRST_COUNT: "2"
+          CAPTURE_MAX_DISPATCH: ${{ inputs.max_dispatch || '2' }}
+          CAPTURE_DAILY_DISPATCH_LIMIT: "4"
+          CAPTURE_OPC_FIRST_COUNT: "1"
         run: python scripts/capture/scheduled_capture_poll.py

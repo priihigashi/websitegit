@@ -15,7 +15,7 @@ name: Pipeline Self-Heal
 
 on:
   schedule:
-    - cron: "0 */2 * * *"  # every 2 hours, on the hour
+    - cron: "0 */5 * * *"  # every 5 hours, on the hour (cost cut from every 2h — 2026-05-07)
   workflow_dispatch:
     inputs:
       target_id:

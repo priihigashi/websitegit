@@ -2,7 +2,7 @@ name: Approval Check — Daily Content Replies
 
 on:
   schedule:
-    - cron: '30 * * * *'   # every hour at :30 UTC (continuous reply pickup)
+    - cron: '30 */4 * * *'   # every 4 hours at :30 UTC (cost cut from hourly — 2026-05-07)
   workflow_dispatch:        # manual trigger anytime from GitHub Actions UI
 
 jobs:

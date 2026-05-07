@@ -2871,12 +2871,42 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
     except Exception: pass
 
 
+def _topic_scraper_runs_today(token: str) -> int:
+    """Count topic_scraper.yml runs that started today (UTC). Returns -1 on error."""
+    import urllib.request
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    url = (
+        "https://api.github.com/repos/priihigashi/oak-park-ai-hub/actions/"
+        f"workflows/topic_scraper.yml/runs?created=%3E%3D{today}T00%3A00%3A00Z&per_page=10"
+    )
+    req = urllib.request.Request(url, headers={
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=8) as r:
+            data = json.loads(r.read())
+            return int(data.get("total_count", 0))
+    except Exception as e:
+        print(f"  topic scraper run-count check failed (non-fatal): {e}")
+        return -1
+
+
 def _trigger_topic_scraper(classification, niche="Brazil"):
-    """Dispatch topic_scraper.yml after a capture. Non-fatal if it fails."""
+    """Dispatch topic_scraper.yml after a capture. Non-fatal if it fails.
+
+    Daily cap: max 1 run per UTC day across all captures. Cost-cut 2026-05-07
+    because each scraper run = ~10 reels × Whisper × Claude (~$0.50/run).
+    """
     import urllib.request
     token = os.getenv("GITHUB_TOKEN", "")
     if not token:
         print("  SKIP topic scraper dispatch: GITHUB_TOKEN not set")
+        return
+    runs_today = _topic_scraper_runs_today(token)
+    if runs_today >= 1:
+        print(f"  SKIP topic scraper dispatch: daily cap reached ({runs_today} run(s) today)")
         return
     keywords = (classification.get("hook", "") or classification.get("summary", ""))[:80].strip()
     if not keywords:

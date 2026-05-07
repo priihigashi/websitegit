@@ -2,8 +2,8 @@ name: Content Research — Ideas Feed (Blog + Social)
 
 on:
   schedule:
-    - cron: '15 11 * * *'
-      timezone: 'America/New_York'  # Daily 11:15am ET (handles EST/EDT automatically)
+    - cron: '15 11 */2 * *'
+      timezone: 'America/New_York'  # Every other day 11:15am ET (cost cut from daily — 2026-05-07)
   workflow_dispatch:
     inputs:
       research_focus:
