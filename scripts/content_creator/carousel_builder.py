@@ -601,17 +601,20 @@ Return ONLY a JSON object with these fields:
     {{
       "slide": 2,
       "visual_hint": "context-image or none — use context-image when slide2_stat references something visual (a material, a process, a specific product)",
-      "context_image_query": "Pexels/Wikimedia search for the STAT on SLIDE 2 (slide2_stat field) — must show the material or process the number is about. MINIMUM 4 words. GOOD: 'concrete driveway residential pour south florida', 'bathroom tile frameless shower door installation', 'shiplap wood accent wall interior residential'. BAD (banned): 'construction work', 'house', 'renovation', 'contractor', 'kitchen', 'bathroom', 'home improvement'. Must be specific to the stat subject, not the overall topic."
+      "context_image_query": "Pexels/Wikimedia search for the STAT on SLIDE 2 (slide2_stat field) — must show the material or process the number is about. MINIMUM 4 words. GOOD: 'concrete driveway residential pour south florida', 'bathroom tile frameless shower door installation', 'shiplap wood accent wall interior residential'. BAD (banned): 'construction work', 'house', 'renovation', 'contractor', 'kitchen', 'bathroom', 'home improvement'. Must be specific to the stat subject, not the overall topic.",
+      "context_image_query_alt": "Simpler fallback search for the same subject — broader but still topic-related. Used only if the specific query above finds no real photo. 3-4 words, common terms, still tied to the slide subject. GOOD examples for the queries above: 'concrete pour residential site', 'frameless shower door bathroom', 'wood accent wall living room'. BAD: completely generic single words ('construction', 'home') OR off-topic queries (a slide about tile must not fall back to a query about roofing)."
     }},
     {{
       "slide": 3,
       "visual_hint": "context-image or none — use context-image for at least 1 of the 3 list items in slide3_items",
-      "context_image_query": "Pexels/Wikimedia search for the LIST items on SLIDE 3 (slide3_items field) — different subject from slide 2 query. Must include material/action + location. GOOD: 'roof shingles GAF installation aerial residential', 'framing wood stud wall addition oak park illinois'. BAD: 'construction', 'building', 'outdoor work'. Query MUST differ from slide 2 query."
+      "context_image_query": "Pexels/Wikimedia search for the LIST items on SLIDE 3 (slide3_items field) — different subject from slide 2 query. Must include material/action + location. GOOD: 'roof shingles GAF installation aerial residential', 'framing wood stud wall addition oak park illinois'. BAD: 'construction', 'building', 'outdoor work'. Query MUST differ from slide 2 query.",
+      "context_image_query_alt": "Simpler fallback for the slide 3 subject — same rules as slide 2's _alt. Must stay related to slide 3 content, never overlap with slide 2 or slide 4 alts."
     }},
     {{
       "slide": 4,
       "visual_hint": "context-image or none — use context-image when slide4_body describes a specific tool, material, or technique",
-      "context_image_query": "Pexels/Wikimedia search for the TIP on SLIDE 4 (slide4_body field) — show the solution or tool being described. Different subject from slides 2 and 3. GOOD: 'contractor measuring kitchen cabinet installation south florida', 'outdoor kitchen pergola concrete patio residential'. BAD: 'contractor', 'renovation', 'home project'. Query MUST differ from both slide 2 and slide 3 queries."
+      "context_image_query": "Pexels/Wikimedia search for the TIP on SLIDE 4 (slide4_body field) — show the solution or tool being described. Different subject from slides 2 and 3. GOOD: 'contractor measuring kitchen cabinet installation south florida', 'outdoor kitchen pergola concrete patio residential'. BAD: 'contractor', 'renovation', 'home project'. Query MUST differ from both slide 2 and slide 3 queries.",
+      "context_image_query_alt": "Simpler fallback for the slide 4 subject — same rules as slide 2's _alt. Must stay related to slide 4 content, never overlap with slide 2 or slide 3 alts."
     }}
   ],
   "clip_suggestions": [
@@ -653,7 +656,12 @@ Rules:
 - slides[]: emit context-image for at least 2 of the 3 middle slides — never all none
 - slide4_body must describe what is happening in the visual (not generic advice)
 - context_image_query: BANNED words that make queries too generic and WILL fail stock search — never use alone or as the whole query: "construction", "house", "home", "building", "renovation", "contractor", "kitchen", "bathroom", "outdoor", "indoor", "work", "project". Always combine with material type + location (e.g. "oak park illinois", "south florida", "residential") + action verb (installation, pour, framing, remodel). Minimum 4 words per query. A generic query means the pipeline falls back to AI images — avoid this.
-- context_image_query UNIQUENESS: Each slide's context_image_query MUST describe a DIFFERENT visual subject. Slides 2, 3, and 4 must each have a distinct query. NEVER reuse or rephrase a query from another slide. If you find yourself writing the same query twice, stop and change one of them to show a different material, location, or action."""
+- context_image_query UNIQUENESS: Each slide's context_image_query MUST describe a DIFFERENT visual subject. Slides 2, 3, and 4 must each have a distinct query. NEVER reuse or rephrase a query from another slide. If you find yourself writing the same query twice, stop and change one of them to show a different material, location, or action.
+- context_image_query_alt: ALWAYS provide a simpler fallback query alongside the main one. The main query is the IDEAL specific match. The _alt is the SAFETY NET — much broader, generic terms that stock libraries actually have, BUT still tied to the slide subject. The _alt should be DELIBERATELY easier to find — think 'what would a search return many results for'.
+  Example for a slide about soil testing:
+    main: "geotechnical engineer inspecting residential building site soil sample"  (specific, ~7 words, niche subject — may return 0 photos)
+    _alt: "construction site soil ground residential"  (broad, common terms — stock libraries have many of these)
+  The _alt MUST stay on-topic. For a slide about soil, the alt should still mention soil/ground/foundation/dirt — never drift to roofing, kitchens, or anything off-topic just to find any image. Rule of thumb: if the main query has 5-7 words with specific brand/material/location, the _alt has 3-5 words with common substitutes."""
 
     for attempt in range(2):
         _prompt = prompt
@@ -2759,10 +2767,66 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 print(f"  Slide {i}: Pixabay fallback for '{cq[:50]}'")
                 _set_slide(i, img_path, "pixabay", "stock", query=cq, prompt=ai_prompt)
                 accepted = True
-        # OPC — all real-photo tiers exhausted → log and leave slot empty (no DALL-E)
+
+        # ── ALT QUERY RETRY ────────────────────────────────────────────────
+        # Primary cq is the ideal/specific match. context_image_query_alt is
+        # the broader safety net. If the primary cascade missed every tier,
+        # retry the catalog + stock cascade with the alt query before giving
+        # up. Catalog match on the broader query often hits a real OPC photo
+        # that the strict primary query rejected.
+        cq_alt = slide.get("context_image_query_alt", "").strip()
+        if not accepted and cq_alt and cq_alt.lower() != cq.lower():
+            print(f"  Slide {i}: primary query missed — retrying with alt '{cq_alt[:60]}'")
+            _alt_slug = re.sub(r"[^a-z0-9]+", "_", cq_alt.lower()).strip("_")[:40] or "context_alt"
+            _alt_fname = f"slide{i}_{_alt_slug}.jpg"
+            _cq_alt_stock = _opc_photo_query(cq_alt, niche)
+
+            # Retry catalog (OPC only) with alt query
+            if niche == "opc":
+                try:
+                    from photo_matcher import match_opc_photo as _opc_match_alt  # type: ignore
+                    _alt_hit = _opc_match_alt(cq_alt)
+                    if _alt_hit and _alt_hit.get("drive_url"):
+                        _img_dir = Path(work_dir) / "resources" / "images"
+                        _img_dir.mkdir(parents=True, exist_ok=True)
+                        _dl = _download_drive_photo(_alt_hit["drive_url"], str(_img_dir / _alt_fname))
+                        if _dl and _vision_accept(_dl, cq_alt, f"slide{i}/opc_catalog_alt"):
+                            _set_slide(i, _dl, "opc_catalog", "real_photo", query=cq_alt,
+                                       service_type=_alt_hit.get("service_type", ""))
+                            accepted = True
+                            print(f"  [photo_matcher alt] slide{i}: {_alt_hit.get('filename')}")
+                except Exception:
+                    pass
+
+            # Retry Wikimedia with alt
+            if not accepted:
+                _alt_path = _fetch_person_photo(_cq_alt_stock, work_dir, _alt_fname)
+                if _alt_path and _vision_accept(_alt_path, _cq_alt_stock, f"slide{i}/wikimedia_alt"):
+                    print(f"  Slide {i}: Wikimedia alt for '{cq_alt[:50]}'")
+                    _set_slide(i, _alt_path, "wikimedia", "cc", query=cq_alt, prompt=ai_prompt)
+                    accepted = True
+
+            # Retry Pexels with alt
+            if not accepted:
+                _alt_path = _fetch_pexels_image(_cq_alt_stock, work_dir, _alt_fname)
+                if _alt_path and _vision_accept(_alt_path, _cq_alt_stock, f"slide{i}/pexels_alt"):
+                    print(f"  Slide {i}: Pexels alt for '{cq_alt[:50]}'")
+                    _set_slide(i, _alt_path, "pexels", "stock", query=cq_alt, prompt=ai_prompt)
+                    accepted = True
+
+            # Retry Pixabay with alt
+            if not accepted:
+                _alt_path = _fetch_pixabay_image(_cq_alt_stock, work_dir, _alt_fname)
+                if _alt_path and _vision_accept(_alt_path, _cq_alt_stock, f"slide{i}/pixabay_alt"):
+                    print(f"  Slide {i}: Pixabay alt for '{cq_alt[:50]}'")
+                    _set_slide(i, _alt_path, "pixabay", "stock", query=cq_alt, prompt=ai_prompt)
+                    accepted = True
+
+        # OPC — all real-photo tiers (primary + alt) exhausted → leave slot empty (no DALL-E)
         if not accepted and niche == "opc":
             print(
-                f"  [OPC] slide{i}: all real-photo tiers exhausted for '{cq[:50]}' — "
+                f"  [OPC] slide{i}: all real-photo tiers exhausted for '{cq[:50]}'"
+                f"{' / alt ' + cq_alt[:40] if cq_alt else ''} — "
                 f"placeholder/bio-initials will render (DALL-E not allowed for OPC)"
             )
 
