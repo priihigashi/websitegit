@@ -71,10 +71,19 @@ jobs:
           python-version: '3.11'
 
       - name: Install ffmpeg (required by yt-dlp post-processing)
+        timeout-minutes: 5
         run: |
           set -e
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
+          for attempt in 1 2 3; do
+            if timeout 120s sudo apt-get update -qq \
+              && timeout 180s sudo apt-get install -y -qq ffmpeg; then
+              exit 0
+            fi
+            echo "apt ffmpeg install attempt ${attempt} failed or timed out"
+            sleep 10
+          done
+          echo "ffmpeg install failed after retries"
+          exit 1
 
       - name: Verify ffmpeg installed
         run: |
