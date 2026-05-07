@@ -104,6 +104,7 @@ def search_youtube_candidates(queries: list[str], max_per_query: int = 5,
                         "duration": entry.get("duration"),
                         "upload_date": entry.get("upload_date", "") or "",
                         "query": q,
+                        "route": "youtube_search",
                     })
         except Exception as e:
             print(f"  YT search '{q}': {e}")
@@ -118,27 +119,56 @@ def search_instagram_candidates(queries: list[str], max_per_query: int = 5,
                                  person_name: str = "",
                                  seed_url: str = "",
                                  on_failure=None) -> list[dict]:
-    """Instagram candidate search — 3-route cascade.
+    """Instagram candidate search — subject-first cascade.
 
-    Tier 1 (preferred): Apify instagram-reel-scraper by hashtag.
-    Tier 2 (free fallback): SerpAPI Google search with site:instagram.com filter.
-    Tier 3 (always-on): DuckDuckGo HTML search with site:instagram.com filter.
+    Discovery principle: the seed uploader is usually a reposter, not the
+    subject person. Search by person name + evidence keywords first, try likely
+    subject handles second, and only scrape the seed uploader after a tiny
+    relevance probe says their feed is about the named person.
 
     Pipeline-resilience non-negotiable per CLAUDE.md: search must NEVER hard-
     fail when Apify returns 403 / credit exhausted. fallback_mode env gates
     Apify entirely when set to no_paid_anthropic_apify.
     """
     state = get_state()
-    primary: list[dict] = []
+
+    collected: list[dict] = []
+
+    # 1) Name + keyword search first. This catches repost/commentary accounts
+    # and avoids assuming the seed uploader is the person of interest.
+    name_keyword = _ig_via_web_search(
+        queries, person_name=person_name, max_results=max_per_query * 4,
+        route="ig_name_keyword",
+    )
+    collected.extend(name_keyword)
+
     if state.should_try_apify() and APIFY_API_KEY:
-        primary = _ig_via_username_from_seed(
-            seed_url, max_per_query=max_per_query, on_failure=on_failure,
+        # 2) Direct handle attempts for the named person. Guesses are enriched
+        # by public web profile search when SerpAPI/DDG is available.
+        handles = _handle_variations(person_name, queries)
+        handles.extend(_ig_profile_handles_from_web(person_name, max_results=6))
+        handle_results = _ig_via_username(
+            handles, max_per_query=max_per_query, route="ig_person_handle",
+            on_failure=on_failure,
         )
-        primary.extend(_ig_via_apify(queries, max_per_query, on_failure=on_failure))
-        primary = dedupe_candidates(primary)
-    if primary:
-        return primary
-    # Fallback ladder runs when Apify returned nothing OR was unavailable.
+        collected.extend(handle_results)
+
+        # 3) Hashtag discovery is still useful, but it should not outrank
+        # person-name/handle routes.
+        collected.extend(_ig_via_apify(queries, max_per_query, on_failure=on_failure))
+
+        # 4) Seed uploader scrape is last, and only after a small relevance
+        # probe shows that account is actually posting about the named person.
+        collected.extend(_ig_via_verified_seed_uploader(
+            seed_url, person_name=person_name, max_per_query=max_per_query,
+            on_failure=on_failure,
+        ))
+
+    collected = dedupe_candidates(collected)
+    if collected:
+        return collected
+
+    # No route found candidates. Log the most useful reason.
     if not state.should_try_apify():
         print("  Instagram: Apify disabled by fallback_mode — using web search")
     elif not APIFY_API_KEY:
@@ -146,12 +176,8 @@ def search_instagram_candidates(queries: list[str], max_per_query: int = 5,
     elif _apify_search_limit_hit:
         print("  Instagram: Apify limit hit — falling back to web search")
     else:
-        print("  Instagram: Apify returned 0 — trying web fallbacks")
-    fallback = _ig_via_web_search(queries, person_name=person_name,
-                                  max_results=max_per_query * 4)
-    if fallback:
-        return fallback
-    return primary
+        print("  Instagram: subject-first routes returned 0")
+    return collected
 
 
 def _scrub_apify(s: str) -> str:
@@ -262,7 +288,7 @@ def _item_has_video_media(item: dict) -> bool:
     return False
 
 
-def _candidate_from_ig_item(item: dict, query: str) -> dict | None:
+def _candidate_from_ig_item(item: dict, query: str, route: str) -> dict | None:
     url = item.get("url") or item.get("postUrl") or ""
     if not url and item.get("shortCode"):
         url = f"https://www.instagram.com/reel/{item['shortCode']}/"
@@ -277,7 +303,52 @@ def _candidate_from_ig_item(item: dict, query: str) -> dict | None:
         "duration": item.get("videoDuration"),
         "upload_date": (item.get("timestamp", "") or "")[:10].replace("-", ""),
         "query": query,
+        "route": route,
     }
+
+
+def _person_tokens(person_name: str) -> list[str]:
+    raw = re.findall(r"[a-z0-9]+", (person_name or "").lower())
+    compact = "".join(raw)
+    out = []
+    for token in raw + ([compact] if compact else []):
+        if len(token) >= 3 and token not in out:
+            out.append(token)
+    return out
+
+
+def _mentions_person(text: str, person_name: str) -> bool:
+    low = (text or "").lower()
+    tokens = _person_tokens(person_name)
+    if not tokens:
+        return False
+    return all(t in low for t in tokens[:2]) or any(t in low for t in tokens if len(t) >= 6)
+
+
+def _handle_variations(person_name: str, queries: list[str]) -> list[str]:
+    tokens = re.findall(r"[a-z0-9]+", (person_name or "").lower())
+    compact = "".join(tokens)
+    handles: list[str] = []
+
+    def add(value: str):
+        h = re.sub(r"[^a-z0-9_.]", "", (value or "").lower()).strip("._")
+        if len(h) >= 3 and h not in handles:
+            handles.append(h)
+
+    add(compact)
+    if len(tokens) >= 2:
+        add(".".join(tokens))
+        add("_".join(tokens))
+        add(tokens[-1] + tokens[0])
+        add(tokens[0] + tokens[-1])
+    if compact:
+        add(f"{compact}oficial")
+        add(f"oficial{compact}")
+    for q in queries:
+        q_clean = q.strip().lstrip("@#").lower()
+        if q_clean and " " not in q_clean:
+            add(q_clean)
+    return handles[:12]
 
 
 def _ig_seed_owner_username(seed_url: str, on_failure=None) -> str:
@@ -331,10 +402,42 @@ def _ig_via_username_from_seed(seed_url: str, max_per_query: int = 5,
     if not username:
         return []
     return _ig_via_username([username], max_per_query=max_per_query,
-                            on_failure=on_failure)
+                            route="ig_seed_uploader", on_failure=on_failure)
+
+
+def _ig_via_verified_seed_uploader(seed_url: str, person_name: str,
+                                   max_per_query: int = 5,
+                                   on_failure=None) -> list[dict]:
+    username = _ig_seed_owner_username(seed_url, on_failure=on_failure)
+    if not username:
+        return []
+    if _mentions_person(username, person_name):
+        return _ig_via_username(
+            [username], max_per_query=max_per_query, route="ig_seed_uploader",
+            on_failure=on_failure,
+        )
+
+    probe = _ig_via_username(
+        [username], max_per_query=2, route="ig_seed_uploader_probe",
+        on_failure=on_failure,
+    )
+    relevant = [
+        c for c in probe
+        if _mentions_person(" ".join([c.get("title", ""), c.get("uploader", "")]),
+                            person_name)
+    ]
+    if not relevant:
+        print(f"  Instagram seed uploader @{username}: skipped (not subject-relevant)")
+        return []
+    deep = _ig_via_username(
+        [username], max_per_query=max_per_query, route="ig_seed_uploader",
+        on_failure=on_failure,
+    )
+    return dedupe_candidates(relevant + deep)
 
 
 def _ig_via_username(usernames: list[str], max_per_query: int = 5,
+                     route: str = "ig_username",
                      on_failure=None) -> list[dict]:
     """Apify instagram-reel-scraper username discovery.
 
@@ -379,12 +482,12 @@ def _ig_via_username(usernames: list[str], max_per_query: int = 5,
             continue
         if not _item_has_video_media(item):
             continue
-        cand = _candidate_from_ig_item(item, f"seed-owner:{','.join(handles[:3])}")
+        cand = _candidate_from_ig_item(item, f"{route}:{','.join(handles[:3])}", route)
         if cand:
             results.append(cand)
     if results:
         state.mark_used("apify")
-        print(f"  Instagram username reels: {len(results)}")
+        print(f"  Instagram username reels ({route}): {len(results)}")
     return results
 
 
@@ -456,6 +559,7 @@ def _ig_via_apify(queries: list[str], max_per_query: int = 5,
             continue
         cand = _candidate_from_ig_item(
             item, ",".join(item.get("hashtags", [])[:3]) or "(hashtag-batch)",
+            "ig_hashtag",
         )
         if cand:
             results.append(cand)
@@ -467,7 +571,8 @@ def _ig_via_apify(queries: list[str], max_per_query: int = 5,
 # ── Instagram fallback: web search (SerpAPI > DuckDuckGo) ────────────────────
 
 def _ig_via_web_search(queries: list[str], person_name: str = "",
-                       max_results: int = 20) -> list[dict]:
+                       max_results: int = 20,
+                       route: str = "ig_web_search") -> list[dict]:
     """Free fallback when Apify is down. Searches the open web for
     instagram.com/reel URLs that mention the person, then resolves each
     URL to a minimal candidate record (transcript fetched later by runner).
@@ -517,10 +622,39 @@ def _ig_via_web_search(queries: list[str], person_name: str = "",
             "duration": None,
             "upload_date": "",
             "query": f"web-fallback:{base}",
+            "route": route,
         })
         if len(results) >= max_results:
             break
     return results
+
+
+def _ig_profile_handles_from_web(person_name: str, max_results: int = 6) -> list[str]:
+    """Find likely public Instagram profile handles for the named person."""
+    pname = (person_name or "").strip()
+    if not pname:
+        return []
+    query = f"site:instagram.com {pname} Instagram perfil"
+    urls = []
+    if SERP_API_KEY:
+        urls = _serpapi_search(query, max_results * 2)
+    if not urls:
+        urls = _duckduckgo_search(query, max_results * 2, include_profiles=True)
+    handles: list[str] = []
+    for u in urls:
+        m = re.search(r"instagram\.com/([A-Za-z0-9_.]+)(?:/|$)", u)
+        if not m:
+            continue
+        handle = m.group(1).lower()
+        if handle in {"p", "reel", "tv", "stories", "explore", "accounts"}:
+            continue
+        if handle not in handles:
+            handles.append(handle)
+        if len(handles) >= max_results:
+            break
+    if handles:
+        print(f"  Instagram profile handles from web: {', '.join(handles[:5])}")
+    return handles
 
 
 def _serpapi_search(query: str, max_results: int) -> list[str]:
@@ -548,7 +682,8 @@ def _serpapi_search(query: str, max_results: int) -> list[str]:
         return []
 
 
-def _duckduckgo_search(query: str, max_results: int) -> list[str]:
+def _duckduckgo_search(query: str, max_results: int,
+                       include_profiles: bool = False) -> list[str]:
     """DuckDuckGo HTML scraper. No API key. Last-resort free route.
     Parses the lite HTML endpoint which is the most stable interface.
     Honors a small delay to avoid rate-limit. Returns list of URLs."""
@@ -576,7 +711,7 @@ def _duckduckgo_search(query: str, max_results: int) -> list[str]:
             real = (qs.get("uddg") or [""])[0]
             if real:
                 href = real
-        if "instagram.com/" in href and "/reel/" in href:
+        if "instagram.com/" in href and (include_profiles or "/reel/" in href):
             out.append(href)
         if len(out) >= max_results:
             break

@@ -128,6 +128,47 @@ class ApifyRouteStateTests(unittest.TestCase):
             ("https://example.com/video.mp4", "videoUrl"),
         )
 
+    def test_instagram_handle_variations_from_person_name(self):
+        handles = cc._handle_variations("Frei Gilson", ["freigilsonpolemica"])
+
+        self.assertIn("freigilson", handles)
+        self.assertIn("frei.gilson", handles)
+        self.assertIn("freigilsonoficial", handles)
+        self.assertIn("freigilsonpolemica", handles)
+
+    @patch("candidate_collectors.APIFY_API_KEY", "apify_api_test")
+    def test_instagram_discovery_order_is_subject_first(self):
+        calls = []
+
+        def web(*args, **kwargs):
+            calls.append("name_keyword")
+            return []
+
+        def username(*args, **kwargs):
+            calls.append("person_handle")
+            return []
+
+        def hashtag(*args, **kwargs):
+            calls.append("hashtag")
+            return []
+
+        def seed(*args, **kwargs):
+            calls.append("seed_uploader")
+            return []
+
+        route_state.reset_state("auto")
+        with patch("candidate_collectors._ig_via_web_search", side_effect=web), \
+             patch("candidate_collectors._ig_via_username", side_effect=username), \
+             patch("candidate_collectors._ig_via_apify", side_effect=hashtag), \
+             patch("candidate_collectors._ig_via_verified_seed_uploader", side_effect=seed), \
+             patch("candidate_collectors._ig_profile_handles_from_web", return_value=[]):
+            cc.search_instagram_candidates(
+                ["freigilsonpolemica"], person_name="Frei Gilson",
+                seed_url="https://www.instagram.com/reel/SEED/",
+            )
+
+        self.assertEqual(calls, ["name_keyword", "person_handle", "hashtag", "seed_uploader"])
+
     def test_instagram_child_post_video_is_transcript_media(self):
         item = {
             "displayUrl": "https://example.com/thumb.jpg",
@@ -159,6 +200,10 @@ class ApifyRouteStateTests(unittest.TestCase):
         self.assertEqual(manifest["status"], "Needs Research — Evidence Weak")
         self.assertFalse(manifest["ready_for_render"])
         self.assertEqual(manifest["diagnostics"]["transcribed_count"], 8)
+        self.assertEqual(
+            manifest["diagnostics"]["candidate_count_by_route"],
+            {"unknown": 1},
+        )
 
     def test_manifest_status_ready_for_review(self):
         verified = [{"score": {"claim_type": "needs-context"}}] * 3

@@ -377,6 +377,15 @@ def _failure_summary(rejected: list[dict]) -> dict:
     return dict(counts.most_common(10))
 
 
+def _candidate_count_by_route(verified: list[dict], rejected: list[dict]) -> dict:
+    counts = Counter()
+    for item in (verified or []) + (rejected or []):
+        cand = item.get("candidate") or {}
+        route = cand.get("route") or cand.get("query") or "unknown"
+        counts[str(route)[:80]] += 1
+    return dict(counts.most_common())
+
+
 # ── manifest writer ──────────────────────────────────────────────────────────
 
 def build_manifest(seed_url: str, person_name: str, person_confidence: float,
@@ -418,6 +427,7 @@ def build_manifest(seed_url: str, person_name: str, person_confidence: float,
             "candidate_count": candidates_collected,
             "transcribed_count": candidates_transcribed,
             "verified_count": len(verified),
+            "candidate_count_by_route": _candidate_count_by_route(verified, rejected),
             "transcription_failure_summary": _failure_summary(rejected),
             "primary_blocker": blocker,
             "recommended_next_action": next_action,
