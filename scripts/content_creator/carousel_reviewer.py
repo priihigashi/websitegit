@@ -233,7 +233,11 @@ def check_html_placeholders(html_path: str) -> list[str]:
         or re.search(r'class="slide opc-(?:mp|fcg|is|st|bs|pm|dt)\b', html)
     )
     if "Tip of the Week · Oak Park Construction" in html and not is_smart_opc:
-        slot_count = len(re.findall(r'class="context-img-slot"', html))
+        # Match the class as a token inside any class attribute. The builder emits
+        # both `class="context-img-slot"` and multi-class forms like
+        # `class="context-img-slot context-img-placeholder"`. The old literal regex
+        # missed the multi-class form and returned slot_count=0 (run 25498995171).
+        slot_count = len(re.findall(r'class="[^"]*\bcontext-img-slot\b[^"]*"', html))
         # Lowered from 3 → 2: visual rhythm rule below already enforces image
         # density on body slides; structural slot count is a soft floor.
         if slot_count < 2:
@@ -241,7 +245,7 @@ def check_html_placeholders(html_path: str) -> list[str]:
                 f"OPC layout issue: expected >=2 context image slots on slides 2-4, found {slot_count}"
             )
 
-        img_count = len(re.findall(r'<div class="context-img-slot"[^>]*>\s*<img ', html))
+        img_count = len(re.findall(r'<div class="[^"]*\bcontext-img-slot\b[^"]*"[^>]*>\s*<img ', html))
         if img_count < 2:
             issues.append(
                 f"OPC visual floor miss: only {img_count} context slot(s) have real images; require >=2"
