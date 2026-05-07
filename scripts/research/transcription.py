@@ -414,17 +414,118 @@ def _apify_request(method: str, path: str, *, params: dict | None = None,
     return body, None
 
 
+def _is_soft_fail_item(item: dict) -> tuple[bool, str]:
+    """Apify IG actor returns a SUCCEEDED run with an error-shaped item when
+    Instagram blocks the actor's proxy / requires login. Item carries
+    `error`, `errorDescription`, and/or `requestErrorMessages` instead of
+    post fields. Detect this so we can retry with a different proxy group
+    instead of treating it as a permanent failure."""
+    if not isinstance(item, dict):
+        return False, ""
+    if item.get("error"):
+        desc = (item.get("errorDescription") or "")[:300]
+        rem = item.get("requestErrorMessages")
+        if rem:
+            desc = f"{desc} | {str(rem)[:200]}"
+        return True, f"{item.get('error')}: {desc}".strip(" :|")
+    return False, ""
+
+
+def _ig_audio_one_attempt(reel_url: str, proxy_groups: list[str] | None) -> tuple[str, str, str]:
+    """One Apify run attempt with a given proxy group.
+
+    Returns (transcript, status_label, detail). Possible status_label:
+      ok                 — got transcript, detail = source field
+      start_failed       — request to start actor failed
+      run_failed         — run did not SUCCEED
+      empty_dataset      — actor SUCCEEDED but no items
+      soft_fail          — actor returned IG-blocked error item (retryable)
+      no_media           — item present but no media URL field detected
+      tiny_audio         — downloaded <5k bytes
+      download_failed    — couldn't fetch the media URL
+      whisper_empty      — Whisper returned empty string
+    """
+    actor = "apify~instagram-scraper"
+    proxy: dict = {"useApifyProxy": True}
+    if proxy_groups:
+        proxy["apifyProxyGroups"] = proxy_groups
+    payload = {
+        "directUrls": [reel_url.split("?")[0]],
+        "resultsType": "posts",
+        "resultsLimit": 1,
+        "addParentData": False,
+        "proxy": proxy,
+    }
+    body, err = _apify_request(
+        "POST", f"/acts/{actor}/runs",
+        params={"token": APIFY_API_KEY}, json_body=payload, timeout=30,
+    )
+    if err is not None:
+        return "", "start_failed", err
+    run_id = body["data"]["id"]
+
+    status = ""
+    for _ in range(12):
+        time.sleep(10)
+        s, perr = _apify_request(
+            "GET", f"/actor-runs/{run_id}",
+            params={"token": APIFY_API_KEY}, timeout=15,
+        )
+        if perr or not isinstance(s, dict):
+            continue
+        status = s.get("data", {}).get("status", "")
+        if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
+            break
+    if status != "SUCCEEDED":
+        return "", "run_failed", f"run_status:{status}"
+
+    items_body, _ = _apify_request(
+        "GET", f"/actor-runs/{run_id}/dataset/items",
+        params={"token": APIFY_API_KEY, "limit": 1, "format": "json"},
+        timeout=30,
+    )
+    items = items_body if isinstance(items_body, list) else []
+    if not items:
+        return "", "empty_dataset", ""
+
+    is_soft, soft_msg = _is_soft_fail_item(items[0])
+    if is_soft:
+        return "", "soft_fail", soft_msg
+
+    video_url, src_field = _extract_ig_media_url(items[0])
+    if not video_url:
+        keys_seen = sorted(items[0].keys())[:30]
+        return "", "no_media", f"keys={keys_seen}"
+
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "audio.mp4")
+            with urllib.request.urlopen(video_url, timeout=120) as dl:
+                with open(path, "wb") as f:
+                    f.write(dl.read())
+            if os.path.getsize(path) < 5_000:
+                return "", "tiny_audio", f"size<5k via {src_field}"
+            text = _whisper_transcribe(path)
+            if not text:
+                return "", "whisper_empty", f"via {src_field}"
+            return text, "ok", src_field
+    except Exception as e:
+        return "", "download_failed", _scrub(str(e))[:300]
+
+
 def _apify_ig_audio(reel_url: str) -> str:
     """Apify instagram-scraper -> mediaUrl -> Whisper.
 
     Used as a transcription fallback when yt-dlp gets rate-limited or
     login-walled on a public reel (common from GitHub runner IPs).
 
-    Tries the full set of known media URL fields rather than just
-    `videoUrl` — some actors return `video_url`, `videoUrlBackup`, or
-    embed the URL inside an array under `downloadedVideo`. Logs which
-    field actually carried a usable URL so debugging future actor schema
-    drift is fast.
+    Two-tier proxy cascade:
+      1. Default Apify proxy (cheap)
+      2. RESIDENTIAL proxy on soft-fail (4-8× cost; bypasses IG block)
+
+    soft_fail = actor SUCCEEDED but returned an error-shaped item. That's
+    different from a code/schema bug (HTTP 400) and from quota (HTTP 402).
+    Only soft_fail justifies the residential retry.
     """
     global _apify_limit_hit
     state = get_state()
@@ -434,88 +535,44 @@ def _apify_ig_audio(reel_url: str) -> str:
         if not APIFY_API_KEY:
             state.mark_unavailable("apify", "no_api_key")
         return ""
-    actor = "apify~instagram-scraper"
-    payload = {
-        "directUrls": [reel_url.split("?")[0]],
-        "resultsType": "posts",
-        "resultsLimit": 1,
-        "addParentData": False,
-        "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["DATACENTER"]},
-    }
-    body, err = _apify_request(
-        "POST", f"/acts/{actor}/runs",
-        params={"token": APIFY_API_KEY}, json_body=payload, timeout=30,
+
+    # Tier 1: default proxy.
+    text, status_label, detail = _ig_audio_one_attempt(reel_url, proxy_groups=None)
+    if status_label == "ok":
+        print(f"    Apify IG OK via default proxy (field='{detail}')")
+        return text
+    print(f"    Apify IG default-proxy attempt: {status_label} ({detail[:200]})")
+
+    # Mark quota/credit failures and bail (no point retrying).
+    low_detail = detail.lower()
+    if status_label == "start_failed" and (
+        "403" in detail or "402" in detail or "credit" in low_detail or "billing" in low_detail
+    ):
+        _apify_limit_hit = True
+        state.mark_failed("apify", "ig_audio_start_quota", detail)
+        _record_error("apify_ig", detail)
+        return ""
+
+    # Only soft_fail warrants a residential retry. Other failures (no_media,
+    # tiny_audio, download_failed, run_failed) are not proxy-fixable.
+    if status_label != "soft_fail":
+        state.mark_failed("apify", f"ig_audio_{status_label}", detail)
+        _record_error("apify_ig", f"{status_label}: {detail}")
+        return ""
+
+    # Tier 2: RESIDENTIAL proxy retry.
+    print(f"    Apify IG: soft-fail on default proxy, retrying via RESIDENTIAL")
+    text, status_label, detail = _ig_audio_one_attempt(
+        reel_url, proxy_groups=["RESIDENTIAL"],
     )
-    if err is not None:
-        low = err.lower()
-        if "403" in err or "402" in err or "credit" in low or "billing" in low:
-            _apify_limit_hit = True
-        state.mark_failed("apify", "ig_audio_start", err)
-        _record_error("apify_ig", err)
-        print(f"    Apify IG start failed: {err[:300]}")
-        return ""
-    run_id = body["data"]["id"]
-
-    status = ""
-    for _ in range(12):
-        time.sleep(10)
-        s, err = _apify_request(
-            "GET", f"/actor-runs/{run_id}",
-            params={"token": APIFY_API_KEY}, timeout=15,
-        )
-        if err or not isinstance(s, dict):
-            continue
-        status = s.get("data", {}).get("status", "")
-        if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
-            break
-    if status != "SUCCEEDED":
-        state.mark_failed("apify", "ig_audio_run", f"run_status:{status}")
-        _record_error("apify_ig", f"run_status:{status}")
-        print(f"    Apify IG run ended: {status}")
-        return ""
-
-    items_body, err = _apify_request(
-        "GET", f"/actor-runs/{run_id}/dataset/items",
-        params={"token": APIFY_API_KEY, "limit": 1, "format": "json"},
-        timeout=30,
-    )
-    items = items_body if isinstance(items_body, list) else []
-    if not items:
-        state.mark_failed("apify", "ig_audio_dataset", "empty_dataset")
-        _record_error("apify_ig", "empty_dataset")
-        print("    Apify IG dataset empty")
-        return ""
-
-    video_url, src_field = _extract_ig_media_url(items[0])
-    if not video_url:
-        # Actor SUCCEEDED but no usable media URL — likely a carousel image
-        # post or an actor schema change. Log fields seen so we can adapt.
-        keys_seen = sorted(items[0].keys())[:30]
-        state.mark_failed("apify", "ig_audio_no_media",
-                          f"keys_seen={keys_seen}")
-        _record_error("apify_ig", f"no_media_url; keys={keys_seen}")
-        print(f"    Apify IG: no media URL found. keys={keys_seen}")
-        return ""
-
-    print(f"    Apify IG media URL via field='{src_field}'")
-    try:
-        with tempfile.TemporaryDirectory() as td:
-            path = os.path.join(td, "audio.mp4")
-            with urllib.request.urlopen(video_url, timeout=120) as dl:
-                with open(path, "wb") as f:
-                    f.write(dl.read())
-            if os.path.getsize(path) < 5_000:
-                state.mark_failed("apify", "ig_audio_tiny",
-                                  f"size<5k via {src_field}")
-                _record_error("apify_ig", f"audio_tiny via {src_field}")
-                return ""
-            return _whisper_transcribe(path)
-    except Exception as e:
-        msg = _scrub(str(e))
-        state.mark_failed("apify", "ig_audio_download", msg)
-        _record_error("apify_ig", msg)
-        print(f"    Apify IG download failed: {msg[:200]}")
-        return ""
+    if status_label == "ok":
+        print(f"    Apify IG OK via RESIDENTIAL proxy (field='{detail}')")
+        state.mark_used("apify")
+        return text
+    state.mark_failed("apify", f"ig_audio_residential_{status_label}", detail)
+    _record_error("apify_ig", f"residential_{status_label}: {detail}")
+    print(f"    Apify IG RESIDENTIAL also failed: {status_label} ({detail[:200]})")
+    return ""
 
 
 def transcribe_instagram(reel_url: str) -> dict:
