@@ -28,7 +28,7 @@ on:
       username:
         description: 'Instagram username for mode=username (without or with @)'
         required: false
-        default: 'freigilson'
+        default: 'freigilson_somdomonte'
       results_limit:
         description: 'Dataset items to request for hashtag/username modes'
         required: false
