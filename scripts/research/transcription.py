@@ -43,10 +43,12 @@ _apify_limit_hit = False
 def _apify_failure_disables_route(reason: str) -> bool:
     """True only for account/provider-level failures shared by Apify actors."""
     low = (reason or "").lower()
+    if "insufficient-permissions" in low or "provider-access" in low:
+        return False
     markers = (
-        "401", "402", "403", "429",
-        "auth", "unauthorized", "forbidden",
-        "credit", "billing", "quota", "provider-access", "limit",
+        "401", "402", "429",
+        "auth", "unauthorized",
+        "credit", "billing", "quota", "limit",
     )
     return any(m in low for m in markers)
 

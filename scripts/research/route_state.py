@@ -20,9 +20,9 @@ failure to also surface in the 🚨 Pipeline Failures sheet should pass an
 `on_failure` callback that writes there without appending to the fatal list.
 
 Important SH-104 distinction: one Apify actor/stage can fail because of a bad
-schema, empty dataset, or proxy soft-fail while another Apify route remains
-usable. Only auth/billing/provider-access/limit failures should disable the
-whole Apify route.
+schema, empty dataset, proxy soft-fail, or actor-specific permission issue
+while another Apify route remains usable. Only auth/billing/quota/limit
+failures should disable the whole Apify route.
 """
 
 from __future__ import annotations

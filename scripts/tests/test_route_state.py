@@ -15,6 +15,7 @@ sys.path.insert(0, str(_REPO / "scripts" / "research"))
 
 import candidate_collectors as cc  # noqa: E402
 import route_state  # noqa: E402
+import transcription  # noqa: E402
 
 
 class ApifyRouteStateTests(unittest.TestCase):
@@ -39,7 +40,7 @@ class ApifyRouteStateTests(unittest.TestCase):
         state.mark_failed(
             "apify",
             "ig_audio_start_quota",
-            "HTTP 403 [provider-access] Forbidden",
+            "HTTP 402 [billing] Monthly usage quota exceeded",
         )
 
         self.assertFalse(state.should_try_apify())
@@ -71,10 +72,10 @@ class ApifyRouteStateTests(unittest.TestCase):
 
     @patch("candidate_collectors.APIFY_API_KEY", "apify_api_test")
     @patch("candidate_collectors._apify_post_run")
-    def test_hashtag_403_disables_apify_globally(self, post_run):
+    def test_hashtag_402_disables_apify_globally(self, post_run):
         post_run.return_value = (
             None,
-            "HTTP 403 [provider-access] Forbidden",
+            "HTTP 402 [billing] Monthly usage quota exceeded",
         )
         state = route_state.reset_state("auto")
 
@@ -83,6 +84,26 @@ class ApifyRouteStateTests(unittest.TestCase):
         self.assertEqual(out, [])
         self.assertFalse(state.should_try_apify())
         self.assertEqual(state.snapshot()["route_status"]["apify"], "failed")
+
+    @patch("candidate_collectors.APIFY_API_KEY", "apify_api_test")
+    @patch("candidate_collectors._apify_post_run")
+    def test_actor_specific_403_does_not_disable_apify(self, post_run):
+        post_run.return_value = (
+            None,
+            "HTTP 403 [insufficient-permissions] Insufficient permissions for the Actor",
+        )
+        state = route_state.reset_state("auto")
+
+        out = cc._ig_via_apify(["freigilson"], max_per_query=1)
+
+        self.assertEqual(out, [])
+        self.assertTrue(state.should_try_apify())
+        self.assertEqual(state.snapshot()["route_status"]["apify"], "untried")
+
+    def test_youtube_actor_403_is_stage_scoped(self):
+        self.assertFalse(transcription._apify_failure_disables_route(
+            "HTTP 403 [insufficient-permissions] Insufficient permissions for the Actor"
+        ))
 
     @patch("candidate_collectors.APIFY_API_KEY", "apify_api_test")
     @patch("candidate_collectors._apify_post_run")

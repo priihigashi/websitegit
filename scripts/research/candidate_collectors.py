@@ -42,19 +42,21 @@ APIFY_BASE    = "https://api.apify.com/v2"
 CLAUDE_KEY    = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
 SERP_API_KEY  = os.environ.get("SERP_API_KEY", "")  # Free fallback when Apify down
 
-# Apify limit / 403 marker — once tripped on the primary actor, sibling
-# actors share the same key, so cascading to a second actor is wasted spend.
-# We still try the SERP fallback in that case.
+# Apify billing/quota marker. Actor-specific 403/provider-access errors are
+# stage-scoped because another actor (for example direct Reel lookup) may still
+# be healthy with the same key. We still try the SERP fallback in that case.
 _apify_search_limit_hit = False
 
 
 def _apify_failure_disables_route(reason: str) -> bool:
     """True only for account/provider-level failures shared by Apify actors."""
     low = (reason or "").lower()
+    if "insufficient-permissions" in low or "provider-access" in low:
+        return False
     markers = (
-        "401", "402", "403", "429",
-        "auth", "unauthorized", "forbidden",
-        "credit", "billing", "quota", "provider-access", "limit",
+        "401", "402", "429",
+        "auth", "unauthorized",
+        "credit", "billing", "quota", "limit",
     )
     return any(m in low for m in markers)
 
