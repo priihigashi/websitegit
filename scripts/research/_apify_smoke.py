@@ -8,7 +8,7 @@ before a full SH-104 retry.
 Modes:
   direct_url — apify~instagram-scraper with directUrls=[public Reel URL]
   hashtag    — apify~instagram-hashtag-scraper with hashtags=[tag]
-  username   — apify~instagram-reel-scraper with username=<handle>
+  username   — apify~instagram-reel-scraper with username=[<handle>]
 
 Exit code is 0 when the selected route is accepted and returns usable route
 evidence. direct_url additionally requires a detected media URL.
@@ -72,7 +72,7 @@ def _route_config(args: argparse.Namespace) -> tuple[str, dict, str]:
         return "apify~instagram-hashtag-scraper", payload, tag
 
     handle = (args.username or "").strip().lstrip("@")
-    payload = {"username": handle, "resultsLimit": max(1, args.results_limit)}
+    payload = {"username": [handle], "resultsLimit": max(1, args.results_limit)}
     return "apify~instagram-reel-scraper", payload, handle
 
 
