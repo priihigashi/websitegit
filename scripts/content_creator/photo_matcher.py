@@ -431,38 +431,155 @@ def audit_stale_catalog_rows(sheet_service, spreadsheet_id, tab_name):
     return stale
 
 
+def _extract_drive_file_id(url: str) -> str:
+    """Extract Drive file ID from a Drive URL (file/d/ID/ or id=ID form)."""
+    m = re.search(r"/file/d/([a-zA-Z0-9_-]{10,})", url)
+    if m:
+        return m.group(1)
+    m2 = re.search(r"[?&]id=([a-zA-Z0-9_-]{10,})", url)
+    if m2:
+        return m2.group(1)
+    return ""
+
+
+def _describe_image_haiku(file_id: str) -> str:
+    """Download image from Drive + call Claude Haiku Vision for a concise description.
+    Returns description string or '' on any failure. Non-fatal.
+    """
+    if not file_id:
+        return ""
+    anthropic_key = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
+    sheets_token_raw = os.environ.get("SHEETS_TOKEN", "")
+    if not anthropic_key or not sheets_token_raw:
+        return ""
+    try:
+        import io, base64
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaIoBaseDownload
+
+        td = json.loads(sheets_token_raw)
+        creds = Credentials(
+            token=td.get("token") or td.get("access_token"),
+            refresh_token=td.get("refresh_token"),
+            token_uri=td.get("token_uri", "https://oauth2.googleapis.com/token"),
+            client_id=td.get("client_id"), client_secret=td.get("client_secret"),
+            scopes=td.get("scopes") or ["https://www.googleapis.com/auth/drive.readonly"],
+        )
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        drive = build("drive", "v3", credentials=creds)
+
+        buf = io.BytesIO()
+        dl = MediaIoBaseDownload(buf, drive.files().get_media(
+            fileId=file_id, supportsAllDrives=True))
+        done = False
+        while not done:
+            _, done = dl.next_chunk()
+        raw = buf.getvalue()
+        if len(raw) < 5000:
+            return ""
+
+        # Resize to stay within Anthropic's 5 MB limit
+        try:
+            from PIL import Image as PILImage
+            img = PILImage.open(io.BytesIO(raw)).convert("RGB")
+            img.thumbnail((1200, 1200), PILImage.LANCZOS)
+            out = io.BytesIO()
+            img.save(out, format="JPEG", quality=85)
+            raw = out.getvalue()
+        except Exception:
+            pass  # use raw bytes as-is
+
+        img_b64 = base64.b64encode(raw).decode()
+        payload = json.dumps({
+            "model": "claude-haiku-4-5-20251001", "max_tokens": 200,
+            "messages": [{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64",
+                                             "media_type": "image/jpeg", "data": img_b64}},
+                {"type": "text", "text": (
+                    "Describe this construction/renovation photo in 1-2 sentences. "
+                    "Be specific: room type, materials visible, work phase (before/during/after), "
+                    "key visual details. No markdown, no intro phrase."
+                )},
+            ]}],
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages", data=payload,
+            headers={"x-api-key": anthropic_key, "anthropic-version": "2023-06-01",
+                     "content-type": "application/json"},
+        )
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        return resp["content"][0]["text"].strip()
+    except Exception as exc:
+        print(f"  _describe_image_haiku failed (non-fatal): {exc}")
+        return ""
+
+
 def batch_retag_stale_rows(rows, vision_client=None):
-    """Stub: log stale rows that would be re-tagged when Vision API key is wired.
+    """Re-generate descriptions for stale catalog rows using Claude Haiku Vision.
 
     Args:
         rows: list of dicts returned by audit_stale_catalog_rows().
-        vision_client: Google Vision API client (not yet wired — pass None).
+        vision_client: unused legacy param (kept for API compatibility).
 
     Returns:
-        list of row_index values that would be re-tagged.
-
-    TODO: when VISION_API_KEY env var is available, call Vision API on each
-    row's drive_url to generate a real description, then write it back to
-    col F via Sheets batchUpdate. See reference_vision_api_sa.md for SA key.
+        list of row_index values successfully re-tagged.
     """
     if not rows:
         print("  batch_retag_stale_rows: no stale rows to retag")
         return []
 
-    if vision_client is None:
+    anthropic_key = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
+    sheets_token = os.environ.get("SHEETS_TOKEN", "")
+    if not anthropic_key or not sheets_token:
         print(
-            f"  batch_retag_stale_rows: Vision API not wired — "
-            f"{len(rows)} row(s) need re-tagging (stub mode):"
+            f"  batch_retag_stale_rows: CLAUDE_KEY_4_CONTENT or SHEETS_TOKEN missing — "
+            f"logging {len(rows)} stale row(s), skipping re-tag"
         )
         for r in rows:
-            print(
-                f"    row {r['row_index']:>4}: {r['filename'][:50]!r:50s} "
-                f"reason={r['reason']} url={r['drive_url'][:60]}"
-            )
-        return [r["row_index"] for r in rows]
+            print(f"    row {r['row_index']:>4}: {r['filename'][:50]!r:50s} reason={r['reason']}")
+        return []
 
-    # TODO: implement Vision API call when key is available
-    raise NotImplementedError("Vision API re-tagging not yet implemented — wire VISION_API_KEY first")
+    token = _get_token()
+    if not token:
+        print("  batch_retag_stale_rows: no Sheets token — cannot write descriptions")
+        return []
+
+    tagged = []
+    for r in rows:
+        file_id = _extract_drive_file_id(r.get("drive_url", ""))
+        if not file_id:
+            print(f"  batch_retag: row {r['row_index']} — no Drive file ID in URL, skipping")
+            continue
+
+        desc = _describe_image_haiku(file_id)
+        if not desc:
+            print(f"  batch_retag: row {r['row_index']} — description generation failed, skipping")
+            continue
+
+        # Write description to col F (index 5, column letter F)
+        try:
+            cell = f"'📸 Photo Catalog'!F{r['row_index']}"
+            body = json.dumps({
+                "valueInputOption": "USER_ENTERED",
+                "data": [{"range": cell, "values": [[desc]]}],
+            }).encode()
+            url = (f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}"
+                   f"/values:batchUpdate")
+            req = urllib.request.Request(url, data=body, method="POST",
+                headers={"Authorization": f"Bearer {token}",
+                         "Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=15).read()
+            tagged.append(r["row_index"])
+            print(f"  batch_retag: row {r['row_index']} updated — {desc[:80]!r}")
+        except Exception as exc:
+            print(f"  batch_retag: row {r['row_index']} write failed (non-fatal): {exc}")
+        time.sleep(1)  # rate-limit: ~1 req/s to Anthropic
+
+    print(f"  batch_retag_stale_rows: {len(tagged)}/{len(rows)} rows re-tagged")
+    return tagged
 
 
 # ── SH-040: Image relevance validator ────────────────────────────────────────
