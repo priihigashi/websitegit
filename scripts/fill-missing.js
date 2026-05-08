@@ -13,6 +13,7 @@ const SHEETS_TOKEN    = process.env.SHEETS_TOKEN;
 const ANTHROPIC_KEY   = process.env.CLAUDE_KEY_4_CONTENT || process.env.ANTHROPIC_API_KEY || '';
 const OPENAI_KEY      = process.env.OPENAI_API_KEY || '';
 const client = ANTHROPIC_KEY ? new Anthropic({ apiKey: ANTHROPIC_KEY }) : null;
+let anthropicUnavailable = false;
 
 // Column index map (0-based, matching the 22-column sheet layout)
 const COLS = {
@@ -175,7 +176,7 @@ Return ONLY a JSON array, no markdown fences:
 Only include fields that were listed as missing for each item.`;
 
     let raw = '';
-    if (client) {
+    if (client && !anthropicUnavailable) {
       try {
         const message = await client.messages.create({
           model: 'claude-sonnet-4-5',
@@ -186,13 +187,15 @@ Only include fields that were listed as missing for each item.`;
         raw = message.content[0].text.trim();
       } catch (err) {
         console.log(`Claude fill failed (${err.message}); trying OpenAI fallback...`);
+        if ((err.message || '').toLowerCase().includes('credit balance is too low')) {
+          anthropicUnavailable = true;
+        }
       }
     }
     if (!raw) {
       raw = await fillWithOpenAI(system, prompt);
     }
-    raw = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/, '').trim();
-    const filled = JSON.parse(raw);
+    const filled = parseJsonArray(raw);
 
     for (const item of filled) {
       const original = batch[item.num - 1];
@@ -201,6 +204,24 @@ Only include fields that were listed as missing for each item.`;
   }
 
   return results;
+}
+
+function parseJsonArray(raw) {
+  let cleaned = (raw || '').trim().replace(/^```[a-z]*\n?/i, '').replace(/```$/i, '').trim();
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed.items)) return parsed.items;
+    if (Array.isArray(parsed.results)) return parsed.results;
+  } catch (_) {
+    // Fall through to bracket extraction.
+  }
+  const start = cleaned.indexOf('[');
+  const end = cleaned.lastIndexOf(']');
+  if (start >= 0 && end > start) {
+    return JSON.parse(cleaned.slice(start, end + 1));
+  }
+  throw new Error(`AI returned non-array JSON: ${cleaned.slice(0, 300)}`);
 }
 
 async function fillWithOpenAI(system, prompt) {
