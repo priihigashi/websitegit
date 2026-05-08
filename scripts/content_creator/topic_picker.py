@@ -225,6 +225,8 @@ def score_topic(row, header_map, used_topics, queued_topics):
 
     if status in SKIP_STATUSES:
         return -1, niche, topic, status
+    if v("sibling_of"):
+        return -1, niche, topic, status
     if not topic:
         return -1, niche, topic, status
     # Reject junk topics: too short, or look like generic descriptions/placeholders

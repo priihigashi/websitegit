@@ -2277,7 +2277,7 @@ def _detect_source_format(url: str) -> str:
     return "Other"
 
 
-def update_inspiration_library(url, transcript, classification, hub_url="", doc_url="", metadata=None, user_notes="", brief_doc_url=""):
+def update_inspiration_library(url, transcript, classification, hub_url="", doc_url="", metadata=None, user_notes="", brief_doc_url="", sibling_of=""):
     """
     Additive-only. Writes a NEW row. Never updates/overwrites existing rows.
     All columns resolved by header-name lookup — resilient to any future reorder.
@@ -2327,6 +2327,8 @@ def update_inspiration_library(url, transcript, classification, hub_url="", doc_
         _set_col(base_row, "series_override",   classification.get("series_override", ""))
         _set_col(base_row, "fake_news_route",   classification.get("fake_news_route", ""))
         _set_col(base_row, "fake_news_confidence", classification.get("fake_news_confidence", ""))
+        if sibling_of:
+            _set_col(base_row, "sibling_of", sibling_of)
         if classification.get("credibility"):
             _set_col(base_row, "credibility",   classification.get("credibility", ""))
         _set_col(base_row, "status",            classification.get("status", ""))

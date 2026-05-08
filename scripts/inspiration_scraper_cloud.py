@@ -112,7 +112,7 @@ INSPO_HEADER = [
     "What's Working", "A/B Test", "Brief / Angle", "Format", "Status",
     "Topic / Title", "Niche", "Comments",
     "AI Score (1-5)", "Date Status Changed", "Drive Folder Path", "My Raw Notes",
-    "series_override"
+    "series_override", "fake_news_route", "fake_news_confidence", "SIBLING_OF"
 ]
 
 # ── Env ───────────────────────────────────────────────────────────────────────

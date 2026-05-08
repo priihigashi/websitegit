@@ -45,6 +45,9 @@ INSPO_COLS = {
     "series_override":      "series_override",     # AA
     "fake_news_route":      "fake_news_route",     # AB
     "fake_news_confidence": "fake_news_confidence",# AC
+    "credibility":          "credibility",          # AD
+    "manifest_url":         "manifest_url",         # AE
+    "sibling_of":           "sibling_of",          # AG (AF=STATUS exists, AG=new)
 }
 
 # Valid status values for Inspiration Library Status column
