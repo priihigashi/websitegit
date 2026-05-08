@@ -1737,7 +1737,7 @@ Return ONLY a valid JSON object with this exact structure:
       "wikimedia_query": "CC-licensed historical/institutional footage query",
       "motion_prompt": "5s visual direction for the animated cover (Remotion/Kling): camera, mood, framing",
       "motion_renderer": "kenburns",
-      "visual_hint": "bio-card|context-image|place|event|product-photo|none"
+      "visual_hint": "bio-card|context-image|place|event|product-photo|ugc-reaction|none"
     }}
   ],
   "sources": ["Source 1", "Source 2", "Source 3", "Source 4"],
@@ -1770,6 +1770,7 @@ Also target at least 3 middle slides with visual_hint="context-image" plus speci
 visual_hint values:
   "bio-card" → slide has named person in mentioned_people (face cards render automatically from that field)
   "context-image" → slide references a specific institution, building, place, event, or document; fill context_image_query with a specific search term (e.g. "Câmara dos Deputados Brasília", "Viktor Orbán 2026", "Supremo Tribunal Federal fachada", "Congresso Nacional aerial")
+  "ugc-reaction" → UGC/reaction-style motion only: meme reaction, expressive emoji/sticker, quick emotional beat. Use only when the slide needs a reaction GIF/sticker instead of factual b-roll.
   "none" → text-only, max 1 consecutive allowed
 First choice for Brazilian institutions: Agência Brasil CC BY 3.0 search terms. International subjects: English search terms.
 BANNED context_image_query patterns: NEVER copy words from heading_pt or heading_en into the query. The query is a stock photo search term — it must be a place/institution/person name, NOT a phrase from the slide copy. BAD: "Se comparar igual com igual" or "O ponto que importa". GOOD: "Conselho Nacional de Justiça STF fachada" or "STF Brasília Supremo Tribunal Federal". For comparison slides about judicial spending: always reference a specific court or government body (STF, CNJ, Câmara, TCU).
@@ -1790,7 +1791,7 @@ For every slide that would benefit from motion (cover + any slide naming a speec
   - photo_query     → Wikipedia/Wikimedia search term for a CC still photo used as slide background. For people: English full name. For places: landmark name. This is the PRIMARY source — always populate.
   - photo_bg_position → CSS background-position for the crop (default "center 20%"). Use "center top" for portraits, "50% 40%" for buildings.
   - motion_renderer → always "kenburns" for Brazil native template. "kenburns" = Playwright records CSS KB zoom animation on the `.kb-bg` background layer only (text stays static). NOT ffmpeg on the full PNG. Never omit.
-  - visual_hint     → same values as slides.visual_hint. Determines whether stock tiers are allowed (stock skips for bio-card).
+  - visual_hint     → same values as slides.visual_hint, plus "ugc-reaction" for UGC/reaction GIF-style motion. Determines whether stock tiers are allowed (stock skips for bio-card).
 
 If NO tier could plausibly succeed (hyper-local story, no public footage, no place to film) return an empty clip_suggestions array — do not invent false queries. Ken Burns floor will still animate the poster image, so every cover gets motion regardless.
 
