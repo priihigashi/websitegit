@@ -162,6 +162,42 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip().lower())
 
 
+def _clean_comparison_entity(value: str) -> str:
+    """Normalize one side of an X-vs-Y comparison without losing brand terms."""
+    value = re.sub(r"\([^)]*\)", " ", value or "")
+    value = re.sub(r"\b(which|wins?|winner|better|best|costs?|pros?|cons?)\b.*$", " ", value, flags=re.IGNORECASE)
+    value = re.sub(r"\b(for|in|on|with|without|before|after)\b.*$", " ", value, flags=re.IGNORECASE)
+    value = re.sub(r"^(?:should\s+i\s+choose|choose|pick|is|are|the|a|an)\s+", "", value.strip(), flags=re.IGNORECASE)
+    value = re.sub(r"\s+", " ", value).strip(" \t\r\n-—:;,.?!\"'")
+    words = value.split()
+    # Keep entities compact; trailing explanatory words usually make matching noisy.
+    if len(words) > 4:
+        value = " ".join(words[:4])
+    return value.strip()
+
+
+def extract_comparison_pair(topic: str, brief: str = "") -> dict[str, str] | None:
+    """Extract the two subjects from clear comparison topics.
+
+    This is intentionally conservative. It only returns a pair when the wording
+    has an explicit comparator such as "X vs Y", "X versus Y", or "X or Y".
+    """
+    text = re.sub(r"\s+", " ", f"{topic or ''} {brief or ''}").strip()
+    patterns = [
+        r"(?P<left>[A-Za-z0-9][A-Za-z0-9 &/\-]{1,60}?)\s+(?:vs\.?|versus)\s+(?P<right>[A-Za-z0-9][A-Za-z0-9 &/\-]{1,60}?)(?:[:?!.—-]|$)",
+        r"(?:choose|pick|use|install)\s+(?P<left>[A-Za-z0-9][A-Za-z0-9 &/\-]{1,50}?)\s+or\s+(?P<right>[A-Za-z0-9][A-Za-z0-9 &/\-]{1,50}?)(?:[:?!.—-]|$)",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, text, flags=re.IGNORECASE)
+        if not m:
+            continue
+        left = _clean_comparison_entity(m.group("left"))
+        right = _clean_comparison_entity(m.group("right"))
+        if len(left) >= 2 and len(right) >= 2 and left.lower() != right.lower():
+            return {"left": left, "right": right}
+    return None
+
+
 def keyword_hits(text: str, words: list[str]) -> list[str]:
     hits: list[str] = []
     padded = f" {text} "
@@ -245,6 +281,7 @@ def classify_story(topic: str, brief: str = "") -> dict[str, Any]:
     audience_question = infer_audience_question(matches)
     proof_needed = infer_proof_needed(matches)
     payoff = infer_payoff(matches)
+    comparison_pair = extract_comparison_pair(topic, brief)
 
     generic_hook_risk = [p for p in GENERIC_HOOK_PHRASES if p in combined]
 
@@ -254,6 +291,7 @@ def classify_story(topic: str, brief: str = "") -> dict[str, Any]:
         "audience_question": audience_question,
         "proof_needed": proof_needed,
         "payoff": payoff,
+        "comparison_pair": comparison_pair,
         "generic_hook_risk": generic_hook_risk,
     }
 
@@ -436,6 +474,7 @@ def build_recommendation(topic: str, brief: str, registry_path: Path = DEFAULT_R
             "audience_question": story["audience_question"],
             "proof_needed": story["proof_needed"],
             "payoff": story["payoff"],
+            "comparison_pair": story.get("comparison_pair"),
             "matched_signals": story["matches"],
             "generic_hook_risk": story["generic_hook_risk"],
         },
@@ -615,6 +654,7 @@ def plan_carousel_slides(
         }
 
     matches = rec["storytelling_read"]["matched_signals"]
+    comparison_pair = rec["storytelling_read"].get("comparison_pair")
 
     # Slide 1 — cover
     if "warning" in matches:
@@ -625,7 +665,12 @@ def plan_carousel_slides(
         s1 = "opc_tip_cover"
 
     # Slide 2 — definition / stat
-    if "material" in matches:
+    if comparison_pair and "comparison" in matches:
+        # Comparison topics need a paired contract. The material_profile
+        # standalone is intentionally singular, so keep slide 2 on the tip stat
+        # component and let slide 3 carry the four-card head-to-head.
+        s2 = "opc_tip_stat"
+    elif "material" in matches:
         s2 = "opc_material_profile"
     elif "single_item" in matches:
         s2 = "opc_item_spotlight"
@@ -663,7 +708,14 @@ def plan_carousel_slides(
             "slide": slide_num,
             "role": role,
             "template_id": template_id,
-            "content_goal": _slide_goal(template_id, role, topic),
+            "content_goal": (
+                _slide_goal(template_id, role, topic)
+                + (
+                    f" Comparison contract: show both {comparison_pair['left']} and "
+                    f"{comparison_pair['right']} with equal weight."
+                    if comparison_pair and role in {"cover", "definition", "comparison", "statement"} else ""
+                )
+            ),
             "image_need": SLIDE_IMAGE_NEED.get(template_id, "1 image"),
             "required_fields": SLIDE_REQUIRED_FIELDS.get(template_id, []),
             "production_safe": production_safe,
@@ -677,6 +729,7 @@ def plan_carousel_slides(
         "status": "passed",
         "primary_recommendation": rec.get("primary_recommendation"),
         "matched_signals": list(matches.keys()),
+        "comparison_pair": comparison_pair,
         "slides": plan_slides,
         "safety_notes": [
             "Plan only — no rendering performed.",

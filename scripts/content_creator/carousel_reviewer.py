@@ -66,6 +66,15 @@ def _tokens(text: str) -> set[str]:
     return {p for p in parts if p not in STOPWORDS}
 
 
+def _entity_in_text(entity: str, text: str) -> bool:
+    tokens = [
+        t for t in re.findall(r"[a-z0-9]{3,}", (entity or "").lower())
+        if t not in STOPWORDS and t not in {"the", "and", "with"}
+    ]
+    hay = (text or "").lower()
+    return any(re.search(rf"\b{re.escape(t)}s?\b", hay) for t in tokens)
+
+
 # ─── Checks ──────────────────────────────────────────────────────────────────
 
 def _visible_html(html: str) -> str:
@@ -1496,6 +1505,38 @@ def check_standalone_content(content: dict, slide_num: int, template_id: str) ->
             v = nested.get(k) or []
             if not isinstance(v, list) or len(v) != 4:
                 issues.append(f"[content] slide {slide_num}: opc_four_card_grid.{k} must be a list of 4")
+        pair = (content or {}).get("_comparison_pair") or {}
+        left = str(pair.get("left", "")).strip()
+        right = str(pair.get("right", "")).strip()
+        if left and right:
+            titles = nested.get("card_titles") or []
+            copies = nested.get("card_copies") or []
+            combined = " ".join(str(x) for x in titles + copies)
+            if not _entity_in_text(left, combined) or not _entity_in_text(right, combined):
+                issues.append(
+                    f"[content] slide {slide_num}: comparison pair '{left}' vs '{right}' "
+                    "is not represented across opc_four_card_grid text."
+                )
+            for idx, copy in enumerate(copies[:4], start=1):
+                title = str(titles[idx - 1]) if idx - 1 < len(titles) else ""
+                text = f"{title} {copy}"
+                title_declares_winner = bool(re.search(r"\b(wins?|winner)\b", title, flags=re.IGNORECASE))
+                has_left = _entity_in_text(left, text)
+                has_right = _entity_in_text(right, text)
+                if not title_declares_winner and (has_left != has_right):
+                    issues.append(
+                        f"[content] slide {slide_num}: card {idx} is one-sided for "
+                        f"'{left}' vs '{right}' — compare both sides or declare a winner."
+                    )
+            queries = [str(x) for x in (nested.get("card_image_queries") or [])]
+            if queries:
+                left_q = sum(1 for q in queries if _entity_in_text(left, q))
+                right_q = sum(1 for q in queries if _entity_in_text(right, q))
+                if left_q < 1 or right_q < 1:
+                    issues.append(
+                        f"[content] slide {slide_num}: card_image_queries are not balanced "
+                        f"for '{left}' vs '{right}' (left={left_q}, right={right_q})."
+                    )
     if template_id == "opc_progress_media":
         cp = nested.get("caption_pills") or []
         if not isinstance(cp, list) or len(cp) < 1:

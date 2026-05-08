@@ -31,7 +31,7 @@ ET = pytz.timezone("America/New_York")
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))  # for routing.py
 from topic_picker import pick_topics, get_clip_count_for_topic
-from carousel_builder import generate_carousel_content, build_html, render_pngs, generate_image_suggestions, visual_audit, fetch_all_media, fetch_clips, build_motion_html, generate_caption, generate_opc_per_template_content, fetch_template_aware_media
+from carousel_builder import generate_carousel_content, build_html, render_pngs, generate_image_suggestions, visual_audit, fetch_all_media, fetch_clips, build_motion_html, generate_caption, generate_opc_per_template_content, fetch_template_aware_media, enforce_opc_comparison_parity
 from routing import get_route
 import urllib.request, urllib.parse
 from email_preview import send_preview, update_catalog_status
@@ -1336,6 +1336,8 @@ def process_one_topic(topic_entry, run_date, drive):
             plan = plan_carousel_slides(topic, brief or "")
             if plan.get("status") == "passed" and len(plan.get("slides", [])) == 5:
                 content["_slide_plan"] = plan
+                if plan.get("comparison_pair"):
+                    content["_comparison_pair"] = plan.get("comparison_pair")
                 slide_summary = " → ".join(s["template_id"] for s in plan["slides"])
                 print(f"  smart-plan: {slide_summary}")
                 # Phase 8A — generate per-template nested content for each
@@ -1352,6 +1354,9 @@ def process_one_topic(topic_entry, run_date, drive):
                 print(f"  smart-plan: skipped ({plan.get('status')}) — using legacy tip path")
         except Exception as exc:
             print(f"  smart-plan: error {exc!r} — using legacy tip path")
+
+    if niche == "opc" and content:
+        content = enforce_opc_comparison_parity(content, topic, brief or "")
 
     if niche in ("brazil", "usa"):
         content = _enforce_news_visual_targets(content, topic, niche)

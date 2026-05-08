@@ -162,6 +162,137 @@ def _vision_accept(local_path, query, label, *, source_url="", work_dir=None):
         return True
 
 
+def _extract_comparison_pair_safe(topic: str, brief: str = ""):
+    """Return {'left','right'} for explicit X-vs-Y OPC topics, else None."""
+    try:
+        from opc_template_chooser import extract_comparison_pair  # type: ignore
+        return extract_comparison_pair(topic, brief)
+    except Exception:
+        text = re.sub(r"\s+", " ", f"{topic or ''} {brief or ''}")
+        m = re.search(
+            r"(?P<left>[A-Za-z0-9][A-Za-z0-9 &/\-]{1,60}?)\s+(?:vs\.?|versus)\s+"
+            r"(?P<right>[A-Za-z0-9][A-Za-z0-9 &/\-]{1,60}?)(?:[:?!.—-]|$)",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if not m:
+            return None
+        left = re.sub(r"\s+", " ", m.group("left")).strip(" -—:;,.?!\"'")
+        right = re.sub(r"\b(which|wins?|winner|better|best)\b.*$", "", m.group("right"), flags=re.IGNORECASE)
+        right = re.sub(r"\s+", " ", right).strip(" -—:;,.?!\"'")
+        if left and right and left.lower() != right.lower():
+            return {"left": left, "right": right}
+    return None
+
+
+def _comparison_context_word(topic: str) -> str:
+    low = (topic or "").lower()
+    for word in ("driveway", "patio", "walkway", "pool deck", "foundation", "slab", "wall", "floor", "roof"):
+        if word in low:
+            return word
+    return "residential project"
+
+
+def _comparison_media_queries(pair: dict, topic: str) -> list[str]:
+    left = pair.get("left", "").strip()
+    right = pair.get("right", "").strip()
+    ctx = _comparison_context_word(topic)
+    return [
+        f"{left} {ctx} residential south florida",
+        f"{right} {ctx} residential south florida",
+        f"{left} installation detail residential construction",
+        f"{right} installation detail residential construction",
+    ]
+
+
+def _entity_in_text(entity: str, text: str) -> bool:
+    tokens = [t for t in re.findall(r"[a-z0-9]{3,}", (entity or "").lower()) if t not in {"the", "and", "with"}]
+    hay = (text or "").lower()
+    return any(re.search(rf"\b{re.escape(t)}s?\b", hay) for t in tokens)
+
+
+def _comparison_prompt_block(topic: str, brief: str = "") -> str:
+    pair = _extract_comparison_pair_safe(topic, brief)
+    if not pair:
+        return ""
+    left = pair["left"]
+    right = pair["right"]
+    return f"""
+
+TOPIC-LEVEL COMPARISON CONTRACT (NON-NEGOTIABLE):
+- This is a comparison between "{left}" and "{right}". Treat them as a PAIR for the whole carousel.
+- Do NOT let one side become the whole story. Every explanatory slide must name or clearly refer to BOTH sides.
+- Cover/search visuals must include both sides or a true side-by-side comparison.
+- Slide 2 must frame the tradeoff between {left} and {right}, not profile only one material.
+- Slide 3 comparison cards must use one consistent frame: either every card compares both sides, or every title declares a winner by criterion.
+- Media queries must be balanced: at least one query for {left}, at least one query for {right}, and no repeated one-sided visual lane.
+- Bad output example: headline/subhead/cards/images all about "{right}" with "{left}" only appearing in the title. That fails the assignment.
+"""
+
+
+def enforce_opc_comparison_parity(content: dict, topic: str, brief: str = "") -> dict:
+    """Attach and enforce a lightweight comparison contract before media fetch."""
+    if not isinstance(content, dict):
+        return content
+    pair = content.get("_comparison_pair") or _extract_comparison_pair_safe(topic, brief)
+    if not pair:
+        return content
+    left = str(pair.get("left", "")).strip()
+    right = str(pair.get("right", "")).strip()
+    if not left or not right:
+        return content
+
+    content["_comparison_pair"] = {"left": left, "right": right}
+    cover_query = f"{left} and {right} {_comparison_context_word(topic)} residential comparison south florida"
+
+    cover_visual = content.setdefault("cover_visual", {})
+    if isinstance(cover_visual, dict):
+        option_a = cover_visual.setdefault("option_a", {})
+        if isinstance(option_a, dict):
+            existing = str(option_a.get("search_query", ""))
+            if not (_entity_in_text(left, existing) and _entity_in_text(right, existing)):
+                option_a["search_query"] = cover_query
+        option_b = cover_visual.setdefault("option_b", {})
+        if isinstance(option_b, dict):
+            existing_prompt = str(option_b.get("prompt", ""))
+            if not (_entity_in_text(left, existing_prompt) and _entity_in_text(right, existing_prompt)):
+                option_b["prompt"] = (
+                    f"Photorealistic editorial split-view of {left} and {right} "
+                    f"on a {_comparison_context_word(topic)}, South Florida residential construction, no text."
+                )
+
+    queries = _comparison_media_queries({"left": left, "right": right}, topic)
+    slides = content.get("slides") or []
+    if isinstance(slides, list):
+        for idx, slide in enumerate(slides[:3]):
+            if not isinstance(slide, dict):
+                continue
+            q = queries[idx if idx < len(queries) else 0]
+            alt = q.replace("south florida", "").replace("residential construction", "residential")
+            existing_q = str(slide.get("context_image_query", ""))
+            if idx == 0 or not (_entity_in_text(left, existing_q) or _entity_in_text(right, existing_q)):
+                slide["context_image_query"] = q if idx else cover_query
+            existing_alt = str(slide.get("context_image_query_alt", ""))
+            if idx == 0 or not (_entity_in_text(left, existing_alt) or _entity_in_text(right, existing_alt)):
+                slide["context_image_query_alt"] = f"{left} {right} {_comparison_context_word(topic)}" if idx == 0 else alt
+
+    fcg = content.get("opc_four_card_grid")
+    if isinstance(fcg, dict):
+        card_queries = [str(x) for x in (fcg.get("card_image_queries") or [])]
+        left_count = sum(1 for q in card_queries if _entity_in_text(left, q))
+        right_count = sum(1 for q in card_queries if _entity_in_text(right, q))
+        if len(card_queries) != 4 or left_count < 1 or right_count < 1:
+            fcg["card_image_queries"] = queries
+
+    for tid in ("opc_base", "opc_duotone", "opc_progress_media"):
+        nested = content.get(tid)
+        if isinstance(nested, dict):
+            q = str(nested.get("image_query", ""))
+            if not (_entity_in_text(left, q) and _entity_in_text(right, q)):
+                nested["image_query"] = cover_query
+    return content
+
+
 # ── SH-056: OPC photorealistic guardrails ─────────────────────────────────────
 
 # Known AI-art/illustration hosting domains — images from these URLs are rejected
@@ -1140,6 +1271,7 @@ def generate_opc_per_template_content(topic, plan, tip_content, brief="", model=
     prompt = f"""You are filling in approved Instagram carousel TEMPLATES for Oak Park Construction (South Florida contractor, license CBC1263425, voice = Mike, first-person, conversational expert).
 
 Topic: "{topic}"
+{_comparison_prompt_block(topic, brief)}
 
 You ALREADY produced this tip-shape carousel content (use as the SOURCE of facts/voice — do NOT contradict it):
 {json.dumps(tip_ctx, indent=2)}
@@ -1162,6 +1294,7 @@ CRITICAL RULES:
 - For opc_progress_media: tag should reflect the actual project type. caption_pills follow project timeline (BEFORE/DURING/AFTER is the safe default).
 - For opc_material_profile.decision_factors: pull 4 short tokens from slide3_items[].title (first word, ≤12 chars each).
 - For opc_four_card_grid.card_titles + card_copies: if 4 items aren't naturally available, derive 4 distinct decision points from the topic.
+- For opc_four_card_grid.card_image_queries on comparison topics: return exactly 4 balanced queries. At least one query must name Subject A, at least one must name Subject B, and the set should alternate/split the two sides when possible.
 
 FOUR_CARD_GRID — UNIFIED COMPARISON FRAME (NON-NEGOTIABLE):
 - For comparison topics ("X vs Y", "A or B", "Which wins"): ALL 4 cards MUST follow ONE structure. Pick exactly ONE pattern and apply it to every card:
@@ -3187,6 +3320,7 @@ def fetch_template_aware_media(content, niche, work_dir, paths, brief=""):
         return paths
 
     fallback_topic = (content or {}).get("headline", "") or (content or {}).get("topic", "")
+    comparison_pair = (content or {}).get("_comparison_pair") or {}
     img_dir = Path(work_dir) / "resources" / "images"
     img_dir.mkdir(parents=True, exist_ok=True)
 
@@ -3232,6 +3366,14 @@ def fetch_template_aware_media(content, niche, work_dir, paths, brief=""):
             nested = (content or {}).get(tid) or {}
             queries = nested.get("card_image_queries") or []
             titles  = nested.get("card_titles") or []
+            if comparison_pair:
+                pair_queries = _comparison_media_queries(comparison_pair, fallback_topic)
+                left = comparison_pair.get("left", "")
+                right = comparison_pair.get("right", "")
+                left_count = sum(1 for qx in queries if _entity_in_text(left, str(qx)))
+                right_count = sum(1 for qx in queries if _entity_in_text(right, str(qx)))
+                if len(queries) != 4 or left_count < 1 or right_count < 1:
+                    queries = pair_queries
             for i in range(4):
                 if paths["cards"].get(i + 1):
                     continue
