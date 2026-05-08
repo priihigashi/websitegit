@@ -977,6 +977,75 @@ def update_catalog(post_id, status, variant=None):
             return
 
 
+def _download_current_pngs(drive, folder_id: str, local_dir) -> dict:
+    """Download PNGs from the png/ subfolder of a Drive version folder.
+    Returns {basename: Path} dict. Empty dict on any failure.
+    """
+    from pathlib import Path as _P
+    try:
+        res = drive.files().list(
+            q=f"'{folder_id}' in parents and name='png' and mimeType='application/vnd.google-apps.folder'",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+            fields="files(id,name)",
+        ).execute()
+        png_folders = res.get("files", [])
+        if not png_folders:
+            return {}
+        png_folder_id = png_folders[0]["id"]
+
+        res2 = drive.files().list(
+            q=f"'{png_folder_id}' in parents and mimeType='image/png'",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+            fields="files(id,name)",
+        ).execute()
+
+        local_dir = _P(local_dir)
+        local_dir.mkdir(parents=True, exist_ok=True)
+        result = {}
+        for f in res2.get("files", []):
+            lp = local_dir / f["name"]
+            lp.write_bytes(drive.files().get_media(fileId=f["id"]).execute())
+            result[f["name"]] = lp
+        return result
+    except Exception as exc:
+        print(f"  _download_current_pngs failed (non-fatal): {exc}")
+        return {}
+
+
+def _restore_unchanged_pngs(new_png_dir, original_pngs: dict, slide_feedback: list) -> None:
+    """Replace PNGs for slides NOT in slide_feedback with their originals.
+    Only runs when slide_feedback contains specific slide numbers (not "all").
+    """
+    from pathlib import Path as _P
+    import shutil as _sh
+    if not original_pngs or not slide_feedback:
+        return
+    flagged = set()
+    for item in slide_feedback:
+        s = str(item.get("slide", "")).strip().lower()
+        if s == "all":
+            return  # Entire carousel changed — keep new PNGs
+        try:
+            flagged.add(int(s))
+        except ValueError:
+            pass
+    if not flagged:
+        return
+
+    for png_file in sorted(_P(new_png_dir).iterdir()):
+        if not (png_file.is_file() and png_file.suffix == ".png"):
+            continue
+        m = re.match(r'[a-z]+_(\d+)_', png_file.name)
+        if not m:
+            continue
+        slide_num = int(m.group(1))
+        if slide_num not in flagged:
+            orig = original_pngs.get(png_file.name)
+            if orig and orig.exists():
+                _sh.copy2(orig, png_file)
+                print(f"  partial rebuild: kept original PNG for slide {slide_num:02d}")
+
+
 def re_render_post(post, feedback, model="claude-sonnet-4-6", slide_feedback=None):
     """Re-render a post with feedback. Creates v{n+1} folder in same parent as current static folder."""
     import sys, shutil
@@ -994,6 +1063,8 @@ def re_render_post(post, feedback, model="claude-sonnet-4-6", slide_feedback=Non
         print(f"  re_render: cannot parse folder ID from {post['static_link']}")
         return False
     current_folder_id = folder_id_match.group(1)
+    # Partial rebuild: download originals before creating work dir so we can restore unchanged slides later
+    _original_pngs: dict = {}
 
     drive = _get_drive_service()
     try:
@@ -1066,6 +1137,10 @@ def re_render_post(post, feedback, model="claude-sonnet-4-6", slide_feedback=Non
         shutil.rmtree(work)
     work.mkdir(parents=True)
 
+    # Fetch original PNGs now so unchanged slides can be restored after re-render
+    if slide_feedback:
+        _original_pngs = _download_current_pngs(drive, current_folder_id, work / "_original_pngs")
+
     slug = post_id.replace("opc-tip-", "").replace("brazil-", "")[:30]
     media_paths = fetch_all_media(content, niche, str(work))
     html_path = build_html(content, niche, slug, str(work), media_paths=media_paths)
@@ -1081,6 +1156,10 @@ def re_render_post(post, feedback, model="claude-sonnet-4-6", slide_feedback=Non
         print(f"  re_render: PNG render failed")
         shutil.rmtree(work, ignore_errors=True)
         return False
+
+    # Partial rebuild: restore original PNGs for slides not flagged in feedback
+    if _original_pngs:
+        _restore_unchanged_pngs(png_dir, _original_pngs, slide_feedback or [])
 
     new_folder = drive.files().create(
         body={"name": new_folder_name, "mimeType": "application/vnd.google-apps.folder", "parents": [parent_id]},
