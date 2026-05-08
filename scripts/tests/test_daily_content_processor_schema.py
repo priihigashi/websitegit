@@ -7,6 +7,7 @@ Run:
 from __future__ import annotations
 
 import sys
+import json
 import unittest
 from pathlib import Path
 
@@ -110,6 +111,34 @@ class DailyContentProcessorSchemaTests(unittest.TestCase):
         self.assertEqual(updates["Transcript Drive Link"], "drive-link")
         self.assertIn("Step one", updates["What we extracted"])
         self.assertEqual(updates["Quality"], "3")
+
+    def test_update_by_headers_uses_first_duplicate_header(self):
+        captured = {}
+
+        class FakeUrlopen:
+            def __call__(self, req):
+                captured["body"] = req.data
+                class Resp:
+                    def read(self):
+                        return b"{}"
+                return Resp()
+
+        original_urlopen = dcp.urllib.request.urlopen
+        try:
+            dcp.urllib.request.urlopen = FakeUrlopen()
+            dcp.sheet_update_by_headers(
+                "token",
+                "📥 Inspiration Library",
+                2,
+                ["Status", "STATUS"],
+                {"Status": "Processed"},
+            )
+        finally:
+            dcp.urllib.request.urlopen = original_urlopen
+
+        body = json.loads(captured["body"].decode("utf-8"))
+        ranges = [item["range"] for item in body["data"]]
+        self.assertEqual(ranges, ["'📥 Inspiration Library'!A2"])
 
 
 if __name__ == "__main__":

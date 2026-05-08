@@ -127,7 +127,9 @@ def header_index(header: list, *names: str) -> int | None:
 def sheet_update_by_headers(token: str, tab: str, row_idx: int,
                             header: list, values_by_header: dict[str, str]):
     """Patch only named columns so fallback tabs cannot be corrupted by A:J writes."""
-    hmap = {normalize_header(h): i for i, h in enumerate(header)}
+    hmap = {}
+    for i, h in enumerate(header):
+        hmap.setdefault(normalize_header(h), i)
     data = []
     for col_name, val in values_by_header.items():
         idx = hmap.get(normalize_header(col_name))
