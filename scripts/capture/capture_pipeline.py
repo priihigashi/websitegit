@@ -3203,30 +3203,41 @@ STATUS: DRAFT — text ready, art needed"""
     return f"SOURCE: {url}\nNOTES: {notes or 'None'}\n\nTRANSCRIPT:\n{transcript}\n\n[Both Claude and OpenAI brief generation failed]"
 
 
-def translate_to_pt(text: str) -> str:
-    """Translate content brief text to Brazilian Portuguese via Claude Haiku.
-    Uses the same urllib pattern as build_render_props.py. Non-fatal — returns
-    the original text unchanged if translation fails or key is missing.
+def translate(text: str, target_lang: str = "pt") -> str:
+    """Translate text via Claude Haiku. target_lang: 'pt' = Brazilian Portuguese, 'en' = English.
+    Non-fatal — returns the original text unchanged if translation fails or key is missing.
     """
     if not text.strip():
         return text
-    prompt = (
-        "Translate this English content brief to Brazilian Portuguese (PT-BR). "
-        "Keep the same structure, section headers, and formatting. "
-        "Rewrite idioms and hooks naturally for Brazilian audiences — do not translate literally. "
-        "Output ONLY the translated text, no commentary.\n\n"
-        + text
-    )
+    if target_lang == "pt":
+        instruction = (
+            "Translate this English content brief to Brazilian Portuguese (PT-BR). "
+            "Keep the same structure, section headers, and formatting. "
+            "Rewrite idioms and hooks naturally for Brazilian audiences — do not translate literally."
+        )
+        label = "PT-BR"
+    else:
+        instruction = (
+            f"Translate the following text to {target_lang.upper()}. "
+            "Keep the same structure and formatting. Do not add commentary."
+        )
+        label = target_lang.upper()
+    prompt = instruction + " Output ONLY the translated text, no commentary.\n\n" + text
     try:
         translated = _llm_text(prompt, max_tokens=4000, model="claude-haiku-4-5-20251001") or ""
         if translated.strip():
-            print(f"  PT-BR translation: {len(translated)} chars")
+            print(f"  {label} translation: {len(translated)} chars")
             return translated
-        print("  WARNING: PT translation returned empty (non-fatal) — keeping English")
+        print(f"  WARNING: {label} translation returned empty (non-fatal) — keeping original")
         return text
     except Exception as e:
-        print(f"  WARNING: PT translation failed (non-fatal): {e}")
+        print(f"  WARNING: {label} translation failed (non-fatal): {e}")
         return text
+
+
+def translate_to_pt(text: str) -> str:
+    """Backwards-compatible alias for translate(text, 'pt')."""
+    return translate(text, "pt")
 
 
 def save_to_content_hub(story_id: str, url: str, transcript: str, classification: dict, video_path: str = "", notes: str = "", project: str = "opc", screenshots: list = None, debug_info: str = "") -> str:
