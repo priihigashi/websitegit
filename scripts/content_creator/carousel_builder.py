@@ -2948,18 +2948,23 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 _set_cover(c, "wikimedia", "cc", query=search_q)
 
         # Step 2 — non-person covers: AI cascade FIRST (prompt-specific, realistic)
+        # SH-049: OPC is real-photos-only — skip ALL AI providers here, fall through to Wikimedia/Pexels.
         if not paths["cover"] and subject_type != "person":
-            if _IMAGE_PROVIDERS_AVAILABLE:
+            if _IMAGE_PROVIDERS_AVAILABLE and niche != "opc":
                 fresh_prompt = _build_img_prompt(
                     slide_text=search_q, context_image_query=search_q,
                     niche=niche, slide_num=1, subject_type=subject_type,
                     work_dir=work_dir, save=True, brief=brief,
                 ) or ai_prompt
                 cover_fname = _make_img_filename(search_q, "ai", 1)
-                _skip_prov = ["dall-e-3"] if niche == "opc" else []
-                c, used_prov = _gen_ai_image(fresh_prompt, work_dir, cover_fname, skip_providers=_skip_prov)
+                c, used_prov = _gen_ai_image(fresh_prompt, work_dir, cover_fname)
                 if c and _vision_accept(c, search_q, f"cover/{used_prov}", work_dir=work_dir):
                     _set_cover(c, used_prov, "ai", query=search_q, prompt=fresh_prompt)
+            elif _IMAGE_PROVIDERS_AVAILABLE and niche == "opc":
+                print(
+                    f"  [OPC] cover: all AI tiers skipped (SH-049 real-photo-only). "
+                    f"Falling through to Wikimedia/Pexels for '{search_q[:50]}'"
+                )
             elif ai_prompt:
                 # Legacy fallback when image_providers not available.
                 # OPC: DALL-E is forbidden — real photos only (SH-039). Skip all AI tiers.
@@ -3115,20 +3120,22 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 _log_failure("image_library/slide_lookup", _e)
 
         # Tier 1: AI cascade — NB2 → Seedream 4.5 → Seedream 5.0 → Gemini → SDXL → DALL-E
-        if not accepted and _IMAGE_PROVIDERS_AVAILABLE:
+        # SH-049: OPC is real-photos-only — skip ALL AI providers, fall through to Wikimedia/Pexels.
+        if not accepted and _IMAGE_PROVIDERS_AVAILABLE and niche != "opc":
             fresh_prompt = _build_img_prompt(
                 slide_text=cq, context_image_query=cq,
                 niche=niche, slide_num=i, work_dir=work_dir, save=True, brief=brief,
             ) or ai_prompt
             fname = _make_img_filename(cq, "ai", i)
-            _skip_prov = ["dall-e-3"] if niche == "opc" else []
-            img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname, skip_providers=_skip_prov)
+            img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname)
             if img_path and _vision_accept(img_path, cq, f"slide{i}/{used_prov}", work_dir=work_dir):
                 print(f"  Slide {i}: {used_prov} image for '{cq[:50]}'")
                 _set_slide(i, img_path, used_prov, "ai", query=cq, prompt=fresh_prompt)
                 accepted = True
             else:
                 img_path = ""
+        elif not accepted and _IMAGE_PROVIDERS_AVAILABLE and niche == "opc":
+            print(f"  [OPC] slide{i}: AI tiers skipped (SH-049). Falling through to Wikimedia/Pexels.")
         else:
             # Legacy fallback when image_providers not available.
             # OPC: skip DALL-E (AI-generated photos not allowed for OPC — real photos only).
