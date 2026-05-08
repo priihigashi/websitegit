@@ -32,7 +32,7 @@ from _llm_fallback import llm_text  # noqa: E402
 # ──────────────────────────────────────────────────────────────────────────────
 # CONFIG
 # ──────────────────────────────────────────────────────────────────────────────
-SPREADSHEET_ID = os.getenv("STOCKS_SHEET_ID", "1plLMR0GQUdFBagKiUT78CMxcncbUc435jt4uluKxhbI")
+SPREADSHEET_ID = os.getenv("STOCKS_SHEET_ID") or "1plLMR0GQUdFBagKiUT78CMxcncbUc435jt4uluKxhbI"
 ORIGINAL_DIR   = Path("stocks/original")
 TRANSCRIPT_DIR = Path("stocks/transcription")
 SCOPES = [
