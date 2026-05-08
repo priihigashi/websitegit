@@ -94,6 +94,13 @@ TARGET_FILE_ALIASES = {
     "scripts/add-gsc-headers.js or similar": "scripts/add-gsc-headers.js",
 }
 
+REFERENCE_FILE_SUFFIXES = {".py", ".js", ".ts", ".tsx", ".yml", ".yaml"}
+AUTH_REFERENCE_TERMS = {
+    "auth", "oauth", "token", "credential", "credentials", "secret",
+    "sheets_token", "refresh_token", "client_id", "client_secret",
+    "authorization", "bearer",
+}
+
 # Loaded by main() at the start of every cycle from NONNEGOTIABLES.md
 NONNEGOTIABLES_TEXT: str = ""
 DETAILED_REPORT_TEXT: str = ""
@@ -328,6 +335,167 @@ def resolve_target_file_path(repo, raw_path: str,
             return candidate, f"target_file_fuzzy:{path}->{candidate}"
     return path, ""
 
+
+def _local_repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _keyword_tokens(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9_]{4,}", (text or "").lower()))
+
+
+def _task_reference_keywords(task: dict, file_path: str,
+                             file_content: str = "") -> set[str]:
+    parts = [
+        task.get("ID", ""),
+        task.get("Title", ""),
+        task.get("Description", ""),
+        task.get("Verification Method", ""),
+        task.get("Affected Workflow", ""),
+        file_path,
+    ]
+    # Include env-var/function-like tokens from the target content without
+    # stuffing the entire file into the scoring text.
+    content_terms = sorted(_keyword_tokens(file_content))[:80]
+    return _keyword_tokens("\n".join(parts + content_terms))
+
+
+def _is_auth_sensitive(task: dict, file_path: str, file_content: str = "") -> bool:
+    haystack = " ".join([
+        task.get("Title", ""),
+        task.get("Description", ""),
+        task.get("Verification Method", ""),
+        file_path,
+        file_content[:4000],
+    ]).lower()
+    return any(term in haystack for term in AUTH_REFERENCE_TERMS)
+
+
+def _read_reference_text(path: Path, limit: int = 24000) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")[:limit]
+    except Exception:
+        return ""
+
+
+def _score_reference_file(path: Path, target_path: Path, text: str,
+                          keywords: set[str], auth_sensitive: bool) -> int:
+    if not text or path == target_path:
+        return 0
+    score = 0
+    if path.parent == target_path.parent:
+        score += 10
+    lower = text.lower()
+    if auth_sensitive:
+        score += sum(4 for term in AUTH_REFERENCE_TERMS if term in lower)
+    score += min(25, len(_keyword_tokens(text).intersection(keywords)))
+    return score
+
+
+def _reference_snippet(rel_path: str, text: str, keywords: set[str],
+                       max_chars: int = 2600) -> str:
+    lines = text.splitlines()
+    needles = keywords.union(AUTH_REFERENCE_TERMS)
+    hits: list[int] = []
+    for idx, line in enumerate(lines):
+        lower = line.lower()
+        if any(term in lower for term in needles):
+            hits.append(idx)
+    if not hits:
+        snippet = "\n".join(lines[:80])
+    else:
+        selected: list[str] = []
+        used: set[int] = set()
+        for hit in hits[:12]:
+            for line_idx in range(max(0, hit - 2), min(len(lines), hit + 3)):
+                if line_idx in used:
+                    continue
+                used.add(line_idx)
+                selected.append(f"{line_idx + 1}: {lines[line_idx]}")
+                if len("\n".join(selected)) >= max_chars:
+                    break
+            if len("\n".join(selected)) >= max_chars:
+                break
+        snippet = "\n".join(selected)
+    if len(snippet) > max_chars:
+        snippet = snippet[:max_chars] + "\n[reference snippet truncated]"
+    return f"--- {rel_path} ---\n{snippet}"
+
+
+def discover_reference_context(task: dict, file_path: str,
+                               file_content: str,
+                               max_files: int = 4,
+                               max_chars: int = 12000) -> tuple[str, list[str]]:
+    """Find nearby repo-local patterns to include in AI patch prompts.
+
+    The self-heal bot previously patched files in isolation. For auth/OAuth
+    bugs that is risky because a working refresh-token pattern may already
+    exist in a sibling file. This helper only reads local repo files and
+    returns compact snippets for the prompt; it never changes behavior itself.
+    """
+    root = _local_repo_root()
+    target_path = root / file_path
+    keywords = _task_reference_keywords(task, file_path, file_content)
+    auth_sensitive = _is_auth_sensitive(task, file_path, file_content)
+    candidates: list[tuple[int, str, str]] = []
+
+    search_dirs = [target_path.parent]
+    for directory in search_dirs:
+        if not directory.exists() or not directory.is_dir():
+            continue
+        for candidate in sorted(directory.iterdir()):
+            if not candidate.is_file() or candidate.suffix not in REFERENCE_FILE_SUFFIXES:
+                continue
+            text = _read_reference_text(candidate)
+            score = _score_reference_file(candidate, target_path, text, keywords, auth_sensitive)
+            if score <= 0:
+                continue
+            rel = candidate.relative_to(root).as_posix()
+            candidates.append((score, rel, text))
+
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    snippets: list[str] = []
+    refs: list[str] = []
+    total = 0
+    for _, rel, text in candidates[:max_files]:
+        snippet = _reference_snippet(rel, text, keywords)
+        if total + len(snippet) > max_chars:
+            remaining = max_chars - total
+            if remaining <= 400:
+                break
+            snippet = snippet[:remaining] + "\n[reference context truncated]"
+        snippets.append(snippet)
+        refs.append(rel)
+        total += len(snippet)
+    return "\n\n".join(snippets), refs
+
+
+def patch_satisfies_reference_guard(task: dict, file_path: str,
+                                    file_content: str,
+                                    patch: dict,
+                                    field_name: str = "reference_files_consulted"
+                                    ) -> tuple[bool, str]:
+    """Require auth-sensitive patches to name a discovered repo-local reference."""
+    if patch.get("decision") != "PATCH" and field_name == "reference_files_consulted":
+        return True, ""
+    if not _is_auth_sensitive(task, file_path, file_content):
+        return True, ""
+    _, expected_refs = discover_reference_context(task, file_path, file_content)
+    if not expected_refs:
+        return False, "auth-sensitive patch has no repo-local reference context"
+    raw_refs = patch.get(field_name) or []
+    if isinstance(raw_refs, str):
+        raw_refs = [raw_refs]
+    consulted = {str(ref).strip() for ref in raw_refs if str(ref).strip()}
+    if not consulted:
+        return False, f"auth-sensitive patch omitted {field_name}"
+    if not consulted.intersection(expected_refs):
+        return False, (
+            "auth-sensitive patch did not consult discovered reference files: "
+            + ", ".join(expected_refs)
+        )
+    return True, ""
+
 # ── BUG VERIFICATION ────────────────────────────────────────────────────────
 def trigger_workflow(gh: Github, workflow_filename: str, ref: str = DEFAULT_BRANCH,
                      inputs: Optional[dict] = None) -> Optional[int]:
@@ -456,11 +624,16 @@ CONSTRAINTS (NON-NEGOTIABLE — read repo NONNEGOTIABLES.md before reasoning):
 6. PRESERVE COMMENTS AND DOCSTRINGS that document existing behavior. New
    comments may be added but old ones must not be removed unless they are
    describing the exact code being changed.
-7. Output ONLY valid JSON with this schema:
+7. CONSULT REPO-LOCAL REFERENCES: If REFERENCE FILE CONTEXT is provided, inspect
+   it before patching and include every used path in reference_files_consulted.
+   For auth/OAuth/token/credential fixes, REFUSE if no relevant reference file
+   was consulted.
+8. Output ONLY valid JSON with this schema:
    {
      "decision": "PATCH" | "REFUSE",
      "reason": "short explanation",
      "risk": "LOW" | "MED" | "HIGH",
+     "reference_files_consulted": ["repo/path.py"],
      "new_file_content": "FULL FILE CONTENT (only when decision=PATCH)",
      "diff_summary": "1-3 sentences on what changed"
    }
@@ -574,6 +747,8 @@ def request_patch_claude(client: anthropic.Anthropic, task: dict,
                          error_log: str = "") -> dict:
     nn = (NONNEGOTIABLES_TEXT[:8000] if NONNEGOTIABLES_TEXT else "(not loaded)")
     report = (DETAILED_REPORT_TEXT[:15000] if DETAILED_REPORT_TEXT else "(not loaded)")
+    reference_context, reference_files = discover_reference_context(task, file_path, file_content)
+    reference_block = reference_context or "(no relevant sibling/reference files found)"
     user = f"""REPO NON-NEGOTIABLES (read first, comply absolutely):
 ```
 {nn}
@@ -589,6 +764,12 @@ TITLE: {task.get('Title')}
 DESCRIPTION: {task.get('Description')}
 TARGET FILE: {file_path}
 VERIFICATION METHOD: {task.get('Verification Method')}
+
+REFERENCE FILE CONTEXT (repo-local patterns to consult before patching):
+Expected reference_files_consulted candidates: {reference_files}
+```
+{reference_block}
+```
 
 CURRENT FILE CONTENT (verbatim — do not delete or restructure unrelated code):
 ```
@@ -623,6 +804,8 @@ def request_patch_openai_primary(client: OpenAI, task: dict,
     """OpenAI as primary patch generator (fallback when Claude is unavailable)."""
     nn = (NONNEGOTIABLES_TEXT[:8000] if NONNEGOTIABLES_TEXT else "(not loaded)")
     report = (DETAILED_REPORT_TEXT[:15000] if DETAILED_REPORT_TEXT else "(not loaded)")
+    reference_context, reference_files = discover_reference_context(task, file_path, file_content)
+    reference_block = reference_context or "(no relevant sibling/reference files found)"
     user = f"""REPO NON-NEGOTIABLES (read first, comply absolutely):
 ```
 {nn}
@@ -638,6 +821,12 @@ TITLE: {task.get('Title')}
 DESCRIPTION: {task.get('Description')}
 TARGET FILE: {file_path}
 VERIFICATION METHOD: {task.get('Verification Method')}
+
+REFERENCE FILE CONTEXT (repo-local patterns to consult before patching):
+Expected reference_files_consulted candidates: {reference_files}
+```
+{reference_block}
+```
 
 CURRENT FILE CONTENT (verbatim — do not delete or restructure unrelated code):
 ```
@@ -676,6 +865,7 @@ DESCRIPTION: {task.get('Description')}
 PROPOSED PATCH (from Claude):
 - decision: {claude_patch.get('decision')}
 - risk: {claude_patch.get('risk')}
+- reference_files_consulted: {claude_patch.get('reference_files_consulted')}
 - diff_summary: {claude_patch.get('diff_summary')}
 - new_file_content (snippet): {(claude_patch.get('new_file_content') or '')[:6000]}
 
@@ -694,6 +884,7 @@ Decide if Claude's fix is safe and correct. Output JSON ONLY:
   "agreement": "AGREE" | "DISAGREE" | "PARTIAL",
   "concerns": "list of concerns or 'none'",
   "alternative_decision": "PATCH" | "REFUSE" | "USE_CLAUDE_PATCH",
+  "alternative_reference_files_consulted": ["repo/path.py"],
   "alternative_new_file_content": "full file if you propose your own patch, else empty",
   "diff_summary": "what your alternative changes (or 'same as Claude')"
 }}
@@ -1196,9 +1387,28 @@ def main() -> None:
         # Apply Claude's patch (preferred) unless OpenAI proposed an alternative explicitly
         if oa_review.get("alternative_decision") == "PATCH" and oa_review.get("alternative_new_file_content"):
             new_content = oa_review["alternative_new_file_content"]
+            reference_patch = {
+                "decision": "PATCH",
+                "alternative_reference_files_consulted": oa_review.get(
+                    "alternative_reference_files_consulted"
+                ),
+            }
+            ok_refs, ref_reason = patch_satisfies_reference_guard(
+                task, path, before, reference_patch,
+                field_name="alternative_reference_files_consulted",
+            )
+            if not ok_refs:
+                log(f"REJECTED by reference guard: {ref_reason}")
+                error_log = f"REFERENCE GUARD: {ref_reason}"
+                continue
             log("Using OpenAI alternative patch")
         else:
             new_content = claude_patch.get("new_file_content") or ""
+            ok_refs, ref_reason = patch_satisfies_reference_guard(task, path, before, claude_patch)
+            if not ok_refs:
+                log(f"REJECTED by reference guard: {ref_reason}")
+                error_log = f"REFERENCE GUARD: {ref_reason}"
+                continue
 
         if not new_content:
             error_log = "no patch content"
