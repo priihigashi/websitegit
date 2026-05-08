@@ -193,6 +193,7 @@ def youtube_transcript_text(url: str) -> str:
     video_id = youtube_video_id(url)
     if not video_id:
         return ""
+    last_error = None
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         api = YouTubeTranscriptApi()
@@ -205,10 +206,14 @@ def youtube_transcript_text(url: str) -> str:
                 text = " ".join(t.text for t in transcript).strip()
                 if text:
                     return text
-            except Exception:
+            except Exception as e:
+                last_error = e
                 continue
     except Exception as e:
         print(f"  ⚠️  YouTube transcript API unavailable: {e}")
+        return ""
+    if last_error:
+        print(f"  ⚠️  YouTube transcript unavailable: {type(last_error).__name__}")
     return ""
 
 def get_ffmpeg() -> str:
@@ -385,6 +390,8 @@ def main():
     col_link      = header_index(header, "URL", "Link")
     col_niche     = header_index(header, "Niche")
     col_title     = header_index(header, "Topic / Title", "Title")
+    col_desc      = header_index(header, "Description", "About")
+    col_caption   = header_index(header, "Original Caption", "Caption")
     col_extracted = header_index(header, "Transcription", "What we extracted", "Extracted")
     col_status    = header_index(header, "Status")
 
@@ -453,8 +460,23 @@ def main():
                 print(f"  ⚠️  Vision failed: {e}")
 
         if not whisper_text and not vision_text:
-            print("  ❌ Both paths failed — skipping")
-            continue
+            metadata_text = "\n".join(
+                part for part in [
+                    f"Title: {v(col_title)}" if v(col_title) else "",
+                    f"Description: {v(col_desc)}" if v(col_desc) else "",
+                    f"Original caption: {v(col_caption)}" if v(col_caption) else "",
+                ]
+                if part
+            ).strip()
+            if not metadata_text:
+                print("  ❌ Both paths failed and no row metadata exists — skipping")
+                continue
+            print("  ⚠️  Media blocked — using row metadata only")
+            whisper_text = (
+                "[MEDIA RETRIEVAL BLOCKED: GitHub runner hit platform bot/login "
+                "checks and no public captions were available. Metadata-only review.]\n\n"
+                + metadata_text
+            )
 
         # Claude extraction
         print("  🧠 Claude extracting...")
@@ -464,8 +486,8 @@ def main():
             print(f"  ⚠️  Claude extraction failed: {e}")
             fallback_text = (whisper_text or vision_text or "").strip()
             info = {
-                "title": "Review manually",
-                "about": "Automated extraction failed; transcript was saved for manual review.",
+                "title": v(col_title) or "Review manually",
+                "about": "Automated extraction failed; source text was saved for manual review.",
                 "extracted": fallback_text[:1000],
                 "quality": 1,
                 "niche": v(col_niche) or "AI Tips",
