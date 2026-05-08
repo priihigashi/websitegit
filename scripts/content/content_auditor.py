@@ -63,7 +63,14 @@ OVERALL SCORE: [1-10]
 VERDICT: [PASS/FAIL]
 NOTES: [1-2 sentences max]"""
 
-STRUCTURE_FORMAT_PROMPT = """You are a social media format expert. Review for: slide count appropriate (4-8 for carousel), hook in first slide, CTA in last slide, each slide has ONE main point, text not too long per slide, image described or present for alternating slides. Give a score 1-10 and PASS/FAIL verdict.
+STRUCTURE_FORMAT_PROMPT = """You are a social media format expert. Review the RENDERED carousel brief, not raw JSON fields.
+
+Review for: slide count appropriate (4-8 for carousel), hook in first slide, CTA in last slide, each slide has a clear purpose, text not too long per slide, image described or present for alternating slides. Give a score 1-10 and PASS/FAIL verdict.
+
+Important template-aware rules:
+- OPC smart-picker carousels may mix template types. A material/profile grid, four-card comparison grid, and sources/CTA slide are intentionally structured with multiple short micro-points. Do NOT fail those slides for "one point per slide" when the slide has one clear overall purpose.
+- Treat rendered image markers such as [VISUALS: ...] as evidence that visuals are present. Do NOT say visuals are missing when the brief lists images/backgrounds/videos.
+- A CTA may appear as a final-slide save/action phrase, a source-slide action, or a rendered footer CTA.
 
 Format your response EXACTLY as:
 SLIDE COUNT: [count] — [OK/TOO FEW/TOO MANY]
@@ -141,6 +148,36 @@ def _strip_tags(text: str) -> str:
     return text
 
 
+def _visual_summary_for_slide(block: str) -> str:
+    """Summarize rendered visual evidence for the audit LLM.
+
+    The structure auditor only receives text, so without this marker it can
+    falsely claim that a rendered smart-template slide has no visuals.
+    """
+    img_count = len(re.findall(r'<img\b', block, flags=re.IGNORECASE))
+    video_count = len(re.findall(r'<video\b', block, flags=re.IGNORECASE))
+    bg_count = len(re.findall(
+        r'background-image\s*:\s*url\((?!["\']?\s*["\']?\))',
+        block,
+        flags=re.IGNORECASE,
+    ))
+    placeholder_count = len(re.findall(
+        r'context-img-placeholder|ctx-placeholder',
+        block,
+        flags=re.IGNORECASE,
+    ))
+    bits = []
+    if img_count:
+        bits.append(f"{img_count} img")
+    if bg_count:
+        bits.append(f"{bg_count} bg")
+    if video_count:
+        bits.append(f"{video_count} video")
+    if placeholder_count:
+        bits.append(f"{placeholder_count} placeholder")
+    return ", ".join(bits) if bits else "none"
+
+
 def _first_variant_html(html: str) -> str:
     """The carousel builder stores two visual variants in one cover.html file.
 
@@ -160,12 +197,18 @@ def _extract_slides_from_html(html: str) -> list[str]:
     """
     html = _first_variant_html(html)
 
-    # Find positions of all slide-class opening tags
-    slide_open_re = re.compile(
-        r'<(?:div|section|article)[^>]*class=["\'][^"\']*\bslide\b[^"\']*["\'][^>]*>',
+    # Find positions of top-level slide opening tags. Match the CSS class
+    # token exactly so nested helpers like "slide-logo" are not counted as
+    # fake slides.
+    tag_re = re.compile(
+        r'<(?:div|section|article)\b[^>]*class=["\']([^"\']*)["\'][^>]*>',
         flags=re.IGNORECASE,
     )
-    positions = [m.start() for m in slide_open_re.finditer(html)]
+    positions = [
+        m.start()
+        for m in tag_re.finditer(html)
+        if "slide" in (m.group(1) or "").split()
+    ]
 
     if not positions:
         # Fallback: segment by data-slide or id=slide-N
@@ -185,8 +228,30 @@ def _extract_slides_from_html(html: str) -> list[str]:
         block = html[positions[i]:positions[i + 1]]
         t = _strip_tags(block).strip()
         if len(t) > 20:
-            texts.append(t[:500])
+            visuals = _visual_summary_for_slide(block)
+            texts.append(f"{t[:500]} [VISUALS: {visuals}]")
     return texts
+
+
+def _slide_plan_summary(content: dict) -> list[str]:
+    """Return compact smart-picker template roles for audit context."""
+    plan = (content or {}).get("_slide_plan") or {}
+    resolved = plan.get("_resolved_slides") or []
+    planned = plan.get("slides") or []
+    lines = []
+    for idx, slide in enumerate(planned, start=1):
+        resolved_item = resolved[idx - 1] if idx - 1 < len(resolved) else {}
+        template_id = resolved_item.get("effective_id") or slide.get("template_id") or ""
+        role = slide.get("role") or resolved_item.get("role") or ""
+        kind = resolved_item.get("kind") or ""
+        goal = slide.get("content_goal") or ""
+        if template_id or role:
+            lines.append(
+                f"  Slide {idx}: role={role or 'unknown'}; "
+                f"template={template_id or 'unknown'}; kind={kind or 'unknown'}; "
+                f"goal={goal[:140]}"
+            )
+    return lines
 
 
 def extract_content_brief(result: dict) -> str:
@@ -209,6 +274,12 @@ def extract_content_brief(result: dict) -> str:
         lines.append(f"SERIES: {series_override}")
     if mentioned:
         lines.append(f"PEOPLE MENTIONED: {', '.join(mentioned)}")
+
+    content = result.get("content") or {}
+    plan_lines = _slide_plan_summary(content)
+    if plan_lines:
+        lines.append("\nSMART TEMPLATE PLAN:")
+        lines.extend(plan_lines)
 
     # Locate cover.html — it lives at WORK_DIR/post_id/cover.html
     html_path = WORK_DIR / post_id / "cover.html"
