@@ -759,22 +759,34 @@ def schedule_to_buffer(variant, drive_folder_id, caption="", platform="instagram
 
     _buffer_expiry_check()
 
-    profiles_url = f"{BUFFER_API}/profiles.json?access_token={BUFFER_KEY}"
-    try:
-        profiles = json.loads(urllib.request.urlopen(profiles_url, timeout=15).read())
-    except Exception as e:
-        print(f"  Buffer profiles error: {e}")
-        return False
+    # Niche-aware profile selection (added 2026-05-08).
+    # If BUFFER_OPC_<PLATFORM>_PROFILE_ID env var is set, use it directly —
+    # bypasses the "first matching profile" coin-toss when multiple accounts
+    # are connected to the same Buffer login.
+    # Env var name pattern: BUFFER_OPC_INSTAGRAM_PROFILE_ID, BUFFER_OPC_TIKTOK_PROFILE_ID, etc.
+    explicit_id = os.environ.get(f"BUFFER_OPC_{platform.upper()}_PROFILE_ID", "").strip()
 
     profile_id = None
-    for p in profiles:
-        if platform.lower() in p.get("service", "").lower():
-            profile_id = p["id"]
-            break
+    if explicit_id:
+        profile_id = explicit_id
+        print(f"  Using explicit Buffer profile_id from BUFFER_OPC_{platform.upper()}_PROFILE_ID env var")
+    else:
+        # Fallback: query Buffer profiles + pick first matching service
+        profiles_url = f"{BUFFER_API}/profiles.json?access_token={BUFFER_KEY}"
+        try:
+            profiles = json.loads(urllib.request.urlopen(profiles_url, timeout=15).read())
+        except Exception as e:
+            print(f"  Buffer profiles error: {e}")
+            return False
 
-    if not profile_id:
-        print(f"  No Buffer profile for {platform}")
-        return False
+        for p in profiles:
+            if platform.lower() in p.get("service", "").lower():
+                profile_id = p["id"]
+                break
+
+        if not profile_id:
+            print(f"  No Buffer profile for {platform}")
+            return False
 
     drive = _get_drive_service()
     image_urls = _get_variant_image_urls(drive, drive_folder_id, variant)
