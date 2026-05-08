@@ -8,10 +8,11 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { COMPANY } = require('./company-info.js');
 
-const client = new Anthropic();
-
 const GOOGLE_SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SHEETS_TOKEN    = process.env.SHEETS_TOKEN;
+const ANTHROPIC_KEY   = process.env.CLAUDE_KEY_4_CONTENT || process.env.ANTHROPIC_API_KEY || '';
+const OPENAI_KEY      = process.env.OPENAI_API_KEY || '';
+const client = ANTHROPIC_KEY ? new Anthropic({ apiKey: ANTHROPIC_KEY }) : null;
 
 // Column index map (0-based, matching the 22-column sheet layout)
 const COLS = {
@@ -158,13 +159,8 @@ async function fillWithClaude(rows) {
       };
     });
 
-    const message = await client.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 6000,
-      system: `You are a content strategist for ${COMPANY.name}, a licensed general contractor in ${COMPANY.location.headquarters} serving ${COMPANY.location.primaryMarket}. ${COMPANY.contentRules.politicalNeutrality}`,
-      messages: [{
-        role: 'user',
-        content: `The following content ideas from our spreadsheet are missing some columns. Fill ONLY the missing fields for each item. Use the raw idea title and source link to understand the topic.
+    const system = `You are a content strategist for ${COMPANY.name}, a licensed general contractor in ${COMPANY.location.headquarters} serving ${COMPANY.location.primaryMarket}. ${COMPANY.contentRules.politicalNeutrality}`;
+    const prompt = `The following content ideas from our spreadsheet are missing some columns. Fill ONLY the missing fields for each item. Use the raw idea title and source link to understand the topic.
 
 ${items.map(item => `Item ${item.num}:
   Raw idea: "${item.rawIdea}"
@@ -176,11 +172,25 @@ For each item return ONLY the missing fields. All content should be relevant to 
 
 Return ONLY a JSON array, no markdown fences:
 [{"num":1,"topic_direction":"...","focus_keyword":"...","secondary_keyword":"...","hook_professional":"...","hook_emotional":"...","hook_genz":"...","master_hook":"...","reader_payoff":"...","ideal_for":"Both","target_audience":"Homeowner","image_direction":"...","social_one_liner":"..."}]
-Only include fields that were listed as missing for each item.`,
-      }],
-    });
+Only include fields that were listed as missing for each item.`;
 
-    let raw = message.content[0].text.trim();
+    let raw = '';
+    if (client) {
+      try {
+        const message = await client.messages.create({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 6000,
+          system,
+          messages: [{ role: 'user', content: prompt }],
+        });
+        raw = message.content[0].text.trim();
+      } catch (err) {
+        console.log(`Claude fill failed (${err.message}); trying OpenAI fallback...`);
+      }
+    }
+    if (!raw) {
+      raw = await fillWithOpenAI(system, prompt);
+    }
     raw = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/, '').trim();
     const filled = JSON.parse(raw);
 
@@ -191,6 +201,28 @@ Only include fields that were listed as missing for each item.`,
   }
 
   return results;
+}
+
+async function fillWithOpenAI(system, prompt) {
+  if (!OPENAI_KEY) throw new Error('No AI fill provider available: CLAUDE_KEY_4_CONTENT/ANTHROPIC_API_KEY and OPENAI_API_KEY missing or unusable');
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENAI_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: prompt },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI fill failed: ${await res.text()}`);
+  const data = await res.json();
+  return (data.choices?.[0]?.message?.content || '').trim();
 }
 
 (async () => {
