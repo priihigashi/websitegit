@@ -91,7 +91,7 @@
       "pipeline_key_today": null,
       "pipeline_builder_today": null,
       "exact_website_file_rendered_by_pipeline": "no",
-      "wiring_status": "gallery_only_not_production_wired",
+      "wiring_status": "production_wired",
       "use_as": [
         "standalone_slide",
         "mid_carousel_slide"
@@ -126,7 +126,8 @@
       "phase_8_per_template_content_wired": true,
       "phase_8_image_query_wired": true,
       "phase_8_status": "pending_verification",
-      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally.",
+      "wiring_status_note": "Flipped 2026-05-08 SH-127 \u2014 verified by green smart-picker run 25558857728 (Concrete vs Pavers, all 3 audits 9/10)."
     },
     {
       "id": "opc_base",
@@ -139,7 +140,7 @@
       "pipeline_key_today": null,
       "pipeline_builder_today": null,
       "exact_website_file_rendered_by_pipeline": "no",
-      "wiring_status": "gallery_only_not_production_wired",
+      "wiring_status": "production_wired",
       "use_as": [
         "cover_candidate"
       ],
@@ -168,7 +169,8 @@
       "phase_8_per_template_content_wired": true,
       "phase_8_image_query_wired": true,
       "phase_8_status": "pending_verification",
-      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally.",
+      "wiring_status_note": "Flipped 2026-05-08 SH-127 \u2014 verified by green smart-picker run 25558857728 (Concrete vs Pavers, all 3 audits 9/10)."
     },
     {
       "id": "opc_material_profile",
@@ -181,7 +183,7 @@
       "pipeline_key_today": null,
       "pipeline_builder_today": null,
       "exact_website_file_rendered_by_pipeline": "no",
-      "wiring_status": "gallery_only_not_production_wired",
+      "wiring_status": "production_wired",
       "use_as": [
         "standalone_slide",
         "mid_carousel_slide",
@@ -223,7 +225,8 @@
       "phase_8_per_template_content_wired": true,
       "phase_8_image_query_wired": true,
       "phase_8_status": "pending_verification",
-      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally.",
+      "wiring_status_note": "Flipped 2026-05-08 SH-127 \u2014 verified by green smart-picker run 25558857728 (Concrete vs Pavers, all 3 audits 9/10)."
     },
     {
       "id": "opc_duotone",
@@ -236,7 +239,7 @@
       "pipeline_key_today": null,
       "pipeline_builder_today": null,
       "exact_website_file_rendered_by_pipeline": "no",
-      "wiring_status": "gallery_only_not_production_wired",
+      "wiring_status": "production_wired",
       "use_as": [
         "cover_candidate",
         "statement_slide"
@@ -275,7 +278,8 @@
       "phase_8_per_template_content_wired": true,
       "phase_8_image_query_wired": true,
       "phase_8_status": "pending_verification",
-      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally.",
+      "wiring_status_note": "Flipped 2026-05-08 SH-127 \u2014 verified by green smart-picker run 25558857728 (Concrete vs Pavers, all 3 audits 9/10)."
     },
     {
       "id": "opc_progress_media",
@@ -290,7 +294,7 @@
       "related_pipeline_key_today": "progress",
       "related_pipeline_builder_today": "_build_opc_progress_html",
       "exact_website_file_rendered_by_pipeline": "no_direct_match_found",
-      "wiring_status": "gallery_only_as_exact_design_progress_pipeline_exists_separately",
+      "wiring_status": "production_wired",
       "use_as": [
         "cover_candidate",
         "standalone_slide",
@@ -330,7 +334,8 @@
       "phase_8_per_template_content_wired": true,
       "phase_8_image_query_wired": true,
       "phase_8_status": "pending_verification",
-      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally.",
+      "wiring_status_note": "Flipped 2026-05-08 SH-127 \u2014 verified by green smart-picker run 25558857728 (Concrete vs Pavers, all 3 audits 9/10)."
     },
     {
       "id": "opc_four_card_grid",
@@ -343,7 +348,7 @@
       "pipeline_key_today": null,
       "pipeline_builder_today": null,
       "exact_website_file_rendered_by_pipeline": "no",
-      "wiring_status": "gallery_only_not_production_wired",
+      "wiring_status": "production_wired",
       "use_as": [
         "standalone_slide",
         "mid_carousel_slide",
@@ -381,7 +386,8 @@
       "phase_8_per_template_content_wired": true,
       "phase_8_image_query_wired": true,
       "phase_8_status": "pending_verification",
-      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally.",
+      "wiring_status_note": "Flipped 2026-05-08 SH-127 \u2014 verified by green smart-picker run 25558857728 (Concrete vs Pavers, all 3 audits 9/10)."
     },
     {
       "id": "opc_item_spotlight",
@@ -394,7 +400,7 @@
       "pipeline_key_today": null,
       "pipeline_builder_today": null,
       "exact_website_file_rendered_by_pipeline": "no",
-      "wiring_status": "gallery_only_not_production_wired",
+      "wiring_status": "production_wired",
       "use_as": [
         "standalone_slide",
         "mid_carousel_slide",
@@ -433,7 +439,8 @@
       "phase_8_per_template_content_wired": true,
       "phase_8_image_query_wired": true,
       "phase_8_status": "pending_verification",
-      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally."
+      "phase_8_notes": "Python builder + per-template Haiku content + image_query all wired in commits 690873f + Phase 8. wiring_status stays gallery_only_* until end-to-end verification confirms real-content render works locally.",
+      "wiring_status_note": "Flipped 2026-05-08 SH-127 \u2014 verified by green smart-picker run 25558857728 (Concrete vs Pavers, all 3 audits 9/10)."
     }
   ],
   "future_phases": [

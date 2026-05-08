@@ -114,9 +114,9 @@ jobs:
       SLIDE_INSET_PX: ${{ vars.SLIDE_INSET_PX || '40' }}
       # Opt-in: change '' to 'true' to enable DALL-E 3 fallback (Brazil/USA only; OPC is real-photos-only)
       USE_DALLE: ''
-      # Phase 8 — SH-OPC-SMART-SLIDE-PICKER smart slide planner. Default OFF on cron.
-      # Manual runs flip per-run via workflow_dispatch input opc_slide_planner=1.
-      OPC_SLIDE_PLANNER_ENABLED: ${{ github.event.inputs.opc_slide_planner || '0' }}
+      # Phase 8 — SH-OPC-SMART-SLIDE-PICKER smart slide planner. Default ON on cron (SH-126, 2026-05-08).
+      # Manual runs can override via workflow_dispatch input opc_slide_planner=0 to fall back to legacy planner.
+      OPC_SLIDE_PLANNER_ENABLED: ${{ github.event.inputs.opc_slide_planner || '1' }}
 
     steps:
       - name: Checkout
@@ -264,9 +264,9 @@ jobs:
       SLIDE_INSET_PX: ${{ vars.SLIDE_INSET_PX || '40' }}
       # Opt-in: change '' to 'true' to enable DALL-E 3 fallback (Brazil/USA only; OPC is real-photos-only)
       USE_DALLE: ''
-      # Phase 8 — SH-OPC-SMART-SLIDE-PICKER smart slide planner. Default OFF on cron.
-      # Manual runs flip per-run via workflow_dispatch input opc_slide_planner=1.
-      OPC_SLIDE_PLANNER_ENABLED: ${{ github.event.inputs.opc_slide_planner || '0' }}
+      # Phase 8 — SH-OPC-SMART-SLIDE-PICKER smart slide planner. Default ON on cron (SH-126, 2026-05-08).
+      # Manual runs can override via workflow_dispatch input opc_slide_planner=0 to fall back to legacy planner.
+      OPC_SLIDE_PLANNER_ENABLED: ${{ github.event.inputs.opc_slide_planner || '1' }}
 
     steps:
       - name: Checkout
