@@ -2,9 +2,16 @@
 scraper.py — Apify Instagram/TikTok scraper with 10k+ views filter
 Reads Scraping Targets tab to know what to scrape.
 """
-import os, time, requests
+import os, sys, time, requests
 import pytz
 from datetime import datetime
+import pathlib as _sc_pl
+sys.path.insert(0, str(_sc_pl.Path(__file__).resolve().parent.parent / "capture"))
+try:
+    from _llm_fallback import llm_text as _llm_text
+    _HAS_LLM_FALLBACK = True
+except ImportError:
+    _HAS_LLM_FALLBACK = False
 
 APIFY_API_KEY = os.environ.get("APIFY_API_KEY", "")
 APIFY_BASE    = "https://api.apify.com/v2"
@@ -201,7 +208,7 @@ def _research_attribution(caption):
     Returns a JSON string with keys: responsible_party, decision_name, year, source_url."""
     import json as _json, urllib.request as _req
     api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("CLAUDE_KEY_4_CONTENT", "")
-    if not api_key:
+    if not api_key and not _HAS_LLM_FALLBACK:
         print("[debunk] No ANTHROPIC_API_KEY — skipping attribution research")
         return ""
     prompt = (
@@ -210,23 +217,26 @@ def _research_attribution(caption):
         "Return JSON with keys: responsible_party, decision_name, year, source_url."
     )
     try:
-        body = _json.dumps({
-            "model": "claude-sonnet-4-6",
-            "max_tokens": 400,
-            "messages": [{"role": "user", "content": prompt}],
-        }).encode()
-        request = _req.Request(
-            "https://api.anthropic.com/v1/messages",
-            data=body,
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-        )
-        resp = _json.loads(_req.urlopen(request, timeout=60).read())
-        result = resp["content"][0]["text"].strip()
-        print(f"[debunk] Sonnet attribution research complete ({len(result)} chars)")
+        if _HAS_LLM_FALLBACK:
+            result = _llm_text(prompt, model_tier="sonnet", max_tokens=400).strip()
+        else:
+            body = _json.dumps({
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 400,
+                "messages": [{"role": "user", "content": prompt}],
+            }).encode()
+            request = _req.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=body,
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+            )
+            resp = _json.loads(_req.urlopen(request, timeout=60).read())
+            result = resp["content"][0]["text"].strip()
+        print(f"[debunk] attribution research complete ({len(result)} chars)")
         return result
     except Exception as e:
         print(f"[debunk] Sonnet research failed: {e}")
@@ -238,7 +248,7 @@ def _classify_debunk_mode(caption):
     Uses caption text as the transcript proxy since scraper has no Whisper access."""
     import json as _json, urllib.request as _req
     api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("CLAUDE_KEY_4_CONTENT", "")
-    if not api_key:
+    if not api_key and not _HAS_LLM_FALLBACK:
         print("[debunk] No ANTHROPIC_API_KEY — defaulting to mode_b")
         return "mode_b"
     prompt = (
@@ -249,27 +259,30 @@ def _classify_debunk_mode(caption):
         f"Transcript: {caption[:800]}"
     )
     try:
-        body = _json.dumps({
-            "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 10,
-            "messages": [{"role": "user", "content": prompt}],
-        }).encode()
-        request = _req.Request(
-            "https://api.anthropic.com/v1/messages",
-            data=body,
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-        )
-        resp = _json.loads(_req.urlopen(request, timeout=30).read())
-        text = resp["content"][0]["text"].strip().lower()
+        if _HAS_LLM_FALLBACK:
+            text = _llm_text(prompt, model_tier="haiku", max_tokens=10).strip().lower()
+        else:
+            body = _json.dumps({
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 10,
+                "messages": [{"role": "user", "content": prompt}],
+            }).encode()
+            request = _req.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=body,
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+            )
+            resp = _json.loads(_req.urlopen(request, timeout=30).read())
+            text = resp["content"][0]["text"].strip().lower()
         result = "mode_a" if "mode_a" in text else "mode_b"
-        print(f"[debunk] Haiku classified: {result}")
+        print(f"[debunk] classified: {result}")
         return result
     except Exception as e:
-        print(f"[debunk] Haiku classify failed: {e} — defaulting mode_b")
+        print(f"[debunk] classify failed: {e} — defaulting mode_b")
         return "mode_b"
 
 

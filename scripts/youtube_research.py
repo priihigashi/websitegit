@@ -30,6 +30,14 @@ except ImportError:
     os.system("pip install anthropic -q")
     import anthropic
 
+import pathlib as _yr_pl
+sys.path.insert(0, str(_yr_pl.Path(__file__).resolve().parent / "capture"))
+try:
+    from _llm_fallback import llm_text as _llm_text
+    _HAS_LLM_FALLBACK = True
+except ImportError:
+    _HAS_LLM_FALLBACK = False
+
 try:
     from youtube_transcript_api import YouTubeTranscriptApi
 except ImportError:
@@ -365,19 +373,18 @@ def get_transcript(video_id: str) -> str:
 # ── CLAUDE ANALYSIS ───────────────────────────────────────────────────────────
 def analyze_with_claude(video: dict, transcript: str, research_context: str) -> dict:
     """Claude analyzes a video — uses transcript if available, falls back to metadata only"""
-    if not CLAUDE_KEY_4_CONTENT:
+    if not CLAUDE_KEY_4_CONTENT and not _HAS_LLM_FALLBACK:
         return {"summary": "No API key", "watch_priority": "low", "relevance_score": 0}
-    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
-    
+
     has_transcript = transcript and "[transcript unavailable" not in transcript
-    
+
     if has_transcript:
         content_block = f"TRANSCRIPT:\n{transcript[:4000]}"
         mode_note = "You have the full transcript to analyze."
     else:
         content_block = f"NOTE: Transcript unavailable. Analyze based on title, channel, and date only."
         mode_note = "No transcript — use title and channel to infer what this video likely covers."
-    
+
     prompt = f"""You are analyzing a YouTube video for research on: {research_context}
 
 Video: "{video['title']}" by {video.get('uploader', 'unknown')}
@@ -407,12 +414,16 @@ relevance_score is 1-10. If no transcript, cap at 6 (needs manual verification).
 Return only valid JSON, no markdown."""
 
     try:
-        msg = client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=1000,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = msg.content[0].text.strip()
+        if _HAS_LLM_FALLBACK:
+            raw = _llm_text(prompt, model_tier="sonnet", max_tokens=1000).strip()
+        else:
+            client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
+            msg = client.messages.create(
+                model="claude-opus-4-6",
+                max_tokens=1000,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            raw = msg.content[0].text.strip()
         if raw.startswith("```"):
             raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         return json.loads(raw)
@@ -422,15 +433,14 @@ Return only valid JSON, no markdown."""
 # ── KEYWORD EXPANSION ─────────────────────────────────────────────────────────
 def expand_keywords(topic: str, results_so_far: list, round_num: int) -> list[str]:
     """Ask Claude to generate 5 new search queries based on videos analyzed so far"""
-    if not CLAUDE_KEY_4_CONTENT:
+    if not CLAUDE_KEY_4_CONTENT and not _HAS_LLM_FALLBACK:
         return []
-    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
-    
+
     summaries = []
     for r in results_so_far[-10:]:
         score = r["analysis"].get("relevance_score", 0)
         summaries.append(f"- [{score}/10] {r['title']}: {r['analysis'].get('summary', '')[:150]}")
-    
+
     prompt = f"""You are a YouTube research assistant expanding research on: {topic}
 Round: {round_num} of 3. Target: 15 total videos.
 
@@ -447,17 +457,20 @@ Return ONLY a JSON array of 5 query strings, nothing else:
 ["query 1", "query 2", "query 3", "query 4", "query 5"]"""
 
     try:
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=200,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = msg.content[0].text.strip()
-        # Strip markdown fences if Haiku wrapped the JSON
+        if _HAS_LLM_FALLBACK:
+            raw = _llm_text(prompt, model_tier="haiku", max_tokens=200).strip()
+        else:
+            client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=200,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            raw = msg.content[0].text.strip()
         if raw.startswith("```"):
             raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         if not raw:
-            raise ValueError(f"Haiku returned empty body (model=claude-haiku-4-5-20251001, round={round_num})")
+            raise ValueError(f"LLM returned empty body (round={round_num})")
         print(f"  [round {round_num}] raw response (first 200 chars): {raw[:200]}")
         return json.loads(raw)
     except Exception as e:
