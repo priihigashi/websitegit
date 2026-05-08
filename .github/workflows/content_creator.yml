@@ -90,6 +90,14 @@ on:
         required: false
         default: ''
         type: string
+      slide_purpose_pilot:
+        description: 'SH-137 — pilot: enable slide_purpose generation + reviewer/auditor purpose-awareness. Default OFF on cron. Manual-only test flag during pilot. See doc 1BDg9ORg.'
+        required: false
+        default: '0'
+        type: choice
+        options:
+          - '0'
+          - '1'
 
 jobs:
   create-content:
@@ -117,6 +125,10 @@ jobs:
       # Phase 8 — SH-OPC-SMART-SLIDE-PICKER smart slide planner. Default ON on cron (SH-126, 2026-05-08).
       # Manual runs can override via workflow_dispatch input opc_slide_planner=0 to fall back to legacy planner.
       OPC_SLIDE_PLANNER_ENABLED: ${{ github.event.inputs.opc_slide_planner || '1' }}
+      # SH-137 — slide_purpose pilot. Default OFF (cron stays unchanged). Manual-only flag for pilot tests.
+      # Spec: doc 1BDg9ORggVsWH-WQPBx4iQnYNu2UA5vHWcuNRkXCY5v8 (v3 FINAL).
+      # OPC purposes: hook|cost|teach|apply|sources. News purposes: claim|number|evidence|opposition|implication|sources.
+      SLIDE_PURPOSE_PILOT: ${{ github.event.inputs.slide_purpose_pilot || '0' }}
 
     steps:
       - name: Checkout
@@ -267,6 +279,10 @@ jobs:
       # Phase 8 — SH-OPC-SMART-SLIDE-PICKER smart slide planner. Default ON on cron (SH-126, 2026-05-08).
       # Manual runs can override via workflow_dispatch input opc_slide_planner=0 to fall back to legacy planner.
       OPC_SLIDE_PLANNER_ENABLED: ${{ github.event.inputs.opc_slide_planner || '1' }}
+      # SH-137 — slide_purpose pilot. Default OFF (cron stays unchanged). Manual-only flag for pilot tests.
+      # Spec: doc 1BDg9ORggVsWH-WQPBx4iQnYNu2UA5vHWcuNRkXCY5v8 (v3 FINAL).
+      # OPC purposes: hook|cost|teach|apply|sources. News purposes: claim|number|evidence|opposition|implication|sources.
+      SLIDE_PURPOSE_PILOT: ${{ github.event.inputs.slide_purpose_pilot || '0' }}
 
     steps:
       - name: Checkout
