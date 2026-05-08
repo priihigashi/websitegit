@@ -10,7 +10,7 @@ jobs:
     env:
       BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY_EXP04092027 }}
     steps:
-      - name: Probe Buffer GraphQL schema for profile query
+      - name: List channels via Buffer GraphQL
         run: |
           python3 - <<'EOF'
           import os, json, urllib.request, urllib.error
@@ -27,36 +27,31 @@ jobs:
               try:
                   return json.loads(urllib.request.urlopen(req, timeout=15).read())
               except urllib.error.HTTPError as e:
-                  return {"_http_error": e.code, "_body": e.read().decode()[:300]}
-              except Exception as e:
-                  return {"_error": str(e)}
+                  return {"_err": e.code, "_body": e.read().decode()[:500]}
 
-          # 1. Root query field names
-          print("=" * 70)
-          print("Top-level Query fields available")
-          print("=" * 70)
-          r = gql('{ __schema { queryType { fields { name description } } } }')
-          fields = (r.get("data") or {}).get("__schema", {}).get("queryType", {}).get("fields", [])
+          # 1. Get Channel field names
+          print("=== Channel type fields ===")
+          r = gql('{ __type(name: "Channel") { fields { name type { name kind ofType { name } } } } }')
+          fields = (r.get("data") or {}).get("__type", {}).get("fields", []) or []
           for f in fields:
-              print(f"  {f['name']}: {f.get('description', '')[:80]}")
+              t = f["type"]
+              tn = t.get("name") or (t.get("ofType") or {}).get("name")
+              print(f"  {f['name']}: {tn}")
           print()
 
-          # 2. Try common shapes
-          for q in [
-              '{ channels { id service serviceUsername name } }',
-              '{ viewer { channels { id service serviceUsername name } } }',
-              '{ me { channels { id service serviceUsername name } } }',
-              '{ currentUser { channels { id service serviceUsername name } } }',
-              '{ organizations { channels { id service serviceUsername name } } }',
-          ]:
-              print(f"-- Trying: {q}")
-              r = gql(q)
-              if "_http_error" in r:
-                  print(f"   {r['_http_error']}: {r['_body'][:160]}")
-              elif "errors" in r:
-                  msgs = [e.get("message", "?")[:100] for e in r["errors"]]
-                  print(f"   ERRORS: {msgs}")
-              elif "data" in r:
-                  print(f"   ✅ DATA: {json.dumps(r['data'], indent=2)[:600]}")
-              print()
+          # 2. List channels with all the relevant fields
+          field_names = [f["name"] for f in fields]
+          # pick safe scalar fields
+          safe = [n for n in field_names if n in ("id","name","service","serviceType","handle","username","accountId","timezone","avatarUrl","isDisconnected","externalId","metadata","organizationId")]
+          query = "{ channels { " + " ".join(safe) + " } }"
+          print(f"=== Querying: {query} ===\n")
+          r = gql(query)
+          if "data" in r:
+              channels = r["data"].get("channels", [])
+              print(f"Found {len(channels)} channel(s):\n")
+              for c in channels:
+                  print(json.dumps(c, indent=2))
+                  print()
+          else:
+              print(json.dumps(r, indent=2))
           EOF
