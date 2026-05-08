@@ -82,7 +82,14 @@ VISUAL ALTERNATION: [OK/MISSING — every-other-slide visual rule]
 
 OVERALL SCORE: [1-10]
 VERDICT: [PASS/FAIL]
-NOTES: [1-2 sentences max]"""
+NOTES: [1-2 sentences max]
+
+SLIDE PURPOSE FULFILLMENT (P2/SH-143 — include ONLY if the brief contains a SLIDE_PURPOSE PILOT section):
+If the brief lists declared slide purposes (hook, cost, teach, apply, sources, claim, number, evidence, opposition, implication), assess whether each slide's actual content fulfills its declared purpose. One line per slide:
+  Slide 1 ([declared purpose]): FULFILLED / PARTIAL / NOT FULFILLED — [one sentence reason]
+  Slide 2 ([declared purpose]): FULFILLED / PARTIAL / NOT FULFILLED — [one sentence reason]
+  ... (continue for each slide with a declared purpose)
+This section is advisory — it does not affect VERDICT or OVERALL SCORE."""
 
 _BASE_AGENTS = [
     {"name": "Fact Checker",          "system": FACT_CHECKER_PROMPT},

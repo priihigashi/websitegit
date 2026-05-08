@@ -1188,29 +1188,64 @@ def _score_hook_strength(headline: str, subhead: str, niche: str) -> tuple[int, 
     return _sonnet_score(prompt)
 
 
-def _score_copy_coherence(headlines: list[str]) -> tuple[int, str]:
-    """Check B: score narrative arc of slide headlines 1-3 via Sonnet."""
+def _score_copy_coherence(
+    headlines: list[str], purposes: list | None = None
+) -> tuple[int, str]:
+    """Check B: score narrative arc of slide headlines via Sonnet.
+
+    P2 (SH-142): when SLIDE_PURPOSE_PILOT=1 and purposes are supplied, switches
+    to a purpose-fulfillment prompt — each headline is scored against its declared
+    job (hook/cost/teach/apply/sources) instead of generic arc coherence.
+    """
     if len(headlines) < 2:
         return 0, "too few headlines to score"
     numbered = "\n".join(f"{i+1}. {h}" for i, h in enumerate(headlines) if h)
     if not numbered.strip():
         return 0, "no headline text"
-    prompt = (
-        "Do these Instagram carousel slide headlines tell a complete story "
-        "or feel like AI filler?\n\n"
-        f"{numbered}\n\n"
-        "Score 1-3:\n"
-        "3 = clear narrative arc — each headline builds on the last\n"
-        "2 = mostly coherent — minor gaps or repetition\n"
-        "1 = disconnected or filler — could be in any order\n\n"
-        "Reply with score (1/2/3) and one sentence why."
-    )
+
+    if SLIDE_PURPOSE_PILOT and purposes and isinstance(purposes, list):
+        purpose_map = "\n".join(
+            f"  Slide {e.get('slide', i + 1)}: declared purpose = '{e.get('purpose', '?')}'"
+            for i, e in enumerate(purposes)
+            if isinstance(e, dict)
+        )
+        prompt = (
+            "These Instagram carousel slide headlines were each generated with a declared "
+            "narrative purpose. Score whether each headline fulfills its purpose and whether "
+            "the sequence builds toward a payoff.\n\n"
+            f"Declared purposes:\n{purpose_map}\n\n"
+            f"Headlines:\n{numbered}\n\n"
+            "Score 1-3:\n"
+            "3 = each headline clearly fulfills its declared purpose AND the sequence "
+            "builds hook → cost → teach → apply → sources (or equivalent)\n"
+            "2 = most headlines fulfill their purpose — 1-2 slides feel off or generic\n"
+            "1 = headlines do not fulfill declared purposes, or could be in any order\n\n"
+            "Reply with score (1/2/3) and one sentence naming which slide(s) "
+            "fulfilled or missed their purpose."
+        )
+    else:
+        prompt = (
+            "Do these Instagram carousel slide headlines tell a complete story "
+            "or feel like AI filler?\n\n"
+            f"{numbered}\n\n"
+            "Score 1-3:\n"
+            "3 = clear narrative arc — each headline builds on the last\n"
+            "2 = mostly coherent — minor gaps or repetition\n"
+            "1 = disconnected or filler — could be in any order\n\n"
+            "Reply with score (1/2/3) and one sentence why."
+        )
     return _sonnet_score(prompt)
 
 
-def check_text_quality(html_path: str, niche: str) -> list[str]:
+def check_text_quality(
+    html_path: str, niche: str, purposes: list | None = None
+) -> list[str]:
     """Goal 1B: run hook strength + copy coherence checks via Claude Sonnet.
-    Returns issue strings; tokens match _TEXT_ISSUE_TOKENS auto-fix gate."""
+    Returns issue strings; tokens match _TEXT_ISSUE_TOKENS auto-fix gate.
+
+    P2 (SH-142): accepts optional purposes list from slide_purpose pilot so the
+    Coherence scorer can check purpose fulfillment instead of generic arc.
+    """
     issues = []
     if not ANTHROPIC_KEY:
         return issues
@@ -1249,17 +1284,18 @@ def check_text_quality(html_path: str, niche: str) -> list[str]:
     if 0 < hook_score < 2:
         issues.append(f"[hook weak] Cover hook scored {hook_score}/3 — {hook_reason[:120]}")
 
-    # Check B — copy coherence
+    # Check B — copy coherence (P2/SH-142: purpose-aware when pilot active)
     # Smart-picker carousels mix heterogeneous templates (base + material_profile +
     # four_card_grid + progress_media + sources) by design — there is no cross-slide
     # narrative arc to score. OpenAI fallback (Phase 11.2) is also stricter than Sonnet
     # was, returning 1/3 even for acceptable legacy tips. Treat coherence as advisory:
     # only block on hard error/no headlines (score 0 is already excluded above).
-    coh_score, coh_reason = _score_copy_coherence(all_headlines)
-    print(f"  [1B] Coherence {coh_score}/3 — {coh_reason[:80]}")
+    coh_score, coh_reason = _score_copy_coherence(all_headlines, purposes=purposes)
+    _coh_mode = "purpose-aware" if (SLIDE_PURPOSE_PILOT and purposes) else "arc"
+    print(f"  [1B] Coherence {coh_score}/3 ({_coh_mode}) — {coh_reason[:80]}")
     if 0 < coh_score < 2:
         # Print only — do not append to issues. Hook strength remains the gate.
-        print(f"       [advisory] Coherence {coh_score}/3 — {coh_reason[:120]}")
+        print(f"       [advisory] Coherence {coh_score}/3 ({_coh_mode}) — {coh_reason[:120]}")
 
     return issues
 
@@ -1746,7 +1782,20 @@ def check_built_post(result: dict) -> dict:
             "post cannot be scheduled to Buffer (check generate_caption() call in main.py)"
         )
 
+    # SH-139/P2 — extract slide_purpose declarations BEFORE coherence scoring so
+    # check_text_quality() can pass them to the purpose-aware Coherence scorer (SH-142).
+    _purposes = result.get("slide_purposes") or result.get("content", {}).get("slide_purposes")
+    if _purposes and isinstance(_purposes, list):
+        print(f"  [SH-139] slide_purpose pilot active — declared purposes:")
+        for entry in _purposes:
+            if isinstance(entry, dict):
+                idx = entry.get("slide", "?")
+                pur = entry.get("purpose", "?")
+                print(f"           Slide {idx}: purpose='{pur}'")
+        print(f"           (P2: Coherence scorer and Structure agent are now purpose-aware)")
+
     # 6. Goal 1B — hook strength + copy coherence (Sonnet)
+    # P2/SH-142: passes _purposes so Coherence scorer checks purpose fulfillment
     storytelling_scores: dict = {}
     if ANTHROPIC_KEY:
         _html_for_text = html_local if html_local.exists() else None
@@ -1755,7 +1804,7 @@ def check_built_post(result: dict) -> dict:
                 _html_for_text = _c
                 break
         if _html_for_text and Path(_html_for_text).exists():
-            all_issues.extend(check_text_quality(str(_html_for_text), niche))
+            all_issues.extend(check_text_quality(str(_html_for_text), niche, purposes=_purposes))
             # SH-028: storytelling quality score per slide
             storytelling_scores = score_storytelling(str(_html_for_text), niche)
             if storytelling_scores:
@@ -1765,20 +1814,6 @@ def check_built_post(result: dict) -> dict:
                         f"[storytelling] Overall quality score {overall}/100 — "
                         f"{storytelling_scores.get('summary', '')[:100]}"
                     )
-
-    # SH-139 — slide_purpose pilot (advisory). When generation declared per-slide
-    # purposes (SLIDE_PURPOSE_PILOT=1 emitted slide_purposes in result), print
-    # a per-slide line so reviewer + email can show whether each slide fulfilled
-    # its declared narrative job. NON-BLOCKING during pilot.
-    _purposes = result.get("slide_purposes") or result.get("content", {}).get("slide_purposes")
-    if _purposes and isinstance(_purposes, list):
-        print(f"  [SH-139] slide_purpose pilot active — declared purposes:")
-        for entry in _purposes:
-            if isinstance(entry, dict):
-                idx = entry.get("slide", "?")
-                pur = entry.get("purpose", "?")
-                print(f"           Slide {idx}: purpose='{pur}'")
-        print(f"           (advisory only — auditor will check fulfillment)")
 
     # 7. Auto-fix — runs in analyze_and_fix mode when Drive folder ID is available.
     # check_built_post() previously only detected issues; this closes the gap where
