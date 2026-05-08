@@ -47,6 +47,7 @@ from __future__ import annotations
 import os
 import sys
 import json
+import re
 import time
 import base64
 import smtplib
@@ -84,6 +85,14 @@ CLAUDE_MODEL = "claude-sonnet-4-5"  # Sonnet cheaper than Opus for patch generat
 OPENAI_MODEL = "gpt-4o"
 
 PRIORITY_ORDER = {"P0-CRITICAL": 0, "P1-HIGH": 1, "P2-MED": 2, "P3-LOW": 3, "USER-ONLY": 99}
+
+# Queue rows occasionally outlive script renames. Resolve known stale aliases
+# before GitHub get_contents() so self-heal does not fake-block on 404.
+TARGET_FILE_ALIASES = {
+    "scripts/drive_map_scan.py": "scripts/drive_map_builder.py",
+    "scripts/daily_content_processor.js": "scripts/daily_content_processor.py",
+    "scripts/add-gsc-headers.js or similar": "scripts/add-gsc-headers.js",
+}
 
 # Loaded by main() at the start of every cycle from NONNEGOTIABLES.md
 NONNEGOTIABLES_TEXT: str = ""
@@ -289,6 +298,35 @@ def pick_task(rows: list[dict], target_id: str = "", force: bool = False) -> Opt
         return None
     candidates.sort(key=lambda x: (x[0], x[1]))
     return candidates[0][2]
+
+
+def _repo_path_exists(repo, path: str, ref: str = DEFAULT_BRANCH) -> bool:
+    try:
+        repo.get_contents(path, ref=ref)
+        return True
+    except Exception:
+        return False
+
+
+def resolve_target_file_path(repo, raw_path: str,
+                             ref: str = DEFAULT_BRANCH) -> tuple[str, str]:
+    """Resolve stale or fuzzy queue Target File values to repo paths.
+
+    Returns (path, note). note is empty when no alias/fuzzy resolution happened.
+    """
+    path = (raw_path or "").strip()
+    if not path:
+        return "", ""
+    if _repo_path_exists(repo, path, ref=ref):
+        return path, ""
+    alias = TARGET_FILE_ALIASES.get(path)
+    if alias and _repo_path_exists(repo, alias, ref=ref):
+        return alias, f"target_file_alias:{path}->{alias}"
+    for part in re.split(r"\s+or\s+|\s*,\s*", path):
+        candidate = part.strip()
+        if candidate and _repo_path_exists(repo, candidate, ref=ref):
+            return candidate, f"target_file_fuzzy:{path}->{candidate}"
+    return path, ""
 
 # ── BUG VERIFICATION ────────────────────────────────────────────────────────
 def trigger_workflow(gh: Github, workflow_filename: str, ref: str = DEFAULT_BRANCH,
@@ -1094,12 +1132,17 @@ def main() -> None:
     log(f"verify-bug: outcome={verify_outcome}")
 
     # Pull file content
-    path = (task.get("Target File") or "").strip()
-    if not path or path == "external services":
+    raw_path = (task.get("Target File") or "").strip()
+    if not raw_path or raw_path == "external services":
         log("No target file — marking USER-ONLY")
         update_queue_row(ws, task_id, Status="USER-ONLY")
         return
     repo = gh.get_repo(f"{REPO_OWNER}/{REPO_NAME}")
+    path, path_note = resolve_target_file_path(repo, raw_path, ref=DEFAULT_BRANCH)
+    if path_note:
+        log(f"target-file resolved: {path_note}")
+        task = dict(task)
+        task["Target File"] = path
     try:
         file_obj = repo.get_contents(path, ref=DEFAULT_BRANCH)
         before = base64.b64decode(file_obj.content).decode("utf-8", "replace")
