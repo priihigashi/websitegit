@@ -20,7 +20,7 @@ Optional notes-embedded fields:
   - Count: 6                (or "find 6", "6 clips", etc.)
 
 If person_name not found in notes, infer from caption / transcript via
-Claude Haiku one-shot.
+the shared Claude → OpenAI → Gemini LLM cascade.
 """
 
 from __future__ import annotations
@@ -30,9 +30,13 @@ import re
 import subprocess
 from datetime import datetime, timezone
 
-CLAUDE_KEY = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
 GH_BIN     = os.environ.get("GH_BIN", "/Users/priscilahigashi/bin/gh")
 REPO       = "priihigashi/oak-park-ai-hub"
+
+try:
+    from _llm_fallback import llm_text
+except Exception:
+    llm_text = None
 
 # ── trigger detection ───────────────────────────────────────────────────────
 
@@ -136,7 +140,7 @@ def infer_person_name(caption: str, transcript: str, creator_name: str = "") -> 
     if creator_name and creator_name.strip():
         # Creator handle is a strong signal
         return creator_name.strip(), 0.85
-    if not CLAUDE_KEY:
+    if llm_text is None:
         return "", 0.0
     excerpt = (caption or "")[:400] + "\n\n" + (transcript or "")[:1500]
     if not excerpt.strip():
@@ -156,17 +160,19 @@ If the speaker is unclear, anonymous, or you cannot tell, return:
 
 NO prose. JSON only."""
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=CLAUDE_KEY)
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        raw = llm_text(
+            prompt,
+            model_tier="haiku",
             max_tokens=200,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = msg.content[0].text.strip()
+            temperature=0,
+            context="person_evidence_dispatcher.infer_person_name",
+        ).strip()
         if raw.startswith("```"):
             raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
             raw = re.sub(r"```\s*$", "", raw)
+        m_json = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m_json:
+            raw = m_json.group()
         data = json.loads(raw)
         name = str(data.get("name", "")).strip()
         conf = float(data.get("confidence", 0.0))

@@ -73,6 +73,10 @@ OPENAI_API_KEY     = os.getenv("OPENAI_API_KEY", "")
 CLAUDE_KEY_4_CONTENT  = os.getenv("CLAUDE_KEY_4_CONTENT", "")
 GEMINI_API_KEY     = os.getenv("GEMINI_API_KEY", "")  # fallback transcription tier
 
+def _has_llm_key() -> bool:
+    """Any text LLM key is enough because _llm_text cascades Claude → OpenAI."""
+    return bool(CLAUDE_KEY_4_CONTENT or OPENAI_API_KEY)
+
 def _llm_text(prompt: str, max_tokens: int = 3000, model: str = "claude-sonnet-4-6") -> str:
     """Call Claude; fall back to OpenAI gpt-4o on credit/auth error. Returns '' on total failure.
 
@@ -1835,10 +1839,8 @@ def _try_vision_fallback(audio: str, tmp_dir: str, metadata: dict) -> str:
 # ─── CLAUDE ANALYSIS ──────────────────────────────────────────────────────────
 
 def analyze_book(transcript: str, url: str, story_id: str, notes: str) -> str:  # noqa: keep name for backward compat
-    if not CLAUDE_KEY_4_CONTENT:
-        return f"[PENDING — CLAUDE_KEY_4_CONTENT required]\n\n{transcript}"
-    import anthropic
-    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
+    if not _has_llm_key():
+        return f"[PENDING — LLM key required]\n\n{transcript}"
     print("  Claude (claude-sonnet-4-6) fact-checking...")
     prompt = f"""Run capture_crazy_ideas skill for RECEIPTS book.
 
@@ -1910,10 +1912,8 @@ BOOK READY: YES / NO / NEEDS MORE RESEARCH"""
 
 
 def analyze_news(transcript: str, url: str, story_id: str, notes: str, creator_name: str = "") -> str:
-    if not CLAUDE_KEY_4_CONTENT:
-        return f"[PENDING — CLAUDE_KEY_4_CONTENT required]\n\n{transcript}"
-    import anthropic
-    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
+    if not _has_llm_key():
+        return f"[PENDING — LLM key required]\n\n{transcript}"
     print("  Claude (claude-sonnet-4-6) News analysis...")
     prompt = f"""Analyze this content for the News political/civic page.
 Study the format and identify how to do it better — more examples, more teaching, not just negatives.
@@ -1986,10 +1986,8 @@ def analyze_bias(transcript: str, url: str, story_id: str, notes: str, creator_n
     (BASEADO EM DADOS / VIÉS IDEOLÓGICO / VIÉS DE INTERESSE) + slide copy in PT-BR + EN.
     Audience: non-expert (8th grade level). Always fair and specific.
     """
-    if not CLAUDE_KEY_4_CONTENT:
-        return f"[PENDING — CLAUDE_KEY_4_CONTENT required]\n\n{transcript}"
-    import anthropic
-    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
+    if not _has_llm_key():
+        return f"[PENDING — LLM key required]\n\n{transcript}"
     print("  Claude (claude-sonnet-4-6) Bias Check analysis — FORMAT-019...")
     prompt = f"""Você é um jornalista bilíngue (PT-BR + EN) especializado em análise de mídia e verificação de influenciadores.
 Analise o conteúdo abaixo para produzir um BRIEF FORMATO-019 — "Dados ou Agenda?".
@@ -2143,10 +2141,8 @@ def analyze_opc(transcript: str, url: str, notes: str) -> dict:
             "additional_niches": [],
         }
 
-    if not CLAUDE_KEY_4_CONTENT:
+    if not _has_llm_key():
         return {"niche": "Oak Park", "classification": "NEEDS_REVIEW", "summary": _tx[:150]}
-    import anthropic
-    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
     print("  Claude (claude-sonnet-4-6) classifying...")
     prompt = f"""You are classifying a video transcript for the Oak Park Construction content pipeline.
 
@@ -2978,11 +2974,9 @@ def research_from_notes(notes: str, transcript: str, niche: str, story_id: str =
     empty = {"research_tasks": [], "structure_hints": [], "format_flags": {}, "manual_tasks": []}
     if not notes or notes.strip().lower() in ("none", "n/a", ""):
         return empty
-    if not CLAUDE_KEY_4_CONTENT:
+    if not _has_llm_key():
         return empty
-
-    import anthropic, re as _re
-    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
+    import re as _re
 
     # ── Step 1: parse notes into categories (Haiku — fast + cheap) ──
     parse_prompt = f"""Analyze these user notes from a video capture and categorize every instruction.
@@ -3102,12 +3096,10 @@ def generate_content_brief(transcript: str, url: str, classification: dict, note
     """Ask Claude to generate carousel + reel + topic breakdowns from transcript.
     research: optional dict from research_from_notes() — embedded before slides.
     Returns plain text content brief (no markdown tables — avoids Docs API 400 errors).
-    Falls back to transcript + classification JSON if CLAUDE_KEY_4_CONTENT not set.
+    Falls back to transcript + classification JSON if no LLM key is set.
     """
-    if not CLAUDE_KEY_4_CONTENT:
+    if not _has_llm_key():
         return f"SOURCE: {url}\nNOTES: {notes or 'None'}\n\nTRANSCRIPT:\n{transcript}\n\nClassification:\n{json.dumps(classification, indent=2)}"
-    import anthropic
-    client = anthropic.Anthropic(api_key=CLAUDE_KEY_4_CONTENT)
     niche = classification.get("niche", "General")
 
     # Build research block to inject into prompt
@@ -3199,45 +3191,11 @@ SOURCES (list from transcript + research findings):
 
 STATUS: DRAFT — text ready, art needed"""
 
-    # 2026-05-03: append-only OpenAI fallback (NN-S2 / NN-S8). Claude stays primary.
-    # If Anthropic returns 400 (credit) or 401 (auth), fall back to OpenAI gpt-4o
-    # using the same prompt. Same pattern as scripts/self_heal/orchestrator.py.
-    try:
-        msg = client.messages.create(
-            model="claude-sonnet-4-6", max_tokens=3000,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return msg.content[0].text
-    except anthropic.BadRequestError as _claude_err_credit:
-        print(f"  generate_content_brief: Claude 400 ({_claude_err_credit}); falling back to OpenAI")
-    except anthropic.AuthenticationError as _claude_err_auth:
-        print(f"  generate_content_brief: Claude 401 ({_claude_err_auth}); falling back to OpenAI")
-
-    # OpenAI fallback path
-    import os as _os, urllib.request as _urlreq, urllib.error as _urlerr
-    _oai_key = _os.environ.get("OPENAI_API_KEY", "")
-    if not _oai_key:
-        return f"SOURCE: {url}\nNOTES: {notes or 'None'}\n\nTRANSCRIPT:\n{transcript}\n\n[Brief generation skipped: Claude credit error and no OPENAI_API_KEY fallback set]"
-    try:
-        _payload = json.dumps({
-            "model": "gpt-4o",
-            "max_tokens": 3000,
-            "messages": [{"role": "user", "content": prompt}],
-        }).encode()
-        _req = _urlreq.Request(
-            "https://api.openai.com/v1/chat/completions",
-            data=_payload,
-            headers={
-                "Authorization": f"Bearer {_oai_key}",
-                "Content-Type": "application/json",
-            },
-        )
-        with _urlreq.urlopen(_req, timeout=120) as _resp:
-            _data = json.loads(_resp.read().decode("utf-8"))
-        return _data["choices"][0]["message"]["content"]
-    except Exception as _oai_err:
-        print(f"  generate_content_brief: OpenAI fallback also failed ({_oai_err}); returning transcript only")
-        return f"SOURCE: {url}\nNOTES: {notes or 'None'}\n\nTRANSCRIPT:\n{transcript}\n\n[Both Claude and OpenAI brief generation failed]"
+    text = _llm_text(prompt, max_tokens=3000, model="claude-sonnet-4-6")
+    if text:
+        return text
+    print("  generate_content_brief: all LLM tiers failed; returning transcript only")
+    return f"SOURCE: {url}\nNOTES: {notes or 'None'}\n\nTRANSCRIPT:\n{transcript}\n\n[Both Claude and OpenAI brief generation failed]"
 
 
 def translate_to_pt(text: str) -> str:
@@ -3920,8 +3878,8 @@ def detect_project(transcript: str, caption: str, notes: str) -> tuple:
             if any(k in notes_l for k in keywords):
                 return (niche, 1.0, f"notes keyword match → {niche}")
 
-    if not CLAUDE_KEY_4_CONTENT:
-        return ("unrouted", 0.0, "no CLAUDE_KEY_4_CONTENT — cannot classify")
+    if not _has_llm_key():
+        return ("unrouted", 0.0, "no LLM key — cannot classify")
 
     transcript_snip = (transcript or "")[:3000]
     caption_snip = (caption or "")[:1000]

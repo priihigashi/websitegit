@@ -81,6 +81,31 @@ class NotesParserTests(unittest.TestCase):
 class DispatchTests(unittest.TestCase):
     """Prove that with mocked subprocess, dispatcher fires the right CLI."""
 
+    @patch("person_evidence_dispatcher.llm_text")
+    def test_person_inference_uses_llm_cascade(self, mock_llm):
+        mock_llm.return_value = '{"name":"Frei Gilson","confidence":0.92}'
+        name, confidence = ped.infer_person_name(
+            caption="Trecho de pregação de Frei Gilson",
+            transcript="Frei Gilson fala no vídeo sobre mulheres.",
+            creator_name="",
+        )
+        self.assertEqual(name, "Frei Gilson")
+        self.assertAlmostEqual(confidence, 0.92)
+        kwargs = mock_llm.call_args.kwargs
+        self.assertEqual(kwargs["model_tier"], "haiku")
+        self.assertEqual(kwargs["temperature"], 0)
+
+    @patch("person_evidence_dispatcher.llm_text")
+    def test_person_inference_extracts_json_from_wrapped_response(self, mock_llm):
+        mock_llm.return_value = 'Here is the JSON:\n{"name":"Jane Doe","confidence":0.81}'
+        name, confidence = ped.infer_person_name(
+            caption="Jane Doe says this on camera.",
+            transcript="",
+            creator_name="",
+        )
+        self.assertEqual(name, "Jane Doe")
+        self.assertAlmostEqual(confidence, 0.81)
+
     @patch("person_evidence_dispatcher.subprocess.run")
     def test_dispatch_command_shape(self, mock_run):
         mock_run.return_value = MagicMock(
