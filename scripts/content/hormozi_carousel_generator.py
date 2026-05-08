@@ -30,6 +30,15 @@ import base64
 import urllib.request
 import urllib.parse
 from datetime import datetime, timedelta
+import pathlib as _hcg_pl
+
+# LLM cascade: Claude → OpenAI → Gemini
+sys.path.insert(0, str(_hcg_pl.Path(__file__).resolve().parent.parent / "capture"))
+try:
+    from _llm_fallback import llm_text as _llm_text
+    _HAS_LLM_FALLBACK = True
+except ImportError:
+    _HAS_LLM_FALLBACK = False
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
@@ -222,24 +231,27 @@ Remember: give away the WHAT and WHY. The HOW = hire Oak Park Construction.
 
 Return only the JSON object. No markdown, no explanation."""
 
-    payload = json.dumps({
-        "model": "claude-sonnet-4-6",
-        "max_tokens": 1500,
-        "system": HORMOZI_SYSTEM_PROMPT,
-        "messages": [{"role": "user", "content": user_prompt}]
-    }).encode()
-
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=payload,
-        headers={
-            "x-api-key": CLAUDE_KEY_4_CONTENT,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        }
-    )
-    resp = json.loads(urllib.request.urlopen(req).read())
-    content = resp["content"][0]["text"].strip()
+    if _HAS_LLM_FALLBACK:
+        content = _llm_text(user_prompt, model_tier="sonnet", max_tokens=1500,
+                            system=HORMOZI_SYSTEM_PROMPT).strip()
+    else:
+        payload = json.dumps({
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 1500,
+            "system": HORMOZI_SYSTEM_PROMPT,
+            "messages": [{"role": "user", "content": user_prompt}]
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "x-api-key": CLAUDE_KEY_4_CONTENT,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+        )
+        resp = json.loads(urllib.request.urlopen(req).read())
+        content = resp["content"][0]["text"].strip()
 
     # Strip markdown code fences if present
     if content.startswith("```"):
