@@ -278,11 +278,11 @@ def enforce_opc_comparison_parity(content: dict, topic: str, brief: str = "") ->
 
     fcg = content.get("opc_four_card_grid")
     if isinstance(fcg, dict):
-        card_queries = [str(x) for x in (fcg.get("card_image_queries") or [])]
-        left_count = sum(1 for q in card_queries if _entity_in_text(left, q))
-        right_count = sum(1 for q in card_queries if _entity_in_text(right, q))
-        if len(card_queries) != 4 or left_count < 1 or right_count < 1:
-            fcg["card_image_queries"] = queries
+        # The LLM can technically mention both sides while still producing
+        # vague stock searches like "concrete slab" that return unrelated
+        # industrial photos. For comparisons, make the visual contract
+        # deterministic: two left-side queries and two right-side queries.
+        fcg["card_image_queries"] = queries
 
     for tid in ("opc_base", "opc_duotone", "opc_progress_media"):
         nested = content.get(tid)
@@ -3368,12 +3368,9 @@ def fetch_template_aware_media(content, niche, work_dir, paths, brief=""):
             titles  = nested.get("card_titles") or []
             if comparison_pair:
                 pair_queries = _comparison_media_queries(comparison_pair, fallback_topic)
-                left = comparison_pair.get("left", "")
-                right = comparison_pair.get("right", "")
-                left_count = sum(1 for qx in queries if _entity_in_text(left, str(qx)))
-                right_count = sum(1 for qx in queries if _entity_in_text(right, str(qx)))
-                if len(queries) != 4 or left_count < 1 or right_count < 1:
-                    queries = pair_queries
+                # Always use pair-aware queries for comparison card media.
+                # Generated text can stay nuanced; media must stay balanced.
+                queries = pair_queries
             for i in range(4):
                 if paths["cards"].get(i + 1):
                     continue
