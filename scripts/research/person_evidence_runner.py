@@ -57,6 +57,18 @@ RUN_LOG_LINES: list[str] = []
 PIPELINE_FAILURES: list[dict] = []  # FATAL only — flips workflow exit code.
 ROUTE_FAILURES: list[dict] = []     # NON-FATAL route fallbacks — logged for visibility, run still succeeds.
 
+# B6 audit fix — per-process header memo. _ensure_columns is called 3x per run
+# (Clip Collections, Content Queue, Inspiration Library). Memoizing the
+# verified-headers result collapses 6 Sheets API calls into 3 on the happy
+# path and avoids the read-then-update race within a single run. Cross-
+# process race is not addressed here — workflow_dispatch effectively
+# serialises SH-104 runs, so it's not a practical concern. Cache resets
+# per process. Key = (sheet_id, tab).
+# REVERT recipe: delete this dict + the cache check/set in _ensure_columns
+# (commented "B6 cache hit" / "B6 cache set"). Pure additive — `git revert`
+# this commit is clean, no schema migrations.
+_columns_cache: dict[tuple[str, str], list[str]] = {}
+
 # B7 — defamation surface mitigation.
 # Clip Collections is a Google Sheet that may be shared with collaborators
 # or accidentally surfaced. Writing CLAIM_TYPE next to a named-person URL +
@@ -316,6 +328,12 @@ def _ensure_columns(svc, sheet_id: str, tab: str, required: list[str]) -> list[s
     concurrent writer added another column meanwhile, we surface a warning
     so the next run picks up the merged set rather than silently clobbering.
     """
+    # B6 cache hit — return previously verified headers if all required
+    # cols are still present. Skips the headers read entirely.
+    cache_key = (sheet_id, tab)
+    cached = _columns_cache.get(cache_key)
+    if cached is not None and all(c in cached for c in required):
+        return cached
     try:
         res = svc.spreadsheets().values().get(spreadsheetId=sheet_id, range=f"'{tab}'!1:1").execute()
         headers = res.get("values", [[]])[0] if res.get("values") else []
@@ -336,10 +354,13 @@ def _ensure_columns(svc, sheet_id: str, tab: str, required: list[str]) -> list[s
                 live_headers = res2.get("values", [[]])[0] if res2.get("values") else []
                 if live_headers and live_headers != new_headers:
                     _log(f"  ({tab}) header race detected — using server headers")
+                    _columns_cache[cache_key] = live_headers  # B6 cache set
                     return live_headers
             except Exception:
                 pass
+            _columns_cache[cache_key] = new_headers  # B6 cache set
             return new_headers
+        _columns_cache[cache_key] = headers  # B6 cache set
         return headers
     except Exception as e:
         _fail(f"ensure_columns:{tab}", e)
