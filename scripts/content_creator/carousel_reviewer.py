@@ -1766,6 +1766,20 @@ def check_built_post(result: dict) -> dict:
                         f"{storytelling_scores.get('summary', '')[:100]}"
                     )
 
+    # SH-139 — slide_purpose pilot (advisory). When generation declared per-slide
+    # purposes (SLIDE_PURPOSE_PILOT=1 emitted slide_purposes in result), print
+    # a per-slide line so reviewer + email can show whether each slide fulfilled
+    # its declared narrative job. NON-BLOCKING during pilot.
+    _purposes = result.get("slide_purposes") or result.get("content", {}).get("slide_purposes")
+    if _purposes and isinstance(_purposes, list):
+        print(f"  [SH-139] slide_purpose pilot active — declared purposes:")
+        for entry in _purposes:
+            if isinstance(entry, dict):
+                idx = entry.get("slide", "?")
+                pur = entry.get("purpose", "?")
+                print(f"           Slide {idx}: purpose='{pur}'")
+        print(f"           (advisory only — auditor will check fulfillment)")
+
     # 7. Auto-fix — runs in analyze_and_fix mode when Drive folder ID is available.
     # check_built_post() previously only detected issues; this closes the gap where
     # corrupt/wrong images were reported but never repaired in the normal build path.

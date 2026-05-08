@@ -281,6 +281,30 @@ def extract_content_brief(result: dict) -> str:
         lines.append("\nSMART TEMPLATE PLAN:")
         lines.extend(plan_lines)
 
+    # SH-139 — slide_purpose pilot. When generation declared per-slide narrative
+    # purposes (SLIDE_PURPOSE_PILOT=1 in carousel_builder), expose them to the
+    # auditors so the Structure agent can audit each slide against its declared
+    # job. Non-blocking during pilot (advisory only).
+    purposes = (
+        result.get("slide_purposes")
+        or content.get("slide_purposes")
+        or []
+    )
+    if purposes and isinstance(purposes, list):
+        lines.append("\nSLIDE_PURPOSE PILOT (SH-139, advisory):")
+        lines.append("  Each slide was generated with a declared narrative purpose.")
+        lines.append("  Audit whether the slide content visibly fulfills its purpose AND builds on the previous slide.")
+        for entry in purposes:
+            if isinstance(entry, dict):
+                idx = entry.get("slide", "?")
+                pur = entry.get("purpose", "?")
+                lines.append(f"    Slide {idx}: purpose='{pur}'")
+        lines.append(
+            "  OPC spine: hook | cost | teach | apply | sources.\n"
+            "  News spine: claim | number | evidence | opposition | implication | sources (5-slide compresses to opposition+implication).\n"
+            "  If a slide does NOT visibly fulfill its declared purpose, FLAG it in NOTES (advisory)."
+        )
+
     # Locate cover.html — it lives at WORK_DIR/post_id/cover.html
     html_path = WORK_DIR / post_id / "cover.html"
     if not html_path.exists():
