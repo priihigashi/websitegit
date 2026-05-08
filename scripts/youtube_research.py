@@ -225,14 +225,15 @@ def _try_apify_youtube_audio(video_id: str) -> str:
         return ""
 
     print("    Trying Apify YouTube download...")
-    # Actor swap 2026-05-07: bernardo~youtube-scraper returns HTTP 404 (does not
-    # exist on Apify Store). Using streamers~youtube-scraper (public, accessible,
-    # same startUrls payload shape).
-    actor_id = "streamers~youtube-scraper"
+    # Actor swap 2026-05-07 (revised):
+    # 1) bernardo~youtube-scraper returns HTTP 404 (does not exist).
+    # 2) streamers~youtube-scraper IS public but returns metadata only.
+    # 3) apidojo~youtube-scraper returns streamingData.formats[].url with real
+    #    google-video CDN URLs we can download for Whisper.
+    actor_id = "apidojo~youtube-scraper"
     input_data = {
         "startUrls": [{"url": f"https://www.youtube.com/watch?v={video_id}"}],
-        "maxResults": 1,
-        "proxy": {"useApifyProxy": True},
+        "maxItems": 1,
     }
     try:
         run_resp = urllib.request.urlopen(
@@ -270,9 +271,24 @@ def _try_apify_youtube_audio(video_id: str) -> str:
             return ""
         item = items[0]
         media_url = (
-            item.get("mediaUrl") or item.get("videoUrl")
-            or item.get("audioUrl") or item.get("url")
+            item.get("mediaUrl") or item.get("videoUrl") or item.get("audioUrl") or ""
         )
+        # apidojo schema: streamingData.formats[] has real CDN URLs.
+        # Prefer audio-only adaptive formats; fall back to video formats.
+        if not media_url or "youtube.com" in str(media_url):
+            sd = item.get("streamingData") or {}
+            for fmt in sd.get("adaptiveFormats") or []:
+                mime = (fmt.get("mimeType") or "").lower()
+                url = fmt.get("url") or ""
+                if url and mime.startswith("audio/"):
+                    media_url = url
+                    break
+            if not media_url:
+                for fmt in (sd.get("formats") or []) + (sd.get("adaptiveFormats") or []):
+                    url = fmt.get("url") or ""
+                    if url and "youtube.com" not in url:
+                        media_url = url
+                        break
         if not media_url or "youtube.com" in str(media_url):
             print("    Apify: no direct media URL in result")
             return ""

@@ -270,14 +270,16 @@ def _apify_yt_whisper(video_id: str) -> str:
         if not APIFY_API_KEY:
             state.mark_unavailable("apify", "no_api_key")
         return ""
-    # Actor swap 2026-05-07: bernardo~youtube-scraper returns HTTP 404 (does not
-    # exist on Apify Store). Verified streamers~youtube-scraper is public + works
-    # with the same startUrls payload shape. See SH-104 handoff.
-    actor = "streamers~youtube-scraper"
+    # Actor swap 2026-05-07 (revised):
+    # 1) bernardo~youtube-scraper returns HTTP 404 (does not exist).
+    # 2) streamers~youtube-scraper IS public, but returns metadata only — no
+    #    downloadable mediaUrl/videoUrl/audioUrl in dataset items.
+    # 3) apidojo~youtube-scraper returns streamingData.formats[].url which IS a
+    #    real google-video CDN URL we can download for Whisper transcription.
+    actor = "apidojo~youtube-scraper"
     payload = {
         "startUrls": [{"url": f"https://www.youtube.com/watch?v={video_id}"}],
-        "maxResults": 1,
-        "proxy": {"useApifyProxy": True},
+        "maxItems": 1,
     }
     body, err = _apify_request(
         "POST", f"/acts/{actor}/runs",
@@ -319,10 +321,31 @@ def _apify_yt_whisper(video_id: str) -> str:
         state.mark_stage_failed("apify", "yt_audio_dataset", "empty_dataset")
         _record_error("apify_yt", "empty_dataset")
         return ""
-    media = (items[0].get("mediaUrl") or items[0].get("videoUrl")
-             or items[0].get("audioUrl") or "")
+    item = items[0]
+    media = item.get("mediaUrl") or item.get("videoUrl") or item.get("audioUrl") or ""
+    # apidojo~youtube-scraper schema: streamingData.formats[].url contains
+    # actual google-video CDN URLs we can download. Prefer audio-only formats
+    # (smaller download, faster Whisper) when available; otherwise fall back to
+    # the first available format.
     if not media or "youtube.com" in str(media):
-        keys_seen = sorted(items[0].keys())[:30]
+        sd = item.get("streamingData") or {}
+        formats = sd.get("formats") or []
+        adaptive = sd.get("adaptiveFormats") or []
+        # Try audio-only first (mimeType starts with "audio/")
+        for fmt in adaptive:
+            mime = (fmt.get("mimeType") or "").lower()
+            url = fmt.get("url") or ""
+            if url and mime.startswith("audio/"):
+                media = url
+                break
+        if not media:
+            for fmt in formats + adaptive:
+                url = fmt.get("url") or ""
+                if url and "youtube.com" not in url:
+                    media = url
+                    break
+    if not media or "youtube.com" in str(media):
+        keys_seen = sorted(item.keys())[:30]
         state.mark_stage_failed("apify", "yt_audio_no_media",
                                 f"keys_seen={keys_seen}")
         _record_error("apify_yt", f"no_media_url; keys={keys_seen}")
