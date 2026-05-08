@@ -675,6 +675,18 @@ CAROUSEL STRUCTURE RULES (Brazil/News fact-check):
     - LEGAL / INSTITUTIONAL TENSION: what law was broken or two institutions with opposing stances
     NEVER use "Você sabia que..." / "Não vai acreditar..." or any generic opener.
     The number or the contradiction IS the hook — lead with it directly.
+
+14. OBJECTION LAYER (#122 Addendum — News objection/context):
+    Every carousel must anticipate ONE honest objection the reader will raise.
+    Classify the objection as one of:
+    - PARCIALIDADE: "isso é parcial" — address cross-party confirmation (see rule 10)
+    - CONTEXTO: "isso é fora de contexto" — add timeline or historical comparison
+    - OUTRO LADO: "e o lado oposto?" — cite opposition statement or vote record
+    - EXCEÇÃO: "mas nem todos..." — acknowledge scope limits with exact numbers
+    The objection + response lives on the PENULTIMATE slide (second-to-last),
+    before the sources slide. Format: one sentence raising the objection,
+    one sentence with the fact-based response. Keep it under 20 words each.
+    NEVER ignore the objection — readers who see it pre-empted trust the rest.
 """
 
 
