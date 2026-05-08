@@ -38,6 +38,29 @@ async function run(htmlPath, outputDir) {
   await page.goto(`file://${abs}`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1200);
 
+  // NN-S11: auto-shrink overflow text before any screenshot.
+  await page.evaluate(() => {
+    const TEXT_SELECTORS = [
+      '.headline', '.headline-main', '.headline-italic',
+      '.tip-big', '.src-head', '.stat-big',
+      '.slide-body', '.body', '.caption-text', '.hook-text',
+      '.cover-title', '.cover-subtitle', '.slide-title', '.slide-text',
+      'h1', 'h2', 'h3',
+    ];
+    const MIN_FS = 14;
+    TEXT_SELECTORS.forEach(sel => {
+      document.querySelectorAll(sel).forEach(el => {
+        if (el.scrollHeight <= el.clientHeight && el.scrollWidth <= el.clientWidth) return;
+        let fs = parseFloat(window.getComputedStyle(el).fontSize) || 32;
+        while ((el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) && fs > MIN_FS) {
+          fs -= 2;
+          el.style.fontSize = fs + 'px';
+          el.style.lineHeight = '1.1';
+        }
+      });
+    });
+  });
+
   const slides = page.locator('.slide');
   const n = await slides.count();
   console.log(`${n} slides found in ${path.basename(abs)}`);
