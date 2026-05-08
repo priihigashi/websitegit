@@ -184,6 +184,33 @@ def build_row_update(header: list, existing_row: list, info: dict,
 def is_video_url(url: str) -> bool:
     return any(d in url.lower() for d in VIDEO_DOMAINS)
 
+def youtube_video_id(url: str) -> str:
+    m = re.search(r"(?:v=|youtu\.be/|shorts/)([A-Za-z0-9_-]{11})", url or "")
+    return m.group(1) if m else ""
+
+def youtube_transcript_text(url: str) -> str:
+    """Use YouTube captions when yt-dlp is blocked by runner bot checks."""
+    video_id = youtube_video_id(url)
+    if not video_id:
+        return ""
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+        api = YouTubeTranscriptApi()
+        for kwargs in (
+            {"languages": ["en", "en-US", "en-GB", "pt", "pt-BR", "es"]},
+            {},
+        ):
+            try:
+                transcript = api.fetch(video_id, **kwargs)
+                text = " ".join(t.text for t in transcript).strip()
+                if text:
+                    return text
+            except Exception:
+                continue
+    except Exception as e:
+        print(f"  ⚠️  YouTube transcript API unavailable: {e}")
+    return ""
+
 def get_ffmpeg() -> str:
     try:
         import imageio_ffmpeg
@@ -397,11 +424,15 @@ def main():
         def v(col):
             return row[col].strip() if col is not None and len(row) > col else ""
 
-        # Download
-        audio_path  = download_audio(link)
+        # Download / transcript cascade. YouTube often blocks yt-dlp on GitHub
+        # runners; captions are a safe text-first fallback when available.
+        transcript_api_text = youtube_transcript_text(link)
+        if transcript_api_text:
+            print("  📝 YouTube transcript API text found")
+        audio_path  = None if transcript_api_text else download_audio(link)
         video_path  = download_video_frames(link)
 
-        whisper_text = ""
+        whisper_text = transcript_api_text
         vision_text  = ""
 
         # ALWAYS run both Whisper and Vision

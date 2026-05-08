@@ -17,6 +17,20 @@ import daily_content_processor as dcp  # noqa: E402
 
 
 class DailyContentProcessorSchemaTests(unittest.TestCase):
+    def test_youtube_video_id_handles_watch_short_and_short_url(self):
+        self.assertEqual(
+            dcp.youtube_video_id("https://www.youtube.com/watch?v=BErErllIgFM"),
+            "BErErllIgFM",
+        )
+        self.assertEqual(
+            dcp.youtube_video_id("https://youtu.be/abc123xyz01"),
+            "abc123xyz01",
+        )
+        self.assertEqual(
+            dcp.youtube_video_id("https://www.youtube.com/shorts/ABCDEFGHIJK"),
+            "ABCDEFGHIJK",
+        )
+
     def test_header_index_prefers_url_over_content_hub_link(self):
         header = [
             "Date Added",
