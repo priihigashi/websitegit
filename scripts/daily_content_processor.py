@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 """
 daily_content_processor.py — Oak Park AI Hub
 Runs every day via GitHub Actions (or manually).
@@ -34,7 +36,8 @@ from pathlib import Path
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SHEET_ID        = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
-INSPO_TAB       = "📱 Content Inspo"
+INSPO_TAB       = os.environ.get("CONTENT_INSPO_TAB", "📱 Content Inspo")
+INSPO_FALLBACK_TABS = [INSPO_TAB, "📥 Inspiration Library"]
 OPENAI_KEY      = os.environ.get("OPENAI_API_KEY", "")
 ANTHROPIC_KEY   = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
 SHEETS_TOKEN_PATH = os.environ.get("SHEETS_TOKEN_PATH", "/tmp/oak_park_creds/sheets_token.json")
@@ -88,6 +91,93 @@ def sheet_update_row(token: str, tab: str, row_idx: int, values: list):
     req = urllib.request.Request(url, data=body, method="PUT",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
     urllib.request.urlopen(req)
+
+def load_inspo_rows(token: str) -> tuple[str, list]:
+    """Load the configured inspo tab, falling back to the canonical library tab."""
+    seen = set()
+    for tab in INSPO_FALLBACK_TABS:
+        if not tab or tab in seen:
+            continue
+        seen.add(tab)
+        try:
+            rows = sheet_get(token, tab, "A1:AG100")
+            if rows:
+                if tab != INSPO_TAB:
+                    print(f"  ℹ️  Using fallback tab: {tab}")
+                return tab, rows
+        except Exception as e:
+            print(f"  ⚠️  Could not read tab {tab!r}: {e}")
+    return INSPO_TAB, []
+
+def normalize_header(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
+
+def header_index(header: list, *names: str) -> int | None:
+    norm = [normalize_header(h) for h in header]
+    wanted = [normalize_header(n) for n in names]
+    for name in wanted:
+        if name in norm:
+            return norm.index(name)
+    for name in wanted:
+        for idx, h in enumerate(norm):
+            if name and name in h:
+                return idx
+    return None
+
+def sheet_update_by_headers(token: str, tab: str, row_idx: int,
+                            header: list, values_by_header: dict[str, str]):
+    """Patch only named columns so fallback tabs cannot be corrupted by A:J writes."""
+    hmap = {normalize_header(h): i for i, h in enumerate(header)}
+    data = []
+    for col_name, val in values_by_header.items():
+        idx = hmap.get(normalize_header(col_name))
+        if idx is None:
+            continue
+        col_letter = column_letter(idx + 1)
+        data.append({
+            "range": f"'{tab}'!{col_letter}{row_idx}",
+            "values": [[val]],
+        })
+    if not data:
+        return
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values:batchUpdate"
+    body = json.dumps({"valueInputOption": "USER_ENTERED", "data": data}).encode()
+    req = urllib.request.Request(url, data=body, method="POST",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+    urllib.request.urlopen(req)
+
+def column_letter(n: int) -> str:
+    out = ""
+    while n:
+        n, rem = divmod(n - 1, 26)
+        out = chr(65 + rem) + out
+    return out
+
+def build_row_update(header: list, existing_row: list, info: dict,
+                     drive_link: str, transcript_content: str) -> dict[str, str]:
+    """Return header-keyed updates for either old Content Inspo or Inspiration Library."""
+    extracted_summary = (
+        f"{info.get('about', '')}\n\n"
+        f"TIPS:\n{info.get('extracted', '')}\n\n"
+        f"FITS: {info.get('flow_fit', '')} | ACTION: {info.get('suggested_action', '')}"
+    ).strip()
+    title = info.get("title", "")
+    quality = str(info.get("quality", "?"))
+    niche = info.get("niche", "")
+    updates = {
+        "Niche": niche,
+        "Title": title,
+        "Topic / Title": title,
+        "What we extracted": extracted_summary,
+        "Description": info.get("about", ""),
+        "Transcription": (transcript_content[:45000] + f"\n\nTranscript Drive Link: {drive_link}").strip(),
+        "Transcript Drive Link": drive_link,
+        "AI Score (1-5)": quality,
+        "Quality": quality,
+        "Status": "Processed",
+        "Date Status Changed": datetime.utcnow().strftime("%Y-%m-%d"),
+    }
+    return {k: v for k, v in updates.items() if header_index(header, k) is not None}
 
 # ── Video processing ───────────────────────────────────────────────────────────
 
@@ -240,7 +330,7 @@ def upload_to_drive(content: str, filename: str, token: str) -> str:
                       + content.encode()
                       + f"\r\n--{boundary}--".encode())
         req = urllib.request.Request(
-            "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink",
+            "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink",
             data=body_bytes,
             headers={"Authorization": f"Bearer {token}",
                      "Content-Type": f"multipart/related; boundary={boundary}"})
@@ -256,7 +346,7 @@ def main():
     print(f"\n🚀 Daily Content Processor — {date.today()}")
     token = get_token()
 
-    rows = sheet_get(token, INSPO_TAB, "A1:J100")
+    inspo_tab, rows = load_inspo_rows(token)
     if not rows:
         print("Sheet empty.")
         return
@@ -265,16 +355,11 @@ def main():
     print(f"📊 Columns: {header}")
 
     # Find column indices
-    def ci(name):
-        return next((i for i, h in enumerate(header) if name.lower() in h.lower()), None)
-
-    col_link      = ci("link")        # B
-    col_niche     = ci("niche")       # D
-    col_drive     = ci("transcript")  # E
-    col_title     = ci("title")       # F
-    col_extracted = ci("extracted")   # G
-    col_quality   = ci("quality")     # H
-    col_status    = ci("status")      # I
+    col_link      = header_index(header, "URL", "Link")
+    col_niche     = header_index(header, "Niche")
+    col_title     = header_index(header, "Topic / Title", "Title")
+    col_extracted = header_index(header, "Transcription", "What we extracted", "Extracted")
+    col_status    = header_index(header, "Status")
 
     if col_link is None:
         print("❌ Can't find Link column. Check headers.")
@@ -342,7 +427,20 @@ def main():
 
         # Claude extraction
         print("  🧠 Claude extracting...")
-        info = claude_extract(whisper_text, vision_text, link)
+        try:
+            info = claude_extract(whisper_text, vision_text, link)
+        except Exception as e:
+            print(f"  ⚠️  Claude extraction failed: {e}")
+            fallback_text = (whisper_text or vision_text or "").strip()
+            info = {
+                "title": "Review manually",
+                "about": "Automated extraction failed; transcript was saved for manual review.",
+                "extracted": fallback_text[:1000],
+                "quality": 1,
+                "niche": v(col_niche) or "AI Tips",
+                "flow_fit": "None",
+                "suggested_action": "Review transcript manually",
+            }
 
         # Build transcript text
         slug = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -360,25 +458,7 @@ def main():
         # Upload to Drive
         drive_link = upload_to_drive(transcript_content, f"transcript_{slug}.txt", token)
 
-        # Build updated row values (A:J)
-        existing_date = v(0) if len(row) > 0 else date.today().strftime("%Y-%m-%d")
-        extracted_summary = (
-            f"{info.get('about', '')}\n\n"
-            f"TIPS:\n{info.get('extracted', '')}\n\n"
-            f"FITS: {info.get('flow_fit', '')} | ACTION: {info.get('suggested_action', '')}"
-        )
-        updated_row = [
-            existing_date,                      # A: Date
-            link,                               # B: Link
-            v(2) or "Reel/Video",              # C: Topic/Type
-            info.get("niche", v(col_niche)),   # D: Niche
-            drive_link,                         # E: Transcript Drive Link
-            info.get("title", v(col_title)),   # F: Title
-            extracted_summary.strip(),          # G: What we extracted
-            str(info.get("quality", "?")),     # H: Quality
-            "Processed",                        # I: Status
-            v(col_status + 1) if col_status and col_status + 1 < len(row) else "No — review",  # J
-        ]
+        updated_row = build_row_update(header, row, info, drive_link, transcript_content)
         updates.append((sheet_row, updated_row))
         print(f"  ✅ '{info.get('title')}' | Niche: {info.get('niche')} | Q:{info.get('quality')}/5")
 
@@ -387,7 +467,7 @@ def main():
     # Write all updates to sheet
     for sheet_row, values in updates:
         try:
-            sheet_update_row(token, INSPO_TAB, sheet_row, values)
+            sheet_update_by_headers(token, inspo_tab, sheet_row, header, values)
             print(f"  📊 Updated row {sheet_row}")
         except Exception as e:
             print(f"  ⚠️  Sheet update row {sheet_row} failed: {e}")
