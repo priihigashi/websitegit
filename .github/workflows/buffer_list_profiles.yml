@@ -17,8 +17,8 @@ jobs:
 
           key = os.environ.get("BUFFER_API_KEY", "")
 
-          def gql(q):
-              payload = json.dumps({"query": q}).encode()
+          def gql(q, vars=None):
+              payload = json.dumps({"query": q, "variables": vars or {}}).encode()
               req = urllib.request.Request(
                   "https://api.buffer.com", data=payload,
                   headers={"Authorization": f"Bearer {key}",
@@ -29,29 +29,39 @@ jobs:
               except urllib.error.HTTPError as e:
                   return {"_err": e.code, "_body": e.read().decode()[:500]}
 
-          # 1. Get Channel field names
-          print("=== Channel type fields ===")
-          r = gql('{ __type(name: "Channel") { fields { name type { name kind ofType { name } } } } }')
-          fields = (r.get("data") or {}).get("__type", {}).get("fields", []) or []
-          for f in fields:
+          # 1. ChannelsInput schema
+          print("=== ChannelsInput required fields ===")
+          r = gql('{ __type(name: "ChannelsInput") { inputFields { name type { name kind ofType { name } } } } }')
+          for f in (r.get("data") or {}).get("__type", {}).get("inputFields", []) or []:
               t = f["type"]
               tn = t.get("name") or (t.get("ofType") or {}).get("name")
-              print(f"  {f['name']}: {tn}")
+              print(f"  {f['name']}: {tn} ({t.get('kind')})")
           print()
 
-          # 2. List channels with all the relevant fields
-          field_names = [f["name"] for f in fields]
-          # pick safe scalar fields
-          safe = [n for n in field_names if n in ("id","name","service","serviceType","handle","username","accountId","timezone","avatarUrl","isDisconnected","externalId","metadata","organizationId")]
-          query = "{ channels { " + " ".join(safe) + " } }"
-          print(f"=== Querying: {query} ===\n")
-          r = gql(query)
-          if "data" in r:
-              channels = r["data"].get("channels", [])
-              print(f"Found {len(channels)} channel(s):\n")
-              for c in channels:
-                  print(json.dumps(c, indent=2))
+          # 2. Get organizations first (org id is likely needed)
+          print("=== Organizations ===")
+          r = gql('{ organizations { id name } }')
+          orgs = (r.get("data") or {}).get("organizations", [])
+          print(json.dumps(r, indent=2))
+          print()
+
+          # 3. Try channels with org id
+          if orgs:
+              org_id = orgs[0]["id"]
+              print(f"=== Trying channels with input: organizationId={org_id} ===")
+              for input_shape in [
+                  {"organizationId": org_id},
+                  {"input": {"organizationId": org_id}},
+              ]:
+                  q = """query Q($input: ChannelsInput!) {
+                    channels(input: $input) {
+                      id name service serviceId displayName isDisconnected
+                    }
+                  }"""
+                  r = gql(q, input_shape)
+                  print(f"shape: {input_shape}")
+                  print(json.dumps(r, indent=2)[:2000])
                   print()
-          else:
-              print(json.dumps(r, indent=2))
+                  if "data" in r and r["data"].get("channels"):
+                      break
           EOF
