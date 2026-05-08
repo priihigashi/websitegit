@@ -3141,7 +3141,7 @@ Creator Notes: {notes or 'None'}
 TRANSCRIPT:
 {transcript}
 
-IMPORTANT: Use the RESEARCH FINDINGS above as verified facts — embed them into the slides and key facts section. Follow the CREATOR STRUCTURE NOTES and FORMAT FLAGS exactly.
+IMPORTANT: Use the RESEARCH FINDINGS above as verified facts — embed them into the slides and key facts section. Follow the CREATOR STRUCTURE NOTES and FORMAT FLAGS exactly. Fill the STORYTELLING FRAME (WHAT/WHY/SO WHAT) before writing any slides — every slide should connect back to at least one of the three answers.
 
 Output plain text only — NO markdown tables. Use this structure:
 
@@ -3152,6 +3152,11 @@ Niche: {niche}
 Status: DRAFT
 
 KEY FACTS (5-8 verifiable claims — pull from transcript AND research findings above):
+
+STORYTELLING FRAME (answer these first — they anchor every slide):
+WHAT: [one sentence — what happened or what is the core topic]
+WHY: [one sentence — why this matters to this {niche} audience right now]
+SO WHAT: [one sentence — what the audience should think or do differently after seeing this]
 
 HOOK EN: [scroll-stopping first line in English]
 HOOK PT-BR: [same in Brazilian Portuguese — rewrite, do not translate literally]
