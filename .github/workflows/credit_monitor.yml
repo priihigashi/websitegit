@@ -1,0 +1,57 @@
+name: Credit Monitor
+
+on:
+  schedule:
+    - cron: '0 5 * * *'   # 05:00 UTC daily — 1.5h before content_creator.yml
+  workflow_dispatch:
+    inputs:
+      primary_only:
+        description: 'Check primary providers only (Anthropic + OpenAI)'
+        required: false
+        default: 'false'
+  workflow_call:
+    outputs:
+      status:
+        description: 'ok / degraded / all_down'
+        value: ${{ jobs.check.outputs.status }}
+
+jobs:
+  check:
+    name: API Credit Health Check
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.run.outputs.status }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install google-auth google-auth-httplib2
+
+      - name: Run credit monitor
+        id: run
+        env:
+          CLAUDE_KEY_4_CONTENT:        ${{ secrets.CLAUDE_KEY_4_CONTENT }}
+          OPENAI_API_KEY:              ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY:              ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY:              ${{ secrets.PEXELS_API_KEY }}
+          SHEETS_TOKEN:                ${{ secrets.SHEETS_TOKEN }}
+          PRI_OP_GMAIL_APP_PASSWORD:   ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          GITHUB_RUN_ID:               ${{ github.run_id }}
+          GH_RUN_URL:                  "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: |
+          FLAGS=""
+          if [ "${{ github.event.inputs.primary_only }}" = "true" ]; then
+            FLAGS="--primary-only"
+          fi
+          python scripts/self_heal/credit_monitor.py $FLAGS
+          EXIT=$?
+          if   [ $EXIT -eq 0 ]; then echo "status=ok"       >> $GITHUB_OUTPUT
+          elif [ $EXIT -eq 1 ]; then echo "status=degraded"  >> $GITHUB_OUTPUT
+          else                        echo "status=all_down"  >> $GITHUB_OUTPUT
+          fi
+          # Exit 1 (degraded) is a warning — don't fail the workflow run
+          [ $EXIT -le 1 ] || exit $EXIT
