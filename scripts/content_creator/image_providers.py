@@ -166,6 +166,21 @@ def _cached(dest: Path) -> bool:
     return dest.exists() and dest.stat().st_size > 5000
 
 
+# SH-135: magic-byte guard — HTML error pages from redirect failures pass the
+# size check but aren't images. Check for JPEG/PNG/WebP/GIF signatures.
+_IMAGE_MAGIC = (
+    b"\xff\xd8\xff",       # JPEG
+    b"\x89PNG\r\n\x1a\n",  # PNG
+    b"RIFF",               # WebP (RIFF....WEBP)
+    b"GIF8",               # GIF
+)
+
+
+def _is_image_bytes(raw: bytes) -> bool:
+    """Return True when raw bytes start with a known image magic signature."""
+    return any(raw[:len(m)] == m for m in _IMAGE_MAGIC)
+
+
 def _rel(filename: str) -> str:
     return f"resources/images/{filename}"
 
@@ -214,7 +229,8 @@ def _replicate_run(slug_or_version: str, input_dict: dict,
             return ""
         with urllib.request.urlopen(output, timeout=30) as r:
             raw = r.read()
-        if len(raw) < 5000:
+        if len(raw) < 5000 or not _is_image_bytes(raw):
+            print(f"  {label}: response not a valid image ({len(raw)} bytes) — skipping")
             return ""
         dest.write_bytes(raw)
         print(f"  {filename} ({len(raw)//1024}KB) ← {label}")
@@ -467,7 +483,8 @@ def _nb2(prompt: str, work_dir: str, filename: str) -> str:
             return ""
         with urllib.request.urlopen(str(image_url), timeout=30) as r:
             raw = r.read()
-        if len(raw) < 5000:
+        if len(raw) < 5000 or not _is_image_bytes(raw):
+            print(f"  NB2: response not a valid image ({len(raw)} bytes) — skipping")
             return ""
         dest.write_bytes(raw)
         print(f"  {filename} ({len(raw)//1024}KB) ← NB2/Gemini 3.1 Flash")
@@ -580,7 +597,8 @@ def _dalle3(prompt: str, work_dir: str, filename: str) -> str:
         img_url = resp["data"][0]["url"]
         with urllib.request.urlopen(img_url, timeout=30) as r:
             raw = r.read()
-        if len(raw) < 5000:
+        if len(raw) < 5000 or not _is_image_bytes(raw):
+            print(f"  DALL-E 3: response not a valid image ({len(raw)} bytes) — skipping")
             return ""
         dest.write_bytes(raw)
         print(f"  {filename} ({len(raw)//1024}KB) ← DALL-E 3")
