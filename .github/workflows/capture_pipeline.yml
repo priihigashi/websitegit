@@ -113,7 +113,11 @@ jobs:
             requests \
             youtube-transcript-api \
             instaloader \
-            pytubefix
+            pytubefix \
+            playwright
+
+      - name: Install Playwright Chromium (best-effort — SH-024 article screenshots)
+        run: python -m playwright install chromium --with-deps || true
 
       - name: Run capture pipeline
         env:
