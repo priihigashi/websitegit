@@ -1,0 +1,77 @@
+name: Buffer List Profiles (one-shot diagnostic)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY_EXP04092027 }}
+    steps:
+      - name: List Buffer profiles via REST v1 + GraphQL
+        run: |
+          python3 - <<'EOF'
+          import os, json, urllib.request, urllib.error
+
+          key = os.environ.get("BUFFER_API_KEY", "")
+          if not key:
+              print("❌ No BUFFER_API_KEY env var")
+              exit(1)
+
+          print("=" * 60)
+          print("ROUTE A — REST v1 /profiles.json (used by approval_handler.py)")
+          print("=" * 60)
+          try:
+              url = f"https://api.bufferapp.com/1/profiles.json?access_token={key}"
+              data = json.loads(urllib.request.urlopen(url, timeout=15).read())
+              print(f"Found {len(data)} profile(s):\n")
+              for p in data:
+                  print(f"  id:               {p.get('id')}")
+                  print(f"  service:          {p.get('service')}")
+                  print(f"  service_username: {p.get('service_username')}")
+                  print(f"  formatted_username: {p.get('formatted_username')}")
+                  print(f"  service_id:       {p.get('service_id')}")
+                  print(f"  default:          {p.get('default')}")
+                  print()
+          except urllib.error.HTTPError as e:
+              print(f"❌ HTTP {e.code}: {e.read().decode()[:300]}")
+          except Exception as e:
+              print(f"❌ Error: {e}")
+
+          print("=" * 60)
+          print("ROUTE B — GraphQL channels query (newer Buffer API)")
+          print("=" * 60)
+          try:
+              query = '{ account { channels { id name service serviceId serviceUsername } } }'
+              payload = json.dumps({"query": query}).encode()
+              req = urllib.request.Request(
+                  "https://api.buffer.com",
+                  data=payload,
+                  headers={
+                      "Authorization": f"Bearer {key}",
+                      "Content-Type": "application/json",
+                      "User-Agent": "BufferClient/1.0",
+                  },
+              )
+              data = json.loads(urllib.request.urlopen(req, timeout=15).read())
+              channels = data.get("data", {}).get("account", {}).get("channels", []) or []
+              print(f"Found {len(channels)} channel(s):\n")
+              for c in channels:
+                  print(f"  id:              {c.get('id')}")
+                  print(f"  name:            {c.get('name')}")
+                  print(f"  service:         {c.get('service')}")
+                  print(f"  serviceId:       {c.get('serviceId')}")
+                  print(f"  serviceUsername: {c.get('serviceUsername')}")
+                  print()
+          except Exception as e:
+              print(f"❌ Error: {e}")
+
+          print("=" * 60)
+          print("RECOMMENDATION:")
+          print("Pick the IG profile/channel matching @oakparkconstruction (or whatever your OPC IG handle is)")
+          print("Note its 'id' field")
+          print("That's the value to set as BUFFER_OPC_INSTAGRAM_PROFILE_ID secret")
+          print("=" * 60)
+          EOF
