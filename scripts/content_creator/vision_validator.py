@@ -66,7 +66,8 @@ def _downscale_to_under_limit(image_bytes: bytes, mime: str) -> Tuple[bytes, str
         return b"", mime
 
 
-def validate_image_bytes(image_bytes: bytes, filename: str, query: str) -> Tuple[bool, str]:
+def validate_image_bytes(image_bytes: bytes, filename: str, query: str,
+                         *, opc_strict: bool = False) -> Tuple[bool, str]:
     """Send (image, query) to Claude Vision. Return (is_relevant, reason)."""
     # Phase 11/C2 — accept OpenAI-only deployments. If neither key is set,
     # we have no provider — skip. If only OPENAI_KEY, route directly there.
@@ -101,6 +102,12 @@ def validate_image_bytes(image_bytes: bytes, filename: str, query: str) -> Tuple
                     f"YES if it clearly shows the correct subject, action, or setting.\n"
                     f"NO if it shows something completely unrelated (e.g. kitchen photo "
                     f"on a concrete/structural topic).\n"
+                    + (
+                        "NO also if the image is an AI illustration, cartoon, digital render, "
+                        "3D render, or clip art rather than a real photograph. "
+                        "Real jobsite photos only — no artificial-looking images.\n"
+                        if opc_strict else ""
+                    ) +
                     f"Start with YES or NO, then one short sentence."
                 )},
             ],
@@ -127,13 +134,13 @@ def validate_image_bytes(image_bytes: bytes, filename: str, query: str) -> Tuple
         # billing) AND on 5xx server errors (500 internal, 502 bad gateway,
         # 503 unavailable, 504 timeout, 529 overload).
         if e.code in (400, 401, 402, 429, 500, 502, 503, 504, 529) and OPENAI_KEY:
-            ok, reason = _validate_via_openai(b64, mime, query)
+            ok, reason = _validate_via_openai(b64, mime, query, opc_strict=opc_strict)
             return ok, reason
         return True, f"skipped (vision HTTP {e.code}: {body})"
     except Exception as e:
         if OPENAI_KEY:
             try:
-                return _validate_via_openai(b64, mime, query)
+                return _validate_via_openai(b64, mime, query, opc_strict=opc_strict)
             except Exception:
                 pass
         return True, f"skipped (vision error: {e})"
@@ -142,7 +149,8 @@ def validate_image_bytes(image_bytes: bytes, filename: str, query: str) -> Tuple
     return is_relevant, verdict[:200]
 
 
-def _validate_via_openai(b64_data: str, mime: str, query: str) -> Tuple[bool, str]:
+def _validate_via_openai(b64_data: str, mime: str, query: str,
+                         *, opc_strict: bool = False) -> Tuple[bool, str]:
     """Fallback when Anthropic Vision 400/429/529. Uses OpenAI gpt-4o-mini
     vision, same yes/no contract."""
     payload = json.dumps({
@@ -159,6 +167,12 @@ def _validate_via_openai(b64_data: str, mime: str, query: str) -> Tuple[bool, st
                     f"YES if it clearly shows the correct subject/action/setting.\n"
                     f"NO if it shows something completely unrelated (e.g. kitchen "
                     f"photo on a concrete/structural topic).\n"
+                    + (
+                        "NO also if the image is an AI illustration, cartoon, digital render, "
+                        "3D render, or clip art rather than a real photograph. "
+                        "Real jobsite photos only — no artificial-looking images.\n"
+                        if opc_strict else ""
+                    ) +
                     f"Start with YES or NO, then one short sentence."
                  )},
             ],
@@ -181,12 +195,13 @@ def _validate_via_openai(b64_data: str, mime: str, query: str) -> Tuple[bool, st
     return is_relevant, f"[openai-fallback] {verdict[:180]}"
 
 
-def validate_image(local_path: str, query: str) -> Tuple[bool, str]:
+def validate_image(local_path: str, query: str,
+                   *, opc_strict: bool = False) -> Tuple[bool, str]:
     """Read a local image file and validate it against the query. Convenience wrapper."""
     p = Path(local_path)
     if not p.exists():
         return True, "skipped (file not found)"
     try:
-        return validate_image_bytes(p.read_bytes(), p.name, query)
+        return validate_image_bytes(p.read_bytes(), p.name, query, opc_strict=opc_strict)
     except Exception as e:
         return True, f"skipped (read error: {e})"

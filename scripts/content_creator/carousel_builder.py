@@ -181,7 +181,7 @@ def _is_valid_image_file(path, work_dir=None) -> bool:
         return False
 
 
-def _vision_accept(local_path, query, label, *, source_url="", work_dir=None):
+def _vision_accept(local_path, query, label, *, source_url="", work_dir=None, opc_strict=False):
     """Return True if Vision says image matches query. Logs the verdict.
     Empty path or empty query short-circuits to True so we never block on
     missing inputs.
@@ -223,7 +223,7 @@ def _vision_accept(local_path, query, label, *, source_url="", work_dir=None):
     except Exception:
         pass
     try:
-        ok, reason = _vision_validate(str(resolved_path), query)
+        ok, reason = _vision_validate(str(resolved_path), query, opc_strict=opc_strict)
         if ok:
             print(f"  Vision OK ({label}): {reason[:120]}")
         else:
@@ -2932,7 +2932,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 lib_hit = _search_library(search_q, niche)
                 if lib_hit:
                     rel = _enhance_library_image(lib_hit.get("drive_url", ""), work_dir, cover_fname, search_q)
-                    if rel and _vision_accept(rel, search_q, "cover/library", work_dir=work_dir):
+                    if rel and _vision_accept(rel, search_q, "cover/library", work_dir=work_dir, opc_strict=(niche == "opc")):
                         _set_cover(rel, "library", "library", query=search_q, prompt="scene-lock enhance from library")
                         if _mark_library_used:
                             _mark_library_used(lib_hit.get("row_idx", 0), f"{niche}:{search_q[:40]}")
@@ -3088,7 +3088,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                     _dl = _download_drive_photo(opc_hit["drive_url"], str(_img_dir / _try_fname))
                     _fname_key = (opc_hit.get("filename", "") or "").strip().lower()
                     _drive_key = (opc_hit.get("drive_url", "") or "").strip().lower()
-                    if _dl and _vision_accept(_dl, cq, f"slide{i}/opc_catalog", work_dir=work_dir):
+                    if _dl and _vision_accept(_dl, cq, f"slide{i}/opc_catalog", work_dir=work_dir, opc_strict=True):
                         _set_slide(i, _dl, "opc_catalog", "real_photo", query=cq,
                                    service_type=opc_hit.get("service_type", ""))
                         accepted = True
@@ -3111,7 +3111,7 @@ def fetch_all_media(content, niche, work_dir, brief=""):
                 lib_hit = _search_library(cq, niche)
                 if lib_hit:
                     rel = _enhance_library_image(lib_hit.get("drive_url", ""), work_dir, fname, cq)
-                    if rel and _vision_accept(rel, cq, f"slide{i}/library", work_dir=work_dir):
+                    if rel and _vision_accept(rel, cq, f"slide{i}/library", work_dir=work_dir, opc_strict=(niche == "opc")):
                         _set_slide(i, rel, "library", "library", query=cq, prompt="scene-lock enhance from library")
                         accepted = True
                         if _mark_library_used:
