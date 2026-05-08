@@ -772,6 +772,45 @@ TOPIC_ANCHORS_EN = [
 ]
 
 
+def _topic_hints_from_notes(notes: str, language: str = "pt") -> list[str]:
+    """Extract simple topic hints from free-text notes without an LLM.
+
+    This keeps discovery useful when Anthropic/OpenAI query generation is down:
+    user notes such as "mulheres e LGBT" should still become search terms.
+    """
+    text = (notes or "").lower()
+    if not text.strip():
+        return []
+    anchors = TOPIC_ANCHORS_EN if language == "en" else TOPIC_ANCHORS_PT
+    found: list[str] = []
+    for anchor in anchors:
+        needle = anchor.lower()
+        compact = needle.replace("-", " ")
+        if needle in text or compact in text:
+            found.append(anchor)
+    # Pull short quoted/comma-separated terms without turning whole sentences
+    # into search queries. Keep the list capped so fallback remains cheap.
+    for raw in re.split(r"[,;/\n]", text):
+        term = re.sub(r"[^a-z0-9áàâãéêíóôõúüçñ -]+", " ", raw).strip()
+        term = re.sub(r"\s+", " ", term)
+        if 3 <= len(term) <= 32 and len(term.split()) <= 4:
+            if term not in found and term not in {"none", "nenhum", "n a"}:
+                found.append(term)
+        if len(found) >= 8:
+            break
+    return found[:8]
+
+
+def _merge_keyword_hints(notes: str, keyword_hints: list[str] | None,
+                         language: str = "pt") -> list[str]:
+    merged: list[str] = []
+    for value in (keyword_hints or []) + _topic_hints_from_notes(notes, language):
+        clean = re.sub(r"\s+", " ", str(value or "").strip().lower())
+        if clean and clean not in merged:
+            merged.append(clean)
+    return merged[:8]
+
+
 def _build_default_query_set(person_name: str, hints: list[str] | None,
                               language: str = "pt") -> dict:
     """Construct the fallback/default query buckets without an LLM.
@@ -871,13 +910,14 @@ def generate_query_buckets(person_name: str, requirement: str,
 
     Always returns a complete dict with all 5 keys.
     """
-    fallback = _build_default_query_set(person_name, keyword_hints, language)
+    merged_hints = _merge_keyword_hints(notes, keyword_hints, language)
+    fallback = _build_default_query_set(person_name, merged_hints, language)
 
     prompt = _QUERY_BUCKET_PROMPT.format(
         person_name=person_name,
         requirement=requirement[:1000],
         notes=(notes or "(none)")[:800],
-        hints=(", ".join(keyword_hints) if keyword_hints else "(none)"),
+        hints=(", ".join(merged_hints) if merged_hints else "(none)"),
         seed_excerpt=(seed_excerpt or "(none)")[:800],
     )
     try:

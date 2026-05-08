@@ -9,6 +9,7 @@ Run:
 from __future__ import annotations
 
 import sys
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -148,6 +149,53 @@ class Sh104ProviderRouteTests(unittest.TestCase):
             self.assertEqual(cc.search_tiktok_candidates(["Frei Gilson"]), [])
         self.assertFalse(state.should_try_apify())
         self.assertEqual(state.snapshot()["route_status"]["apify"], "failed")
+
+
+class Sh104QueryVocabularyTests(unittest.TestCase):
+    def test_notes_feed_fallback_query_hints_when_llm_is_down(self):
+        fake_router = types.SimpleNamespace(llm_json=lambda *args, **kwargs: {})
+        with patch.dict(sys.modules, {"llm_router": fake_router}):
+            queries = cc.generate_query_buckets(
+                "Frei Gilson",
+                "same public person evidence",
+                notes="Foco em mulheres, LGBT e denúncia ao Ministério Público",
+                keyword_hints=None,
+                language="pt",
+            )
+
+        youtube = " | ".join(queries["youtube_queries"]).lower()
+        instagram = " | ".join(queries["instagram_queries"]).lower()
+        self.assertIn("frei gilson mulheres", youtube)
+        self.assertIn("frei gilson lgbt", youtube)
+        self.assertIn("freigilsonpolêmica", instagram)
+        self.assertIn("mulheres", instagram)
+
+    def test_explicit_keyword_hints_precede_notes(self):
+        hints = cc._merge_keyword_hints(
+            "mulheres e religião",
+            ["catequese", "LGBT"],
+            language="pt",
+        )
+
+        self.assertEqual(hints[:2], ["catequese", "lgbt"])
+        self.assertIn("mulheres", hints)
+        self.assertIn("religião", hints)
+
+    def test_english_fallback_uses_english_vocabulary(self):
+        fake_router = types.SimpleNamespace(llm_json=lambda *args, **kwargs: {})
+        with patch.dict(sys.modules, {"llm_router": fake_router}):
+            queries = cc.generate_query_buckets(
+                "Public Figure",
+                "same public person evidence",
+                notes="women and religion",
+                language="en",
+            )
+
+        youtube = " | ".join(queries["youtube_queries"]).lower()
+        context = " | ".join(queries["context_queries"]).lower()
+        self.assertIn("public figure scandal", youtube)
+        self.assertIn("public figure women", youtube)
+        self.assertIn("public figure interview", context)
 
 
 if __name__ == "__main__":
