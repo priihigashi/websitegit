@@ -3319,7 +3319,11 @@ def fetch_template_aware_media(content, niche, work_dir, paths, brief=""):
     if not slides:
         return paths
 
-    fallback_topic = (content or {}).get("headline", "") or (content or {}).get("topic", "")
+    fallback_topic = (
+        plan.get("topic")
+        or (content or {}).get("topic", "")
+        or (content or {}).get("headline", "")
+    )
     comparison_pair = (content or {}).get("_comparison_pair") or {}
     img_dir = Path(work_dir) / "resources" / "images"
     img_dir.mkdir(parents=True, exist_ok=True)
