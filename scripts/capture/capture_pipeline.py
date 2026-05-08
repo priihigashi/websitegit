@@ -2510,6 +2510,212 @@ def _mark_queue_failed(url: str, reason: str = "error"):
         print(f"  WARNING _mark_queue_failed (non-fatal): {e}")
 
 
+# ─── SH-105 SHOT 1: PRE-FLIGHT + CAPTURE QUEUE STAGE TRACKING ─────────────────
+
+_PREFLIGHT_EMAIL_FLAG = "/tmp/capture_preflight_email_sent"
+
+
+def _send_preflight_alert(ant_status: str, oai_status: str) -> None:
+    """Send one email alert when ALL LLM providers are down. Non-fatal."""
+    gmail_pass = os.getenv("PRI_OP_GMAIL_APP_PASSWORD", "")
+    if not gmail_pass:
+        return
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        addr = "priscila@oakpark-construction.com"
+        body = (
+            "Capture pipeline blocked — all LLM providers unreachable.\n\n"
+            f"Anthropic: {ant_status}\n"
+            f"OpenAI:    {oai_status}\n\n"
+            "The pipeline exited cleanly. No download, transcribe, or Drive folder was created.\n"
+            "Top up Anthropic credits at console.anthropic.com or add OpenAI credits to retry."
+        )
+        msg = MIMEText(body)
+        msg["Subject"] = "🚨 Capture pipeline blocked — top up credits"
+        msg["From"] = addr
+        msg["To"] = addr
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(addr, gmail_pass)
+            smtp.send_message(msg)
+        print("  [preflight] Alert email sent")
+    except Exception as exc:
+        print(f"  [preflight] Alert email failed (non-fatal): {exc}")
+
+
+def _log_preflight_failure_to_sheet(ant_status: str, oai_status: str) -> None:
+    """Append one row to 🚨 Pipeline Failures and one to Credit Blocks. Non-fatal."""
+    import urllib.request as _ur, urllib.parse as _up
+    raw = os.getenv("SHEETS_TOKEN", "")
+    if not raw:
+        return
+    try:
+        td = json.loads(raw)
+        data = _up.urlencode({
+            "client_id": td["client_id"], "client_secret": td["client_secret"],
+            "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
+        }).encode()
+        resp = json.loads(_ur.urlopen(_ur.Request("https://oauth2.googleapis.com/token", data=data)).read())
+        token = resp["access_token"]
+        run_id = os.getenv("GITHUB_RUN_ID", "")
+        run_url = f"https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{run_id}" if run_id else ""
+        ts = datetime.utcnow().isoformat() + "Z"
+        err = f"Anthropic={ant_status} OpenAI={oai_status}"
+
+        for ss_id, tab, cols_range in [
+            (IDEAS_INBOX_ID,     "🚨 Pipeline Failures",
+             [ts, "capture_pipeline.yml", run_id, "preflight_check", err, run_url, "", ""]),
+            ("1yh9C7KU9OlqCdHNDI9mbZ6ldqLA3bAR3uENXUh37bkQ", "Credit Blocks",
+             [ts, "capture_pipeline.yml", run_id, "preflight_check/pre-flight", err, run_url, "", "Anthropic+OpenAI"]),
+        ]:
+            enc = _up.quote(f"'{tab}'!A:H", safe="!:'")
+            url = (f"https://sheets.googleapis.com/v4/spreadsheets/{ss_id}/values/{enc}"
+                   f":append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS")
+            _ur.urlopen(_ur.Request(url, data=json.dumps({"values": [cols_range]}).encode(),
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})).read()
+    except Exception as exc:
+        print(f"  [preflight] Sheet log failed (non-fatal): {exc}")
+
+
+def preflight_check() -> bool:
+    """Tiny ping to Anthropic + OpenAI before any download or transcribe.
+
+    Returns True  → at least one LLM provider reachable; pipeline can proceed.
+    Returns False → all providers down; pipeline aborted cleanly.
+
+    When both are down sends ONE alert email per 12 h (tracked via /tmp flag) and
+    logs to 🚨 Pipeline Failures + Credit Blocks.
+    """
+    import urllib.request as _ur, urllib.error as _uerr
+
+    def _ping(url: str, payload: bytes, headers: dict) -> str:
+        try:
+            _ur.urlopen(_ur.Request(url, data=payload, headers=headers), timeout=15)
+            return "ok"
+        except _uerr.HTTPError as e:
+            body = e.read().decode("utf-8", "replace")[:300].lower()
+            if any(k in body for k in ("credit", "billing", "purchase", "quota", "insufficient")):
+                return "low_credit"
+            if e.code in (401, 403):
+                return "auth"
+            if e.code == 429:
+                return "rate_limit"
+            return f"http_{e.code}"
+        except Exception as exc:
+            return f"error:{str(exc)[:60]}"
+
+    ant_key = os.getenv("CLAUDE_KEY_4_CONTENT", "") or os.getenv("ANTHROPIC_API_KEY", "")
+    oai_key = os.getenv("OPENAI_API_KEY", "")
+
+    ant_status = "no_key"
+    oai_status = "no_key"
+
+    if ant_key:
+        ant_payload = json.dumps({
+            "model": "claude-haiku-4-5-20251001", "max_tokens": 5,
+            "messages": [{"role": "user", "content": "ok"}],
+        }).encode()
+        ant_status = _ping(
+            "https://api.anthropic.com/v1/messages", ant_payload,
+            {"x-api-key": ant_key, "anthropic-version": "2023-06-01",
+             "content-type": "application/json"},
+        )
+
+    if oai_key:
+        oai_payload = json.dumps({
+            "model": "gpt-4o-mini", "max_tokens": 5,
+            "messages": [{"role": "user", "content": "ok"}],
+        }).encode()
+        oai_status = _ping(
+            "https://api.openai.com/v1/chat/completions", oai_payload,
+            {"Authorization": f"Bearer {oai_key}", "Content-Type": "application/json"},
+        )
+
+    print(f"[preflight] Anthropic={ant_status}  OpenAI={oai_status}")
+
+    # If only Anthropic is down but OpenAI is reachable → warn and continue
+    if ant_status not in ("ok", "no_key", "rate_limit") and oai_status in ("ok", "rate_limit"):
+        print("  [preflight] WARNING: Anthropic degraded — pipeline will use OpenAI fallback cascade")
+        return True
+
+    both_down = (ant_status not in ("ok", "no_key", "rate_limit")
+                 and oai_status not in ("ok", "no_key", "rate_limit"))
+    if both_down:
+        # Rate-limit email to ONE per 12 h
+        send_email = True
+        try:
+            from pathlib import Path as _P
+            flag = _P(_PREFLIGHT_EMAIL_FLAG)
+            if flag.exists():
+                age_h = (datetime.utcnow().timestamp() - flag.stat().st_mtime) / 3600
+                send_email = age_h >= 12
+        except Exception:
+            pass
+        if send_email:
+            _send_preflight_alert(ant_status, oai_status)
+            try:
+                from pathlib import Path as _P
+                _P(_PREFLIGHT_EMAIL_FLAG).write_text(datetime.utcnow().isoformat())
+            except Exception:
+                pass
+        _log_preflight_failure_to_sheet(ant_status, oai_status)
+        print("  [preflight] All LLM providers down — aborting pipeline cleanly")
+        return False
+
+    return True
+
+
+def _mark_capture_queue_failed(url: str, stage: str, folder_id: str = "") -> None:
+    """Write FAILED_AT_STAGE / RESUME_FOLDER_ID / FAILED_AT_TIMESTAMP to the
+    Capture Queue row matching this URL.  Leaves PROCESSED=FALSE so the queue
+    processor can prioritise it in the next run.  Non-fatal.
+    """
+    import urllib.request as _ur, urllib.parse as _up
+    raw = os.getenv("SHEETS_TOKEN", "")
+    if not raw or not url:
+        return
+    try:
+        td = json.loads(raw)
+        data = _up.urlencode({
+            "client_id": td["client_id"], "client_secret": td["client_secret"],
+            "refresh_token": td["refresh_token"], "grant_type": "refresh_token",
+        }).encode()
+        resp = json.loads(_ur.urlopen(_ur.Request("https://oauth2.googleapis.com/token", data=data)).read())
+        token = resp["access_token"]
+
+        sheet_id = IDEAS_INBOX_ID
+        tab = "📲 Capture Queue"
+        enc = _up.quote(f"'{tab}'!A2:B", safe="!:'")
+        rows_resp = json.loads(_ur.urlopen(_ur.Request(
+            f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{enc}",
+            headers={"Authorization": f"Bearer {token}"}
+        )).read())
+        norm = url.split("?")[0].rstrip("/")
+        for i, row in enumerate(rows_resp.get("values", [])):
+            row_url = (row[1].strip() if len(row) > 1 else "").split("?")[0].rstrip("/")
+            if row_url == norm:
+                sheet_row = i + 2
+                ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+                body = json.dumps({
+                    "valueInputOption": "USER_ENTERED",
+                    "data": [
+                        {"range": f"'{tab}'!N{sheet_row}", "values": [[stage]]},
+                        {"range": f"'{tab}'!O{sheet_row}", "values": [[folder_id or ""]]},
+                        {"range": f"'{tab}'!P{sheet_row}", "values": [[ts]]},
+                    ],
+                }).encode()
+                _ur.urlopen(_ur.Request(
+                    f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values:batchUpdate",
+                    data=body,
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                )).read()
+                print(f"  [capture_queue] Row {sheet_row} failed at stage={stage!r} folder={folder_id[:40] if folder_id else '—'}")
+                return
+        print(f"  [capture_queue] _mark_capture_queue_failed: URL not found in queue ({url[:60]})")
+    except Exception as exc:
+        print(f"  WARNING _mark_capture_queue_failed (non-fatal): {exc}")
+
+
 # ─── PIPELINES ────────────────────────────────────────────────────────────────
 
 def run_book(args, transcript):
@@ -4225,6 +4431,10 @@ def main():
                 f"\nOriginal caption: {metadata['caption'][:200]}"
                 f"\nSource: {metadata['source_url']}"
             )
+
+    # SH-105 Shot 1A: pre-flight LLM credit check before any download
+    if not preflight_check():
+        sys.exit(0)  # cleanly abort — alert email + sheet logging done inside
 
     with tempfile.TemporaryDirectory() as tmp:
         audio = download_audio(args.url, tmp, metadata=metadata)

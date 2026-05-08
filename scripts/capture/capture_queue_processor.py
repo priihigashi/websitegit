@@ -85,7 +85,8 @@ def _get_token() -> str:
 # ─── SHEETS ───────────────────────────────────────────────────────────────────
 
 def _read_queue(token: str) -> list:
-    enc = urllib.parse.quote(f"'{QUEUE_TAB}'!A2:H", safe="!:'")
+    # Read through P to include SH-105 columns: N=failed_at_stage, O=resume_folder_id, P=failed_at_timestamp
+    enc = urllib.parse.quote(f"'{QUEUE_TAB}'!A2:P", safe="!:'")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
     resp = json.loads(urllib.request.urlopen(
         urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
@@ -145,7 +146,7 @@ def _clear_failure_flags(token: str, rows: list):
     """
     updates = []
     for i, row in enumerate(rows):
-        row_padded = row + [""] * (8 - len(row))
+        row_padded = row + [""] * (16 - len(row))
         moved_to = row_padded[5].strip()
         if moved_to.startswith("⚠️"):
             sheet_row = i + 2
@@ -287,22 +288,36 @@ def main():
         _clear_failure_flags(token, rows)
         rows = _read_queue(token)  # re-read after clearing flags
 
+    # SH-105 Shot 1C: prioritise rows that previously failed mid-stage.
+    # Col N (index 13) = failed_at_stage; non-empty = partial work exists.
+    # Process these BEFORE fresh unprocessed rows so partial work is retried first.
+    def _failed_stage(r):
+        padded = r + [""] * (16 - len(r))
+        return padded[13].strip()  # N = failed_at_stage
+
+    rows_with_idx = list(enumerate(rows))
+    failed_rows = [(i, r) for i, r in rows_with_idx if _failed_stage(r)]
+    fresh_rows  = [(i, r) for i, r in rows_with_idx if not _failed_stage(r)]
+    if failed_rows:
+        print(f"[capture_queue] SH-105: {len(failed_rows)} row(s) with prior stage failure — processing first")
+    ordered_rows = failed_rows + fresh_rows
+
     # Build set of already-processed URLs (D=TRUE) for dedup check in loop.
     # Normalise by stripping query params so ?igsh=... variants match each other.
     _processed_urls: set = set()
     for _r in rows:
-        _r_pad = _r + [""] * (8 - len(_r))
+        _r_pad = _r + [""] * (16 - len(_r))
         if _r_pad[3].strip().upper() == "TRUE" and _r_pad[1].strip():
             _processed_urls.add(_r_pad[1].strip().split("?")[0].rstrip("/"))
 
     processed_count = 0
-    for i, row in enumerate(rows):
+    for i, row in ordered_rows:
         if processed_count >= MAX_PER_RUN:
             print(f"[capture_queue] Cap reached ({MAX_PER_RUN}), stopping.")
             break
 
-        # Pad to 8 columns
-        row = row + [""] * (8 - len(row))
+        # Pad to 16 columns (A–P, including SH-105 stage columns at N/O/P)
+        row = row + [""] * (16 - len(row))
         url       = row[1].strip()           # B — LINK
         comment   = row[2].strip()           # C — COMMENT
         processed = row[3].strip().upper()   # D — PROCESSED (checkbox)

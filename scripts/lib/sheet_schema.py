@@ -85,6 +85,11 @@ CAPTURE_QUEUE_COLS = {
     "credits_source":    "credits/source",         # I  (added 2026-04-17 by ux-agent)
     "content_ideas":     "content ideas generated",# J
     "ready_to_build":    "ready to build",         # K
+    "cut_windows":       "cut_windows",            # L — existing (not added by SH-105)
+    "screenshots":       "screenshots",            # M — existing (not added by SH-105)
+    "failed_at_stage":   "failed_at_stage",        # N — SH-105: capture stage that failed
+    "resume_folder_id":  "resume_folder_id",       # O — SH-105: Drive folder with partial work
+    "failed_at_ts":      "failed_at_timestamp",    # P — SH-105: ISO UTC timestamp of failure
 }
 
 # ── Helper ────────────────────────────────────────────────────────────────────
