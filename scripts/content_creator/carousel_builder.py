@@ -20,6 +20,82 @@ PEXELS_KEY     = os.environ.get("PEXELS_API_KEY", "")
 PIXABAY_KEY    = os.environ.get("PIXABAY_API_KEY", "")
 REPLICATE_KEY  = os.environ.get("PRI_OP_REPLICATE_API_KEY", "")
 INFSH_KEY      = os.environ.get("PRI_OP_INFSH_API_KEY", "")
+
+# SH-138 — slide_purpose pilot (doc 1BDg9ORggVsWH-WQPBx4iQnYNu2UA5vHWcuNRkXCY5v8 v3 FINAL).
+# Default OFF on cron. When SLIDE_PURPOSE_PILOT=1, generation prompts emit slide_purpose
+# tags so reviewer/auditor can audit each slide against its declared narrative job.
+# Pilot keeps slide count fixed — no dynamic counts during pilot.
+# OPC purposes:  hook | cost | teach | apply | sources
+# News purposes: claim | number | evidence | opposition | implication | sources
+# 5-slide News compression (pilot-safe per v3-final doc): implication folded into slide 4.
+SLIDE_PURPOSE_PILOT = os.environ.get("SLIDE_PURPOSE_PILOT", "0") == "1"
+SLIDE_PURPOSE_OPC_BY_INDEX = {
+    1: "hook", 2: "cost", 3: "teach", 4: "apply", 5: "sources",
+}
+SLIDE_PURPOSE_NEWS_5SLIDE_BY_INDEX = {
+    1: "claim", 2: "number", 3: "evidence",
+    4: "opposition+implication",  # 5-slide compression — opposition slide ends with implication line
+    5: "sources",
+}
+SLIDE_PURPOSE_NEWS_6SLIDE_BY_INDEX = {
+    1: "claim", 2: "number", 3: "evidence", 4: "opposition", 5: "implication", 6: "sources",
+}
+
+
+def _slide_purpose_block(niche: str, n_slides: int) -> str:
+    """SH-138: build a prompt fragment that asks the model to emit slide_purpose
+    per slide. Returns "" when pilot disabled so cron behavior is unchanged.
+    """
+    if not SLIDE_PURPOSE_PILOT:
+        return ""
+    if niche == "opc":
+        mapping = SLIDE_PURPOSE_OPC_BY_INDEX
+        purpose_doc = (
+            "OPC narrative spine (purposes IN ORDER): hook | cost | teach | apply | sources.\n"
+            "  - hook  = stop the scroll. Surprising fact / costly mistake. Noun phrase, no question.\n"
+            "  - cost  = the dollar/time/regret number that grounds the hook. Concrete, sourced.\n"
+            "  - teach = explain ONE concept simply. The 'explain one thing' rule.\n"
+            "  - apply = how a homeowner applies it (NOT what OPC does — what THEY do).\n"
+            "  - sources = citations + soft 'save this for your reno' CTA."
+        )
+    else:
+        # Brazil/USA News
+        if n_slides <= 5:
+            mapping = SLIDE_PURPOSE_NEWS_5SLIDE_BY_INDEX
+            purpose_doc = (
+                "News narrative spine (purposes IN ORDER, 5-slide compression): claim | number | evidence | opposition+implication | sources.\n"
+                "  - claim    = cover_claim verbatim. The provocative statement.\n"
+                "  - number   = the size of the claim. Visual receipts.\n"
+                "  - evidence = primary sources (gov website, official doc).\n"
+                "  - opposition+implication = cross-partisan agreement on the same fact, ENDING with one neutral implication line ('what this means for you').\n"
+                "  - sources  = full citations."
+            )
+        else:
+            mapping = SLIDE_PURPOSE_NEWS_6SLIDE_BY_INDEX
+            purpose_doc = (
+                "News narrative spine (purposes IN ORDER): claim | number | evidence | opposition | implication | sources.\n"
+                "  - claim       = cover_claim verbatim. The provocative statement.\n"
+                "  - number      = the size of the claim. Visual receipts.\n"
+                "  - evidence    = primary sources (gov website, official doc).\n"
+                "  - opposition  = cross-partisan agreement on the same fact.\n"
+                "  - implication = neutral 'what this means for you' line. Never editorial.\n"
+                "  - sources     = full citations."
+            )
+    by_index = "\n".join(
+        f"  Slide {i}: {mapping.get(i, 'middle')}" for i in range(1, n_slides + 1)
+    )
+    return (
+        "\n=== SH-138 SLIDE PURPOSE PILOT (advisory, non-blocking) ===\n"
+        f"{purpose_doc}\n"
+        f"For this {n_slides}-slide carousel, each slide MUST fulfill its declared purpose AND build on the previous slide.\n"
+        f"Required slide_purpose by slide index:\n{by_index}\n"
+        "Return an additional top-level field `slide_purposes` in your JSON output:\n"
+        '  "slide_purposes": [{"slide": 1, "purpose": "hook"}, {"slide": 2, "purpose": "cost"}, ...]\n'
+        "Each slide's content MUST visibly serve its purpose. Reviewer will audit per-slide.\n"
+        "=== END SLIDE PURPOSE PILOT ===\n"
+    )
+
+
 # SH-041: DALL-E opt-in guard — must be explicitly set to activate (OPC always off regardless)
 _USE_DALLE     = os.environ.get("USE_DALLE", "").lower() in ("1", "true", "yes")
 APIFY_KEY      = os.environ.get("APIFY_API_KEY", "")
@@ -750,6 +826,7 @@ def generate_carousel_content(topic, niche, template_key=None, brief="", model="
 
     lang = "Portuguese (Brazilian)" if niche == "brazil" else "English"
     copy_rules = OPC_COPY_RULES if niche == "opc" else BRAZIL_COPY_RULES
+    purpose_block = _slide_purpose_block(niche, tmpl['slides'])  # SH-138 pilot
 
     prompt = f"""You are a content writer for an Instagram carousel.
 Generate content for a {tmpl['slides']}-slide carousel about: "{topic}"
@@ -759,6 +836,7 @@ Structure: {tmpl['structure']}
 Language: {lang}
 
 {copy_rules}
+{purpose_block}
 
 Return ONLY a JSON object with these fields:
 {{
@@ -1268,11 +1346,36 @@ def generate_opc_per_template_content(topic, plan, tip_content, brief="", model=
         "slide4_body":     tip_content.get("slide4_body", ""),
     }
 
+    # SH-138: build a per-template purpose map from the plan's slide indices.
+    # Empty string when pilot disabled so the prompt format is unchanged on cron.
+    purpose_block_smart = ""
+    if SLIDE_PURPOSE_PILOT:
+        n_total = len(slides) or 5
+        tmpl_to_purpose = {}
+        for s in slides:
+            idx = s.get("slide", 0)
+            tid = s.get("template_id", "")
+            purpose = SLIDE_PURPOSE_OPC_BY_INDEX.get(idx, "middle")
+            if tid in standalone_ids and tid not in tmpl_to_purpose:
+                tmpl_to_purpose[tid] = (idx, purpose)
+        if tmpl_to_purpose:
+            lines = [f"  - {tid}: slide {idx} → purpose='{p}'" for tid, (idx, p) in tmpl_to_purpose.items()]
+            purpose_block_smart = (
+                "\n=== SH-138 SLIDE PURPOSE PILOT (advisory, non-blocking) ===\n"
+                "OPC narrative spine: hook | cost | teach | apply | sources.\n"
+                f"Each standalone template fills a specific slide whose narrative purpose is fixed:\n"
+                + "\n".join(lines) + "\n"
+                "Each template's content MUST visibly serve its assigned purpose.\n"
+                "Add a top-level field `slide_purpose` to EACH template's nested dict, e.g.\n"
+                '  "opc_material_profile": { ..., "slide_purpose": "teach" }\n'
+                "=== END SLIDE PURPOSE PILOT ===\n"
+            )
+
     prompt = f"""You are filling in approved Instagram carousel TEMPLATES for Oak Park Construction (South Florida contractor, license CBC1263425, voice = Mike, first-person, conversational expert).
 
 Topic: "{topic}"
 {_comparison_prompt_block(topic, brief)}
-
+{purpose_block_smart}
 You ALREADY produced this tip-shape carousel content (use as the SOURCE of facts/voice — do NOT contradict it):
 {json.dumps(tip_ctx, indent=2)}
 
