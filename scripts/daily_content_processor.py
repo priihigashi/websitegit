@@ -34,6 +34,15 @@ import os, sys, json, time, tempfile, subprocess, base64, re, urllib.request, ur
 from datetime import date, datetime
 from pathlib import Path
 
+# LLM cascade: Claude → OpenAI → Gemini (never let a quota kill the run)
+import pathlib as _dcp_pl
+sys.path.insert(0, str(_dcp_pl.Path(__file__).resolve().parent / "capture"))
+try:
+    from _llm_fallback import llm_text as _llm_text, llm_vision as _llm_vision
+    _HAS_LLM_FALLBACK = True
+except ImportError:
+    _HAS_LLM_FALLBACK = False
+
 # ── Config ────────────────────────────────────────────────────────────────────
 SHEET_ID        = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
 INSPO_TAB       = os.environ.get("CONTENT_INSPO_TAB", "📱 Content Inspo")
@@ -275,36 +284,41 @@ def whisper_transcribe(audio_path: str) -> str:
     return "\n".join(lines)
 
 def vision_extract(video_path: str) -> str:
-    """Extract frames and read text with Claude Vision."""
+    """Extract frames and read text — Claude → OpenAI → Gemini Vision cascade."""
     ffmpeg = get_ffmpeg()
     frames_dir = tempfile.mkdtemp()
     subprocess.run([ffmpeg, "-i", video_path, "-vf", "select=not(mod(n\\,15))",
                     "-vsync", "vfr", "-frames:v", "8",
                     f"{frames_dir}/f_%03d.jpg", "-y"], capture_output=True)
-    frames = []
-    for f in sorted(Path(frames_dir).glob("f_*.jpg"))[:8]:
-        frames.append(base64.b64encode(f.read_bytes()).decode())
-        f.unlink()
-    try:
-        Path(frames_dir).rmdir()
-    except Exception:
-        pass
-    if not frames:
+    frame_paths = sorted(Path(frames_dir).glob("f_*.jpg"))[:8]
+    if not frame_paths:
         return ""
-    content = [{"type": "text", "text": (
+    vision_prompt = (
         "These are frames from a social media video/reel. "
         "Read ALL text visible on screen: overlays, captions, subtitles, on-screen text, tips, steps, numbers. "
         "List everything as plain text. If no text is visible, say: NO TEXT ON SCREEN."
-    )}]
-    for fb in frames:
-        content.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": fb}})
-    body = json.dumps({"model": "claude-haiku-4-5-20251001", "max_tokens": 800,
-                       "messages": [{"role": "user", "content": content}]}).encode()
-    req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body,
-        headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01",
-                 "content-type": "application/json"})
-    resp = json.loads(urllib.request.urlopen(req).read())
-    return resp["content"][0]["text"]
+    )
+    try:
+        if _HAS_LLM_FALLBACK:
+            return _llm_vision([str(p) for p in frame_paths], vision_prompt, max_tokens=800) or ""
+        # Fallback: direct Anthropic call (only if _llm_fallback import failed)
+        frames_b64 = [base64.b64encode(p.read_bytes()).decode() for p in frame_paths]
+        content = [{"type": "text", "text": vision_prompt}]
+        for fb in frames_b64:
+            content.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": fb}})
+        body = json.dumps({"model": "claude-haiku-4-5-20251001", "max_tokens": 800,
+                           "messages": [{"role": "user", "content": content}]}).encode()
+        req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body,
+            headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01",
+                     "content-type": "application/json"})
+        resp = json.loads(urllib.request.urlopen(req).read())
+        return resp["content"][0]["text"]
+    finally:
+        for p in frame_paths:
+            try: p.unlink()
+            except Exception: pass
+        try: Path(frames_dir).rmdir()
+        except Exception: pass
 
 def claude_extract(whisper_text: str, vision_text: str, url: str) -> dict:
     combined = f"AUDIO TRANSCRIPT:\n{whisper_text}\n\nON-SCREEN TEXT:\n{vision_text}"
@@ -328,13 +342,16 @@ Extract structured info for a content inspiration spreadsheet. Return ONLY valid
 
 Quality: 1=music/junk, 2=low value, 3=decent tips, 4=strong framework, 5=must-implement"""
 
-    body = json.dumps({"model": "claude-haiku-4-5-20251001", "max_tokens": 700,
-                       "messages": [{"role": "user", "content": prompt}]}).encode()
-    req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body,
-        headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01",
-                 "content-type": "application/json"})
-    resp = json.loads(urllib.request.urlopen(req).read())
-    text = resp["content"][0]["text"].strip()
+    if _HAS_LLM_FALLBACK:
+        text = _llm_text(prompt, model_tier="haiku", max_tokens=700).strip()
+    else:
+        body = json.dumps({"model": "claude-haiku-4-5-20251001", "max_tokens": 700,
+                           "messages": [{"role": "user", "content": prompt}]}).encode()
+        req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body,
+            headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01",
+                     "content-type": "application/json"})
+        resp = json.loads(urllib.request.urlopen(req).read())
+        text = resp["content"][0]["text"].strip()
     try:
         clean = text
         if "```" in clean:
