@@ -13,6 +13,7 @@ permissions:
 jobs:
   fill-missing:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -32,6 +33,7 @@ jobs:
           OPENAI_API_KEY:      ${{ secrets.OPENAI_API_KEY }}
           GOOGLE_SHEET_ID:   ${{ secrets.GOOGLE_SHEET_ID }}
           SHEETS_TOKEN:      ${{ secrets.SHEETS_TOKEN }}
+          MAX_ROWS_PER_RUN:  60
         run: node scripts/fill-missing.js
 
       - name: Notify via GitHub Issue on failure

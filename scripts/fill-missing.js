@@ -12,6 +12,8 @@ const GOOGLE_SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SHEETS_TOKEN    = process.env.SHEETS_TOKEN;
 const ANTHROPIC_KEY   = process.env.CLAUDE_KEY_4_CONTENT || process.env.ANTHROPIC_API_KEY || '';
 const OPENAI_KEY      = process.env.OPENAI_API_KEY || '';
+const MAX_ROWS_PER_RUN = Math.max(1, Number.parseInt(process.env.MAX_ROWS_PER_RUN || '60', 10) || 60);
+const WRITE_CHUNK_SIZE = Math.max(1, Number.parseInt(process.env.WRITE_CHUNK_SIZE || '500', 10) || 500);
 const client = ANTHROPIC_KEY ? new Anthropic({ apiKey: ANTHROPIC_KEY }) : null;
 let anthropicUnavailable = false;
 
@@ -121,6 +123,40 @@ async function updateRow(token, rowIndex, filled) {
   if (!res.ok) throw new Error(`Row update failed: ${await res.text()}`);
 }
 
+async function updateRows(token, results) {
+  const updates = [];
+  for (const { rowIndex, filled } of results) {
+    const sheetRow = rowIndex + 2; // +1 for header, +1 for 1-indexing
+    for (const col of FILLABLE_COLS) {
+      if (filled[col] === undefined) continue;
+      updates.push({
+        range: `Content Ideas!${colLetter(COLS[col])}${sheetRow}`,
+        values: [[filled[col]]],
+      });
+    }
+  }
+
+  for (let i = 0; i < updates.length; i += WRITE_CHUNK_SIZE) {
+    const chunk = updates.slice(i, i + WRITE_CHUNK_SIZE);
+    console.log(`Writing cells ${i + 1}-${i + chunk.length} of ${updates.length}...`);
+    const res = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEET_ID}/values:batchUpdate`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          valueInputOption: 'USER_ENTERED',
+          data: chunk,
+        }),
+      }
+    );
+    if (!res.ok) throw new Error(`Rows batch update failed: ${await res.text()}`);
+  }
+}
+
 function colLetter(index) {
   // Convert 0-based column index to letter (A, B, ... Z, AA, etc.)
   let result = '';
@@ -140,6 +176,7 @@ async function fillWithClaude(rows) {
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE);
+    console.log(`Filling batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(rows.length / BATCH_SIZE)} (${batch.length} rows)...`);
 
     const items = batch.map((r, idx) => {
       const row = r.row;
@@ -196,9 +233,15 @@ Only include fields that were listed as missing for each item.`;
       raw = await fillWithOpenAI(system, prompt);
     }
     const filled = parseJsonArray(raw);
+    console.log(`Parsed ${filled.length} filled item(s) for batch.`);
 
     for (const item of filled) {
-      const original = batch[item.num - 1];
+      const itemNum = Number.parseInt(item.num, 10);
+      if (!Number.isInteger(itemNum) || itemNum < 1 || itemNum > batch.length) {
+        console.log(`Skipping filled item with invalid num: ${JSON.stringify(item).slice(0, 200)}`);
+        continue;
+      }
+      const original = batch[itemNum - 1];
       results.push({ rowIndex: original.rowIndex, filled: item });
     }
   }
@@ -263,40 +306,40 @@ async function fillWithOpenAI(system, prompt) {
     const needsFilling = dataRows
       .map((row, i) => ({ rowIndex: i, row }))
       .filter(r => rowNeedsFilling(r.row));
+    const rowsThisRun = needsFilling.slice(0, MAX_ROWS_PER_RUN);
 
     if (needsFilling.length === 0) {
       console.log('All rows are complete. Nothing to fill.');
       process.exit(0);
     }
 
-    console.log(`Found ${needsFilling.length} rows with missing columns. Sending to Claude...`);
+    console.log(`Found ${needsFilling.length} rows with missing columns. Processing ${rowsThisRun.length} this run...`);
 
-    const results = await fillWithClaude(needsFilling);
+    const results = await fillWithClaude(rowsThisRun);
 
     console.log(`Updating ${results.length} rows in sheet...`);
-    for (const { rowIndex, filled } of results) {
-      const mapped = {
-        topicDirection:   filled.topic_direction,
-        focusKeyword:     filled.focus_keyword,
-        secondaryKeyword: filled.secondary_keyword,
-        hookProfessional: filled.hook_professional,
-        hookEmotional:    filled.hook_emotional,
-        hookGenZ:         filled.hook_genz,
-        masterHook:       filled.master_hook,
-        readerPayoff:     filled.reader_payoff,
-        idealFor:         filled.ideal_for,
-        targetAudience:   filled.target_audience,
-        imageDirection:   filled.image_direction,
-        socialOneLiner:   filled.social_one_liner,
-      };
-      // Only update columns that have new values
-      const toUpdate = Object.fromEntries(
-        Object.entries(mapped).filter(([, v]) => v !== undefined && v !== '')
-      );
-      await updateRow(token, rowIndex, toUpdate);
-    }
+    const mappedResults = results.map(({ rowIndex, filled }) => ({
+      rowIndex,
+      filled: Object.fromEntries(
+        Object.entries({
+          topicDirection:   filled.topic_direction,
+          focusKeyword:     filled.focus_keyword,
+          secondaryKeyword: filled.secondary_keyword,
+          hookProfessional: filled.hook_professional,
+          hookEmotional:    filled.hook_emotional,
+          hookGenZ:         filled.hook_genz,
+          masterHook:       filled.master_hook,
+          readerPayoff:     filled.reader_payoff,
+          idealFor:         filled.ideal_for,
+          targetAudience:   filled.target_audience,
+          imageDirection:   filled.image_direction,
+          socialOneLiner:   filled.social_one_liner,
+        }).filter(([, v]) => v !== undefined && v !== '')
+      ),
+    })).filter(({ filled }) => Object.keys(filled).length > 0);
+    await updateRows(token, mappedResults);
 
-    console.log(`✓ Done. Filled missing columns for ${results.length} rows.`);
+    console.log(`✓ Done. Filled missing columns for ${mappedResults.length} rows.`);
 
   } catch (err) {
     console.error('Error:', err.message);
