@@ -105,6 +105,18 @@ AUTH_REFERENCE_TERMS = {
 NONNEGOTIABLES_TEXT: str = ""
 DETAILED_REPORT_TEXT: str = ""
 
+# Phase 1 bootstrap (2026-05-08): full-file prompts truncate at 50KB. Files larger
+# than this threshold cannot be safely patched in full-file mode — promote to
+# USER-ONLY before burning API. Keep ~10KB below the truncation point as buffer.
+MAX_FULL_FILE_PATCH_BYTES: int = 40000
+
+# Queue columns A-M are read by gspread expected_headers. N1/O1 hold the pause
+# counter (not headers). New per-row metadata starts at column P (16) onward.
+QUEUE_EXTRA_COLUMNS: dict[str, int] = {
+    "Creates New File": 16,  # P — TRUE allows commit_patch to create_file when target missing
+    "Depends-On":       17,  # Q — comma-separated row IDs that must be DONE before this row runs
+}
+
 # ── INIT ────────────────────────────────────────────────────────────────────
 def log(msg: str) -> None:
     print(f"[{dt.datetime.utcnow().isoformat(timespec='seconds')}Z] {msg}", flush=True)
@@ -181,6 +193,22 @@ def read_queue(ws: gspread.Worksheet) -> list[dict]:
         for raw in all_values[1:]:
             padded = (raw + [""] * len(expected_headers))[:len(expected_headers)]
             rows.append(dict(zip(expected_headers, padded)))
+
+    # Phase 1 (2026-05-08): merge in the extra metadata columns at P/Q. gspread's
+    # get_all_records cannot span the N/O pause-counter gap, so we read the raw
+    # cell matrix once and zip the trailing columns onto each row dict by index.
+    try:
+        all_values = ws.get_all_values()
+        if len(all_values) >= 2:
+            for i, row_dict in enumerate(rows):
+                raw = all_values[i + 1] if i + 1 < len(all_values) else []
+                for col_name, col_idx in QUEUE_EXTRA_COLUMNS.items():
+                    row_dict[col_name] = raw[col_idx - 1].strip() if col_idx - 1 < len(raw) else ""
+    except Exception as e:
+        log(f"WARN: extra-column merge failed ({e}); rows will lack {list(QUEUE_EXTRA_COLUMNS)}")
+        for row_dict in rows:
+            for col_name in QUEUE_EXTRA_COLUMNS:
+                row_dict.setdefault(col_name, "")
     return rows
 
 def update_queue_row(ws: gspread.Worksheet, task_id: str, **fields: Any) -> None:
@@ -271,6 +299,29 @@ def maybe_pause(ws: gspread.Worksheet) -> bool:
     return True
 
 # ── TASK SELECTION ──────────────────────────────────────────────────────────
+def _dependencies_satisfied(row: dict, all_rows: list[dict]) -> tuple[bool, str]:
+    """Phase 1 (2026-05-08): row's Depends-On IDs must all be DONE before it runs.
+
+    Returns (ok, reason). reason is "" when ok; otherwise human-readable explanation.
+    Empty Depends-On = always satisfied. Unknown dep ID = not satisfied (caller skips).
+    """
+    raw = (row.get("Depends-On") or "").strip()
+    if not raw:
+        return True, ""
+    dep_ids = [d.strip() for d in raw.split(",") if d.strip()]
+    if not dep_ids:
+        return True, ""
+    by_id = {r.get("ID"): r for r in all_rows}
+    for dep_id in dep_ids:
+        dep_row = by_id.get(dep_id)
+        if dep_row is None:
+            return False, f"dep {dep_id} not in queue"
+        dep_status = (dep_row.get("Status") or "").upper()
+        if dep_status != "DONE":
+            return False, f"dep {dep_id} status={dep_status or 'BLANK'}"
+    return True, ""
+
+
 def pick_task(rows: list[dict], target_id: str = "", force: bool = False) -> Optional[dict]:
     if target_id:
         for r in rows:
@@ -299,6 +350,12 @@ def pick_task(rows: list[dict], target_id: str = "", force: bool = False) -> Opt
             attempts = 0
         if attempts >= 3 and not force:
             continue
+        # Phase 1 (2026-05-08): dependency gate. Force bypasses this.
+        if not force:
+            ok, reason = _dependencies_satisfied(r, rows)
+            if not ok:
+                log(f"skip {r.get('ID')}: {reason}")
+                continue
         prio = PRIORITY_ORDER.get(r.get("Priority") or "P3-LOW", 99)
         candidates.append((prio, attempts, r))
     if not candidates:
@@ -585,9 +642,17 @@ def _read_task_timeout_s(task: dict, default: int = 600) -> int:
 
 # ── BACKUPS ─────────────────────────────────────────────────────────────────
 def backup_file_to_drive(creds: Credentials, gh: Github, path: str, task_id: str) -> str:
-    """Copy current file content to Drive Backups folder. Return Drive file ID."""
+    """Copy current file content to Drive Backups folder. Return Drive file ID.
+
+    Phase 1 (2026-05-08): when path does not yet exist (new-file task), there is
+    nothing to back up. Return "" sentinel so callers can proceed to create_file.
+    """
     repo = gh.get_repo(f"{REPO_OWNER}/{REPO_NAME}")
-    contents = repo.get_contents(path, ref=DEFAULT_BRANCH)
+    try:
+        contents = repo.get_contents(path, ref=DEFAULT_BRANCH)
+    except Exception as e:
+        log(f"BACKUP skipped: {path} does not exist on {DEFAULT_BRANCH} ({e}) — new-file path")
+        return ""
     content_bytes = base64.b64decode(contents.content)
     drive = gbuild("drive", "v3", credentials=creds)
     ts = dt.datetime.utcnow().strftime("%Y-%m-%dT%H%M%SZ")
@@ -908,14 +973,25 @@ Decide if Claude's fix is safe and correct. Output JSON ONLY:
 # ── COMMIT + PR + MERGE ─────────────────────────────────────────────────────
 def commit_patch(gh: Github, branch: str, base: str,
                   path: str, content: str, message: str) -> str:
-    """Create branch off base, commit one-file change. Return commit SHA."""
+    """Create branch off base, commit one-file change. Return commit SHA.
+
+    Phase 1 (2026-05-08): when path does not exist on the branch, fall back to
+    create_file so new-module tasks (e.g. clip_cutter.py, url_screenshot.py)
+    can be committed. Existing-file tasks unchanged.
+    """
     repo = gh.get_repo(f"{REPO_OWNER}/{REPO_NAME}")
     base_ref = repo.get_branch(base)
     try:
         repo.create_git_ref(ref=f"refs/heads/{branch}", sha=base_ref.commit.sha)
     except Exception:
         pass  # branch may exist from a prior attempt
-    file_obj = repo.get_contents(path, ref=branch)
+    try:
+        file_obj = repo.get_contents(path, ref=branch)
+    except Exception as e:
+        log(f"commit_patch: {path} not found on {branch} ({e}) — using create_file")
+        result = repo.create_file(path=path, message=message, content=content,
+                                  branch=branch)
+        return result["commit"].sha
     result = repo.update_file(path=path, message=message, content=content,
                               sha=file_obj.sha, branch=branch)
     return result["commit"].sha
@@ -1334,16 +1410,39 @@ def main() -> None:
         log(f"target-file resolved: {path_note}")
         task = dict(task)
         task["Target File"] = path
+    creates_new_file = (task.get("Creates New File") or "").strip().upper() == "TRUE"
     try:
         file_obj = repo.get_contents(path, ref=DEFAULT_BRANCH)
         before = base64.b64decode(file_obj.content).decode("utf-8", "replace")
     except Exception as e:
-        log(f"cannot read {path}: {e}")
-        update_queue_row(ws, task_id, Status="BLOCKED",
-                         **{"Last Result": f"FILE_READ_FAIL: {e}"})
+        # Phase 1 (2026-05-08): missing target file. If row explicitly opts in
+        # via "Creates New File"=TRUE, treat as a new-module task with empty
+        # before-state. Otherwise refuse (same behavior as before this patch).
+        if creates_new_file:
+            log(f"new-file mode: {path} does not exist — proceeding with empty before-state")
+            before = ""
+        else:
+            log(f"cannot read {path}: {e}")
+            update_queue_row(ws, task_id, Status="BLOCKED",
+                             **{"Last Result": f"FILE_READ_FAIL: {e}"})
+            return
+
+    # Phase 1 (2026-05-08): full-file prompts truncate at 50KB. Files larger than
+    # MAX_FULL_FILE_PATCH_BYTES cannot be patched safely in full-file mode — the
+    # AI sees only the head of the file and any returned new_file_content
+    # silently drops the tail, then trips the deletion guard. Promote to
+    # USER-ONLY before spending API credits.
+    if len(before) > MAX_FULL_FILE_PATCH_BYTES:
+        size_kb = len(before) / 1024
+        note = (f"FILE_TOO_LARGE_AUTO_PROMOTED: {path} is {size_kb:.1f}KB > "
+                f"{MAX_FULL_FILE_PATCH_BYTES/1024:.0f}KB threshold. Full-file "
+                f"patch unsafe — needs targeted-patch mode (Phase 4).")
+        log(note)
+        update_queue_row(ws, task_id, Status="USER-ONLY",
+                         **{"Last Result": note[:500]})
         return
 
-    # Backup
+    # Backup (returns "" sentinel for new-file tasks; harmless downstream)
     backup_id = backup_file_to_drive(creds, gh, path, task_id)
 
     # Generate patch

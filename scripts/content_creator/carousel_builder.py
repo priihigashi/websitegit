@@ -612,8 +612,15 @@ MANDATORY RULES — follow these exactly:
      opc_statement. NEVER include a question mark in headline_main or
      headline_italic for these templates.
 
-9. COVER HOOK ANCHOR (OPC storytelling rule — #122):
-   The cover hook must be grounded in ONE of these 5 tension types:
+9. CREDIBILITY LAYER — contractor-safe caveats (#122 addendum):
+   When a slide mentions price, timeline, or ROI — add a qualifier:
+   - Price: "costs vary by scope, materials, and local market"
+   - Timeline: "add 20-30% buffer for permit approval and material lead time"
+   - ROI: "ROI is market-specific and not guaranteed — research local comps"
+   These caveats build trust. Homeowners who see you hedge on ROI believe the rest.
+
+10. COVER HOOK ANCHOR (OPC storytelling rule — #122):
+    The cover hook must be grounded in ONE of these 5 tension types:
    - RISK: a consequence the homeowner didn't know they were facing
    - COST: a dollar/time range that surprises people — not just "expensive"
    - MISTAKE: what most homeowners do wrong and why it costs them
