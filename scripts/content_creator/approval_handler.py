@@ -14,6 +14,63 @@ from datetime import datetime, timedelta
 import pytz
 
 ET = pytz.timezone("America/New_York")
+
+
+def _call_claude_json(prompt: str, model: str = "claude-sonnet-4-6", max_tokens: int = 512) -> str:
+    """Raw Anthropic API call. Returns response text or empty string on failure."""
+    key = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
+    if not key:
+        return ""
+    payload = json.dumps({
+        "model": model, "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    try:
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages", data=payload,
+            headers={"x-api-key": key, "anthropic-version": "2023-06-01",
+                     "content-type": "application/json"},
+        )
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        return resp["content"][0]["text"].strip()
+    except Exception as exc:
+        print(f"  _call_claude_json failed (non-fatal): {exc}")
+        return ""
+
+
+def parse_slide_feedback(feedback_text: str) -> list:
+    """Use Sonnet to parse per-slide instructions from a 'NOT GOOD' email reply.
+
+    Returns list of dicts: [{"slide": 3, "action": "swap_image", "note": "..."}].
+    Returns [] when feedback is general (no slide refs) or parsing fails.
+    """
+    if not feedback_text or len(feedback_text.strip()) < 10:
+        return []
+
+    prompt = (
+        "Extract per-slide instructions from this content reviewer message about a social media carousel.\n\n"
+        f'Reviewer message: "{feedback_text}"\n\n'
+        "Return a JSON array of per-slide instructions (empty [] if no slide-specific feedback):\n"
+        '[{"slide": 3, "action": "swap_image", "note": "use a kitchen photo not bathroom"}]\n\n'
+        "Valid actions: swap_image, rewrite_text, remove_slide, add_slide, change_tone, "
+        "change_color, swap_person, other\n"
+        'Use "all" as slide value when the instruction applies to the whole carousel.\n'
+        "If the feedback has no slide number/position references, return [].\n"
+        "Return ONLY the JSON array. No explanation."
+    )
+    raw = _call_claude_json(prompt, model="claude-sonnet-4-6", max_tokens=512)
+    if not raw:
+        return []
+    try:
+        cleaned = re.sub(r"```(?:json)?\s*", "", raw).strip(" `\n")
+        result = json.loads(cleaned)
+        if isinstance(result, list):
+            return result
+    except Exception as exc:
+        print(f"  parse_slide_feedback JSON parse failed (non-fatal): {exc}")
+    return []
+
+
 APPROVAL_REMINDER_SUBJECT = "⏰ Content approvals pending"
 APPROVAL_REMINDER_SUBJECTS = {
     "opc": "⏰ OPC content approvals pending",
@@ -920,7 +977,7 @@ def update_catalog(post_id, status, variant=None):
             return
 
 
-def re_render_post(post, feedback, model="claude-sonnet-4-6"):
+def re_render_post(post, feedback, model="claude-sonnet-4-6", slide_feedback=None):
     """Re-render a post with feedback. Creates v{n+1} folder in same parent as current static folder."""
     import sys, shutil
     from pathlib import Path
@@ -990,7 +1047,16 @@ def re_render_post(post, feedback, model="claude-sonnet-4-6"):
     except Exception as _te:
         print(f"  In Production pre-render status update skipped: {_te}")
 
-    content = generate_carousel_content(topic, niche, brief=f"Revision feedback:\n{feedback}", model=model)
+    brief = f"Revision feedback:\n{feedback}"
+    if slide_feedback:
+        brief += "\n\nPer-slide instructions (apply exactly):\n"
+        for item in slide_feedback:
+            slide = item.get("slide", "?")
+            action = item.get("action", "")
+            note = item.get("note", "")
+            brief += f"  Slide {slide} — {action}: {note}\n"
+
+    content = generate_carousel_content(topic, niche, brief=brief, model=model)
     if not content:
         print(f"  re_render: content generation failed")
         return False
@@ -1462,9 +1528,13 @@ def process_replies():
             feedback = result.get("feedback", "")
             stats["changes"] += 1
             print(f"  Change requested: {feedback[:80]}")
+            slide_feedback = parse_slide_feedback(feedback)
+            if slide_feedback:
+                print(f"  Parsed {len(slide_feedback)} per-slide instruction(s)")
             for post in scoped_posts:
                 try:
-                    if re_render_post(post, feedback, model=result.get("model", "claude-sonnet-4-6")):
+                    if re_render_post(post, feedback, model=result.get("model", "claude-sonnet-4-6"),
+                                      slide_feedback=slide_feedback):
                         print(f"  Re-render triggered: {post['post_id']}")
                     else:
                         print(f"  Re-render failed: {post['post_id']}")
