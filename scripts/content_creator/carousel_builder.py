@@ -611,6 +611,16 @@ MANDATORY RULES — follow these exactly:
    - This applies to opc_material_profile, opc_item_spotlight, opc_base,
      opc_statement. NEVER include a question mark in headline_main or
      headline_italic for these templates.
+
+9. COVER HOOK ANCHOR (OPC storytelling rule — #122):
+   The cover hook must be grounded in ONE of these 5 tension types:
+   - RISK: a consequence the homeowner didn't know they were facing
+   - COST: a dollar/time range that surprises people — not just "expensive"
+   - MISTAKE: what most homeowners do wrong and why it costs them
+   - HIDDEN CONSEQUENCE: a downstream problem caused by a common choice
+   - DECISION TENSION: a genuine trade-off (A vs B) homeowners face right now
+   If the cover hook doesn't fit one of these 5 types, rewrite it until it does.
+   NEVER open with "Here's what you need to know" or similar generic openers.
 """
 
 BRAZIL_COPY_RULES = """
@@ -648,6 +658,16 @@ CAROUSEL STRUCTURE RULES (Brazil/News fact-check):
     - NEVER @-tag or hashtag politicians by name.
     - Use ONLY topic hashtags: #politicabrasileira, #senadofederal, #fiscalizacao, #direitoshumanos.
     - Reason: party hashtags trigger shadow-ban on Instagram. Attribution-without-traffic rule.
+
+13. COVER HOOK ANCHOR TYPE (News storytelling rule — #122):
+    Every cover hook must be anchored on ONE of these patterns:
+    - EXACT CLAIM: the specific claim being verified — include the number when available
+    - CONTRADICTION: two official positions that oppose each other
+    - VOTE / RESULT: who voted for what, who approved or blocked it
+    - NUMBER THAT SHOCKS: a budget figure, a percentage, a vote count
+    - LEGAL / INSTITUTIONAL TENSION: what law was broken or two institutions with opposing stances
+    NEVER use "Você sabia que..." / "Não vai acreditar..." or any generic opener.
+    The number or the contradiction IS the hook — lead with it directly.
 """
 
 
