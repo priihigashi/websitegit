@@ -24,17 +24,16 @@ const ANTHROPIC_API_KEY = (
   process.env.ANTHROPIC_API_KEY ||
   ''
 ).trim();
+const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || '').trim();
 const ANTHROPIC_KEY_SOURCE = process.env.CLAUDE_KEY_4_CONTENT
   ? 'CLAUDE_KEY_4_CONTENT'
   : (process.env.ANTHROPIC_API_KEY ? 'ANTHROPIC_API_KEY' : 'MISSING');
 
-if (!ANTHROPIC_API_KEY) {
-  throw new Error(
-    'Anthropic API key missing: set CLAUDE_KEY_4_CONTENT (or ANTHROPIC_API_KEY) in the workflow environment.'
-  );
+if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+  throw new Error('No LLM key available: set CLAUDE_KEY_4_CONTENT or OPENAI_API_KEY.');
 }
 
-const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+const client = ANTHROPIC_API_KEY ? new Anthropic({ apiKey: ANTHROPIC_API_KEY }) : null;
 
 const TODAY = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
 const CURRENT_YEAR = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', year: 'numeric' });
@@ -322,6 +321,45 @@ function dedupeRawIdeas(items) {
 }
 
 // ─── Claude: Score + enrich a batch of ideas ─────────────────────────────────
+async function callLlmText({ system, content, maxTokens = 4000, claudeModel = 'claude-sonnet-4-6', openaiModel = 'gpt-4o' }) {
+  if (client) {
+    try {
+      const message = await client.messages.create({
+        model: claudeModel,
+        max_tokens: maxTokens,
+        system,
+        messages: [{ role: 'user', content }],
+      });
+      return message.content[0].text.trim();
+    } catch (err) {
+      console.log(`Claude failed (${err.message}); trying OpenAI fallback...`);
+    }
+  } else {
+    console.log('Claude key missing; using OpenAI fallback...');
+  }
+
+  if (!OPENAI_API_KEY) throw new Error('OpenAI fallback unavailable: OPENAI_API_KEY not set');
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: openaiModel,
+      max_tokens: maxTokens,
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI fallback failed: ${await res.text()}`);
+  const data = await res.json();
+  return (data.choices?.[0]?.message?.content || '').trim();
+}
+
 async function enrichBatch(items, offset) {
   const SYSTEM = IS_SHEETS_FOCUS
     ? 'You are a senior operations analyst for Google Sheets workflow design, schema governance, and AI-assisted spreadsheet automation.'
@@ -348,13 +386,7 @@ HOLD AS IDEA (don't approve) if:
 - Pure DIY with no contractor value
 - Ambiguous or could embarrass the company`;
 
-  const message = await client.messages.create({
-    model: 'claude-opus-4-6',
-    max_tokens: 8000,
-    system: SYSTEM,
-    messages: [{
-      role: 'user',
-      content: `Review these raw content ideas collected from Reddit, YouTube, News, and Google.
+  const userPrompt = `Review these raw content ideas collected from Reddit, YouTube, News, and Google.
 For each idea, decide if it's relevant enough to write a blog post about.
 
 ${approvalRules}
@@ -385,11 +417,15 @@ Raw ideas:
 ${items.map((item, i) => `${offset+i+1}. [${item.source}] "${item.rawIdea}" — ${item.description || ''}`).join('\n')}
 
 Return ONLY a valid JSON array, no markdown fences, no extra text. Use the original index numbers.
-Example: [{"index":1,"status":"✅ Approved","topic_direction":"...","focus_keyword":"...","secondary_keyword":"...","hook_professional":"...","hook_emotional":"...","hook_genz":"...","master_hook":"...","reader_payoff":"...","ideal_for":"Both","target_audience":"Homeowner","image_direction":"...","social_one_liner":"..."}]`
-    }]
-  });
+Example: [{"index":1,"status":"✅ Approved","topic_direction":"...","focus_keyword":"...","secondary_keyword":"...","hook_professional":"...","hook_emotional":"...","hook_genz":"...","master_hook":"...","reader_payoff":"...","ideal_for":"Both","target_audience":"Homeowner","image_direction":"...","social_one_liner":"..."}]`;
 
-  let raw = message.content[0].text.trim();
+  let raw = await callLlmText({
+    system: SYSTEM,
+    content: userPrompt,
+    maxTokens: 8000,
+    claudeModel: 'claude-opus-4-6',
+    openaiModel: 'gpt-4o',
+  });
   raw = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/, '').trim();
   return parseClaudeJsonArray(raw, offset, items.length);
 }
@@ -559,7 +595,7 @@ function buildResearchSummary(allRaw, enriched, meta) {
     `- YouTube Data API`,
     `- NewsAPI`,
     `- SerpAPI Google Search`,
-    `- Anthropic Claude enrichment`,
+    `- LLM enrichment (Claude primary, OpenAI fallback)`,
     `- Google Sheets append write`,
     `- YouTube transcript fallback via SerpAPI transcript engine`,
     `${SUPADATA_API_KEY ? '- Supadata transcript fallback enabled' : '- Supadata transcript fallback not configured for this run'}`,
@@ -571,7 +607,7 @@ function buildResearchSummary(allRaw, enriched, meta) {
     `1. Pulled raw ideas from each configured source query set.`,
     `2. If source set was thin, attempted transcript fallback for YouTube items.`,
     `3. Deduplicated near-identical ideas.`,
-    `4. Sent batches to Claude for structured enrichment and qualification.`,
+    `4. Sent batches to LLM enrichment for structured qualification (Claude primary, OpenAI fallback).`,
     `5. Wrote structured rows into the Content Ideas sheet.`,
     `6. Created this run summary document for future consultation.`,
     ``,
@@ -711,7 +747,7 @@ async function getOAuthToken() {
 (async () => {
   try {
     console.log(`\n=== Oak Park Construction Research Script — ${TODAY} ===\n`);
-    console.log(`[AUTH] Anthropic key source: ${ANTHROPIC_KEY_SOURCE}`);
+    console.log(`[AUTH] Anthropic key source: ${ANTHROPIC_KEY_SOURCE}; OpenAI fallback: ${OPENAI_API_KEY ? 'present' : 'missing'}`);
     if (RESEARCH_FOCUS) {
       console.log(`[FOCUS] ${RESEARCH_FOCUS}`);
       console.log(`[FOCUS_MODE] ${IS_SHEETS_FOCUS ? 'sheets' : 'default'}`);

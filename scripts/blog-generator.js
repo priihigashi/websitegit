@@ -3,8 +3,6 @@ const fs = require('fs');
 const { getRandomTopic } = require('./topics.js');
 const { COMPANY } = require('./company-info.js');
 
-const client = new Anthropic();
-
 // ─── Configuration ────────────────────────────────────────────────────────────
 const WP_URL          = process.env.WP_URL;
 const WP_USERNAME     = process.env.WP_USERNAME;
@@ -13,6 +11,48 @@ const PEXELS_API_KEY  = process.env.PEXELS_API_KEY || '';
 const MANUAL_TOPIC    = process.env.MANUAL_TOPIC || '';
 const GOOGLE_SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const GOOGLE_SA_KEY   = process.env.GOOGLE_SA_KEY;
+const ANTHROPIC_KEY   = (process.env.CLAUDE_KEY_4_CONTENT || process.env.ANTHROPIC_API_KEY || '').trim();
+const OPENAI_API_KEY  = (process.env.OPENAI_API_KEY || '').trim();
+const client = ANTHROPIC_KEY ? new Anthropic({ apiKey: ANTHROPIC_KEY }) : null;
+
+async function callLlmText({ system, content, maxTokens = 4000, claudeModel = 'claude-sonnet-4-6', openaiModel = 'gpt-4o' }) {
+  if (client) {
+    try {
+      const response = await client.messages.create({
+        model: claudeModel,
+        max_tokens: maxTokens,
+        system,
+        messages: [{ role: 'user', content }],
+      });
+      return response.content[0].text.trim();
+    } catch (err) {
+      console.log(`Claude failed (${err.message}); trying OpenAI fallback...`);
+    }
+  } else {
+    console.log('Claude key missing; using OpenAI fallback...');
+  }
+
+  if (!OPENAI_API_KEY) throw new Error('No LLM provider available: set CLAUDE_KEY_4_CONTENT or OPENAI_API_KEY');
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: openaiModel,
+      max_tokens: maxTokens,
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI fallback failed: ${await res.text()}`);
+  const data = await res.json();
+  return (data.choices?.[0]?.message?.content || '').trim();
+}
 
 // Column indexes (0-based) matching the 23-column sheet
 const COL = {
@@ -97,12 +137,12 @@ async function autoApproveIdeasInSheet(rows, token) {
 
   let evaluationText = '';
   try {
-    const evalResponse = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 400,
-      messages: [{
-        role: 'user',
-        content: `You are evaluating blog post topics for Oak Park Construction — a licensed general contractor in South Florida (Broward County).
+    evaluationText = await callLlmText({
+      maxTokens: 400,
+      claudeModel: 'claude-haiku-4-5-20251001',
+      openaiModel: 'gpt-4o-mini',
+      system: 'You are a strict blog-topic safety classifier for Oak Park Construction.',
+      content: `You are evaluating blog post topics for Oak Park Construction — a licensed general contractor in South Florida (Broward County).
 
 A topic is SAFE (auto-publish) if ALL 5 are true:
 1. SERVICE: Directly about construction services homeowners hire for (additions, renovations, new builds, concrete, permits, garage conversions, kitchen/bath remodels, ADU, roofing as part of full project, permits, inspections, materials, hiring tips)
@@ -116,9 +156,7 @@ A topic needs REVIEW (will be saved as draft) if ANY one fails — examples: imm
 Evaluate each topic below. Respond ONLY with the number and one word per line: SAFE or REVIEW. Nothing else.
 
 ${topicsText}`
-      }]
     });
-    evaluationText = evalResponse.content[0].text.trim();
     console.log(`Auto-approval evaluation:\n${evaluationText}`);
   } catch (e) {
     console.log(`Auto-approval evaluation failed: ${e.message} — skipping auto-approval`);
@@ -276,7 +314,7 @@ async function markSheetRowPosted(sheetData, blogUrl, wpStatus) {
 
 // ─── Step 2: Generate blog post with Claude ───────────────────────────────────
 async function generatePost(topic, sheetData = null) {
-  console.log('Calling Claude API...');
+  console.log('Calling LLM API...');
 
   // If we have pre-researched sheet data, give Claude the full context
   const keywordInstructions = sheetData && sheetData.focusKeyword
@@ -304,10 +342,7 @@ Adapt the best hook into a 50-60 character SEO title that:
 - Example: "Concrete Slab Contractors Broward: Why DIY Fails in Florida's Heat"`
     : `KEYWORD: Choose ONE clear focus keyword (3-5 words) with HIRE intent for South Florida (e.g. "home addition contractor Broward County"). Craft a compelling human title around it — do NOT use the raw keyword as the title. Use keyword in title, first 100 words, 2+ subheadings, meta description, and 4-6x in body.`;
 
-  const message = await client.messages.create({
-    model: 'claude-opus-4-6',
-    max_tokens: 8000,
-    system: `You are the content writer for ${COMPANY.name}, a ${COMPANY.license.status} based in ${COMPANY.location.headquarters}, serving ${COMPANY.location.primaryMarket} and surrounding areas.
+  const system = `You are the content writer for ${COMPANY.name}, a ${COMPANY.license.status} based in ${COMPANY.location.headquarters}, serving ${COMPANY.location.primaryMarket} and surrounding areas.
 
 COMPANY:
 ${COMPANY.origin}
@@ -392,11 +427,9 @@ CONTENT RULES:
 - LOCATION: South Florida, ${COMPANY.location.primaryMarket}, or specific local cities ONLY. Never imply the company is in Illinois. Illinois is origin story only.
 - COMPETITORS: Never name any competitor.
 - TRADE REFERRALS: Never tell readers to "hire a roofer/plumber" as standalone advice. Oak Park handles those as part of full projects.
-- POLITICAL NEUTRALITY: ${COMPANY.contentRules.politicalNeutrality}`,
+- POLITICAL NEUTRALITY: ${COMPANY.contentRules.politicalNeutrality}`;
 
-    messages: [{
-      role: 'user',
-      content: `Topic: "${topic}"
+  const userPrompt = `Topic: "${topic}"
 
 ${keywordInstructions}
 
@@ -427,15 +460,25 @@ Return ONLY this exact JSON (no markdown fences, no extra text):
   "meta_description": "EXACTLY 150-160 chars",
   "image_search_query": "3-5 words MAX, plain ASCII only, no punctuation (e.g. 'residential concrete patio slab')",
   "html_content": "<h2>...</h2><p>...</p>"
-}`
-    }]
-  });
+}`;
 
-  let raw = message.content[0].text.trim();
+  let raw = await callLlmText({
+    system,
+    content: userPrompt,
+    maxTokens: 8000,
+    claudeModel: 'claude-opus-4-6',
+    openaiModel: 'gpt-4o',
+  });
   raw = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/, '').trim();
 
-  // Fix literal control chars inside JSON string values (unescaped newlines/tabs from model)
+  // Extract first JSON object if the model adds prose, then fix literal control
+  // chars inside JSON string values (unescaped newlines/tabs from model).
   function fixJsonControlChars(str) {
+    const start = str.indexOf('{');
+    const end = str.lastIndexOf('}');
+    if (start !== -1 && end !== -1 && end > start) {
+      str = str.slice(start, end + 1);
+    }
     let inStr = false, escaped = false, out = '';
     for (const c of str) {
       if (escaped) { out += c; escaped = false; continue; }
@@ -451,7 +494,13 @@ Return ONLY this exact JSON (no markdown fences, no extra text):
     return out;
   }
 
-  const post = JSON.parse(fixJsonControlChars(raw));
+  let post;
+  try {
+    post = JSON.parse(fixJsonControlChars(raw));
+  } catch (err) {
+    const preview = raw.slice(0, 600).replace(/\s+/g, ' ');
+    throw new Error(`Blog JSON parse failed: ${err.message}. Raw preview: ${preview}`);
+  }
   console.log(`Post generated: "${post.title}"`);
   console.log(`Meta description: ${post.meta_description.length} chars`);
   console.log(`Focus keyword: "${post.focus_keyword}"`);
