@@ -76,6 +76,11 @@ on:
         required: false
         type: string
         default: "companion_clip"
+      projects:
+        description: "SH-014 fan-out: comma-separated niches (e.g. 'brazil,usa'). Download once, route to each. Overrides 'project' when set."
+        required: false
+        type: string
+        default: ""
 
 jobs:
   capture:
@@ -154,6 +159,10 @@ jobs:
 
           if [ -n "${{ inputs.url2_role }}" ] && [ "${{ inputs.url2_role }}" != "companion_clip" ]; then
             CMD="$CMD --url2-role \"${{ inputs.url2_role }}\""
+          fi
+
+          if [ -n "${{ inputs.projects }}" ]; then
+            CMD="$CMD --projects \"${{ inputs.projects }}\""
           fi
 
           echo "Running: $CMD"

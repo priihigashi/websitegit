@@ -4381,6 +4381,9 @@ def main():
                         help="Optional second URL (companion clip). Transcribed and appended to story.")
     parser.add_argument("--url2-role", default="companion_clip",
                         help="Role label for the second URL (e.g. 'show_clip_for_last_slide')")
+    parser.add_argument("--projects", default="",
+                        help="SH-014: comma-separated niches for fan-out (e.g. 'brazil,usa'). "
+                             "Download + transcribe once, then route to each. Overrides --project when set.")
     args = parser.parse_args()
 
     # Normalize legacy project names → canonical names.
@@ -4530,58 +4533,86 @@ def main():
             print(f"\n  AUTO-DETECT → project={args.project.upper()} (confidence={_conf:.2f}) — {_detect_reason}")
             print(f"  Story ID: {args.story_id}\n")
 
-        save_transcript(transcript, args.url, args.story_id, args.project)
+        # SH-014: multi-project fan-out — download + transcribe once, route to N niches.
+        # --projects "brazil,usa" → runs run_news twice (brazil folder, then usa folder).
+        # Single-project behavior unchanged when --projects is not set.
+        _fanout_raw = getattr(args, "projects", "").strip()
+        if _fanout_raw:
+            _alias2 = {"sovereign": "brazil", "content": "opc", "news": "brazil"}
+            _fanout_list = [_alias2.get(p.strip(), p.strip()) for p in _fanout_raw.split(",") if p.strip()]
+            print(f"  SH-014 FAN-OUT → {len(_fanout_list)} project(s): {', '.join(_fanout_list)}")
+        else:
+            _fanout_list = [args.project]
+        _fanout_base_story_id = args.story_id
 
-        # Cookie health check — only relevant when yt-dlp is used for YouTube.
-        # When YOUTUBE_API_KEY is set we skip yt-dlp entirely, so no cookie alerts needed.
+        # Cookie health check and SRT prep are project-independent — run once before fan-out loop.
         if is_yt and not YOUTUBE_API_KEY:
             if _YT_COOKIE_FAILURE:
                 _yt_cookie_alert(resolved=False)
             elif video_path:
                 _yt_cookie_alert(resolved=True)
-
-        # Skip SRT generation for sentinels — no audio file exists for either path.
         _has_audio_file = audio not in ("__youtube_transcript_fallback__", "__ig_carousel__")
         srt_content = get_caption_srt(audio) if _has_audio_file and not _is_youtube(args.url) else ""
-        if args.project == "unrouted":
-            run_unrouted(args, transcript, video_path=video_path or "", metadata=metadata,
-                         srt_content=srt_content, detect_reason=_detect_reason,
-                         screenshots=_screenshot_paths, debug_info=_debug_info)
-        elif args.project == "book":
-            run_book(args, transcript)
-        elif args.project == "bias":
-            run_bias(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
-                     screenshots=_screenshot_paths, debug_info=_debug_info)
-        elif args.project in ("brazil", "usa"):
-            # Both niches share the News pipeline flow but land in separate Drive folders
-            # (routing.py::capture_folder returns the correct Brazil or USA folder).
-            srt_content = get_caption_srt(audio) if _has_audio_file else ""
-            run_news(args, transcript, video_path=video_path or "", srt_content=srt_content,
-                     creator_name=metadata.get("creator_name", ""),
-                     screenshots=_screenshot_paths, debug_info=_debug_info)
-        elif args.project == "ugc":
-            run_ugc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
-                    screenshots=_screenshot_paths, debug_info=_debug_info)
-        elif args.project == "stocks":
-            run_stocks(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
-                       screenshots=_screenshot_paths, debug_info=_debug_info)
-        elif args.project == "higashi":
-            run_higashi(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
-                        screenshots=_screenshot_paths, debug_info=_debug_info)
-        else:  # opc (default)
-            run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
-                    screenshots=_screenshot_paths, debug_info=_debug_info)
 
-    # Optional companion clip (url2) — download + transcribe + upload to same Drive capture folder
+        for _fi, _fp in enumerate(_fanout_list):
+            if len(_fanout_list) > 1:
+                args.project = _fp
+                if _fi == 0:
+                    args.story_id = _fanout_base_story_id
+                else:
+                    prefix = _PREFIXES.get(args.project, "UNK")
+                    args.story_id = f"{prefix}-{datetime.now().strftime('%Y%m%d%H%M')}-fo{_fi+1}"
+                print(f"\n{'='*50}\nFAN-OUT {_fi+1}/{len(_fanout_list)}: {args.project.upper()} — {args.story_id}\n{'='*50}")
+
+            save_transcript(transcript, args.url, args.story_id, args.project)
+
+            if args.project == "unrouted":
+                run_unrouted(args, transcript, video_path=video_path or "", metadata=metadata,
+                             srt_content=srt_content, detect_reason=_detect_reason,
+                             screenshots=_screenshot_paths, debug_info=_debug_info)
+            elif args.project == "book":
+                run_book(args, transcript)
+            elif args.project == "bias":
+                run_bias(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
+                         screenshots=_screenshot_paths, debug_info=_debug_info)
+            elif args.project in ("brazil", "usa"):
+                # Both niches share the News pipeline flow but land in separate Drive folders
+                # (routing.py::capture_folder returns the correct Brazil or USA folder).
+                _srt_news = get_caption_srt(audio) if _has_audio_file else ""
+                run_news(args, transcript, video_path=video_path or "", srt_content=_srt_news,
+                         creator_name=metadata.get("creator_name", ""),
+                         screenshots=_screenshot_paths, debug_info=_debug_info)
+            elif args.project == "ugc":
+                run_ugc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
+                        screenshots=_screenshot_paths, debug_info=_debug_info)
+            elif args.project == "stocks":
+                run_stocks(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
+                           screenshots=_screenshot_paths, debug_info=_debug_info)
+            elif args.project == "higashi":
+                run_higashi(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
+                            screenshots=_screenshot_paths, debug_info=_debug_info)
+            else:  # opc (default)
+                run_opc(args, transcript, video_path=video_path, metadata=metadata, srt_content=srt_content,
+                        screenshots=_screenshot_paths, debug_info=_debug_info)
+
+    # Optional companion clip (url2) — download + transcribe + upload to same Drive capture folder.
+    # In fan-out mode, companion clip anchors to the FIRST project's story_id (_fanout_base_story_id),
+    # not the last iteration's args.story_id. Both variables are always set inside the with tmp: block above.
+    try:
+        _url2_story_id = _fanout_base_story_id or args.story_id
+        _url2_project  = _fanout_list[0]
+    except NameError:
+        _url2_story_id = args.story_id
+        _url2_project  = args.project
     if getattr(args, "url2", ""):
         print(f"\n{'='*50}\nCOMPANION CLIP — {args.url2_role.upper()}\nURL: {args.url2}\n{'='*50}")
         try:
             with tempfile.TemporaryDirectory() as tmp2:
                 audio2 = download_audio(args.url2, tmp2, metadata={})
                 transcript2 = transcribe_audio(audio2, args.url2)
-                url2_path = TRANSCRIPTS_DIR / f"{args.story_id}_url2_transcript.txt"
+                url2_path = TRANSCRIPTS_DIR / f"{_url2_story_id}_url2_transcript.txt"
                 url2_content = (
-                    f"STORY: {args.story_id}\n"
+                    f"STORY: {_url2_story_id}\n"
                     f"MAIN URL: {args.url}\nROLE: main_reel\n"
                     f"{'='*40}\n"
                     f"COMPANION URL: {args.url2}\nROLE: {args.url2_role}\n"
@@ -4589,9 +4620,9 @@ def main():
                 )
                 url2_path.write_text(url2_content, encoding="utf-8")
                 # Append to main story analysis file so builder sees both in one place
-                story_file = TRANSCRIPTS_DIR / f"{args.story_id}_news.txt"
+                story_file = TRANSCRIPTS_DIR / f"{_url2_story_id}_news.txt"
                 if not story_file.exists():
-                    story_file = TRANSCRIPTS_DIR / f"{args.story_id}_analysis.txt"
+                    story_file = TRANSCRIPTS_DIR / f"{_url2_story_id}_analysis.txt"
                 if story_file.exists():
                     existing = story_file.read_text(encoding="utf-8")
                     story_file.write_text(
@@ -4606,9 +4637,9 @@ def main():
                 if _drv2:
                     try:
                         from googleapiclient.http import MediaInMemoryUpload as _MIM2
-                        _capture_folder = get_capture_folder(args.project)
+                        _capture_folder = get_capture_folder(_url2_project)
                         _drv2.files().create(
-                            body={"name": f"{args.story_id}_companion_{args.url2_role}.txt",
+                            body={"name": f"{_url2_story_id}_companion_{args.url2_role}.txt",
                                   "parents": [_capture_folder]},
                             media_body=_MIM2(url2_content.encode("utf-8"), mimetype="text/plain"),
                             supportsAllDrives=True,
