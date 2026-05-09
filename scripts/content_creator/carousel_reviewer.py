@@ -1786,6 +1786,18 @@ def check_built_post(result: dict) -> dict:
     # SH-139/P2 — extract slide_purpose declarations BEFORE coherence scoring so
     # check_text_quality() can pass them to the purpose-aware Coherence scorer (SH-142).
     _purposes = result.get("slide_purposes") or result.get("content", {}).get("slide_purposes")
+    # Fallback: when LLM fallback (OpenAI/Gemini) omits slide_purposes from JSON,
+    # derive them from the deterministic OPC 5-slide mapping — purposes don't change
+    # per-topic, they're structural (hook→cost→teach→apply→sources for every OPC tip).
+    if not _purposes and SLIDE_PURPOSE_PILOT and niche == "opc":
+        _purposes = [
+            {"slide": 1, "purpose": "hook"},
+            {"slide": 2, "purpose": "cost"},
+            {"slide": 3, "purpose": "teach"},
+            {"slide": 4, "purpose": "apply"},
+            {"slide": 5, "purpose": "sources"},
+        ]
+        print(f"  [SH-139] slide_purpose pilot: LLM omitted slide_purposes — using OPC deterministic mapping")
     if _purposes and isinstance(_purposes, list):
         print(f"  [SH-139] slide_purpose pilot active — declared purposes:")
         for entry in _purposes:
