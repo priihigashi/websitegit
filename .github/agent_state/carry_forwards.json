@@ -1,17 +1,1 @@
-[
-  {
-    "task": "Phase 7 cutover",
-    "context": "This is the next action needed to complete the pipeline-fix tracker.",
-    "auto_actionable": true
-  },
-  {
-    "task": "First scheduled cleanup run",
-    "context": "To ensure the automated inbox cleanup process is initiated as planned.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Add ugc-reaction visual_hint to carousel_builder.py prompts",
-    "context": "This is necessary before changing GIPHY's position in the cascade.",
-    "auto_actionable": true
-  }
-]
+[]
