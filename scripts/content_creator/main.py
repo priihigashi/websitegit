@@ -31,7 +31,7 @@ ET = pytz.timezone("America/New_York")
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))  # for routing.py
 from topic_picker import pick_topics, get_clip_count_for_topic
-from carousel_builder import generate_carousel_content, build_html, render_pngs, generate_image_suggestions, visual_audit, fetch_all_media, fetch_clips, build_motion_html, generate_caption, generate_opc_per_template_content, fetch_template_aware_media, enforce_opc_comparison_parity
+from carousel_builder import generate_carousel_content, build_html, render_pngs, generate_image_suggestions, visual_audit, fetch_all_media, fetch_clips, build_motion_html, generate_caption, generate_opc_per_template_content, fetch_template_aware_media, enforce_opc_comparison_parity, validate_opc_template_contract, repair_opc_content, check_comparison_text_parity
 from routing import get_route
 import urllib.request, urllib.parse
 from email_preview import send_preview, update_catalog_status
@@ -1317,7 +1317,27 @@ def process_one_topic(topic_entry, run_date, drive):
         template_key = _resolve_news_template(topic_entry, niche)
     else:
         template_key = None
-    content = generate_carousel_content(topic, niche, template_key, brief=brief)
+
+    # Phase 4 (SH-146 improvement): run planner BEFORE content generation so the
+    # tip-shape prompt knows which template each slide will use. This lets the LLM
+    # write slide3_items as comparison dimensions (for four_card_grid) rather than
+    # generic list items — closes the "content generated blind to the plan" gap.
+    _early_plan = None
+    if niche == "opc" and OPC_SLIDE_PLANNER_ENABLED:
+        try:
+            from opc_template_chooser import plan_carousel_slides
+            _early_plan = plan_carousel_slides(topic, brief or "")
+            if _early_plan.get("status") != "passed" or len(_early_plan.get("slides", [])) != 5:
+                print(f"  smart-plan (early): skipped ({_early_plan.get('status')}) — using legacy tip path")
+                _early_plan = None
+            else:
+                slide_summary = " → ".join(s["template_id"] for s in _early_plan["slides"])
+                print(f"  smart-plan (early): {slide_summary}")
+        except Exception as exc:
+            print(f"  smart-plan (early): error {exc!r} — using legacy tip path")
+            _early_plan = None
+
+    content = generate_carousel_content(topic, niche, template_key, brief=brief, slide_plan=_early_plan)
     if not content:
         print("  FAILED: content generation")
         return None
@@ -1325,12 +1345,24 @@ def process_one_topic(topic_entry, run_date, drive):
     if content and template_key:
         content["_template_key"] = template_key
 
-    # Phase 4: smart slide-by-slide template picker (feature-flagged).
-    # When OPC_SLIDE_PLANNER_ENABLED=1 and niche is OPC, run the planner and
-    # attach the resulting plan to content. carousel_builder.build_html
-    # detects content["_slide_plan"] and dispatches to build_opc_from_slide_plan
-    # — falls back to the legacy tip builder if the plan is blocked/empty.
-    if niche == "opc" and OPC_SLIDE_PLANNER_ENABLED and content:
+    # Attach plan + run Phase 8A per-template content generation.
+    if niche == "opc" and _early_plan and content:
+        plan = _early_plan
+        content["_slide_plan"] = plan
+        if plan.get("comparison_pair"):
+            content["_comparison_pair"] = plan.get("comparison_pair")
+        # Phase 8A — generate per-template nested content for each
+        # standalone in the plan. tip-shape keys stay intact for any
+        # tip slides + as a fallback context for derive-from-tip.
+        try:
+            per_tpl = generate_opc_per_template_content(topic, plan, content, brief=brief or "")
+            for tid, fields in per_tpl.items():
+                if isinstance(fields, dict):
+                    content[tid] = fields
+        except Exception as exc:
+            print(f"  smart-plan: per-template content gen failed: {exc!r}")
+    elif niche == "opc" and OPC_SLIDE_PLANNER_ENABLED and content:
+        # Fallback: if early plan failed, try again post-generation (legacy path)
         try:
             from opc_template_chooser import plan_carousel_slides
             plan = plan_carousel_slides(topic, brief or "")
@@ -1339,10 +1371,7 @@ def process_one_topic(topic_entry, run_date, drive):
                 if plan.get("comparison_pair"):
                     content["_comparison_pair"] = plan.get("comparison_pair")
                 slide_summary = " → ".join(s["template_id"] for s in plan["slides"])
-                print(f"  smart-plan: {slide_summary}")
-                # Phase 8A — generate per-template nested content for each
-                # standalone in the plan. tip-shape keys stay intact for any
-                # tip slides + as a fallback context for derive-from-tip.
+                print(f"  smart-plan (fallback): {slide_summary}")
                 try:
                     per_tpl = generate_opc_per_template_content(topic, plan, content, brief=brief or "")
                     for tid, fields in per_tpl.items():
@@ -1351,9 +1380,9 @@ def process_one_topic(topic_entry, run_date, drive):
                 except Exception as exc:
                     print(f"  smart-plan: per-template content gen failed: {exc!r}")
             else:
-                print(f"  smart-plan: skipped ({plan.get('status')}) — using legacy tip path")
+                print(f"  smart-plan (fallback): skipped ({plan.get('status')}) — using legacy tip path")
         except Exception as exc:
-            print(f"  smart-plan: error {exc!r} — using legacy tip path")
+            print(f"  smart-plan (fallback): error {exc!r} — using legacy tip path")
 
     if niche == "opc" and content:
         content = enforce_opc_comparison_parity(content, topic, brief or "")
@@ -1414,6 +1443,37 @@ def process_one_topic(topic_entry, run_date, drive):
     # on motion slides in the static cover.html (alternating clip-bg pattern).
     if clips:
         media_paths["clips"] = clips
+
+    # SH-146 pre-render gate — validate every selected template has required fields;
+    # run a targeted repair pass for any gaps before handing off to the renderer.
+    if niche == "opc" and isinstance(content, dict):
+        _plan_for_gate = content.get("_slide_plan") or {}
+        if _plan_for_gate.get("slides"):
+            _contract_issues = validate_opc_template_contract(content, _plan_for_gate)
+            if _contract_issues:
+                print(f"  [SH-146] contract gaps: {_contract_issues}")
+                content = repair_opc_content(content, _contract_issues, topic, brief or "")
+                _remaining = validate_opc_template_contract(content, _plan_for_gate)
+                if _remaining:
+                    print(f"  [SH-146] ⚠ still missing after repair: {_remaining}")
+                    _send_alert(
+                        f"Template contract gaps not fully repaired for '{topic[:50]}':\n"
+                        + "\n".join(f"  - {x}" for x in _remaining)
+                    )
+                else:
+                    print("  [SH-146] contract ✅ — all required fields present after repair")
+            else:
+                print("  [SH-146] contract ✅")
+
+        # Comparison text-level parity check
+        _cpair = content.get("_comparison_pair") or {}
+        if _cpair.get("left") and _cpair.get("right"):
+            _parity_ok, _parity_msg = check_comparison_text_parity(
+                content, _cpair["left"], _cpair["right"]
+            )
+            if not _parity_ok:
+                print(f"  [SH-146] ⚠ {_parity_msg}")
+                _send_alert(f"Comparison parity warning for '{topic[:50]}':\n{_parity_msg}")
 
     _raw_handle = content.get("source_handle", "")
     handle_arg = (f"@{_raw_handle}" if _raw_handle and not _raw_handle.startswith("@") else _raw_handle)

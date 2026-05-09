@@ -156,8 +156,10 @@ def _log_credit_failure(api: str, error: str, workflow: str = "credit_monitor.ym
             api,
         ]
         body = json.dumps({"values": [row]}).encode()
+        import urllib.parse as _up
+        _range = _up.quote(f"{CB_TAB}!A1", safe="")
         url = (f"https://sheets.googleapis.com/v4/spreadsheets/{TRACKER_SS}"
-               f"/values/{CB_TAB}!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS")
+               f"/values/{_range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS")
         req = urllib.request.Request(url, data=body, method="POST",
             headers={"Authorization": f"Bearer {creds.token}",
                      "Content-Type": "application/json"})

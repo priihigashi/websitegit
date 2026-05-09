@@ -369,6 +369,157 @@ def enforce_opc_comparison_parity(content: dict, topic: str, brief: str = "") ->
     return content
 
 
+# ── Pre-render contract gate (SH-146) ─────────────────────────────────────────
+# Validates that every selected OPC template has its required fields populated.
+# If fields are missing, triggers a targeted LLM repair pass (fills only blanks).
+# This prevents the 'headline' KeyError class of crashes and ensures weak/empty
+# slides are caught before Playwright tries to render them.
+
+_OPC_TIP_REQUIRED: dict[str, list[str]] = {
+    "opc_tip_cover":    ["headline", "subhead"],
+    "opc_tip_stat":     ["slide2_stat", "slide2_label"],
+    "opc_tip_list":     ["slide3_items"],
+    "opc_tip_explainer":["slide4_headline", "slide4_body"],
+    "opc_tip_sources":  ["sources"],
+}
+_OPC_STANDALONE_REQUIRED: dict[str, list[str]] = {
+    "opc_material_profile": ["headline_main", "headline_italic", "decision_factors"],
+    "opc_four_card_grid":   ["card_titles", "card_copies"],
+    "opc_item_spotlight":   ["headline_main", "fact_1_title", "fact_1_desc"],
+    "opc_statement":        ["quote_body", "attribution"],
+    "opc_progress_media":   ["title_main", "caption_pills"],
+    "opc_duotone":          ["claim_strong", "quote_text"],
+    "opc_base":             ["headline_main", "headline_italic"],
+}
+
+
+def _get_field_value(content: dict, template_id: str, field: str):
+    """Return the field value from the nested template block (standalone) or
+    the top-level content dict (tip components)."""
+    if template_id in _OPC_STANDALONE_REQUIRED:
+        block = content.get(template_id) or {}
+        return block.get(field)
+    return content.get(field)
+
+
+def validate_opc_template_contract(content: dict, plan: dict) -> list[str]:
+    """Return list of '<template_id>.<field>' strings that are missing or empty.
+    Empty list = contract passes, safe to render."""
+    issues = []
+    if not isinstance(content, dict) or not isinstance(plan, dict):
+        return issues
+    for slide in plan.get("slides") or []:
+        tid = slide.get("template_id", "")
+        required = _OPC_TIP_REQUIRED.get(tid) or _OPC_STANDALONE_REQUIRED.get(tid) or []
+        for field in required:
+            val = _get_field_value(content, tid, field)
+            if val is None or val == "" or val == [] or val == {}:
+                issues.append(f"{tid}.{field}")
+    return issues
+
+
+def repair_opc_content(content: dict, issues: list[str], topic: str, brief: str = "") -> dict:
+    """Targeted repair pass — fills only the missing fields listed in `issues`.
+    Uses Sonnet (not Haiku) because partial-fill prompts need reasoning.
+    Returns the (possibly repaired) content dict. Never replaces existing fields."""
+    if not issues:
+        return content
+
+    grouped: dict[str, list[str]] = {}
+    for issue in issues:
+        tid, _, field = issue.partition(".")
+        grouped.setdefault(tid, []).append(field)
+
+    repair_blocks = []
+    for tid, fields in grouped.items():
+        is_standalone = tid in _OPC_STANDALONE_REQUIRED
+        current_block = content.get(tid) if is_standalone else content
+        repair_blocks.append(
+            f"Template: {tid}\n"
+            f"Missing fields: {', '.join(fields)}\n"
+            f"Current block (partial): {json.dumps(current_block or {}, indent=2)[:400]}"
+        )
+
+    tip_ctx = {k: content.get(k) for k in
+               ("headline", "subhead", "accent_word", "slide2_stat", "slide2_label",
+                "slide3_items", "slide4_headline", "slide4_body", "sources") if content.get(k)}
+
+    prompt = f"""You are repairing incomplete OPC carousel content for Oak Park Construction (South Florida contractor, CBC1263425).
+
+Topic: "{topic}"
+Brief: {brief[:300] if brief else '(none)'}
+
+EXISTING tip-shape context (do NOT contradict):
+{json.dumps(tip_ctx, indent=2)}
+
+The following template blocks have missing required fields. Fill ONLY the missing fields. Return JSON with ONLY the templates listed below, keyed by template_id. Keep values concise and on-topic.
+
+{chr(10).join(repair_blocks)}
+
+RULES:
+- slide2_stat: big number WITH qualifier (e.g. "UP TO $12K"). Max 40 chars.
+- slide2_label: 1 line explaining the stat with source. Max 60 chars.
+- slide3_items: exactly 3 items as [{{"title": ..., "sub": ...}}]. title max 34 chars. sub max 80 chars.
+- slide4_body: 2-3 sentences. No promises. No superlatives.
+- card_titles: 4 items, ALL CAPS, max 18 chars each.
+- card_copies: 4 items, max 100 chars each.
+- quote_body: Mike quote without quotation marks. Max 200 chars.
+- caption_pills: 3 items, ALL CAPS, max 8 chars each.
+- sources: list of 3-4 source strings.
+
+Return ONLY JSON. No preamble."""
+
+    try:
+        text = _claude_with_fallback(
+            prompt, max_tokens=1500, timeout=30,
+            context="repair_opc_content",
+        )
+        json_match = re.search(r'\{[\s\S]*\}', text or "")
+        if not json_match:
+            print(f"  [repair] no JSON in response — keeping original content")
+            return content
+        patch = json.loads(json_match.group())
+    except Exception as exc:
+        print(f"  [repair] LLM failed: {exc!r} — keeping original content")
+        return content
+
+    for tid, fields in grouped.items():
+        is_standalone = tid in _OPC_STANDALONE_REQUIRED
+        patch_block = patch.get(tid) if is_standalone else patch
+        if not isinstance(patch_block, dict):
+            continue
+        for field in fields:
+            if field not in patch_block:
+                continue
+            new_val = patch_block[field]
+            if new_val is None or new_val == "" or new_val == [] or new_val == {}:
+                continue
+            if is_standalone:
+                content.setdefault(tid, {})[field] = new_val
+            else:
+                content[field] = new_val
+            print(f"  [repair] filled {tid}.{field}")
+
+    return content
+
+
+def check_comparison_text_parity(content: dict, left: str, right: str) -> tuple[bool, str]:
+    """Check that both sides of a comparison appear at least twice in the
+    generated text (slide copy, not just the topic title). Returns (pass, msg)."""
+    if not left or not right:
+        return True, ""
+    text = json.dumps(content).lower()
+    left_count = text.count(left.lower())
+    right_count = text.count(right.lower())
+    min_count = 2
+    if left_count < min_count or right_count < min_count:
+        return False, (
+            f"Comparison parity low: {left}={left_count} mentions, "
+            f"{right}={right_count} mentions (need ≥{min_count} each)"
+        )
+    return True, ""
+
+
 # ── SH-056: OPC photorealistic guardrails ─────────────────────────────────────
 
 # Known AI-art/illustration hosting domains — images from these URLs are rejected
@@ -845,7 +996,7 @@ Return ONLY a valid JSON object:
             return None
 
 
-def generate_carousel_content(topic, niche, template_key=None, brief="", model="claude-sonnet-4-6"):
+def generate_carousel_content(topic, niche, template_key=None, brief="", model="claude-sonnet-4-6", slide_plan=None):
     # Special templates checked BEFORE the generic niche short-circuit
     if template_key == "progress":
         return generate_progress_content(topic, brief)
@@ -867,6 +1018,31 @@ def generate_carousel_content(topic, niche, template_key=None, brief="", model="
     copy_rules = OPC_COPY_RULES if niche == "opc" else BRAZIL_COPY_RULES
     purpose_block = _slide_purpose_block(niche, tmpl['slides'])  # SH-138 pilot
 
+    # Build plan-aware block when planner already decided the template per slide
+    _plan_block = ""
+    if slide_plan and slide_plan.get("slides"):
+        _slide_lines = []
+        for s in slide_plan["slides"]:
+            tid = s.get("template_id", "")
+            purpose = s.get("purpose", "")
+            _slide_lines.append(f"  Slide {s.get('slide', '?')}: {tid} — {purpose}")
+        _plan_block = (
+            "\nTEMPLATE PLAN (already decided — write content to match this exact plan):\n"
+            + "\n".join(_slide_lines)
+            + "\n\nCRITICAL rules based on this plan:\n"
+            + "- If any slide uses opc_four_card_grid: slide3_items MUST be 4 comparison DIMENSIONS "
+            "(e.g. COST / DURABILITY / MAINTENANCE / APPEARANCE), each with data for BOTH sides "
+            "in the 'sub' field. Format: 'Left side: $X–$Y | Right side: $A–$B'. "
+            "Do NOT write generic tips as list items.\n"
+            "- If any slide uses opc_item_spotlight: slide3_items[0] is the featured item — "
+            "make it a named product/material with a specific stat in 'sub'.\n"
+            "- If any slide uses opc_material_profile: the headline must name the material "
+            "explicitly (e.g. 'CONCRETE BLOCK WALLS') and slide3_items = 3 decision factors "
+            "a homeowner weighs (cost, maintenance, durability) with data in 'sub'.\n"
+            "- If any slide uses opc_duotone: slide4_body becomes the quote/myth to debunk — "
+            "write it as a single strong claim the homeowner believes, then counter it.\n"
+        )
+
     prompt = f"""You are a content writer for an Instagram carousel.
 Generate content for a {tmpl['slides']}-slide carousel about: "{topic}"
 
@@ -876,7 +1052,7 @@ Language: {lang}
 
 {copy_rules}
 {purpose_block}
-
+{_plan_block}
 Return ONLY a JSON object with these fields:
 {{
   "headline": "3-4 word cover headline (ALL CAPS, punchy) — prefer a number, cost, or named risk when possible. GOOD: '3 COSTLY MISTAKES', '$20K TRAP', 'AVOID THIS COST'. BAD: 'THINGS TO KNOW', 'TIPS AND TRICKS', 'WHAT TO DO'.",

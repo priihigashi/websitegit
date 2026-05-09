@@ -153,6 +153,11 @@ STRUCTURAL_TOPIC_TOKENS = {
     "concrete", "cmu", "rebar", "foundation", "formwork", "slab",
     "footing", "drainage", "waterproof", "block wall", "masonry",
     "stem wall", "tie beam", "tilt-up", "post-tension",
+    # hardscape / exterior surfaces
+    "driveway", "asphalt", "pavers", "paver", "hardscape", "sidewalk",
+    "curb", "pool deck", "patio", "pergola", "fence", "roof", "roofing",
+    "shingle", "shingles", "window", "windows", "door", "siding", "stucco",
+    "exterior", "outdoor",
 }
 INTERIOR_TOPIC_TOKENS = {
     "kitchen", "cabinet", "countertop", "tile", "shower", "tub",
@@ -162,11 +167,16 @@ INTERIOR_TOPIC_TOKENS = {
 STRUCTURAL_SERVICES = {
     "foundations", "concrete", "exterior", "drainage", "outdoor",
     "site work", "structural", "masonry",
+    "roofing", "windows", "doors", "hardscape", "paving", "pool",
 }
 INTERIOR_SERVICES = {
     "kitchens", "kitchen", "bathrooms", "bathroom", "cabinets",
     "tile", "countertops", "flooring", "interiors",
 }
+# Hard-reject threshold: if top match score is zero keyword hits (quality-only match)
+# AND it's an interior service for a structural/exterior topic, reject entirely.
+# Prevents kitchen photos appearing on driveway/roof posts.
+_HARD_REJECT_MISMATCH = True
 
 
 def _topic_buckets(topic):
@@ -279,6 +289,26 @@ def match_opc_photo_candidates(topic, phase=None, service_type=None, exclude_key
         return []
 
     scored.sort(key=lambda t: t[0], reverse=True)
+
+    # Hard-reject: when the top candidate has zero keyword hits (quality-only score)
+    # AND its service bucket mismatches the topic bucket, skip all candidates.
+    # Example: empty query → quality-only score → kitchen photo on driveway post.
+    if _HARD_REJECT_MISMATCH and scored:
+        top_score, top_row = scored[0]
+        top_svc = (top_row[2] if len(top_row) > 2 else "").strip()
+        top_sb = _service_bucket(top_svc)
+        tb = _topic_buckets(topic)
+        if (
+            tb is not None and top_sb is not None and tb != top_sb
+            and not keywords  # only hard-block when query was empty/generic
+        ):
+            print(
+                f"  photo_matcher: rejected all {len(scored)} candidate(s) for '{topic[:50]}' "
+                f"— topic bucket '{tb}' mismatches top service '{top_svc}' (bucket '{top_sb}'). "
+                "Letting image_providers.py fetch a topic-matched stock image instead."
+            )
+            return []
+
     out = []
     for score, row in scored[:max(1, int(limit))]:
         _, project, svc, filename, drive_url, description, phase_val, quality_raw, _, _ = row[:10]
