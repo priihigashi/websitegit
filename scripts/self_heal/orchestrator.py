@@ -972,12 +972,13 @@ Decide if Claude's fix is safe and correct. Output JSON ONLY:
 
 # ── COMMIT + PR + MERGE ─────────────────────────────────────────────────────
 def commit_patch(gh: Github, branch: str, base: str,
-                  path: str, content: str, message: str) -> str:
+                  path: str, content: str, message: str,
+                  allow_create_file: bool = False) -> str:
     """Create branch off base, commit one-file change. Return commit SHA.
 
-    Phase 1 (2026-05-08): when path does not exist on the branch, fall back to
-    create_file so new-module tasks (e.g. clip_cutter.py, url_screenshot.py)
-    can be committed. Existing-file tasks unchanged.
+    allow_create_file=True  → create_file when path does not exist (new-module tasks).
+    allow_create_file=False → raise TARGET_NOT_FOUND; a typo in Target File must not
+                               silently create a wrong new file.
     """
     repo = gh.get_repo(f"{REPO_OWNER}/{REPO_NAME}")
     base_ref = repo.get_branch(base)
@@ -988,10 +989,15 @@ def commit_patch(gh: Github, branch: str, base: str,
     try:
         file_obj = repo.get_contents(path, ref=branch)
     except Exception as e:
-        log(f"commit_patch: {path} not found on {branch} ({e}) — using create_file")
-        result = repo.create_file(path=path, message=message, content=content,
-                                  branch=branch)
-        return result["commit"].sha
+        if allow_create_file:
+            log(f"commit_patch: {path} not found on {branch} — using create_file (allow_create_file=True)")
+            result = repo.create_file(path=path, message=message, content=content,
+                                      branch=branch)
+            return result["commit"].sha
+        raise RuntimeError(
+            f"TARGET_NOT_FOUND: {path} on branch {branch} — "
+            f"set 'Creates New File'=TRUE in the queue row to allow creation"
+        ) from e
     result = repo.update_file(path=path, message=message, content=content,
                               sha=file_obj.sha, branch=branch)
     return result["commit"].sha
@@ -1528,7 +1534,8 @@ def main() -> None:
 
         branch = f"self-heal/{task_id.lower()}-attempt-{attempt}"
         commit_sha = commit_patch(gh, branch, DEFAULT_BRANCH, path, new_content,
-                                   f"self-heal {task_id}: {task.get('Title','')[:60]}")
+                                   f"self-heal {task_id}: {task.get('Title','')[:60]}",
+                                   allow_create_file=creates_new_file)
         log(f"committed to {branch} @ {commit_sha[:8]}")
         after = new_content
 
