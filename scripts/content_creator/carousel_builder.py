@@ -1037,7 +1037,12 @@ Rules:
             continue
 
         try:
-            return json.loads(json_match.group())
+            parsed = json.loads(json_match.group())
+            if not parsed.get("headline"):
+                words = re.sub(r"[^a-zA-Z0-9 ]", " ", topic).upper().split()[:4]
+                parsed["headline"] = " ".join(words) or "THE GUIDE"
+                print(f"  [carousel_builder] headline missing in LLM response — using fallback: {parsed['headline']!r}")
+            return parsed
         except json.JSONDecodeError as e:
             print(f"  OPC JSON parse error (attempt {attempt+1}): {e}")
             continue
@@ -4646,7 +4651,7 @@ OPC_TIP_COMPONENT_RENDERERS = {
 
 
 def _build_opc_html(content, slug, work_dir, media_paths=None):
-    hl = content["headline"]
+    hl = content.get("headline") or re.sub(r"[^a-zA-Z0-9 ]", " ", slug or "").upper().strip() or "THE GUIDE"
     # Guardrail: keep cover subhead short enough to avoid colliding with the bottom HUD lane.
     raw_subhead = str(content.get("subhead", "")).strip()
     if len(raw_subhead) > 110:
@@ -4779,7 +4784,7 @@ def build_opc_from_slide_plan(content, slug, work_dir, media_paths=None):
     # Pre-compute the same shared values _build_opc_html computes — so each
     # tip-component renderer has the data it needs regardless of which slide
     # role it ends up filling.
-    hl = content["headline"]
+    hl = content.get("headline") or re.sub(r"[^a-zA-Z0-9 ]", " ", slug or "").upper().strip() or "THE GUIDE"
     raw_subhead = str(content.get("subhead", "")).strip()
     if len(raw_subhead) > 110:
         cut = raw_subhead[:107].rsplit(" ", 1)[0].strip() or raw_subhead[:107].strip()
@@ -5097,7 +5102,7 @@ def _build_opc_progress_html(content, slug, work_dir, media_paths=None):
 def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
     """Illustrated editorial variant:
     keeps OPC typography/colors, adds topic-related image blocks with sketch/line treatment."""
-    hl = content["headline"]
+    hl = content.get("headline") or re.sub(r"[^a-zA-Z0-9 ]", " ", slug or "").upper().strip() or "THE GUIDE"
     accent = content.get("accent_word", hl.split()[-1] if hl else "")
     hl_html = hl.replace(accent, f'<span class="accent">{accent}</span>') if accent else hl
 
@@ -5262,7 +5267,7 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
 def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
     """Cutout sticker editorial variant:
     designed for background-removed PNGs when available, with graceful fallback."""
-    hl = content["headline"]
+    hl = content.get("headline") or re.sub(r"[^a-zA-Z0-9 ]", " ", slug or "").upper().strip() or "THE GUIDE"
     accent = content.get("accent_word", hl.split()[-1] if hl else "")
     hl_html = hl.replace(accent, f'<span class="accent">{accent}</span>') if accent else hl
 
