@@ -1405,7 +1405,7 @@ def process_one_topic(topic_entry, run_date, drive):
     # 1c. Fetch media (CC context images + AI cover) before building HTML so
     # _build_brazil_html() can inject real <img> tags instead of placeholder text.
     print("  Fetching context images + cover...")
-    media_paths = fetch_all_media(content, niche, str(work), brief=brief)
+    media_paths = fetch_all_media(content, niche, str(work), brief=brief, topic=topic)
     # Phase 8C — when a smart slide plan is attached, fetch per-template
     # imagery (4-card grid, statement person, progress jobsite, duotone hero,
     # base sticker) into the right media_paths keys.
@@ -1418,7 +1418,7 @@ def process_one_topic(topic_entry, run_date, drive):
     if media_issues:
         # One retry pass can recover transient/corrupt fetches from upstream providers.
         print("  Media validation failed — retrying fetch_all_media once...")
-        media_paths = fetch_all_media(content, niche, str(work), brief=brief)
+        media_paths = fetch_all_media(content, niche, str(work), brief=brief, topic=topic)
         if niche == "opc" and (content or {}).get("_slide_plan"):
             try:
                 media_paths = fetch_template_aware_media(content, niche, str(work), media_paths, brief=brief)
@@ -1446,6 +1446,7 @@ def process_one_topic(topic_entry, run_date, drive):
 
     # SH-146 pre-render gate — validate every selected template has required fields;
     # run a targeted repair pass for any gaps before handing off to the renderer.
+    # SH-150: block render (return None before Drive upload) when gaps remain after repair.
     if niche == "opc" and isinstance(content, dict):
         _plan_for_gate = content.get("_slide_plan") or {}
         if _plan_for_gate.get("slides"):
@@ -1456,10 +1457,12 @@ def process_one_topic(topic_entry, run_date, drive):
                 _remaining = validate_opc_template_contract(content, _plan_for_gate)
                 if _remaining:
                     print(f"  [SH-146] ⚠ still missing after repair: {_remaining}")
+                    print(f"  [SH-150] BLOCKING render — gaps remain post-repair, refusing to upload incomplete carousel")
                     _send_alert(
-                        f"Template contract gaps not fully repaired for '{topic[:50]}':\n"
+                        f"Template contract gaps not fully repaired for '{topic[:50]}' — render BLOCKED:\n"
                         + "\n".join(f"  - {x}" for x in _remaining)
                     )
+                    return None
                 else:
                     print("  [SH-146] contract ✅ — all required fields present after repair")
             else:
@@ -1471,9 +1474,13 @@ def process_one_topic(topic_entry, run_date, drive):
             _parity_ok, _parity_msg = check_comparison_text_parity(
                 content, _cpair["left"], _cpair["right"]
             )
-            if not _parity_ok:
-                print(f"  [SH-146] ⚠ {_parity_msg}")
+            if _parity_ok:
+                print(f"  [SH-149] Comparison parity ✅ — {_cpair['left']} vs {_cpair['right']} balanced")
+            else:
+                print(f"  [SH-149] Comparison parity ⚠ — {_parity_msg}")
                 _send_alert(f"Comparison parity warning for '{topic[:50]}':\n{_parity_msg}")
+        elif _cpair:
+            print(f"  [SH-149] Comparison parity skipped — incomplete pair: {_cpair}")
 
     _raw_handle = content.get("source_handle", "")
     handle_arg = (f"@{_raw_handle}" if _raw_handle and not _raw_handle.startswith("@") else _raw_handle)

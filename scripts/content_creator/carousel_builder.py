@@ -452,9 +452,17 @@ Brief: {brief[:300] if brief else '(none)'}
 EXISTING tip-shape context (do NOT contradict):
 {json.dumps(tip_ctx, indent=2)}
 
-The following template blocks have missing required fields. Fill ONLY the missing fields. Return JSON with ONLY the templates listed below, keyed by template_id. Keep values concise and on-topic.
+The following template blocks have missing required fields. Fill ONLY the missing fields. Keep values concise and on-topic.
 
 {chr(10).join(repair_blocks)}
+
+OUTPUT FORMAT — return ONE JSON object keyed by template_id, like this:
+{{
+  "opc_tip_cover": {{ "headline": "...", "subhead": "..." }},
+  "opc_tip_stat": {{ "slide2_stat": "...", "slide2_label": "..." }},
+  "opc_four_card_grid": {{ "card_titles": [...], "card_copies": [...] }}
+}}
+Only include the templates listed above. Only include the missing fields. Do not return prose. Do not nest deeper than this.
 
 RULES:
 - slide2_stat: big number WITH qualifier (e.g. "UP TO $12K"). Max 40 chars.
@@ -469,37 +477,56 @@ RULES:
 
 Return ONLY JSON. No preamble."""
 
+    print(f"  [repair] requesting fill for {len(issues)} field(s) across {len(grouped)} template(s)")
     try:
         text = _claude_with_fallback(
             prompt, max_tokens=1500, timeout=30,
             context="repair_opc_content",
         )
-        json_match = re.search(r'\{[\s\S]*\}', text or "")
+        if not text:
+            print(f"  [repair] LLM returned empty text — keeping original content")
+            return content
+        print(f"  [repair] raw response ({len(text)} chars): {text[:300].replace(chr(10), ' ')}")
+        json_match = re.search(r'\{[\s\S]*\}', text)
         if not json_match:
             print(f"  [repair] no JSON in response — keeping original content")
             return content
-        patch = json.loads(json_match.group())
+        try:
+            patch = json.loads(json_match.group())
+        except json.JSONDecodeError as je:
+            print(f"  [repair] JSON parse failed: {je} — keeping original content")
+            return content
+        print(f"  [repair] parsed patch top-level keys: {list(patch.keys())[:10]}")
     except Exception as exc:
         print(f"  [repair] LLM failed: {exc!r} — keeping original content")
         return content
 
+    filled_count = 0
     for tid, fields in grouped.items():
         is_standalone = tid in _OPC_STANDALONE_REQUIRED
-        patch_block = patch.get(tid) if is_standalone else patch
-        if not isinstance(patch_block, dict):
-            continue
+        # Tip templates may be returned as nested {tid: {...}} OR flat at top level.
+        # Standalone templates may also be returned flat OR nested.
+        nested_block = patch.get(tid) if isinstance(patch.get(tid), dict) else None
         for field in fields:
-            if field not in patch_block:
-                continue
-            new_val = patch_block[field]
+            new_val = None
+            # Try nested first (LLM follows the prompt's "keyed by template_id" instruction)
+            if nested_block is not None and field in nested_block:
+                new_val = nested_block[field]
+            # Fall back to flat top-level (LLM returns just the missing fields)
+            elif field in patch:
+                new_val = patch[field]
             if new_val is None or new_val == "" or new_val == [] or new_val == {}:
+                print(f"  [repair] no value for {tid}.{field} in patch (nested={nested_block is not None}, top-keys={list(patch.keys())[:5]})")
                 continue
             if is_standalone:
                 content.setdefault(tid, {})[field] = new_val
             else:
                 content[field] = new_val
-            print(f"  [repair] filled {tid}.{field}")
+            filled_count += 1
+            preview = (str(new_val)[:60] + '...') if len(str(new_val)) > 60 else str(new_val)
+            print(f"  [repair] filled {tid}.{field} = {preview}")
 
+    print(f"  [repair] summary: {filled_count}/{len(issues)} fields filled")
     return content
 
 
@@ -3016,7 +3043,7 @@ def _download_drive_photo(drive_url, dest_path):
         return ""
 
 
-def fetch_all_media(content, niche, work_dir, brief=""):
+def fetch_all_media(content, niche, work_dir, brief="", topic=""):
     """Download/generate all images needed by this carousel BEFORE build_html().
     Returns dict:
       {"cover": rel_path_or_empty, "slides": {slide_idx: rel_path_or_empty}}
@@ -3049,7 +3076,23 @@ def fetch_all_media(content, niche, work_dir, brief=""):
             topic_text = content.get("headline", "") or content.get("topic", "")
             img_dir = Path(work_dir) / "resources" / "images"
             img_dir.mkdir(parents=True, exist_ok=True)
-            match = match_opc_photo(topic_text, exclude_keys=used_opc_photo_keys)
+            # SH-151: pass real post topic as fallback so the bucket guard works
+            # even when content.headline is empty/missing.
+            match = match_opc_photo(topic_text, exclude_keys=used_opc_photo_keys, fallback_topic=topic)
+            if match and match.get("drive_url"):
+                # SH-153: post-fetch category validator — last line of defense.
+                # Even if photo_matcher returned a candidate, refuse interior
+                # photos for structural topics (driveway/roof/hardscape).
+                from photo_matcher import _topic_buckets, _service_bucket  # type: ignore
+                _eff_topic = topic_text or topic or ""
+                _tb = _topic_buckets(_eff_topic)
+                _svc = match.get("service_type", "") or ""
+                _sb = _service_bucket(_svc)
+                if _tb == "structural" and _sb == "interior":
+                    print(f"  [photo_matcher] SH-153 cover REJECTED: {match.get('filename')} "
+                          f"(service '{_svc}' is interior, topic '{_eff_topic[:40]}' is structural). "
+                          "Falling back to stock/AI.")
+                    match = None
             if match and match.get("drive_url"):
                 dest = str(img_dir / "opc_catalog_cover.jpg")
                 dl = _download_drive_photo(match["drive_url"], dest)

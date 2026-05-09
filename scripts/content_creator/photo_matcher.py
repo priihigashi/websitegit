@@ -239,16 +239,25 @@ def _score(row, keywords, phase_filter=None, service_filter=None, topic_text="")
     return int(raw * penalty)
 
 
-def match_opc_photo_candidates(topic, phase=None, service_type=None, exclude_keys=None, limit=3):
+def match_opc_photo_candidates(topic, phase=None, service_type=None, exclude_keys=None, limit=3, fallback_topic=None):
     """Return top-N catalog candidates for the topic, ordered by score (best first).
 
     Phase 1+2 (per-build dedup + try-next-on-reject):
       - exclude_keys: set of filename (lowercased) and Drive URL strings already
         used in this carousel. Rows matching either are skipped.
       - limit: max candidates to return.
+      - fallback_topic: SH-151 — used when `topic` is blank/empty so we can still
+        classify the post bucket. Without this, an empty topic disables the
+        category hard-reject and we get kitchen photos on driveway covers.
 
     Returns: list of dicts (same shape as match_opc_photo). Empty list if none.
     """
+    if (not topic or not str(topic).strip()) and fallback_topic:
+        print(f"  photo_matcher: SH-151 — empty topic, using fallback_topic='{str(fallback_topic)[:60]}'")
+        topic = fallback_topic
+    elif not topic or not str(topic).strip():
+        print("  photo_matcher: SH-151 — empty topic AND no fallback_topic — refusing to match (would risk category mismatch)")
+        return []
     token = _get_token()
     if not token:
         print("  photo_matcher: no SHEETS_TOKEN — skipping real-photo match")
@@ -290,22 +299,32 @@ def match_opc_photo_candidates(topic, phase=None, service_type=None, exclude_key
 
     scored.sort(key=lambda t: t[0], reverse=True)
 
-    # Hard-reject: when the top candidate has zero keyword hits (quality-only score)
-    # AND its service bucket mismatches the topic bucket, skip all candidates.
-    # Example: empty query → quality-only score → kitchen photo on driveway post.
+    # Hard-reject: prevent interior photos (Kitchens/Bathrooms) showing up on
+    # structural/exterior posts (driveway, roof, hardscape). Two trigger paths:
+    #   (a) explicit mismatch — topic bucket structural, top photo interior (or reverse)
+    #   (b) SH-152 — topic is structural and top photo is interior, even with zero
+    #       keyword hits, regardless of how _topic_buckets classified the empty/short topic.
     if _HARD_REJECT_MISMATCH and scored:
         top_score, top_row = scored[0]
         top_svc = (top_row[2] if len(top_row) > 2 else "").strip()
         top_sb = _service_bucket(top_svc)
         tb = _topic_buckets(topic)
+        # Path (a): clear cross-bucket mismatch with no keyword hits
         if (
             tb is not None and top_sb is not None and tb != top_sb
-            and not keywords  # only hard-block when query was empty/generic
+            and not keywords
         ):
             print(
                 f"  photo_matcher: rejected all {len(scored)} candidate(s) for '{topic[:50]}' "
                 f"— topic bucket '{tb}' mismatches top service '{top_svc}' (bucket '{top_sb}'). "
                 "Letting image_providers.py fetch a topic-matched stock image instead."
+            )
+            return []
+        # Path (b): structural topic + interior photo, regardless of keyword count
+        if tb == "structural" and top_sb == "interior":
+            print(
+                f"  photo_matcher: SH-152 — rejected {len(scored)} candidate(s) for '{topic[:50]}' "
+                f"— structural topic, top service '{top_svc}' is interior. Falling back to stock."
             )
             return []
 
@@ -326,14 +345,17 @@ def match_opc_photo_candidates(topic, phase=None, service_type=None, exclude_key
     return out
 
 
-def match_opc_photo(topic, phase=None, service_type=None, exclude_keys=None):
+def match_opc_photo(topic, phase=None, service_type=None, exclude_keys=None, fallback_topic=None):
     """Compatibility wrapper — returns the single best candidate or None.
 
     New callers should prefer match_opc_photo_candidates() so they can iterate
     when Vision rejects the top match.
+    fallback_topic: SH-151 — used when `topic` is blank so the category guard
+    has something to classify on.
     """
     cands = match_opc_photo_candidates(topic, phase=phase, service_type=service_type,
-                                       exclude_keys=exclude_keys, limit=1)
+                                       exclude_keys=exclude_keys, limit=1,
+                                       fallback_topic=fallback_topic)
     return cands[0] if cands else None
 
 
