@@ -46,6 +46,7 @@ REVIEW_STRICT = os.environ.get("REVIEW_STRICT", "").strip().lower() in {"1", "tr
 #          "analyze_and_fix"        = detect, auto-fix [fix_type=regenerate] issues,
 #                                     then email before/after change log
 FIX_MODE = os.environ.get("FIX_MODE", "analyze_only").strip().lower()
+SLIDE_PURPOSE_PILOT = os.environ.get("SLIDE_PURPOSE_PILOT", "0").strip() in {"1", "true", "yes"}
 
 DRY_RUN = "--dry-run" in sys.argv
 
