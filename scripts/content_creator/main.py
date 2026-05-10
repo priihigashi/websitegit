@@ -98,6 +98,59 @@ def _send_alert(msg: str, fatal: bool = False):
         _PIPELINE_FATAL = True
 
 
+def _filter_results_for_email(results: list, label: str = "") -> tuple[list, list]:
+    """SH-157: Run the strict reviewer's check_built_post on each result BEFORE
+    send_preview() so failures block the email instead of arriving after it.
+
+    Returns (passing_results, failed_results). Failed results are alerted; the
+    caller decides whether to email partial (passing only) or block entirely.
+
+    REVIEW_STRICT controls behavior:
+      - REVIEW_STRICT=true  → ANY failure blocks the entire email (returns [], failed)
+      - REVIEW_STRICT=false → only failed posts are dropped; remaining ship
+    """
+    if not results:
+        return [], []
+    try:
+        from carousel_reviewer import check_built_post
+    except Exception as exc:
+        print(f"  [SH-157] reviewer import failed — skipping pre-email gate: {exc!r}")
+        return results, []
+
+    strict = os.environ.get("REVIEW_STRICT", "").strip().lower() in {"1", "true", "yes"}
+    print(f"\n  [SH-157] Pre-email reviewer{(' (' + label + ')') if label else ''} — "
+          f"{len(results)} post(s), strict={strict}")
+    passing, failed = [], []
+    for r in results:
+        try:
+            review = check_built_post(r)
+        except Exception as exc:
+            print(f"  [SH-157] reviewer crashed on '{r.get('topic','?')[:40]}': {exc!r} — treating as FAIL")
+            review = {"passed": False, "issues": [f"reviewer crashed: {exc}"], "topic": r.get("topic", "")}
+        icon = "✅" if review.get("passed") else "❌"
+        print(f"  [SH-157] {icon} {r.get('topic','')[:60]}")
+        for issue in review.get("issues", []):
+            print(f"           ⚠ {issue}")
+        if review.get("passed"):
+            passing.append(r)
+        else:
+            r["_review_issues"] = review.get("issues", [])
+            failed.append(r)
+
+    if failed:
+        topics = "\n".join(f"  - {r.get('topic','?')[:60]}: " + "; ".join(r.get('_review_issues', [])[:3])
+                           for r in failed)
+        _send_alert(
+            f"[SH-157] Pre-email reviewer flagged {len(failed)}/{len(results)} post(s):\n{topics}\n\n"
+            f"strict={strict} → " + ("EMAIL BLOCKED entirely." if strict else f"failed posts dropped, {len(passing)} sent."),
+        )
+
+    if strict and failed:
+        print(f"  [SH-157] strict mode — BLOCKING email entirely ({len(failed)} failed of {len(results)})")
+        return [], failed
+    return passing, failed
+
+
 def _flush_alerts():
     """Send all queued alerts as ONE digest email. Call once at the end of main()."""
     if not _PENDING_ALERTS:
@@ -1491,6 +1544,28 @@ def process_one_topic(topic_entry, run_date, drive):
         print("  FAILED: HTML build")
         return None
 
+    # SH-155: pre-render HTML completeness gate. Reads cover.html for empty
+    # required fields (body-text, stat-big, stat-label, tip-explain, src-list)
+    # and visible internal placeholders ('STAT CONTEXT IMAGE', etc.). If any
+    # issue is found, refuse to render PNGs / upload / email — fail BEFORE the
+    # client-facing review email goes out.
+    if niche == "opc":
+        from carousel_builder import verify_html_completeness
+        _html_issues = verify_html_completeness(html_path)
+        if _html_issues:
+            print(f"  [SH-155] HTML completeness gate FAILED — {len(_html_issues)} issue(s):")
+            for _issue in _html_issues:
+                print(f"    - {_issue}")
+            _send_alert(
+                f"HTML completeness gate BLOCKED preview for '{topic[:50]}' — "
+                f"render+upload+email refused. Issues:\n"
+                + "\n".join(f"  - {x}" for x in _html_issues)
+                + f"\n\nLocal HTML: {html_path}",
+                fatal=False,
+            )
+            return None
+        print("  [SH-155] HTML completeness gate ✅ — no empty fields, no visible placeholders")
+
     # 2b. Build per-slide motion HTML files (one per clip slot, separate from cover.html)
     clip_html_files = build_motion_html(content, niche, slug, str(work), clips, media_paths=media_paths, clip_failures=clip_failures)
 
@@ -2191,10 +2266,15 @@ def main():
             )
             return
 
-        try:
-            send_preview(results, now_et.strftime("%Y-%m-%d"))
-        except Exception as e:
-            print(f"  Manual preview email send failed: {e}")
+        # SH-157: pre-email reviewer gate — block bad previews BEFORE send_preview
+        results_to_email, failed_review = _filter_results_for_email(results, label="manual")
+        if not results_to_email:
+            print("  [SH-157] No results passed pre-email reviewer — skipping send_preview")
+        else:
+            try:
+                send_preview(results_to_email, now_et.strftime("%Y-%m-%d"))
+            except Exception as e:
+                print(f"  Manual preview email send failed: {e}")
 
         print(f"\n[content_creator] Manual mode done — {len(results)} posts")
         results_file = WORK_DIR / "results.json"
@@ -2308,13 +2388,18 @@ def main():
 
     # Phase C: Send preview email → mark each row 'Email Sent'
     print(f"\n--- Phase C: Sending preview email ({len(results)} posts) ---")
-    try:
-        send_preview(results, now_et.strftime("%Y-%m-%d"))
-        for r in results:
-            if r.get("queue_row_idx"):
-                write_queue_status(r["queue_row_idx"], status="Email Sent")
-    except Exception as e:
-        print(f"  Email send failed: {e}")
+    # SH-157: pre-email reviewer gate — block bad previews BEFORE send_preview
+    results_to_email, failed_review = _filter_results_for_email(results, label="phase-c")
+    if not results_to_email:
+        print("  [SH-157] No results passed pre-email reviewer — skipping send_preview")
+    else:
+        try:
+            send_preview(results_to_email, now_et.strftime("%Y-%m-%d"))
+            for r in results_to_email:
+                if r.get("queue_row_idx"):
+                    write_queue_status(r["queue_row_idx"], status="Email Sent")
+        except Exception as e:
+            print(f"  Email send failed: {e}")
 
     elapsed = time.time() - start
     print(f"\n[content_creator] Done — {len(results)} posts rendered in {elapsed:.0f}s")

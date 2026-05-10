@@ -530,6 +530,78 @@ Return ONLY JSON. No preamble."""
     return content
 
 
+# SH-155: visible placeholder strings that MUST NOT reach rendered HTML.
+# If any of these appear in the body of cover.html the build is blocked.
+_HTML_BLOCKED_PLACEHOLDER_STRINGS = (
+    "STAT CONTEXT IMAGE",
+    "TIP IN ACTION IMAGE",
+    "PROCESS IMAGE",
+    "INSTALL placeholder",
+    "IMAGE PLACEHOLDER",
+    "CONTEXT IMAGE",
+)
+
+# Required text-bearing div selectors per OPC tip template. Empty = block.
+_HTML_REQUIRED_NONEMPTY = (
+    # (css_class, human_label, max_check_per_variant_block)
+    ("body-text", "cover subhead"),
+    ("stat-big", "stat number"),
+    ("stat-label", "stat label/source"),
+    ("tip-explain", "pro tip body"),
+    ("src-list", "sources list"),
+)
+
+
+def verify_html_completeness(html_path: str) -> list[str]:
+    """SH-155: pre-email HTML gate. Reads the rendered cover.html and returns a list
+    of issues — empty list = HTML is shippable, non-empty = block upload + email.
+
+    Checks:
+      1. No visible internal placeholder strings (STAT CONTEXT IMAGE, etc.)
+      2. Required text-bearing divs are non-empty:
+         body-text, stat-big (cannot be '—'), stat-label, tip-explain, src-list
+      3. src-list must contain at least one .src-row child
+    """
+    issues: list[str] = []
+    try:
+        html = Path(html_path).read_text()
+    except Exception as exc:
+        issues.append(f"could not read {html_path}: {exc!r}")
+        return issues
+
+    # Strip HTML comments before scanning so '<!-- omitted ... -->' tags from
+    # SH-156 don't false-trigger placeholder string match.
+    body_only = re.sub(r"<!--[\s\S]*?-->", "", html)
+    # Drop the entire <style> block — CSS class/selector text would match too.
+    body_only = re.sub(r"<style[\s\S]*?</style>", "", body_only)
+
+    # 1. Placeholder string scan
+    for needle in _HTML_BLOCKED_PLACEHOLDER_STRINGS:
+        if needle in body_only:
+            issues.append(f"placeholder string '{needle}' visible in rendered HTML")
+
+    # 2. Required non-empty divs (per occurrence — every variant block must be filled)
+    for cls, label in _HTML_REQUIRED_NONEMPTY:
+        # Match opening tag + capture content until matching close. Greedy-safe by
+        # using non-greedy match against [^<] then </div>; nested divs allowed via
+        # broader pattern.
+        for m in re.finditer(rf'<div class="{cls}"[^>]*>([\s\S]*?)</div>', body_only):
+            inner = m.group(1).strip()
+            # Strip nested HTML tags to count visible text
+            visible = re.sub(r"<[^>]+>", "", inner).strip()
+            if not visible or visible == "—":
+                issues.append(f"empty {cls} div ({label}) — slide cannot ship")
+                break  # one issue per class is enough; don't spam
+
+    # 3. src-list must contain at least one src-row
+    for m in re.finditer(r'<div class="src-list"[^>]*>([\s\S]*?)</div>\s*<div class="cta-bar"', body_only):
+        if 'class="src-row"' not in m.group(1):
+            issues.append("src-list contains no src-row entries — sources missing")
+            break
+
+    return issues
+
+
 def check_comparison_text_parity(content: dict, left: str, right: str) -> tuple[bool, str]:
     """Check that both sides of a comparison appear at least twice in the
     generated text (slide copy, not just the topic title). Returns (pass, msg)."""
@@ -4327,8 +4399,12 @@ def _cap34(text: str) -> str:
 
 
 def _opc_tip_context_slot(slide_num, fallback_label, opc_slides_meta, media_paths):
-    """Picks the right context image (or branded placeholder) for an OPC tip slide.
-    Module-level so the slide-component renderers + a future opc_slide_planner can reuse it."""
+    """Picks the right context image for an OPC tip slide.
+    SH-156: when no image is fetched, OMIT the slot entirely instead of rendering a
+    visible placeholder label. Internal labels like 'STAT CONTEXT IMAGE' must NEVER
+    reach the rendered HTML the client/Priscila reviews. The HTML completeness gate
+    (verify_html_completeness) treats their presence as a hard block.
+    Module-level so the slide-component renderers + opc_slide_planner can reuse it."""
     slide_meta_idx = max(0, slide_num - 2)
     slide_meta = opc_slides_meta[slide_meta_idx] if slide_meta_idx < len(opc_slides_meta) else {}
     visual_hint = str(slide_meta.get("visual_hint", "context-image")).strip().lower()
@@ -4339,21 +4415,14 @@ def _opc_tip_context_slot(slide_num, fallback_label, opc_slides_meta, media_path
     if img_path:
         return (
             f'<div class="context-img-slot" data-query="{query_attr}">'
-            f'<img src="{img_path}" alt="{fallback_label}">'
+            f'<img src="{img_path}" alt="">'
             '</div>'
         )
-    # No image: if hint is explicitly "none", omit the slot entirely
-    if visual_hint == "none":
-        return ""
-    # No image but slot is expected: show a branded placeholder (not raw query text)
-    return (
-        f'<div class="context-img-slot context-img-placeholder" data-query="{query_attr}">'
-        f'<div class="ctx-placeholder-inner">'
-        f'<div class="ctx-placeholder-icon">&#9632;</div>'
-        f'<div class="ctx-placeholder-label">{fallback_label}</div>'
-        f'</div>'
-        '</div>'
-    )
+    # No image: log + omit the slot entirely. The slide layout falls back to its
+    # text-only design (text columns expand). Internal label is preserved in a
+    # data-attribute for log analysis, never rendered text.
+    print(f"  [SH-156] slide{slide_num}: no context image — omitting slot (was: {fallback_label})")
+    return f'<!-- context-img-slot omitted (slide {slide_num} — no image; would have been: {fallback_label}) -->'
 
 
 def render_opc_tip_cover(content, v_class, *, hl_html, bg_photo_el):
@@ -5114,8 +5183,20 @@ def build_opc_from_slide_plan(content, slug, work_dir, media_paths=None):
         ]
         return f"\n<!-- {v_class.upper()} -->\n" + "\n\n".join(rendered) + "\n"
 
-    v2 = variant_block("v2", "#CBCC10", "#CBCC10")
-    v3 = variant_block("v3", "#F0EBE3", "#F0EBE3")
+    # SH-154: single-variant lock — when MANUAL_TEMPLATE_SET=single (or unset in
+    # manual mode), emit ONE variant family so the review email is one cohesive
+    # 5-slide deck, not 10 mixed PNGs. Default OPC family = v2 (cream) — the
+    # production-proven family. Override with OPC_PROOF_VARIANT=v3 if needed.
+    _tset = os.environ.get("MANUAL_TEMPLATE_SET", "").strip().lower()
+    _proof_variant = os.environ.get("OPC_PROOF_VARIANT", "v2").strip().lower()
+    if _proof_variant not in ("v2", "v3"):
+        _proof_variant = "v2"
+    _emit_v2 = _tset != "single" or _proof_variant == "v2"
+    _emit_v3 = _tset != "single" or _proof_variant == "v3"
+    v2 = variant_block("v2", "#CBCC10", "#CBCC10") if _emit_v2 else ""
+    v3 = variant_block("v3", "#F0EBE3", "#F0EBE3") if _emit_v3 else ""
+    if _tset == "single":
+        print(f"  [SH-154] single-variant lock — emitting {_proof_variant} only")
 
     html_path = Path(work_dir) / "cover.html"
     with open(Path(__file__).parent / "opc_tip_base.css") as f:
