@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -724,6 +725,28 @@ def plan_carousel_slides(
             ),
         })
 
+    # SH-158: Production rollback — when OPC_DISABLE_STANDALONES is on, force every
+    # standalone slide back to its tip-component fallback. Standalones (especially
+    # opc_four_card_grid) ship card images via Pixabay/Pexels that have failed
+    # vision validation in production runs (e.g. lifestyle/portrait photos on a
+    # driveway carousel). Until per-card vision validation is reliable, the
+    # conservative all-tip plan is the production path.
+    _disable_standalones = os.environ.get("OPC_DISABLE_STANDALONES", "1").strip().lower() in {"1", "true", "yes"}
+    if _disable_standalones:
+        _safe_tips = {"opc_tip_cover", "opc_tip_stat", "opc_tip_list", "opc_tip_explainer", "opc_tip_sources"}
+        rolled_back = []
+        for slide in plan_slides:
+            tid = slide.get("template_id", "")
+            if tid not in _safe_tips:
+                fb = STANDALONE_TO_TIP_FALLBACK.get(tid) or "opc_tip_explainer"
+                rolled_back.append(f"slide{slide['slide']}:{tid}→{fb}")
+                slide["_original_template_id"] = tid
+                slide["template_id"] = fb
+                slide["production_safe"] = True
+                slide["fallback_template_id"] = None
+        if rolled_back:
+            print(f"  [SH-158] OPC_DISABLE_STANDALONES=1 — rolled back: {', '.join(rolled_back)}")
+
     return {
         "topic": topic,
         "status": "passed",
@@ -735,6 +758,7 @@ def plan_carousel_slides(
             "Plan only — no rendering performed.",
             "All 7 standalone Python builders shipped in Phase 6 (commit 690873f); fallback_template_id is now a defensive escape hatch only.",
             "Banned legacy keys cutout/illustrated cannot appear in any slot.",
+            "SH-158 rollback active by default — set OPC_DISABLE_STANDALONES=0 to re-enable standalones once card-image vision validation is verified.",
         ],
     }
 

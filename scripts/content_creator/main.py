@@ -1576,6 +1576,32 @@ def process_one_topic(topic_entry, run_date, drive):
         print("  FAILED: PNG render")
         return None
 
+    # SH-159: post-render visual QA gate (OPC only). Blocks BEFORE motion/upload/email if:
+    #   - PNG count is not exactly 5 (proof rerun must be a clean 5-slide deck)
+    #   - More than one variant family prefix exists (cream + lime mix)
+    if niche == "opc":
+        _png_files = sorted(p.name for p in png_dir.glob("*_html.png"))
+        _prefixes = sorted({p.split("_")[0] for p in _png_files if "_" in p})
+        _qa_issues = []
+        if len(_png_files) != 5:
+            _qa_issues.append(f"PNG count = {len(_png_files)}, expected exactly 5")
+        if len(_prefixes) > 1:
+            _qa_issues.append(f"multiple variant families found: {_prefixes} — single mode requires one")
+        if _qa_issues:
+            print(f"  [SH-159] post-render visual QA FAILED — {len(_qa_issues)} issue(s):")
+            for _i in _qa_issues:
+                print(f"    - {_i}")
+            print(f"    PNGs: {_png_files}")
+            _send_alert(
+                f"Post-render visual QA BLOCKED preview for '{topic[:50]}' — "
+                f"render+upload+email refused. Issues:\n"
+                + "\n".join(f"  - {x}" for x in _qa_issues)
+                + f"\n\nPNG list: {_png_files}",
+                fatal=False,
+            )
+            return None
+        print(f"  [SH-159] post-render visual QA ✅ — {len(_png_files)} PNGs, single family '{_prefixes[0] if _prefixes else '?'}'")
+
     # 4. Render motion — RENDERER CASCADE: Remotion → Playwright → Ken Burns
     #    Each tier is a fallback for the one above. Motion is default-ON; Ken Burns is the floor.
     #    4a. Remotion render for the black cover — React-source, highest quality.
