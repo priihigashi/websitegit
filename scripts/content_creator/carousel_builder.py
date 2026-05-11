@@ -42,6 +42,34 @@ SLIDE_PURPOSE_NEWS_6SLIDE_BY_INDEX = {
 }
 
 
+def _local_font_face_css() -> str:
+    """Return @font-face declarations pointing to local WOFF2 files bundled in the repo.
+    Playwright renders via file:// which blocks Google Fonts HTTPS requests; local fonts
+    are the only reliable way to load Anton + Roboto Condensed in headless rendering."""
+    fonts_dir = Path(__file__).parent / "fonts"
+    anton = fonts_dir / "Anton-Regular.woff2"
+    rc = fonts_dir / "RobotoCondensed-Regular.woff2"
+    if not anton.exists() or not rc.exists():
+        return ""
+    return f"""@font-face {{
+  font-family: 'Anton'; font-weight: 400; font-style: normal;
+  src: url('file://{anton}') format('woff2');
+}}
+@font-face {{
+  font-family: 'Roboto Condensed'; font-weight: 300; font-style: normal;
+  src: url('file://{rc}') format('woff2');
+}}
+@font-face {{
+  font-family: 'Roboto Condensed'; font-weight: 400; font-style: normal;
+  src: url('file://{rc}') format('woff2');
+}}
+@font-face {{
+  font-family: 'Roboto Condensed'; font-weight: 700; font-style: normal;
+  src: url('file://{rc}') format('woff2');
+}}
+"""
+
+
 def _slide_purpose_block(niche: str, n_slides: int) -> str:
     """SH-138: build a prompt fragment that asks the model to emit slide_purpose
     per slide. Returns "" when pilot disabled so cron behavior is unchanged.
@@ -5035,7 +5063,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
 <title>OPC — Tip — {slug}</title>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-{base_css}
+{_local_font_face_css()}{base_css}
 </style>
 </head>
 <body>
@@ -5228,7 +5256,7 @@ def build_opc_from_slide_plan(content, slug, work_dir, media_paths=None):
 <title>OPC — Smart Plan — {slug}{title_suffix}</title>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&family=JetBrains+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Cormorant+Garamond:wght@300;400;600&family=Barlow:ital,wght@0,400;0,700;1,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-{base_css}
+{_local_font_face_css()}{base_css}
 {standalones_css}
 </style>
 </head>
@@ -5399,7 +5427,7 @@ def _build_opc_progress_html(content, slug, work_dir, media_paths=None):
 <title>OPC — Progress — {slug}</title>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-{base_css}
+{_local_font_face_css()}{base_css}
 {progress_extra_css}
 </style>
 </head>
@@ -5565,7 +5593,7 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
 <title>OPC — Illustrated — {slug}</title>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-{base_css}
+{_local_font_face_css()}{base_css}
 {illustrated_css}
 </style>
 </head>
@@ -5788,7 +5816,7 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
 <title>OPC — Cutout — {slug}</title>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Roboto+Condensed:wght@300;400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-{base_css}
+{_local_font_face_css()}{base_css}
 {cutout_css}
 </style>
 </head>
