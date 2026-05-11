@@ -1294,8 +1294,13 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
         issues.append("PNG folder missing")
     else:
         pngs = [f for f in _list_children(drive, png_folder_id) if f.get("name", "").lower().endswith(".png")]
-        if len(pngs) < 5:
-            issues.append(f"Too few PNGs: {len(pngs)} found, expected ≥ 5")
+        if len(pngs) == 0 or len(pngs) % 5 != 0:
+            issues.append(f"PNG count = {len(pngs)}, expected multiple of 5 (5/10/15)")
+        _tset = os.environ.get("MANUAL_TEMPLATE_SET", "").strip().lower()
+        if _tset == "single":
+            _prefixes = sorted({p["name"].split("_")[0] for p in pngs if "_" in p.get("name", "")})
+            if len(_prefixes) > 1:
+                issues.append(f"multiple variant families in single mode: {_prefixes}")
         tiny = [p["name"] for p in pngs if int(p.get("size") or 0) < 10_000]
         if tiny:
             issues.append(f"Suspiciously small PNGs (blank slide?): {', '.join(tiny)}")

@@ -49,8 +49,10 @@ def _local_font_face_css() -> str:
     fonts_dir = Path(__file__).parent / "fonts"
     anton = fonts_dir / "Anton-Regular.woff2"
     rc = fonts_dir / "RobotoCondensed-Regular.woff2"
+    rc_bold = fonts_dir / "RobotoCondensed-Bold.woff2"
     if not anton.exists() or not rc.exists():
         return ""
+    _rc_bold_src = f"url('file://{rc_bold}') format('woff2')" if rc_bold.exists() else f"url('file://{rc}') format('woff2')"
     return f"""@font-face {{
   font-family: 'Anton'; font-weight: 400; font-style: normal;
   src: url('file://{anton}') format('woff2');
@@ -65,7 +67,7 @@ def _local_font_face_css() -> str:
 }}
 @font-face {{
   font-family: 'Roboto Condensed'; font-weight: 700; font-style: normal;
-  src: url('file://{rc}') format('woff2');
+  src: {_rc_bold_src};
 }}
 """
 
@@ -5239,6 +5241,8 @@ def build_opc_from_slide_plan(content, slug, work_dir, media_paths=None):
     _tset = os.environ.get("MANUAL_TEMPLATE_SET", "").strip().lower()
     _proof_variant = os.environ.get("OPC_PROOF_VARIANT", "v2").strip().lower()
     if _proof_variant not in ("v2", "v3"):
+        if _proof_variant == "v1":
+            print(f"  [SH-154] OPC_PROOF_VARIANT=v1 not supported in smart-plan path — using v2")
         _proof_variant = "v2"
     _emit_v2 = _tset != "single" or _proof_variant == "v2"
     _emit_v3 = _tset != "single" or _proof_variant == "v3"
