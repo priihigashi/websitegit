@@ -14,7 +14,7 @@ async function run(htmlPath, outputDir) {
   fs.mkdirSync(outputDir, { recursive: true });
   const base = path.basename(abs, '.html');
 
-  const browser = await chromium.launch({ headless: true, channel: 'chrome' });
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 1200, height: 1400 } });
   await page.goto(`file://${abs}`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1800);
