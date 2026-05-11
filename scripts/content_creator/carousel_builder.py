@@ -1273,6 +1273,13 @@ Rules:
 - Stats MUST use ranges (e.g. "$5K-$15K") not exact averages — safer and more honest
 - Every stat must name its source in slide2_label or on the sources slide
 - Headlines in ALL CAPS
+- NARRATIVE ARC — NON-NEGOTIABLE: ALL 5 slides must tell ONE connected story. They are chapters, not 5 separate tips.
+  SEQUENCE: cover sets the risk/hook → slide2_stat quantifies THAT risk → slide3_items are 3 causes/red-flags OF that same risk → slide4 is the ONE fix for that risk → sources back up the claims.
+  THREAD TEST: if you remove the cover slide, can someone read slides 2-4 and still know they're about the SAME topic? If no, rewrite.
+  - slide2_headline MUST name the same risk/material/situation as the cover headline (e.g. cover = "3 OUTDOOR KITCHEN RISKS" → slide2_headline = "WHAT THESE COST" or "THE REAL PRICE TAG")
+  - slide3_items are the 3 items/causes/red-flags introduced on the cover — NOT 3 different tips on a different subject
+  - slide4 addresses specifically what the homeowner does to avoid the risk introduced on slide 1
+  BANNED: slides that each cover a different sub-topic (e.g. slide 2 = permits, slide 3 = materials, slide 4 = timeline — these feel like 3 different posts crammed together)
 - Caption hook = first line visible in feed — MUST contain at least one of: a specific number, a dollar amount, or a named consequence/risk. BANNED: generic openers like "Here's what you need to know", "Let's talk about", "Important update", "Things homeowners should know". GOOD: "Most homeowners spend $12K-$20K replacing tile they could have saved." | "3 red flags your contractor won't mention until after you sign." | "This one permit mistake delays your project 6-8 weeks."
 - NEVER promise what OPC does for clients
 - slides[]: emit context-image for at least 2 of the 3 middle slides — never all none
