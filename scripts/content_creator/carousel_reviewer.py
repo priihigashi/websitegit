@@ -400,6 +400,28 @@ def check_html_placeholders(html_path: str) -> list[str]:
             if m_v2 and "#0A0A0A" in m_v2.group(1):
                 issues.append("OPC readability miss: v2 cover headline uses near-black color over dark overlay.")
 
+    # ── Structural content checks ─────────────────────────────────────────────
+    # Cover headline has text (OPC: .headline on .slide-cover; Brazil: .cover-hl)
+    hl_matches = re.findall(
+        r'class="(?:headline|cover-hl)"[^>]*>(.*?)</div>', html, re.DOTALL
+    )
+    has_hl = any(re.sub(r'<[^>]+>', '', h).strip() for h in hl_matches)
+    if not has_hl:
+        issues.append("Cover headline empty — carousel has no visible title")
+
+    # Sources slide present
+    if "slide-sources" not in html:
+        issues.append("Sources slide missing — no attribution/CTA slide")
+
+    # CTA present (OPC: .save-cta, Brazil: .cta-pt)
+    if "save-cta" not in html and "cta-pt" not in html:
+        issues.append("CTA missing on sources slide — no 'save this' prompt")
+
+    # <img> tags with empty src attribute
+    empty_src = re.findall(r'<img\s[^>]*src\s*=\s*["\'\']["\'\'][^>]*>', html)
+    if empty_src:
+        issues.append(f"{len(empty_src)} <img> tag(s) have empty src — broken image slot(s)")
+
     return issues
 
 
@@ -446,6 +468,258 @@ def check_motion_folder(motion_dir: str) -> list[str]:
     if not mp4s:
         return ["No MP4 files in motion folder — motion render failed"]
     return []
+
+
+# ─── Placeholder auto-fix: Wikimedia fetch + HTML patch + re-render + Drive upload ──
+
+def _fetch_wikimedia_image(search_query: str, dest_path) -> bool:
+    """Download a CC-licensed image from Wikimedia Commons.
+    Mirrors carousel_builder._fetch_person_photo — no API key needed.
+    Returns True on success. All exceptions caught.
+    """
+    dest_path = Path(dest_path)
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    if dest_path.exists() and dest_path.stat().st_size > 1000:
+        return True
+    try:
+        q = urllib.parse.quote_plus(search_query)
+        search_url = (
+            f"https://commons.wikimedia.org/w/api.php?action=query&list=search"
+            f"&srsearch={q}&srnamespace=6&srlimit=8&format=json&srprop="
+        )
+        req = urllib.request.Request(
+            search_url,
+            headers={"User-Agent": "oak-park-carousel/1.0 (github.com/priihigashi)"},
+        )
+        data = json.loads(urllib.request.urlopen(req, timeout=10).read())
+        for hit in data.get("query", {}).get("search", [])[:8]:
+            title = hit.get("title", "")
+            if not any(title.lower().endswith(ext) for ext in (".jpg", ".jpeg", ".png")):
+                continue
+            enc = urllib.parse.quote(title.replace(" ", "_"))
+            info_url = (
+                f"https://commons.wikimedia.org/w/api.php?action=query"
+                f"&titles={enc}&prop=imageinfo&iiprop=url&iiurlwidth=600&format=json"
+            )
+            info = json.loads(urllib.request.urlopen(
+                urllib.request.Request(
+                    info_url, headers={"User-Agent": "oak-park-carousel/1.0"}
+                ),
+                timeout=10,
+            ).read())
+            for page in info.get("query", {}).get("pages", {}).values():
+                ii = (page.get("imageinfo") or [{}])[0]
+                img_url = ii.get("thumburl") or ii.get("url", "")
+                if not img_url:
+                    continue
+                with urllib.request.urlopen(img_url, timeout=15) as r:
+                    raw = r.read()
+                if len(raw) < 2000:
+                    continue
+                dest_path.write_bytes(raw)
+                print(f"    [wiki-fix] {dest_path.name} ({len(raw)//1024}KB) <- {title[:55]}")
+                return True
+        print(f"    [wiki-fix] No Wikimedia result: {search_query[:60]}")
+    except Exception as e:
+        print(f"    [wiki-fix] Fetch failed ({search_query[:40]}): {e}")
+    return False
+
+
+def _patch_html_placeholders(html_path: str, work_dir) -> tuple:
+    """Patch [ IMG: query ] and @NAME_STICKER placeholders with Wikimedia images.
+
+    Covers both execution paths:
+      Path A (local): html_path is in WORK_DIR, work_dir = post_dir
+      Path B (Drive): html_path is a /tmp download, work_dir = scratch dir
+
+    Returns (patched: bool, fixes: list[str], remaining: list[str]).
+    patched=True means HTML was modified on disk and re-render is needed.
+    """
+    html_file = Path(html_path)
+    if not html_file.exists():
+        return False, [], []
+    html = html_file.read_text(encoding="utf-8", errors="ignore")
+    original = html
+    img_dir = Path(work_dir) / "resources" / "images"
+    fixes = []
+    remaining = []
+
+    # Fix 1: [ IMG: query ] context-image slots
+    # HTML pattern: <span class="ctx-query">[ IMG: Câmara dos Deputados ]</span>
+    img_re = re.compile(r"\[ IMG: ([^\]]{3,120}) \]")
+    for idx, m in enumerate(img_re.finditer(html)):
+        query = m.group(1).strip()
+        safe = re.sub(r"[^\w]", "_", query.lower())[:40] + f"_{idx}.jpg"
+        dest = img_dir / safe
+        if _fetch_wikimedia_image(query, dest):
+            rel = f"resources/images/{safe}"
+            old = f'<span class="ctx-query">[ IMG: {query} ]</span>'
+            new = (
+                f'<img src="{rel}" alt="{query}" '
+                f'style="width:100%;height:100%;object-fit:cover;border-radius:4px;">'
+            )
+            html = html.replace(old, new, 1)
+            fixes.append(f"IMG '{query[:50]}' -> Wikimedia")
+        else:
+            remaining.append(
+                f"CONTEXT-IMAGE slot not auto-resolved (no Wikimedia match): "
+                f"'[ IMG: {query[:50]} ]' — source manually"
+            )
+
+    # Fix 2: @NAME_STICKER Brazil profile sticker slots
+    # HTML pattern: <div class="sticker-placeholder">@LASTNAME_STICKER</div>
+    sticker_re = re.compile(r"@(\w+)_STICKER")
+    for m in sticker_re.finditer(html):
+        raw_name = m.group(1)
+        query = raw_name.replace("_", " ")
+        safe = re.sub(r"[^\w]", "_", query.lower())[:30] + "_sticker.jpg"
+        dest = img_dir / safe
+        if _fetch_wikimedia_image(query, dest):
+            rel = f"resources/images/{safe}"
+            old_slot = (
+                f'<div class="sticker-slot">'
+                f'<div class="sticker-placeholder">@{raw_name}_STICKER</div></div>'
+            )
+            new_slot = (
+                f'<div class="sticker-slot sticker-photo" '
+                f'style="background-image:url(\'{rel}\');background-size:cover;'
+                f'background-position:center top;border:none;border-radius:4px;"></div>'
+            )
+            html = html.replace(old_slot, new_slot, 1)
+            fixes.append(f"Sticker '@{raw_name}_STICKER' -> Wikimedia")
+        else:
+            remaining.append(
+                f"STICKER placeholder not auto-resolved (no Wikimedia match): "
+                f"'@{raw_name}_STICKER' — source headshot manually"
+            )
+
+    if html != original:
+        html_file.write_text(html, encoding="utf-8")
+        return True, fixes, remaining
+    return False, fixes, remaining
+
+
+def _replace_pngs_in_drive(folder_id: str, local_png_dir, drive,
+                            skip_cover: bool = False) -> None:
+    """Delete all PNGs from folder_id and re-upload from local_png_dir.
+    skip_cover=True preserves cover in motion/ so existing cover MP4 still aligns.
+    """
+    from googleapiclient.http import MediaFileUpload
+    try:
+        existing = drive.files().list(
+            q=f"\'{folder_id}\' in parents and mimeType='image/png' and trashed=false",
+            fields="files(id)",
+            supportsAllDrives=True, includeItemsFromAllDrives=True, corpora="allDrives",
+        ).execute().get("files", [])
+        for f in existing:
+            drive.files().delete(fileId=f["id"], supportsAllDrives=True).execute()
+    except Exception as e:
+        print(f"    [rerender] PNG delete failed: {e}")
+    for p in sorted(Path(local_png_dir).glob("*.png")):
+        if skip_cover and "_01_cover" in p.name:
+            continue
+        try:
+            drive.files().create(
+                body={"name": p.name, "parents": [folder_id]},
+                media_body=MediaFileUpload(str(p), mimetype="image/png"),
+                supportsAllDrives=True, fields="id",
+            ).execute()
+        except Exception as e:
+            print(f"    [rerender] PNG upload failed ({p.name}): {e}")
+
+
+def _rerender_and_upload(html_path: str, png_dir: str,
+                         version_folder_id: str, motion_folder_id: str = "") -> bool:
+    """Re-render PNGs from a patched HTML file and push them back to Drive.
+
+    Runs on BOTH execution paths:
+      Path A (local WORK_DIR): version_folder_id from result dict
+      Path B (Drive manual):   version_folder_id = folder under review
+
+    Steps:
+      1. Re-run export_variants.js (Playwright) -> local png_dir
+      2. Upload patched cover.html to version_folder root
+      3. Replace PNGs in version_folder/png/ subfolder
+      4. Replace non-cover PNGs in motion_folder (preserves MP4s/GIFs)
+
+    Returns True if re-render succeeded.
+    Drive failures are logged but non-fatal — re-render success is the key signal.
+    """
+    export_js = os.environ.get(
+        "EXPORT_SCRIPT", str(Path(__file__).parent / "export_variants.js")
+    )
+    if not Path(export_js).exists():
+        print(f"    [rerender] export_variants.js not found at {export_js} — skipping")
+        return False
+
+    os.makedirs(png_dir, exist_ok=True)
+    try:
+        res = subprocess.run(
+            ["node", export_js, html_path, png_dir],
+            capture_output=True, text=True, timeout=120,
+        )
+        if res.returncode != 0:
+            print(f"    [rerender] FAILED: {res.stderr[:300]}")
+            return False
+        last_line = res.stdout.strip().split("\n")[-1]
+        print(f"    [rerender] {last_line}")
+        for f in Path(png_dir).glob("blue_*"):
+            f.rename(f.parent / f.name.replace("blue_", "lime_"))
+    except Exception as e:
+        print(f"    [rerender] Error running export_variants.js: {e}")
+        return False
+
+    if not version_folder_id:
+        return True
+    try:
+        drive = _build_drive_service()
+        if not drive:
+            print("    [rerender] Drive service unavailable — patched assets not pushed to Drive")
+            return True
+
+        from googleapiclient.http import MediaInMemoryUpload
+
+        # Update cover.html at version folder root
+        html_bytes = Path(html_path).read_bytes()
+        existing_html = drive.files().list(
+            q=f"\'{version_folder_id}\' in parents and name='cover.html' and trashed=false",
+            fields="files(id)",
+            supportsAllDrives=True, includeItemsFromAllDrives=True, corpora="allDrives",
+        ).execute().get("files", [])
+        if existing_html:
+            drive.files().update(
+                fileId=existing_html[0]["id"],
+                media_body=MediaInMemoryUpload(html_bytes, mimetype="text/html"),
+                supportsAllDrives=True,
+            ).execute()
+        else:
+            drive.files().create(
+                body={"name": "cover.html", "parents": [version_folder_id]},
+                media_body=MediaInMemoryUpload(html_bytes, mimetype="text/html"),
+                supportsAllDrives=True, fields="id",
+            ).execute()
+        print("    [rerender] Drive: cover.html updated")
+
+        # Replace PNGs in png/ subfolder
+        png_folder_id = _find_folder_id(drive, version_folder_id, "png")
+        if not png_folder_id:
+            png_folder_id = drive.files().create(
+                body={"name": "png", "mimeType": "application/vnd.google-apps.folder",
+                      "parents": [version_folder_id]},
+                supportsAllDrives=True, fields="id",
+            ).execute()["id"]
+        _replace_pngs_in_drive(png_folder_id, Path(png_dir), drive, skip_cover=False)
+        print("    [rerender] Drive: png/ subfolder updated")
+
+        # Replace non-cover PNGs in motion/ subfolder (keep MP4s/GIFs)
+        if motion_folder_id:
+            _replace_pngs_in_drive(motion_folder_id, Path(png_dir), drive, skip_cover=True)
+            print("    [rerender] Drive: motion/ non-cover PNGs updated")
+
+    except Exception as e:
+        print(f"    [rerender] Drive upload failed (non-fatal): {e}")
+
+    return True
 
 
 def _extract_drive_id(text: str) -> str:
@@ -971,6 +1245,33 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
             tmp.write_text(html_text, encoding="utf-8")
             _tmp_html = tmp
             issues.extend(check_html_placeholders(str(tmp)))
+            # Placeholder auto-fix (Path B — Drive folder review)
+            # IMG/STICKER placeholders -> Wikimedia -> HTML patch -> re-render -> Drive upload.
+            if not DRY_RUN:
+                _b_work = tmp.parent / f"pfx_work_{folder_id[:12]}"
+                _b_work.mkdir(exist_ok=True)
+                _b_patched, _b_fixes, _b_remaining = _patch_html_placeholders(
+                    str(tmp), _b_work
+                )
+                if _b_fixes:
+                    issues.append(
+                        f"[auto-fixed] {len(_b_fixes)} placeholder(s) resolved via Wikimedia: "
+                        + "; ".join(_b_fixes[:3])
+                    )
+                issues.extend(_b_remaining)
+                if _b_patched:
+                    _b_motion = _find_folder_id(drive, folder_id, "motion")
+                    _b_re_ok = _rerender_and_upload(
+                        str(tmp),
+                        str(_b_work / "png"),
+                        folder_id,
+                        _b_motion,
+                    )
+                    if not _b_re_ok:
+                        issues.append(
+                            "Placeholder fix: HTML patched but re-render failed — "
+                            "PNGs in Drive may still show placeholders"
+                        )
             # SH-028: storytelling score on Drive path (mirrors check_built_post logic)
             if ANTHROPIC_KEY:
                 niche_guess = _infer_niche_from_folder(folder_name, input_ref or "")
@@ -1782,6 +2083,39 @@ def check_built_post(result: dict) -> dict:
             "caption.txt missing — no Instagram caption was generated; "
             "post cannot be scheduled to Buffer (check generate_caption() call in main.py)"
         )
+
+    # 5.5. Placeholder auto-fix (Path A — local WORK_DIR)
+    # IMG/STICKER placeholders → Wikimedia fetch → HTML patch → re-render → Drive upload.
+    # Runs unconditionally (not gated on FIX_MODE) — placeholders are always broken.
+    if not DRY_RUN:
+        _ph_html = html_local if html_local.exists() else None
+        if not _ph_html:
+            for _c in Path(work_dir_env).glob(f"**/{post_id}/cover.html"):
+                _ph_html = _c
+                break
+        if _ph_html and Path(_ph_html).exists():
+            _ph_work = Path(_ph_html).parent
+            _ph_patched, _ph_fixes, _ph_remaining = _patch_html_placeholders(
+                str(_ph_html), _ph_work
+            )
+            if _ph_fixes:
+                all_issues.append(
+                    f"[auto-fixed] {len(_ph_fixes)} placeholder(s) resolved via Wikimedia: "
+                    + "; ".join(_ph_fixes[:3])
+                )
+            all_issues.extend(_ph_remaining)
+            if _ph_patched:
+                _re_ok = _rerender_and_upload(
+                    str(_ph_html),
+                    str(_ph_work / "png"),
+                    result.get("version_folder_id") or result.get("static_folder_id", ""),
+                    result.get("motion_folder_id", ""),
+                )
+                if not _re_ok:
+                    all_issues.append(
+                        "Placeholder fix: HTML patched but re-render failed — "
+                        "PNGs in Drive may still show placeholders"
+                    )
 
     # SH-139/P2 — extract slide_purpose declarations BEFORE coherence scoring so
     # check_text_quality() can pass them to the purpose-aware Coherence scorer (SH-142).
