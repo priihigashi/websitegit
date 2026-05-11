@@ -1577,15 +1577,16 @@ def process_one_topic(topic_entry, run_date, drive):
         return None
 
     # SH-159: post-render visual QA gate (OPC only). Blocks BEFORE motion/upload/email if:
-    #   - PNG count is not exactly 5 (proof rerun must be a clean 5-slide deck)
-    #   - More than one variant family prefix exists (cream + lime mix)
+    #   - PNG count is not a valid multiple of 5 (5, 10, or 15 for 1, 2, or 3 variants)
+    #   - single mode has more than 1 variant family (SH-154 should have prevented this)
     if niche == "opc":
+        _sh159_tset = os.environ.get("MANUAL_TEMPLATE_SET", "").strip().lower()
         _png_files = sorted(p.name for p in png_dir.glob("*_html.png"))
         _prefixes = sorted({p.split("_")[0] for p in _png_files if "_" in p})
         _qa_issues = []
-        if len(_png_files) != 5:
-            _qa_issues.append(f"PNG count = {len(_png_files)}, expected exactly 5")
-        if len(_prefixes) > 1:
+        if len(_png_files) == 0 or len(_png_files) % 5 != 0:
+            _qa_issues.append(f"PNG count = {len(_png_files)}, expected multiple of 5 (5/10/15)")
+        if _sh159_tset == "single" and len(_prefixes) > 1:
             _qa_issues.append(f"multiple variant families found: {_prefixes} — single mode requires one")
         if _qa_issues:
             print(f"  [SH-159] post-render visual QA FAILED — {len(_qa_issues)} issue(s):")
@@ -1600,7 +1601,8 @@ def process_one_topic(topic_entry, run_date, drive):
                 fatal=False,
             )
             return None
-        print(f"  [SH-159] post-render visual QA ✅ — {len(_png_files)} PNGs, single family '{_prefixes[0] if _prefixes else '?'}'")
+        _variant_label = f"{len(_prefixes)} famil{'y' if len(_prefixes)==1 else 'ies'}: {_prefixes}"
+        print(f"  [SH-159] post-render visual QA ✅ — {len(_png_files)} PNGs, {_variant_label}")
 
     # 4. Render motion — RENDERER CASCADE: Remotion → Playwright → Ken Burns
     #    Each tier is a fallback for the one above. Motion is default-ON; Ken Burns is the floor.

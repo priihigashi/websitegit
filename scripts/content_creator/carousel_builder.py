@@ -5007,8 +5007,21 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
             + sources_block + "\n"
         )
 
-    v2 = variant_block("v2", "#0A0A0A", "#CBCC10", "#CBCC10")
-    v3 = variant_block("v3", "#F0EBE3", "#F0EBE3", "#F0EBE3")
+    # SH-154 (legacy path mirror): single-variant lock — same logic as build_opc_from_slide_plan.
+    # Default MANUAL_TEMPLATE_SET=single emits ONE variant for a clean 5-slide review email.
+    # Non-single runs emit all 3 (v1 lime-bg + v2 black-bg + v3 cream-bg) = 15 PNGs.
+    _tset = os.environ.get("MANUAL_TEMPLATE_SET", "").strip().lower()
+    _proof_variant = os.environ.get("OPC_PROOF_VARIANT", "v2").strip().lower()
+    if _proof_variant not in ("v1", "v2", "v3"):
+        _proof_variant = "v2"
+    _emit_v1 = _tset != "single" or _proof_variant == "v1"
+    _emit_v2 = _tset != "single" or _proof_variant == "v2"
+    _emit_v3 = _tset != "single" or _proof_variant == "v3"
+    if _tset == "single":
+        print(f"  [SH-154-legacy] single-variant lock — emitting {_proof_variant} only")
+    v1 = variant_block("v1", "#CBCC10", "#CBCC10", "#CBCC10") if _emit_v1 else ""
+    v2 = variant_block("v2", "#0A0A0A", "#CBCC10", "#CBCC10") if _emit_v2 else ""
+    v3 = variant_block("v3", "#F0EBE3", "#F0EBE3", "#F0EBE3") if _emit_v3 else ""
 
     html_path = Path(work_dir) / "cover.html"
 
@@ -5026,6 +5039,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
 </style>
 </head>
 <body>
+{v1}
 {v2}
 {v3}
 </body>
