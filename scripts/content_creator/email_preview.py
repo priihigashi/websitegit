@@ -150,6 +150,7 @@ def _build_one_carousel_html(post: dict, slides: list[dict]) -> str:
     reel_link   = post.get("reel_link", "")
     folder_id = _extract_folder_id(static_link)
     clip_failures = post.get("clip_failures") or {}
+    reviewer_issues = post.get("_review_issues") or []
     # FIX 3: caption data
     caption_body = post.get("caption", "")
     in_post_hashtags = post.get("in_post_hashtags", "")
@@ -193,6 +194,15 @@ def _build_one_carousel_html(post: dict, slides: list[dict]) -> str:
           {f'<div style="font-family:Arial,sans-serif;color:#aaaaaa;font-size:13px;margin-top:10px;">{in_post_hashtags}</div>' if in_post_hashtags else ''}
           {f'<div style="margin-top:12px;"><div style="font-family:Arial,sans-serif;color:#4ade80;font-size:12px;font-weight:700;">First comment hashtags:</div><div style="font-family:monospace;color:#aaaaaa;font-size:12px;line-height:1.6;margin-top:4px;white-space:pre-wrap;">{first_comment_hashtags}</div></div>' if first_comment_hashtags else ''}
         </div>''' if caption_body else ''}
+
+        {f'''
+        <div style="background:#0d0d1a;border-left:3px solid #7c83fd;padding:14px 16px;margin-top:20px;border-radius:4px;">
+          <div style="font-family:Arial,sans-serif;color:#a5aaff;font-size:13px;font-weight:700;">🔍 REVIEWER NOTES ({len(reviewer_issues)})</div>
+          <div style="font-family:monospace;color:#c8caff;font-size:12px;line-height:1.9;margin-top:8px;">
+            {"<br/>".join("· " + issue for issue in reviewer_issues[:12])}
+            {("<br/>· ... +" + str(len(reviewer_issues)-12) + " more") if len(reviewer_issues) > 12 else ""}
+          </div>
+        </div>''' if reviewer_issues else ''}
 
         <div style="background:#111;border-left:3px solid #CBCC10;padding:14px 16px;margin-top:20px;border-radius:4px;">
           <div style="font-family:Arial,sans-serif;color:#CBCC10;font-size:13px;font-weight:700;">Reply commands</div>

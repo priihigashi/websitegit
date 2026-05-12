@@ -136,6 +136,7 @@ def _filter_results_for_email(results: list, label: str = "") -> tuple[list, lis
         for issue in review.get("issues", []):
             print(f"           ⚠ {issue}")
         if review.get("passed"):
+            r["_review_issues"] = review.get("issues", [])  # carry concerns to email even when passing
             passing.append(r)
         else:
             r["_review_issues"] = review.get("issues", [])
