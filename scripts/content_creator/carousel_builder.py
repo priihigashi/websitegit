@@ -29,6 +29,10 @@ INFSH_KEY      = os.environ.get("PRI_OP_INFSH_API_KEY", "")
 # News purposes: claim | number | evidence | opposition | implication | sources
 # 5-slide News compression (pilot-safe per v3-final doc): implication folded into slide 4.
 SLIDE_PURPOSE_PILOT = os.environ.get("SLIDE_PURPOSE_PILOT", "0") == "1"
+
+# SH-147: generation trace — populated by _claude_with_fallback() on each success.
+# main.py reads this after generate_carousel_content() to attach to the result dict.
+_gen_trace: dict = {"provider": "unknown", "model": "unknown", "fallback_used": False}
 SLIDE_PURPOSE_OPC_BY_INDEX = {
     1: "hook", 2: "cost", 3: "teach", 4: "apply", 5: "sources",
 }
@@ -720,10 +724,23 @@ def _opc_photo_query(query: str, niche: str) -> str:
 def _claude_with_fallback(prompt, *, max_tokens, timeout=60, context="", model="claude-sonnet-4-6"):
     """Try the Claude→OpenAI→Gemini cascade; if the shared module is unavailable,
     fall back to the raw HTTP call this script originally used."""
+    import sys as _sys
     if _llm_text_cascade and model == "claude-sonnet-4-6":
         try:
-            return _llm_text_cascade(prompt, model_tier="sonnet",
-                                     max_tokens=max_tokens, context=context)
+            result = _llm_text_cascade(prompt, model_tier="sonnet",
+                                       max_tokens=max_tokens, context=context)
+            # SH-147: read which tier actually succeeded from _llm_fallback module state
+            _fb = _sys.modules.get("_llm_fallback")
+            _prov = (_fb._last_provider.copy() if _fb and hasattr(_fb, "_last_provider") else {})
+            _gen_trace.update({
+                "provider": _prov.get("provider", "cascade"),
+                "model": _prov.get("model", "unknown"),
+                "fallback_used": _prov.get("tier", 1) > 1,
+                "context": context,
+            })
+            print(f"  [gen:{context or 'content'}] generated_by={_gen_trace['provider']} "
+                  f"model={_gen_trace['model']} fallback={_gen_trace['fallback_used']}")
+            return result
         except Exception as e:
             print(f"  [carousel_builder] cascade failed ({e}) — trying raw Claude HTTP")
     payload = json.dumps({
@@ -737,6 +754,8 @@ def _claude_with_fallback(prompt, *, max_tokens, timeout=60, context="", model="
                  "content-type": "application/json"},
     )
     resp = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
+    _gen_trace.update({"provider": "claude-direct", "model": model, "fallback_used": True, "context": context})
+    print(f"  [gen:{context or 'content'}] generated_by=claude-direct model={model}")
     return resp["content"][0]["text"]
 
 OPC_TEMPLATE = "tip"

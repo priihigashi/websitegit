@@ -151,10 +151,44 @@ def _build_one_carousel_html(post: dict, slides: list[dict]) -> str:
     folder_id = _extract_folder_id(static_link)
     clip_failures = post.get("clip_failures") or {}
     reviewer_issues = post.get("_review_issues") or []
+    generation_trace = post.get("_generation_trace") or {}     # SH-147
+    storytelling_scores = post.get("_storytelling_scores") or {}  # SH-147
     # FIX 3: caption data
     caption_body = post.get("caption", "")
     in_post_hashtags = post.get("in_post_hashtags", "")
     first_comment_hashtags = post.get("first_comment_hashtags", "")
+
+    # SH-147: pre-compute story quality + model trace blocks (avoids backslash-in-fstring issue)
+    if storytelling_scores:
+        _st_overall = storytelling_scores.get("overall", "?")
+        _st_summary = storytelling_scores.get("summary", "")[:160]
+        _st_slide_lines = "<br/>".join(
+            "· slide " + str(s.get("slide", "?")) + ": " + str(s.get("score", "?")) + "/100 — " + str(s.get("reason", ""))[:80]
+            for s in (storytelling_scores.get("slide_scores") or [])[:8]
+        )
+        _story_quality_block = (
+            f'<div style="background:#0d1a0a;border-left:3px solid #86efac;padding:14px 16px;margin-top:20px;border-radius:4px;">'
+            f'<div style="font-family:Arial,sans-serif;color:#86efac;font-size:13px;font-weight:700;">&#128214; STORY QUALITY &#8212; {_st_overall} / 100</div>'
+            f'<div style="font-family:Arial,sans-serif;color:#d0d0d0;font-size:13px;line-height:1.6;margin-top:8px;">{_st_summary}</div>'
+            f'<div style="font-family:monospace;color:#aaaaaa;font-size:12px;line-height:1.8;margin-top:8px;">{_st_slide_lines}</div>'
+            f'</div>'
+        )
+    else:
+        _story_quality_block = ""
+
+    if generation_trace:
+        _gt_provider = generation_trace.get("provider", "unknown")
+        _gt_model = generation_trace.get("model", "unknown")
+        _gt_fallback = "yes &#x26A0;&#xFE0F;" if generation_trace.get("fallback_used") else "no &#x2713;"
+        _model_trace_block = (
+            f'<div style="background:#1a1005;border-left:3px solid #f59e0b;padding:14px 16px;margin-top:20px;border-radius:4px;">'
+            f'<div style="font-family:Arial,sans-serif;color:#fbbf24;font-size:13px;font-weight:700;">&#9881;&#65039; MODEL / BUILD TRACE</div>'
+            f'<div style="font-family:monospace;color:#d0d0d0;font-size:12px;line-height:1.8;margin-top:8px;">'
+            f'generated_by: {_gt_provider}<br/>model: {_gt_model}<br/>fallback_used: {_gt_fallback}'
+            f'</div></div>'
+        )
+    else:
+        _model_trace_block = ""
 
     blocks = []
     for i, s in enumerate(slides, start=1):
@@ -203,6 +237,10 @@ def _build_one_carousel_html(post: dict, slides: list[dict]) -> str:
             {("<br/>· ... +" + str(len(reviewer_issues)-12) + " more") if len(reviewer_issues) > 12 else ""}
           </div>
         </div>''' if reviewer_issues else ''}
+
+        {_story_quality_block}
+
+        {_model_trace_block}
 
         <div style="background:#111;border-left:3px solid #CBCC10;padding:14px 16px;margin-top:20px;border-radius:4px;">
           <div style="font-family:Arial,sans-serif;color:#CBCC10;font-size:13px;font-weight:700;">Reply commands</div>

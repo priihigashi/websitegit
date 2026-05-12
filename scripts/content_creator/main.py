@@ -137,9 +137,11 @@ def _filter_results_for_email(results: list, label: str = "") -> tuple[list, lis
             print(f"           ⚠ {issue}")
         if review.get("passed"):
             r["_review_issues"] = review.get("issues", [])  # carry concerns to email even when passing
+            r["_storytelling_scores"] = review.get("storytelling_scores", {})  # SH-147
             passing.append(r)
         else:
             r["_review_issues"] = review.get("issues", [])
+            r["_storytelling_scores"] = review.get("storytelling_scores", {})  # SH-147
             failed.append(r)
 
     if failed:
@@ -1429,6 +1431,12 @@ def process_one_topic(topic_entry, run_date, drive):
         print("  FAILED: content generation")
         return None
 
+    # SH-147: capture which provider generated this content
+    import sys as _sys
+    _cb = _sys.modules.get("carousel_builder")
+    if _cb and hasattr(_cb, "_gen_trace"):
+        content["_generation_trace"] = dict(_cb._gen_trace)
+
     if content and template_key:
         content["_template_key"] = template_key
 
@@ -2117,6 +2125,8 @@ def process_one_topic(topic_entry, run_date, drive):
         "caption": caption_result.get("caption", ""),
         "in_post_hashtags": caption_result.get("in_post_hashtags", ""),
         "first_comment_hashtags": caption_result.get("first_comment_hashtags", ""),
+        # SH-147: model trace — which provider generated this carousel's content
+        "_generation_trace": content.get("_generation_trace", {}),
     }
 
 

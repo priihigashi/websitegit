@@ -108,6 +108,11 @@ def _try_gemini(prompt: str, *, model: str, max_tokens: int, system: Optional[st
     return resp.text or ""
 
 
+# SH-147: module-level provider trace — updated by llm_text() on each success.
+# Read via sys.modules['_llm_fallback']._last_provider after any llm_text() call.
+_last_provider: dict = {"provider": "unknown", "model": "unknown", "tier": -1}
+
+
 def llm_text(
     prompt: str,
     *,
@@ -128,6 +133,8 @@ def llm_text(
     try:
         out = _try_claude(prompt, model=models["claude"], max_tokens=max_tokens, system=system, temperature=temperature)
         if out and out.strip():
+            _last_provider.update({"provider": "claude", "model": models["claude"], "tier": 1})
+            print(f"  [llm_text] ✓ generated_by=claude model={models['claude']}")
             return out
         raise RuntimeError("Claude returned empty response")
     except Exception as e:
@@ -144,6 +151,8 @@ def llm_text(
     try:
         out = _try_openai(prompt, model=models["openai"], max_tokens=max_tokens, system=system, temperature=temperature)
         if out and out.strip():
+            _last_provider.update({"provider": "openai", "model": models["openai"], "tier": 2})
+            print(f"  [llm_text] ✓ generated_by=openai model={models['openai']} (fallback tier 2)")
             return out
         raise RuntimeError("OpenAI returned empty response")
     except Exception as e:
@@ -160,6 +169,8 @@ def llm_text(
     try:
         out = _try_gemini(prompt, model=models["gemini"], max_tokens=max_tokens, system=system, temperature=temperature)
         if out and out.strip():
+            _last_provider.update({"provider": "gemini", "model": models["gemini"], "tier": 3})
+            print(f"  [llm_text] ✓ generated_by=gemini model={models['gemini']} (fallback tier 3)")
             return out
         raise RuntimeError("Gemini returned empty response")
     except Exception as e:

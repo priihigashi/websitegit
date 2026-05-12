@@ -154,6 +154,15 @@ jobs:
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      - name: Fallback module import smoke test (SH-147)
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, 'scripts/capture')
+          from _llm_fallback import llm_text, llm_image, llm_vision
+          print('fallback import ok — llm_text llm_image llm_vision available')
+          "
+
       - name: Pre-flight credit check (SH-021)
         env:
           CLAUDE_KEY_4_CONTENT:      ${{ secrets.CLAUDE_KEY_4_CONTENT }}
