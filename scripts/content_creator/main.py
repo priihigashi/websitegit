@@ -84,16 +84,20 @@ TEST_OUTPUT_FOLDER = os.environ.get("TEST_OUTPUT_FOLDER", "").strip()
 
 
 # SH-048: alert digest — collect all failures, send ONE email at run end
-_PENDING_ALERTS: list[str] = []
+# Each entry is a (msg, level) tuple. level = "warning" | "error"
+_PENDING_ALERTS: list[tuple[str, str]] = []
 _PIPELINE_FATAL = False
 
 
-def _send_alert(msg: str, fatal: bool = False):
+def _send_alert(msg: str, fatal: bool = False, level: str = "error"):
     """SH-048: Queue an alert. Flushed as one email at end of run by _flush_alerts().
+    level="warning" → heads-up email (no 🚨, friendly subject).
+    level="error"   → automation error email (🚨, full technical detail).
     Prevents inbox flood when multiple failures happen in the same pipeline run."""
     global _PIPELINE_FATAL
-    print(f"\n🔴 ALERT (queued): {msg}")
-    _PENDING_ALERTS.append(msg)
+    icon = "⚠️" if level == "warning" else "🔴"
+    print(f"\n{icon} ALERT (queued, {level}): {msg}")
+    _PENDING_ALERTS.append((msg, level))
     if fatal:
         _PIPELINE_FATAL = True
 
@@ -156,15 +160,44 @@ def _flush_alerts():
     if not _PENDING_ALERTS:
         return
     run_time = datetime.now(ET).strftime('%Y-%m-%d %H:%M ET')
-    subject = f"[content_creator] {len(_PENDING_ALERTS)} pipeline alert(s) — {run_time}"
-    body_lines = [
-        f"Content Creator pipeline encountered {len(_PENDING_ALERTS)} alert(s) in this run:\n",
-    ]
-    for i, alert in enumerate(_PENDING_ALERTS, 1):
-        body_lines.append(f"--- Alert {i} ---\n{alert}\n")
-    body_lines.append(
-        "\nCheck logs: https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/content_creator.yml"
-    )
+
+    warnings = [(m, l) for m, l in _PENDING_ALERTS if l == "warning"]
+    errors   = [(m, l) for m, l in _PENDING_ALERTS if l != "warning"]
+    only_warnings = len(errors) == 0
+
+    if only_warnings:
+        subject = f"OPC Pipeline — {len(warnings)} heads-up — {run_time}"
+        body_lines = [
+            "Hey Priscila — the pipeline ran fine today, but there's something to know:\n",
+        ]
+        for msg, _ in warnings:
+            body_lines.append(f"  • {msg}\n")
+        body_lines.append(
+            "\nNo action needed unless you want to fix it. Pipeline will keep running normally."
+            "\n\nLogs: https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/content_creator.yml"
+        )
+    else:
+        n_total = len(_PENDING_ALERTS)
+        subject = f"🚨 OPC Pipeline — {n_total} issue(s) need attention — {run_time}"
+        body_lines = [
+            f"The pipeline hit {len(errors)} error(s) this run"
+            + (f" (+ {len(warnings)} warning(s))" if warnings else "")
+            + ":\n",
+        ]
+        if errors:
+            body_lines.append("ERRORS (need attention):")
+            for i, (msg, _) in enumerate(errors, 1):
+                body_lines.append(f"  {i}. {msg}")
+            body_lines.append("")
+        if warnings:
+            body_lines.append("HEADS-UP (no action needed):")
+            for msg, _ in warnings:
+                body_lines.append(f"  • {msg}")
+            body_lines.append("")
+        body_lines.append(
+            "Logs: https://github.com/priihigashi/oak-park-ai-hub/actions/workflows/content_creator.yml"
+        )
+
     body = "\n".join(body_lines)
 
     # Route A: gh CLI (GitHub Actions environment)
@@ -2336,7 +2369,13 @@ def main():
                 "Pipeline may overfill OPC unless Brazil/USA topics are approved and eligible."
             )
             print(f"  WARNING: {msg}")
-            _send_alert(msg)
+            missing = " and ".join(s.split("<")[0].upper() for s in shortfall)
+            human_msg = (
+                f"No {missing} topics were ready to build today — only OPC ran. "
+                f"This is normal if you haven't approved any {missing} topics yet. "
+                f"To add one: go to Inspiration Library, find a {missing} topic, and set Status → Approved."
+            )
+            _send_alert(human_msg, level="warning")
             _niche_alert_sent = set(s.split("<")[0] for s in shortfall)  # e.g. {"brazil","usa"}
         else:
             _niche_alert_sent = set()
