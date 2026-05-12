@@ -4455,11 +4455,13 @@ def _opc_tip_context_slot(slide_num, fallback_label, opc_slides_meta, media_path
             f'<img src="{img_path}" alt="">'
             '</div>'
         )
-    # No image: log + omit the slot entirely. The slide layout falls back to its
-    # text-only design (text columns expand). Internal label is preserved in a
-    # data-attribute for log analysis, never rendered text.
+    # No image: omit the visual slot but keep data-query as a hidden metadata span
+    # so SH-157 can still validate the query string (empty slot ≠ missing metadata).
     print(f"  [SH-156] slide{slide_num}: no context image — omitting slot (was: {fallback_label})")
-    return f'<!-- context-img-slot omitted (slide {slide_num} — no image; would have been: {fallback_label}) -->'
+    return (
+        f'<span class="context-img-metadata" data-query="{query_attr}" style="display:none"></span>'
+        f'<!-- context-img-slot omitted (slide {slide_num} — no image) -->'
+    )
 
 
 def render_opc_tip_cover(content, v_class, *, hl_html, bg_photo_el):
