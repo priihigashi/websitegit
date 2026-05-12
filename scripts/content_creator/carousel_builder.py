@@ -43,31 +43,38 @@ SLIDE_PURPOSE_NEWS_6SLIDE_BY_INDEX = {
 
 
 def _local_font_face_css() -> str:
-    """Return @font-face declarations pointing to local WOFF2 files bundled in the repo.
-    Playwright renders via file:// which blocks Google Fonts HTTPS requests; local fonts
-    are the only reliable way to load Anton + Roboto Condensed in headless rendering."""
+    """Return @font-face declarations with base64-encoded WOFF2 fonts embedded inline.
+    Inline data URIs bypass Chromium's file:// cross-directory restriction entirely —
+    no network needed, no path-matching required, works in any headless context."""
+    import base64
     fonts_dir = Path(__file__).parent / "fonts"
     anton = fonts_dir / "Anton-Regular.woff2"
-    rc = fonts_dir / "RobotoCondensed-Regular.woff2"
-    rc_bold = fonts_dir / "RobotoCondensed-Bold.woff2"
+    rc    = fonts_dir / "RobotoCondensed-Regular.woff2"
+    rc_b  = fonts_dir / "RobotoCondensed-Bold.woff2"
     if not anton.exists() or not rc.exists():
+        print("  [font] WARNING: bundled WOFF2 not found — fonts will fall back to system")
         return ""
-    _rc_bold_src = f"url('file://{rc_bold}') format('woff2')" if rc_bold.exists() else f"url('file://{rc}') format('woff2')"
+
+    def _b64(p: Path) -> str:
+        return "data:font/woff2;base64," + base64.b64encode(p.read_bytes()).decode()
+
+    _rc_bold_uri = _b64(rc_b) if rc_b.exists() else _b64(rc)
+    print(f"  [font] Embedding Anton + Roboto Condensed (Regular/Bold) as inline base64 — Google Fonts bypassed")
     return f"""@font-face {{
   font-family: 'Anton'; font-weight: 400; font-style: normal;
-  src: url('file://{anton}') format('woff2');
+  src: url('{_b64(anton)}') format('woff2');
 }}
 @font-face {{
   font-family: 'Roboto Condensed'; font-weight: 300; font-style: normal;
-  src: url('file://{rc}') format('woff2');
+  src: url('{_b64(rc)}') format('woff2');
 }}
 @font-face {{
   font-family: 'Roboto Condensed'; font-weight: 400; font-style: normal;
-  src: url('file://{rc}') format('woff2');
+  src: url('{_b64(rc)}') format('woff2');
 }}
 @font-face {{
   font-family: 'Roboto Condensed'; font-weight: 700; font-style: normal;
-  src: {_rc_bold_src};
+  src: url('{_rc_bold_uri}') format('woff2');
 }}
 """
 
