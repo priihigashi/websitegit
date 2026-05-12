@@ -3428,7 +3428,10 @@ def fetch_all_media(content, niche, work_dir, brief="", topic=""):
                     _dl = _download_drive_photo(opc_hit["drive_url"], str(_img_dir / _try_fname))
                     _fname_key = (opc_hit.get("filename", "") or "").strip().lower()
                     _drive_key = (opc_hit.get("drive_url", "") or "").strip().lower()
-                    if _dl and _vision_accept(_dl, cq, f"slide{i}/opc_catalog", work_dir=work_dir, opc_strict=True):
+                    # Use post topic (not slide-specific cq) — Vision can answer "is this about
+                    # pergola work?" but cannot answer "does this show cost overrun?" (abstract).
+                    _cat_vision_q = (topic or cq).strip()
+                    if _dl and _vision_accept(_dl, _cat_vision_q, f"slide{i}/opc_catalog", work_dir=work_dir, opc_strict=True):
                         _set_slide(i, _dl, "opc_catalog", "real_photo", query=cq,
                                    service_type=opc_hit.get("service_type", ""))
                         accepted = True
@@ -3564,7 +3567,8 @@ def fetch_all_media(content, niche, work_dir, brief="", topic=""):
                         _dl = _download_drive_photo(_alt_hit["drive_url"], str(_img_dir / _try_alt_fname))
                         _fname_key = (_alt_hit.get("filename", "") or "").strip().lower()
                         _drive_key = (_alt_hit.get("drive_url", "") or "").strip().lower()
-                        if _dl and _vision_accept(_dl, cq_alt, f"slide{i}/opc_catalog_alt", work_dir=work_dir):
+                        _cat_alt_vision_q = (topic or cq_alt).strip()
+                        if _dl and _vision_accept(_dl, _cat_alt_vision_q, f"slide{i}/opc_catalog_alt", work_dir=work_dir):
                             _set_slide(i, _dl, "opc_catalog", "real_photo", query=cq_alt,
                                        service_type=_alt_hit.get("service_type", ""))
                             accepted = True
