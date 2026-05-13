@@ -4088,7 +4088,7 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
     n_slides = len(slides)   # middle slides only; cover=1, sources=n_slides+2
     total_slides = n_slides + 2  # cover + middles + sources
 
-    css = _brazil_motion_css()
+    css = _brazil_motion_css().format(SLIDE_INSET_PX=SLIDE_INSET_PX)
 
     def esc(s):
         return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
@@ -4103,10 +4103,44 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
         rel_clip = os.path.relpath(clip_path, work_dir) if clip_path else None
         html_body = ""
 
-        # Clip sticker block — real clip when fetched, placeholder when all tiers failed
+        # Resolve slide_data and layout_hint before building the clip block so routing
+        # decisions can depend on per-slide metadata even when that data comes from the
+        # middle-slide array (which would otherwise only be accessed inside the else branch).
+        if slide_idx == 1:
+            slide_data = {}
+            layout_hint = content.get("cover_layout_hint", content.get("layout_hint", "A")).upper()
+        else:
+            _data_idx = max(0, min(slide_idx - 2, len(slides) - 1)) if slides else 0
+            slide_data = slides[_data_idx] if slides else {}
+            layout_hint = slide_data.get("layout_hint", "A").upper()
+
+        # Build clip block, dark overlay, and slide-class modifier from layout_hint.
+        # Layout A: framed sticker 260×340 top-right (default — safe when layout_hint absent).
+        # Layout B: landscape clip 380×220 bottom-left (place / event / institution).
+        # Layout D: full-bleed clip + dark overlay (text must be high-contrast).
+        # Layout C: deferred (multi-face/network grid — not yet implemented, falls back to A).
         clip_block = ""
+        overlay_block = ""
+        layout_class = ""
         if rel_clip:
-            clip_block = f"""
+            if layout_hint == "D":
+                clip_block = f"""
+    <div class="clip-layout-d">
+      <video class="clip-video" autoplay muted loop playsinline>
+        <source src="{rel_clip}" type="video/mp4">
+      </video>
+    </div>"""
+                overlay_block = '<div class="layout-d-overlay"></div>'
+                layout_class = "slide-layout-d"
+            elif layout_hint == "B":
+                clip_block = f"""
+    <div class="clip-frame clip-layout-b{'  clip-frame-mid' if slide_idx != 1 else ''}">
+      <video class="clip-video" autoplay muted loop playsinline>
+        <source src="{rel_clip}" type="video/mp4">
+      </video>
+    </div>"""
+            else:  # Layout A (default — also covers C until implemented)
+                clip_block = f"""
     <div class="clip-frame{'  clip-frame-mid' if slide_idx != 1 else ''}">
       <video class="clip-video" autoplay muted loop playsinline>
         <source src="{rel_clip}" type="video/mp4">
@@ -4132,9 +4166,10 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
                 headline = esc(content.get("headline", ""))
                 subhead  = esc(content.get("subhead", ""))
                 html_body = f"""
-<div class="slide slide-cover motion-slide opc-cover">
+<div class="slide slide-cover motion-slide opc-cover {layout_class}">
   <div class="kb-bg" {bg_style}></div>
   {clip_block}
+  {overlay_block}
   <div class="slide-content">
     <div class="tag">{tag_text}</div>
     <div class="cover-hl">{headline}</div>
@@ -4154,9 +4189,10 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
                     cover_hl = cover_pt
                 cover_date = esc(content.get("cover_date", ""))
                 html_body = f"""
-<div class="slide slide-cover motion-slide">
+<div class="slide slide-cover motion-slide {layout_class}">
   <div class="kb-bg" {bg_style}></div>
   {clip_block}
+  {overlay_block}
   <div class="slide-content">
     <div class="tag">Quem decidiu isso?</div>
     <div class="cover-date">{cover_date}</div>
@@ -4166,10 +4202,7 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
   </div>
 </div>"""
         else:
-            # Middle slide — content["slides"] holds middle slides only (cover/sources are separate).
-            # slide_idx=2 → slides[0]. Clamp to avoid off-by-one silent empty.
-            data_idx = max(0, min(slide_idx - 2, len(slides) - 1)) if slides else 0
-            slide_data = slides[data_idx] if slides else {}
+            # Middle slide — slide_data and layout_hint already resolved above the clip block.
             if niche == "opc":
                 h_pt = esc(slide_data.get("heading", slide_data.get("heading_pt", "")))
                 h_en = ""
@@ -4182,9 +4215,10 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
                 f'background-position:center top;opacity:0.3;"' if slide_img else ""
             )
             html_body = f"""
-<div class="slide motion-slide">
+<div class="slide motion-slide {layout_class}">
   <div class="kb-bg" {bg_style}></div>
   {clip_block}
+  {overlay_block}
   <div class="slide-content">
     <div class="slide-hl">{h_pt}</div>
     {'<div class="slide-en">' + h_en + '</div>' if h_en else ''}
@@ -4223,9 +4257,7 @@ def _brazil_motion_css():
 :root{{--ob:#0E0D0B;--pa:#F2ECE0;--ca:#C9A84C;--gr:#7A7267;--W:1080px;--H:1350px;--P:{SLIDE_INSET_PX}px}}
 body{background:var(--ob);overflow:hidden}
 .slide{width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);position:relative;overflow:hidden;font-family:'Inter',sans-serif}
-.kb-bg{position:absolute;inset:0;background-size:cover;background-position:center top;
-       animation:kb-zoom 5s ease-in-out forwards;transform-origin:center center;}
-@keyframes kb-zoom{0%{transform:scale(1);}100%{transform:scale(1.08);}}
+.kb-bg{position:absolute;inset:0;background-size:cover;background-position:center top;}
 .slide-content{position:relative;z-index:2;padding:var(--P);height:100%;display:flex;flex-direction:column;}
 .tag{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--gr);letter-spacing:.06em;text-transform:uppercase;margin-bottom:28px}
 .accent{color:var(--ca)}
@@ -4235,12 +4267,22 @@ body{background:var(--ob);overflow:hidden}
 .slide-hl{font-family:'Fraunces',serif;font-weight:700;font-size:68px;line-height:1.1;text-transform:uppercase;margin-bottom:12px;text-shadow:0 2px 20px rgba(0,0,0,.8);}
 .slide-en{font-family:'Inter',sans-serif;font-style:italic;font-size:26px;color:var(--gr);margin-bottom:28px}
 .swipe{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);right:var(--P)}
-/* CLIP FRAME — z-index:1 so it sits BEHIND .slide-content (z-index:2). Text always wins. */
-.clip-frame{position:absolute;top:120px;right:var(--P);width:340px;height:420px;
+/* CLIP FRAME — Layout A (default): framed sticker 260×340, top-right. z-index:1 < .slide-content z-index:2. Text always wins. */
+.clip-frame{position:absolute;top:120px;right:var(--P);width:260px;height:340px;
             z-index:1;border:2px solid var(--ca);background:#000;overflow:hidden;
             border-radius:14px;
             box-shadow:0 4px 18px rgba(0,0,0,.55),0 12px 48px rgba(0,0,0,.45),0 0 0 1px rgba(203,204,16,.18);}
 .clip-frame-mid{top:auto;bottom:200px;}
+/* Layout B: landscape clip 380×220, bottom-left — place/event/institution. */
+.clip-layout-b{position:absolute;bottom:200px;left:var(--P);width:380px;height:220px;
+               z-index:1;border:2px solid var(--ca);background:#000;overflow:hidden;
+               border-radius:14px;
+               box-shadow:0 4px 18px rgba(0,0,0,.55),0 12px 48px rgba(0,0,0,.45);}
+/* Layout D: full-bleed clip + overlay. Clip at z:1, overlay at z:2, .slide-content bumped to z:3. */
+.clip-layout-d{position:absolute;inset:0;z-index:1;}
+.clip-layout-d .clip-video{width:100%;height:100%;object-fit:cover;display:block;}
+.layout-d-overlay{position:absolute;inset:0;z-index:2;background:rgba(14,13,11,0.65);}
+.slide-layout-d .slide-content{z-index:3;}
 .clip-stamp{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--ca);
             background:var(--ob);padding:6px 12px;position:absolute;top:-1px;right:-1px;
             border:1px solid var(--ca);z-index:3;letter-spacing:.05em;border-radius:0 14px 0 6px;}
