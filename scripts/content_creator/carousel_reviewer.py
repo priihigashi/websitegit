@@ -86,6 +86,35 @@ def _visible_html(html: str) -> str:
     return html
 
 
+# Short uppercase words known to be valid in construction/service copy — must not be flagged.
+_ALLOWED_SHORT_WORDS = {
+    "HIRE", "NAIL", "BEAM", "SEAL", "TILE", "DECK", "BOLT", "FOAM",
+    "ROOF", "WALL", "DOOR", "TRIM", "COST", "SAVE", "PRO", "DEMO",
+    "SALE", "BEST", "FAST", "FREE", "SAFE", "TIPS", "CALL", "DONE",
+}
+# Words that should not appear in construction/service headline copy — documented prior artifact.
+_SUSPICIOUS_SHORT_WORDS = {"HIDE"}
+
+
+def _check_short_word_artifacts(visible_html: str) -> list[str]:
+    """Flag suspicious short uppercase words in visible HTML that may be substitution artifacts.
+
+    Documented prior case: cream variant showed HIDE where HIRE was intended.
+    This check catches the case where corruption occurred before/during HTML generation.
+    PNG-only distortions are outside this gate's scope.
+    """
+    issues = []
+    plain = re.sub(r"<[^>]+>", " ", visible_html)
+    found = set(re.findall(r'\b([A-Z]{3,6})\b', plain))
+    suspicious = found & _SUSPICIOUS_SHORT_WORDS
+    for word in sorted(suspicious):
+        issues.append(
+            f'[CONCERN][OCR] Suspicious short word in visible HTML: "{word}". '
+            f'Known prior artifact: HIRE appeared as HIDE. Verify before approval.'
+        )
+    return issues
+
+
 def _first_variant_html(html: str) -> str:
     """Review only one variant from HTML files that contain v2 + v3 slides."""
     marker = "<!-- V3 -->"
@@ -140,6 +169,9 @@ def check_html_placeholders(html_path: str) -> list[str]:
         )
 
     visible_html = _visible_html(html)
+
+    # Short-word artifact gate — catches documented HIRE→HIDE class of substitution.
+    issues.extend(_check_short_word_artifacts(visible_html))
 
     # Label-leak: structural labels that Haiku sometimes emits verbatim into slide copy.
     # Inspect visible markup only; CSS declarations like "--c-body:" are not copy.
