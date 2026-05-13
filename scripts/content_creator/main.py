@@ -79,6 +79,9 @@ MANUAL_NICHE = os.environ.get("MANUAL_NICHE", "").strip().lower()
 MANUAL_TEMPLATE = os.environ.get("MANUAL_TEMPLATE", "auto").strip().lower()
 MANUAL_TEMPLATE_SET = os.environ.get("MANUAL_TEMPLATE_SET", "").strip().lower()
 MANUAL_BRIEF = os.environ.get("MANUAL_BRIEF", "").strip()  # Google Docs URL or plain text brief
+# Cycle A1 — note-intent gate. Default OFF until Cycle A0 is fully closed (independent tests + tracker).
+# Set NOTE_PARSER_GATE_ENABLED=1 in workflow env to enable.
+NOTE_PARSER_GATE_ENABLED = os.environ.get("NOTE_PARSER_GATE_ENABLED", "0").strip() == "1"
 # When set, all Drive uploads go to this test folder instead of normal series destinations.
 TEST_OUTPUT_FOLDER = os.environ.get("TEST_OUTPUT_FOLDER", "").strip()
 
@@ -1391,33 +1394,35 @@ def process_one_topic(topic_entry, run_date, drive):
             f"Fix: run /capture on the source post, then re-approve in Content Queue."
         )
         return None
-    # Cycle A1 — Note intent gate. Parses brief to detect research_first / archive_defer / series_plan.
+    # Cycle A1 — Note intent gate (DISABLED until A0 closed: set NOTE_PARSER_GATE_ENABLED=1 to activate).
+    # Parses brief to detect research_first / archive_defer / series_plan.
     # build_now=False holds the post before any API call. Failures fall through (never block build).
-    _brief_for_parse = brief.strip()
-    if _brief_for_parse and not _brief_for_parse.startswith("https://"):
-        try:
-            from note_parser import note_parser as _note_parser
-            _intent = _note_parser(_brief_for_parse, project=niche, use_llm=True)
-            if not _intent.get("build_now", True):
-                _reason = _intent.get("action", "unknown")
-                _blockers = ", ".join((_intent.get("reviewer_blockers") or [])[:3])
-                print(
-                    f"  [NOTE-GATE] build_now=False → action={_reason} | "
-                    f"blockers: {_blockers or 'none'}"
-                )
-                if queue_row:
-                    write_queue_status(
-                        queue_row, status="Needs Research",
-                        extra={"notes": f"note_parser: {_reason}"},
+    if NOTE_PARSER_GATE_ENABLED:
+        _brief_for_parse = brief.strip()
+        if _brief_for_parse and not _brief_for_parse.startswith("https://"):
+            try:
+                from note_parser import note_parser as _note_parser
+                _intent = _note_parser(_brief_for_parse, project=niche, use_llm=True)
+                if not _intent.get("build_now", True):
+                    _reason = _intent.get("action", "unknown")
+                    _blockers = ", ".join((_intent.get("reviewer_blockers") or [])[:3])
+                    print(
+                        f"  [NOTE-GATE] build_now=False → action={_reason} | "
+                        f"blockers: {_blockers or 'none'}"
                     )
-                _send_alert(
-                    f"[NOTE-GATE] '{topic[:60]}' held — brief says: {_reason}\n"
-                    f"Reviewer blockers: {_blockers or 'none'}\n"
-                    f"Fix: complete required research/series-plan then re-approve in Content Queue."
-                )
-                return None
-        except Exception as _np_exc:
-            print(f"  [NOTE-GATE] parser error ({_np_exc}) — proceeding with build")
+                    if queue_row:
+                        write_queue_status(
+                            queue_row, status="Needs Research",
+                            extra={"notes": f"note_parser: {_reason}"},
+                        )
+                    _send_alert(
+                        f"[NOTE-GATE] '{topic[:60]}' held — brief says: {_reason}\n"
+                        f"Reviewer blockers: {_blockers or 'none'}\n"
+                        f"Fix: complete required research/series-plan then re-approve in Content Queue."
+                    )
+                    return None
+            except Exception as _np_exc:
+                print(f"  [NOTE-GATE] parser error ({_np_exc}) — proceeding with build")
     # Verificamos: Route A = clip overlay (verificamos_clip), Route B = debunk carousel (verificamos)
     # Dados ou Agenda: always uses the dados-ou-agenda template (9-slide bias check)
     # Verdade Pela Metade: FORMAT-024 weekly debunk (Tuesdays)

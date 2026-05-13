@@ -375,6 +375,10 @@ def _parse_rule_based(note_text: str, project: str = "") -> dict:
     ]
     _research_kws = [
         "research first", "post after", "transcribed first", "research before",
+        "transcribe candidates", "evidence-mining", "evidence mining",
+        "find public clips", "find clips", "find 6-10", "find 6 to 10",
+        "keep only matches", "verify before", "investigate before",
+        "check before building", "fact.check first", "verify first",
     ]
     _series_kws = [
         "series idea", "series:", "episode structure", "each episode",

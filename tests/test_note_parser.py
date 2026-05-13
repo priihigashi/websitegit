@@ -1,20 +1,79 @@
 """
 Cycle A0 — Golden tests for note_parser() against 5 real Capture Queue notes.
 
-All 5 must pass. Test 5 (archive/defer) is the critical gate:
-  build_now must be False, do_not_generate_content must be True.
+All tests use use_llm=False for determinism. Haiku path verified separately.
+Note texts are pasted directly from the Capture Queue — NOT imported from the
+parser module, so tests remain independent of _FEW_SHOT_EXAMPLES changes.
 
 Run: python3.12 -m pytest tests/test_note_parser.py -v
      (from repo root: ~/ClaudeWorkspace/oak-park-ai-hub/)
-
-Uses use_llm=False for determinism. LLM path verified separately.
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "content_creator"))
 
-from note_parser import note_parser, _FEW_SHOT_EXAMPLES
+from note_parser import note_parser
 
 _KB = {"use_llm": False}  # rule-based for deterministic golden tests
+
+# ---------------------------------------------------------------------------
+# Independent note fixtures — pasted from real Capture Queue rows, NOT from
+# _FEW_SHOT_EXAMPLES. Tests must stay valid even if training examples change.
+# ---------------------------------------------------------------------------
+
+_NOTE_1_BRAZIL_VOICE_RAMBLE = (
+    "we should verify this case look what she did try to find proof of what she did look her up "
+    "she previews videos from her and then we definitely should start with this one and then we can "
+    "have more information about what happened before this day and then that could be other slides and "
+    "I definitely would like to put the clips it's gonna be a motion carousel and we could also plan "
+    "for a video for reels, but I don't have comments about it, but would be similar. This is this is "
+    "the hook you know like showing her and then we can say wait for that if it's a video I say wait "
+    "for more information about the case watch this something like that while trying to find a way to "
+    "keep it with a journalistic feel"
+)
+
+_NOTE_2_BRAZIL_RESEARCH_BRIEF = (
+    "alexandre de moraes investigating flavio bolsonaro — show BOTH sides: his complaint + what the "
+    "other side justifies. 5 YouTube videos + 5 IG reels transcribed. Research first, post after. "
+    "no fake news debunk if any"
+)
+
+_NOTE_3_USA_SERIES_SPEC = (
+    "SERIES IDEA: '10 Times the U.S. Intervened. This Is What Happened.' | "
+    "NOT a complete list — only interventions with declassified evidence. | "
+    "COVER: '10 Times the U.S. Intervened. This Is What Happened.' + small disclaimer: "
+    "'Not a complete list — these are the ones the documents confirm.' | "
+    "Each episode labeled: [Country] — [N] of 10 | "
+    "EPISODE STRUCTURE (5 slides): 1) Hook card — country name MASSIVE + big image | "
+    "2) What the U.S. Said at the Time — official quote | "
+    "3) What the Documents Show — declassified record, sourced | "
+    "4) Before & After — split: before intervention vs after"
+)
+
+_NOTE_4_ONE_LINER = (
+    "Just create points from it and create a content about Iran and "
+    "Hollywood propaganda. USA and Brazil"
+)
+
+_NOTE_5_ARCHIVE_DEFER = "Save and transcribe for stocks tips plans later"
+
+# ---------------------------------------------------------------------------
+# Regression fixtures — phrases that must NOT be classified as build_now
+# Added after Brazil run 25772351907 proved rule-based allowed these through.
+# ---------------------------------------------------------------------------
+
+_NOTE_6_EVIDENCE_MINING = (
+    "Brazil / evidence-mining route seed. Person: Frei Gilson. Use seed clip as hook, then find "
+    "6-10 more same-person public clips; transcribe candidates; keep only matches where transcript "
+    "evidence shows target behavior. Build carousel from evidence chain."
+)
+
+_NOTE_7_TRANSCRIBE_CANDIDATES = (
+    "transcribe candidates from the 5 videos, verify before building. post after research is done."
+)
+
+_NOTE_8_FIND_PUBLIC_CLIPS = (
+    "find public clips of this senator, cross-check claims with official records, then build."
+)
 
 
 # ---------------------------------------------------------------------------
@@ -22,8 +81,7 @@ _KB = {"use_llm": False}  # rule-based for deterministic golden tests
 # Voice ramble / proof-seeking / motion carousel
 # ---------------------------------------------------------------------------
 def test_note1_voice_ramble_brazil():
-    note = _FEW_SHOT_EXAMPLES[0]["note"]
-    r = note_parser(note, project="brazil", **_KB)
+    r = note_parser(_NOTE_1_BRAZIL_VOICE_RAMBLE, project="brazil", **_KB)
 
     assert r["action"] == "build_now", f"Expected build_now, got {r['action']}"
     assert r["build_now"] is True
@@ -41,8 +99,7 @@ def test_note1_voice_ramble_brazil():
 # Typed research brief / both sides / research first
 # ---------------------------------------------------------------------------
 def test_note2_research_brief_brazil():
-    note = _FEW_SHOT_EXAMPLES[1]["note"]
-    r = note_parser(note, project="brazil", **_KB)
+    r = note_parser(_NOTE_2_BRAZIL_RESEARCH_BRIEF, project="brazil", **_KB)
 
     assert r["action"] == "research_first", f"Expected research_first, got {r['action']}"
     assert r["build_now"] is False, f"CRITICAL: build_now must be False for research_first"
@@ -59,8 +116,7 @@ def test_note2_research_brief_brazil():
 # Structured series spec / locked slide structure / motion version
 # ---------------------------------------------------------------------------
 def test_note3_series_spec_usa():
-    note = _FEW_SHOT_EXAMPLES[2]["note"]
-    r = note_parser(note, project="usa", **_KB)
+    r = note_parser(_NOTE_3_USA_SERIES_SPEC, project="usa", **_KB)
 
     assert r["action"] == "create_series_plan", f"Expected create_series_plan, got {r['action']}"
     assert "locked_slide_structure" in r["intent_labels"], f"intent_labels={r['intent_labels']}"
@@ -75,8 +131,7 @@ def test_note3_series_spec_usa():
 # One-liner topic extraction / routing uncertain / dual market
 # ---------------------------------------------------------------------------
 def test_note4_one_liner_topic_expansion():
-    note = _FEW_SHOT_EXAMPLES[3]["note"]
-    r = note_parser(note, project="", **_KB)
+    r = note_parser(_NOTE_4_ONE_LINER, project="", **_KB)
 
     assert r["action"] == "build_now", f"Expected build_now, got {r['action']}"
     assert "needs_topic_expansion" in r["intent_labels"], f"intent_labels={r['intent_labels']}"
@@ -91,8 +146,7 @@ def test_note4_one_liner_topic_expansion():
 # Archive/defer / transcribe for later / do not build now — CRITICAL TEST
 # ---------------------------------------------------------------------------
 def test_note5_archive_defer_stocks():
-    note = _FEW_SHOT_EXAMPLES[4]["note"]
-    r = note_parser(note, project="", **_KB)
+    r = note_parser(_NOTE_5_ARCHIVE_DEFER, project="", **_KB)
 
     assert r["action"] in ("archive_defer", "transcribe_only"), \
         f"Expected archive_defer or transcribe_only, got {r['action']}"
@@ -103,6 +157,42 @@ def test_note5_archive_defer_stocks():
     assert r["transcription_required"] is True
     assert r["content_area"] == "stocks", f"content_area={r['content_area']}"
     assert r["future_use"] is True
+
+
+# ---------------------------------------------------------------------------
+# Test 6 — Regression: evidence-mining note must NOT be build_now
+# Proved by Brazil run 25772351907: rule-based allowed this through, pipeline
+# built a post with unsourced placeholders and reviewer blocked it.
+# ---------------------------------------------------------------------------
+def test_note6_evidence_mining_is_research_first():
+    r = note_parser(_NOTE_6_EVIDENCE_MINING, project="brazil", **_KB)
+
+    assert r["action"] in ("research_first", "archive_defer"), \
+        f"Evidence-mining note must not be build_now. Got action={r['action']}"
+    assert r["build_now"] is False, \
+        f"CRITICAL: evidence-mining note must hold build. Got build_now={r['build_now']}\nFull: {r}"
+
+
+# ---------------------------------------------------------------------------
+# Test 7 — Regression: "transcribe candidates / verify before / post after"
+# ---------------------------------------------------------------------------
+def test_note7_transcribe_verify_is_research_first():
+    r = note_parser(_NOTE_7_TRANSCRIBE_CANDIDATES, project="brazil", **_KB)
+
+    assert r["action"] == "research_first", \
+        f"Expected research_first, got {r['action']}"
+    assert r["build_now"] is False, \
+        f"'transcribe candidates / post after' must hold build. Got: {r['build_now']}"
+
+
+# ---------------------------------------------------------------------------
+# Test 8 — Regression: "find public clips" phrase
+# ---------------------------------------------------------------------------
+def test_note8_find_public_clips_is_research_first():
+    r = note_parser(_NOTE_8_FIND_PUBLIC_CLIPS, project="brazil", **_KB)
+
+    assert r["build_now"] is False, \
+        f"'find public clips' must hold build. Got build_now={r['build_now']}, action={r['action']}"
 
 
 # ---------------------------------------------------------------------------
