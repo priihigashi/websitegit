@@ -70,6 +70,9 @@ async function run(htmlPath, outputDir) {
         if (fs < startFs) {
           console.log(`[auto-shrink] ${sel}: ${startFs.toFixed(0)}px → ${fs.toFixed(0)}px (floor ${minFs}px)`);
         }
+        if ((el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) && fs <= minFs) {
+          console.error(`[BLOCK] ${sel} still overflows at floor ${minFs}px — text too long for container. Do not approve.`);
+        }
       });
     });
   });
