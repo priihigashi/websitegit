@@ -1,17 +1,17 @@
 # SKILL: Fix Google Sheets Range Error
 
 ## Purpose
-Automatically corrects range parsing errors when accessing Google Sheets.
+This skill addresses recurring HttpError 400 when attempting to access Google Sheets ranges. The error is due to an incorrect range format.
 
-## Trigger
-When a Google Sheets API request results in an HttpError 400 with the message "Unable to parse range."
+## Implementation
+1. **Validate Range Format:** Ensure that the range used in Google Sheets API requests is correctly formatted according to the API documentation.
+2. **Add Error Handling:** Implement error handling that catches HttpError 400 and attempts to correct the range format.
+3. **Fallback Mechanism:** If the range is still incorrect, log the error and alert the responsible team or individual to manually review the range.
 
-## Actions
-1. Log the error details for review.
-2. Check the specified range format in the request.
-3. If the range format is incorrect, attempt to correct it by ensuring the range follows the 'SheetName!A1:Z100' format.
-4. Retry the request with the corrected range.
+## Example
+- Before Requesting: Validate that the range 'Clip Collections!A:G' is correct.
+- On Error: Log detailed information about the error and notify.
 
-## Notes
-- Ensure the sheet name and range are dynamically retrieved from a reliable source or configuration to avoid hardcoding.
-- This skill assumes that the range parsing issue is due to incorrect formatting and attempts a sensible correction.
+## Prerequisites
+- Access to Google Sheets API
+- Logging and notification capabilities
