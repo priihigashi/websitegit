@@ -4615,9 +4615,14 @@ def render_opc_tip_stat(content, v_class, *, context_slot):
 
 def render_opc_tip_list(content, v_class, *, items_html, context_slot):
     """OPC tip — slide 3 (TEACH / why-it-happens checklist slide)."""
-    # Derive a topic-specific headline from the Haiku-generated cover headline
-    # (max 12 chars per schema) instead of the generic "THE LIST."
-    _s3_hl = (content.get("headline") or "THE CAUSE").strip().upper()
+    # Keep slide 3 topic-specific without reusing a long cover headline that can
+    # overflow the fixed legacy list layout at the readable 48px floor.
+    _headline_words = re.findall(r"[A-Za-z0-9$]+", (content.get("headline") or "").upper())
+    _accent_word = re.sub(r"[^A-Za-z0-9$]", "", (content.get("accent_word") or "").upper())
+    _s3_hl = next(
+        (w for w in [_accent_word, *reversed(_headline_words), *_headline_words] if 2 <= len(w) <= 10),
+        "THE CAUSE",
+    )
     return (
         f'<div class="slide slide-list {v_class}">\n'
         f'  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>\n'
