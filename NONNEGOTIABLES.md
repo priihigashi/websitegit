@@ -933,3 +933,63 @@ END OF 2026-05-03 NN-S10/S11 APPEND
 
 - **SCRIPT / CODE EDITING RULE — NON-NEGOTIABLE** (from repo CLAUDE.md, 2026-05-13)
   Never rewrite a working script from scratch. Only change what is strictly necessary. Before any edit: read the full file, list what you're changing and why. Good things already in the script must be p
+
+
+═══════════════════════════════════════════════════════════════════════
+MOTION SYSTEM V2 SPEC — appended 2026-05-13 (approved by Priscila)
+═══════════════════════════════════════════════════════════════════════
+
+NN-M1 — MOTION SOURCE CASCADE IS LOCKED (4 TIERS, NO EXCEPTIONS)
+  Approved cascade for all motion slides:
+    Tier 1: real clip (approved OPC source or relevant real-world clip)
+    Tier 2: GIPHY — only if relevant and not cheesy; skip if no strong match
+    Tier 3: static image, NO animation (Pexels Photos API, not Videos API)
+    Tier 4: skip motion slot entirely — deliver static PNG only, no empty MP4
+
+  PEXELS FOR VIDEO IS TREATED AS UNAVAILABLE FOR PHASE 1.
+  GitHub Actions runner IPs are blocked by Pexels Videos API (403).
+  This is an external blocker — not a motion-design issue, not fixable in code.
+  The cascade must not depend on Pexels video being healthy.
+  Pexels Photos API (static image fallback, Tier 3) may work and is allowed.
+  File Pexels video 403 as a separate external-dependency ticket — do not block
+  motion Phase 1 on it.
+
+NN-M2 — ROUTING LOGIC OVERRIDES ROUTE SETS
+  Per-slide routing_hint from carousel_builder.py (layout_hint, subject_type,
+  text_density) takes precedence over any global route-set rotation.
+  Example: a bio-card slide routes Layout A regardless of which route set
+  is active for that post. Route sets are the default; per-slide hint wins.
+
+NN-M3 — PHASE 1 SCOPE: PLAYWRIGHT/HTML RECORDING ONLY, MANUAL TEST ONLY
+  Phase 1 implementation is scoped to:
+    - Playwright record_motion.js recording CSS-animated HTML
+    - Layout A (framed clip sticker, top-right) and Layout D (full-bleed clip)
+    - Cover slide only — non-cover slides get static PNG, no motion
+  NOT in Phase 1:
+    - CarouselMotion.tsx (Remotion) — deferred to Phase 2
+    - Remotion architecture changes — deferred to Phase 2
+    - cron/prod motion defaults — MOTION_ENABLED stays 0 in prod
+    - Buffer approval logic — unchanged
+    - Smart-picker production cutover — unchanged
+  MOTION_ENABLED=1 is ONLY set manually for local proof tests.
+  Do NOT flip prod/cron motion until Priscila visually approves Phase 1 output.
+
+NN-M4 — CAROUELMOTION.TSX IS FROZEN IN PHASE 1
+  scripts/remotion/src/CarouselMotion.tsx must NOT be touched until Phase 2.
+  The known bug (posterPng zoom includes baked text) is documented but intentionally
+  deferred. Any PR that modifies CarouselMotion.tsx during Phase 1 is rejected.
+
+NN-M5 — PHASE 1 PROOF TESTS REQUIRED BEFORE EXPANSION
+  Before expanding motion to non-cover slides, additional route sets, or any
+  production cron trigger, these 5 tests must pass manually:
+    1. Cover A: framed clip sticker renders at correct position, text is static
+    2. Cover D: full-bleed clip with readable dark overlay, text is static
+    3. No-clip test: when no clip found, static PNG delivered — no empty MP4
+    4. Cover-only: only the cover PNG gets a motion version produced
+    5. Layout D text: static title is legible over full-bleed clip
+  Priscila must see output and choose which motion language (A or D) to expand.
+  "I ran the tests" is not sufficient — Drive links to the test output required.
+
+═══════════════════════════════════════════════════════════════════════
+END OF 2026-05-13 MOTION SYSTEM V2 APPEND
+═══════════════════════════════════════════════════════════════════════
