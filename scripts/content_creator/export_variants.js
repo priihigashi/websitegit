@@ -43,14 +43,19 @@ async function run(htmlPath, outputDir) {
       'h1': 48, 'h2': 36, 'h3': 28,
     };
     const DEFAULT_MIN_FS = 16;
+    const isOverflowing = (el) => {
+      const heightOverflow = el.scrollHeight > Math.ceil(el.clientHeight * 1.4);
+      const widthOverflow = el.scrollWidth > el.clientWidth + 1;
+      return heightOverflow || widthOverflow;
+    };
     const blocks = [];
     TEXT_SELECTORS.forEach(sel => {
       const minFs = MIN_FS_MAP[sel] !== undefined ? MIN_FS_MAP[sel] : DEFAULT_MIN_FS;
       document.querySelectorAll(sel).forEach(el => {
-        if (el.scrollHeight <= el.clientHeight && el.scrollWidth <= el.clientWidth) return;
+        if (!isOverflowing(el)) return;
         let fs = parseFloat(window.getComputedStyle(el).fontSize) || 32;
         const startFs = fs;
-        while ((el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) && fs > minFs) {
+        while (isOverflowing(el) && fs > minFs) {
           fs -= 2;
           el.style.fontSize = fs + 'px';
           el.style.lineHeight = '1.1';
@@ -59,7 +64,7 @@ async function run(htmlPath, outputDir) {
           console.log(`[auto-shrink] ${sel}: ${startFs.toFixed(0)}px → ${fs.toFixed(0)}px (floor ${minFs}px)`);
         }
         // If still overflowing at the readable floor, collect a block message.
-        if ((el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) && fs <= minFs) {
+        if (isOverflowing(el) && fs <= minFs) {
           const msg = `[BLOCK] ${sel} still overflows at floor ${minFs}px — text too long for container. Do not approve.`;
           console.error(msg);  // browser DevTools visibility
           blocks.push(msg);
