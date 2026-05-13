@@ -33,11 +33,13 @@ _Last updated: 2026-05-13 (auto-updated by nonnegotiables_updater.py)_
 
 ## LOCKED — Content & Carousel Pipeline
 
-**MOTION IS DEFAULT ON**
-Every carousel build ships BOTH static PNGs AND motion (MP4 + GIF + preview frame).
-Motion = OFF only when Priscila explicitly says "static only" for that specific post.
-Applies to: scripts, email preview, any manual chat, all skills.
-Source: CLAUDE.md — MOTION IS DEFAULT ON
+**MOTION IS CURRENTLY DISABLED (MOTION_ENABLED=0) — overrides prior "default ON" rule**
+Pipeline produces static PNGs only. No MP4, GIF, or reel is built.
+Reason: entire motion cascade (Ken Burns/Remotion/Playwright) was broken in 4 ways —
+wrong slides animated, text zoomed with background, wrong frames on cover, wrong tool entirely.
+Do NOT re-enable until a new motion plan is designed and approved by Priscila.
+To re-enable: set MOTION_ENABLED=1 in GitHub secrets AND get explicit approval.
+Updated: 2026-05-13. See commit bf1d7c1.
 
 **CAROUSEL FOLDER STANDARD**
 Every carousel lands at: `<Series>/_TEMPLATE_CAROUSEL/v<N>_<slug>/` with `png/` + `motion/` siblings.
