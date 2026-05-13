@@ -423,7 +423,7 @@ Example: [{"index":1,"status":"✅ Approved","topic_direction":"...","focus_keyw
     system: SYSTEM,
     content: userPrompt,
     maxTokens: 8000,
-    claudeModel: 'claude-opus-4-6',
+    claudeModel: 'claude-haiku-4-5-20251001',
     openaiModel: 'gpt-4o',
   });
   raw = raw.replace(/^```[a-z]*\n?/i, '').replace(/```$/, '').trim();
