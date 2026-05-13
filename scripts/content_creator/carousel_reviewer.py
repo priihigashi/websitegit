@@ -427,6 +427,19 @@ def check_html_placeholders(html_path: str) -> list[str]:
             issues.append(f"OPC readability miss: .body-text font-size too small ({fs_body}px).")
         if fs_src is not None and fs_src < 20:
             issues.append(f"OPC readability miss: .src-row font-size too small ({fs_src}px).")
+        # Headline floor check — catches inline style overrides that crush headlines below readable size.
+        # export_variants.js auto-shrink floor was raised to 48px for headlines; flag anything below that.
+        for hl_sel in (".headline", ".headline-main", ".tip-big", ".stat-big"):
+            for m_hl_style in re.finditer(
+                rf'class="[^"]*{re.escape(hl_sel.lstrip("."))}[^"]*"[^>]*style="[^"]*font-size\s*:\s*([0-9]+)px',
+                html,
+            ):
+                fs_hl = int(m_hl_style.group(1))
+                if fs_hl < 48:
+                    issues.append(
+                        f"[P0] OPC headline too small: {hl_sel} rendered at {fs_hl}px "
+                        f"(minimum 48px). Auto-shrink may have crushed the title. Do not approve."
+                    )
         if ".v2.slide-cover .headline" in html:
             m_v2 = re.search(r"\.v2\.slide-cover\s+\.headline[^{]*\{([\s\S]*?)\}", html)
             if m_v2 and "#0A0A0A" in m_v2.group(1):

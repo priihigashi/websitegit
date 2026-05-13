@@ -30,18 +30,29 @@ async function run(htmlPath, outputDir) {
       '.cover-title', '.cover-subtitle', '.slide-title', '.slide-text',
       'h1', 'h2', 'h3',
     ];
-    const MIN_FS = 14;
+    // Per-selector floors: headlines must stay readable even after shrink.
+    // Global 14px floor caused titles to go microscopic on long headlines.
+    const MIN_FS_MAP = {
+      '.headline': 48, '.headline-main': 48, '.headline-italic': 32,
+      '.tip-big': 40, '.src-head': 28, '.stat-big': 48,
+      '.cover-title': 40, '.cover-subtitle': 24,
+      '.slide-title': 32, '.slide-text': 16,
+      'h1': 48, 'h2': 36, 'h3': 28,
+    };
+    const DEFAULT_MIN_FS = 16;
     TEXT_SELECTORS.forEach(sel => {
+      const minFs = MIN_FS_MAP[sel] !== undefined ? MIN_FS_MAP[sel] : DEFAULT_MIN_FS;
       document.querySelectorAll(sel).forEach(el => {
         if (el.scrollHeight <= el.clientHeight && el.scrollWidth <= el.clientWidth) return;
         let fs = parseFloat(window.getComputedStyle(el).fontSize) || 32;
-        while ((el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) && fs > MIN_FS) {
+        const startFs = fs;
+        while ((el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) && fs > minFs) {
           fs -= 2;
           el.style.fontSize = fs + 'px';
           el.style.lineHeight = '1.1';
         }
-        if (fs < parseFloat(window.getComputedStyle(el).fontSize) + 4) {
-          console.log(`[auto-shrink] ${sel}: ${fs.toFixed(0)}px`);
+        if (fs < startFs) {
+          console.log(`[auto-shrink] ${sel}: ${startFs.toFixed(0)}px → ${fs.toFixed(0)}px (floor ${minFs}px)`);
         }
       });
     });
