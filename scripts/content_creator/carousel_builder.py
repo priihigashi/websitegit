@@ -4572,12 +4572,15 @@ def render_opc_tip_stat(content, v_class, *, context_slot):
 
 
 def render_opc_tip_list(content, v_class, *, items_html, context_slot):
-    """OPC tip — slide 3 (THE LIST. checklist slide)."""
+    """OPC tip — slide 3 (TEACH / why-it-happens checklist slide)."""
+    # Derive a topic-specific headline from the Haiku-generated cover headline
+    # (max 12 chars per schema) instead of the generic "THE LIST."
+    _s3_hl = (content.get("headline") or "THE CAUSE").strip().upper()
     return (
         f'<div class="slide slide-list {v_class}">\n'
         f'  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>\n'
-        f'  <div class="tag">What To Know</div>\n'
-        f'  <div class="headline" style="font-size:96px; margin-bottom:36px;">THE <span class="accent">LIST.</span></div>\n'
+        f'  <div class="tag">Why It Happens</div>\n'
+        f'  <div class="headline" style="font-size:96px; margin-bottom:36px;">{_s3_hl}<span class="accent">.</span></div>\n'
         f'  {context_slot}\n'
         f'  <div class="list">\n'
         f'{items_html}  </div>\n'
@@ -5593,7 +5596,7 @@ def _build_opc_illustrated_html(content, slug, work_dir, media_paths=None):
 
 <div class="slide slide-list {v_class} ill-shell">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-  <div class="tag">What To Know</div>
+  <div class="tag">Why It Happens</div>
   {img_panel(slide3_img, "TOPIC IMAGE")}
   <div class="list">
 {items_html}  </div>
@@ -5796,7 +5799,7 @@ def _build_opc_cutout_html(content, slug, work_dir, media_paths=None):
 
 <div class="slide slide-list {v_class} cut-shell">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
-  <div class="tag">What To Know</div>
+  <div class="tag">Why It Happens</div>
   {art3}
   <div class="list">
 {items_html}  </div>
