@@ -82,6 +82,9 @@ MANUAL_BRIEF = os.environ.get("MANUAL_BRIEF", "").strip()  # Google Docs URL or 
 # Cycle A1 — note-intent gate. Default OFF until Cycle A0 is fully closed (independent tests + tracker).
 # Set NOTE_PARSER_GATE_ENABLED=1 in workflow env to enable.
 NOTE_PARSER_GATE_ENABLED = os.environ.get("NOTE_PARSER_GATE_ENABLED", "0").strip() == "1"
+# Item 2.3 — Story arc retry gate. Default OFF until one controlled run verifies behavior.
+# Set ARC_GATE_ENABLED=1 in workflow env to activate the 2-attempt generation retry.
+ARC_GATE_ENABLED = os.environ.get("ARC_GATE_ENABLED", "0").strip() == "1"
 # When set, all Drive uploads go to this test folder instead of normal series destinations.
 TEST_OUTPUT_FOLDER = os.environ.get("TEST_OUTPUT_FOLDER", "").strip()
 
@@ -1307,6 +1310,24 @@ def _check_media_presence(png_dir, motion_dir, resources_dir, post_id):
     return len(issues) == 0, issues
 
 
+def _extract_arc_headlines(content: dict) -> list[str]:
+    """Extract slide headline strings from a content dict for arc scoring.
+
+    Collects every value whose key ends with '_headline' plus the top-level
+    'headline' key.  Returns deduplicated, non-empty strings in key-sort order
+    so the arc scorer sees them in slide order.
+    """
+    headlines = []
+    for k, v in sorted(content.items()):
+        if not isinstance(v, str):
+            continue
+        if k == "headline" or k.endswith("_headline"):
+            clean = v.strip()
+            if clean and clean not in headlines:
+                headlines.append(clean)
+    return headlines
+
+
 def process_one_topic(topic_entry, run_date, drive):
     topic = topic_entry["topic"]
     niche = topic_entry["niche"]
@@ -1516,6 +1537,60 @@ def process_one_topic(topic_entry, run_date, drive):
 
     if niche in ("brazil", "usa"):
         content = _enforce_news_visual_targets(content, topic, niche)
+
+    # Item 2.3 — Story arc retry gate (ARC_GATE_ENABLED=0 by default).
+    # Scores narrative coherence before rendering. On score==1, retries generation once
+    # with an explicit arc instruction. If still 1 after attempt 2, blocks and alerts.
+    # Failures fall through (never block build) to keep existing behavior intact.
+    if ARC_GATE_ENABLED and content:
+        _arc_score_1, _arc_reason_1 = 0, "skipped"
+        _arc_score_2, _arc_reason_2 = 0, "not needed"
+        _arc_result = "fallthrough"
+        try:
+            from carousel_reviewer import _score_copy_coherence
+            _headlines = _extract_arc_headlines(content)
+            if _headlines:
+                _arc_score_1, _arc_reason_1 = _score_copy_coherence(_headlines)
+                if _arc_score_1 >= 2:
+                    _arc_result = "accepted_attempt_1"
+                else:
+                    _retry_brief = (
+                        (brief or "") + "\n\n[ARC RETRY INSTRUCTION] "
+                        "Attempt 1 scored 1/3 — all 5 slides must connect to the SAME specific topic "
+                        f"('{topic[:60]}'). Every headline must name or directly reference this topic. "
+                        "No generic filler. No slides that could belong to any other topic."
+                    )
+                    _content2 = generate_carousel_content(
+                        topic, niche, template_key, brief=_retry_brief, slide_plan=_early_plan
+                    )
+                    if _content2:
+                        # Re-run enforcement on retry content
+                        if niche == "opc":
+                            _content2 = enforce_opc_comparison_parity(_content2, topic, brief or "")
+                        elif niche in ("brazil", "usa"):
+                            _content2 = _enforce_news_visual_targets(_content2, topic, niche)
+                        _headlines2 = _extract_arc_headlines(_content2)
+                        _arc_score_2, _arc_reason_2 = _score_copy_coherence(_headlines2)
+                        if _arc_score_2 >= 2:
+                            content = _content2
+                            _arc_result = "accepted_attempt_2"
+                        else:
+                            _arc_result = "blocked"
+                    else:
+                        _arc_result = "retry_failed_no_content"
+        except Exception as _arc_exc:
+            _arc_result = f"error({_arc_exc})"
+        print(
+            f"  [ARC-GATE] attempt=1 score={_arc_score_1} | "
+            f"attempt=2 score={_arc_score_2} | result={_arc_result}"
+        )
+        if _arc_result == "blocked":
+            _send_alert(
+                f"[ARC-GATE] '{topic[:60]}' blocked after 2 attempts scored 1/3.\n"
+                f"Attempt 1: {_arc_reason_1}\nAttempt 2: {_arc_reason_2}\n"
+                f"Fix: refine the topic or brief to give the LLM a more specific anchor."
+            )
+            return None
 
     # 1b. Visual audit — flag boring/incomplete carousels before rendering
     _, audit_issues, audit_summary = visual_audit(content, niche)
