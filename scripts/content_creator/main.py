@@ -1753,112 +1753,110 @@ def process_one_topic(topic_entry, run_date, drive):
         _variant_label = f"{len(_prefixes)} famil{'y' if len(_prefixes)==1 else 'ies'}: {_prefixes}"
         print(f"  [SH-159] post-render visual QA ✅ — {len(_png_files)} PNGs, {_variant_label}")
 
-    # 4. Render motion — RENDERER CASCADE: Remotion → Playwright → Ken Burns
-    #    Each tier is a fallback for the one above. Motion is default-ON; Ken Burns is the floor.
-    #    4a. Remotion render for the black cover — React-source, highest quality.
-    #    4b. Playwright video recording for slides with clips + HTML-source templates.
-    #    4c. Ken Burns ffmpeg zoom for every slide not already covered above.
-    print("  Rendering motion (cascade: Remotion → Playwright → Ken Burns)...")
-    recorded_mp4s = []
-    recorded_indices = set()
-
-    # 4a — Remotion cover render (if Remotion project present). Uses the clip from slide 1 if we got one.
-    clip_suggestions = content.get("clip_suggestions", [])
-    cover_sugg = next((c for c in clip_suggestions if c.get("slide", 0) == 1),
-                     (clip_suggestions[0] if clip_suggestions else {}))
-    cover_motion_prompt = cover_sugg.get("motion_prompt", "")
-    cover_renderer_pref = cover_sugg.get("motion_renderer", "remotion")  # default: remotion for cover
-    cream_covers = sorted(png_dir.glob("cream_01_*_html.png"))
-    remotion_cover_done = False
-    if cream_covers and cover_renderer_pref == "remotion":
-        remotion_clip = clips.get(1, "")
-        r_path = render_motion_remotion(
-            str(cream_covers[0]), remotion_clip, str(motion_dir), "cream",
-            hook_text=(content.get("hook") or "")[:48], slide_idx=1
-        )
-        if r_path:
-            remotion_cover_done = True
-            recorded_indices.add(1)
-
-    # 4b — Playwright recording for any clip slide (cover included if Remotion missed + HTML clip file exists).
-    if clip_html_files:
-        pw_inputs = [(idx, h) for idx, h in clip_html_files
-                     if not (idx == 1 and remotion_cover_done)]
-        if pw_inputs:
-            print(f"  Recording {len(pw_inputs)} clip slide(s) via Playwright...")
-            recorded_mp4s = record_motion_slides(pw_inputs, str(motion_dir), duration=5)
-            recorded_indices |= {idx for idx, _ in recorded_mp4s}
-            print(f"  Playwright recorded: {len(recorded_mp4s)} MP4(s) (slides {sorted({idx for idx,_ in recorded_mp4s})})")
-
-    # 4c. Kling — fires automatically when Remotion didn't produce an mp4 and no
-    # real clip exists for the cover. Cascade: Remotion → Kling → Ken Burns.
-    # KLING_APPROVE=0 can explicitly disable Kling for a specific run if needed.
-    kling_disabled = os.environ.get("KLING_APPROVE", "").strip().lower() == "0"
-    cover_has_real_clip = bool(clips.get(1))
-    cream_covers = sorted(png_dir.glob("cream_01_*_html.png"))
-    if cream_covers and not remotion_cover_done and not cover_has_real_clip and not kling_disabled:
-        anim_prompt = (
-            content.get("cover_visual", {}).get("option_b", {}).get("prompt", "")
-            or "Subtle cinematic camera movement, documentary editorial style"
-        )
-        print(f"  Kling: Remotion missed + no real clip — animating cover PNG...")
-        _animate_cover_kling(str(cream_covers[0]), anim_prompt, str(motion_dir), "cream")
-
-    # 4d. Ken Burns floor for any black slide index that still has no motion MP4.
-    # Regression fix: ensure every slide can animate even when clip fetch/record misses.
-    for png in sorted(png_dir.glob("cream_*_html.png")):
-        m = re.search(r"cream_(\d+)_", png.name)
-        if not m:
-            continue
-        slide_idx = int(m.group(1))
-        if slide_idx in recorded_indices:
-            continue
-        kb_existing = list(motion_dir.glob(f"cream_{slide_idx:02d}_*_motion.mp4"))
-        if kb_existing:
-            continue
-        render_motion_cover(str(png), str(motion_dir), "cream")
-        recorded_indices.add(slide_idx)
-
-    # Motion completeness guard — never email preview with empty motion folder
-    motion_mp4s = list(motion_dir.glob("*.mp4")) if motion_dir.exists() else []
-    if not motion_mp4s:
-        _send_alert(f"Motion folder empty for '{topic[:40]}' — skipping preview. Check Playwright + record_motion_slides logs.")
-        return None
-
-    # Build carousel reel: stitch per-slide MP4s into one continuous 9:16 reel.
-    # Tier 1 — Remotion CarouselReel (letterboxed, smooth Ken Burns per slide)
-    # Tier 2 — build_carousel_reel.sh (FFmpeg, always-succeeds floor)
+    # 4. Render motion — disabled when MOTION_ENABLED=0.
+    # Motion is currently OFF (broken Ken Burns cascade, wrong architecture).
+    # Will be rebuilt from scratch with real video clips + static text overlay.
+    # To re-enable: set MOTION_ENABLED=1 (or remove the env var — default is ON).
+    motion_enabled = os.environ.get("MOTION_ENABLED", "0").strip() != "0"
     reel_built = False
     reel_link  = ""
-    reel_renderer = "failed"
-    png_count = len(list(png_dir.glob("*.png")))
-    if png_count >= 3:
-        # Tier 1 — Remotion
-        _remotion_reel = render_carousel_reel_remotion(png_dir, motion_dir, slug, clips)
-        if _remotion_reel:
-            reel_built = True
-            reel_renderer = "remotion"
+    reel_renderer = "skipped"
 
-        # Tier 2 — FFmpeg fallback
-        if not reel_built:
-            _reel_script = Path(__file__).parent / "build_carousel_reel.sh"
-            if _reel_script.exists():
-                try:
-                    _reel_proc = subprocess.run(
-                        ["bash", str(_reel_script), slug, str(motion_dir)],
-                        capture_output=True, text=True, timeout=300,
-                    )
-                    for _line in _reel_proc.stdout.strip().splitlines():
-                        print(f"  {_line}")
-                    if (motion_dir / "carousel_reel.mp4").exists():
-                        reel_built = True
-                        reel_renderer = "ffmpeg"
-                except Exception as _reel_err:
-                    print(f"  [carousel_reel] FFmpeg fallback failed (non-fatal): {_reel_err}")
+    if motion_enabled:
+        print("  Rendering motion (cascade: Remotion → Playwright → Ken Burns)...")
+        recorded_mp4s = []
+        recorded_indices = set()
 
-        if not reel_built:
-            reel_renderer = "failed"
-            _send_alert(f"[REEL_FAILED] Both Remotion and FFmpeg failed for '{topic[:40]}' — no carousel_reel.mp4 produced.")
+        # 4a — Remotion cover render (if Remotion project present). Uses the clip from slide 1 if we got one.
+        clip_suggestions = content.get("clip_suggestions", [])
+        cover_sugg = next((c for c in clip_suggestions if c.get("slide", 0) == 1),
+                         (clip_suggestions[0] if clip_suggestions else {}))
+        cover_motion_prompt = cover_sugg.get("motion_prompt", "")
+        cover_renderer_pref = cover_sugg.get("motion_renderer", "remotion")  # default: remotion for cover
+        cream_covers = sorted(png_dir.glob("cream_01_*_html.png"))
+        remotion_cover_done = False
+        if cream_covers and cover_renderer_pref == "remotion":
+            remotion_clip = clips.get(1, "")
+            r_path = render_motion_remotion(
+                str(cream_covers[0]), remotion_clip, str(motion_dir), "cream",
+                hook_text=(content.get("hook") or "")[:48], slide_idx=1
+            )
+            if r_path:
+                remotion_cover_done = True
+                recorded_indices.add(1)
+
+        # 4b — Playwright recording for any clip slide (cover included if Remotion missed + HTML clip file exists).
+        if clip_html_files:
+            pw_inputs = [(idx, h) for idx, h in clip_html_files
+                         if not (idx == 1 and remotion_cover_done)]
+            if pw_inputs:
+                print(f"  Recording {len(pw_inputs)} clip slide(s) via Playwright...")
+                recorded_mp4s = record_motion_slides(pw_inputs, str(motion_dir), duration=5)
+                recorded_indices |= {idx for idx, _ in recorded_mp4s}
+                print(f"  Playwright recorded: {len(recorded_mp4s)} MP4(s) (slides {sorted({idx for idx,_ in recorded_mp4s})})")
+
+        # 4c. Kling — fires automatically when Remotion didn't produce an mp4 and no
+        # real clip exists for the cover. Cascade: Remotion → Kling → Ken Burns.
+        kling_disabled = os.environ.get("KLING_APPROVE", "").strip().lower() == "0"
+        cover_has_real_clip = bool(clips.get(1))
+        cream_covers = sorted(png_dir.glob("cream_01_*_html.png"))
+        if cream_covers and not remotion_cover_done and not cover_has_real_clip and not kling_disabled:
+            anim_prompt = (
+                content.get("cover_visual", {}).get("option_b", {}).get("prompt", "")
+                or "Subtle cinematic camera movement, documentary editorial style"
+            )
+            print(f"  Kling: Remotion missed + no real clip — animating cover PNG...")
+            _animate_cover_kling(str(cream_covers[0]), anim_prompt, str(motion_dir), "cream")
+
+        # 4d. Ken Burns floor for any slide that still has no motion MP4.
+        for png in sorted(png_dir.glob("cream_*_html.png")):
+            m = re.search(r"cream_(\d+)_", png.name)
+            if not m:
+                continue
+            slide_idx = int(m.group(1))
+            if slide_idx in recorded_indices:
+                continue
+            kb_existing = list(motion_dir.glob(f"cream_{slide_idx:02d}_*_motion.mp4"))
+            if kb_existing:
+                continue
+            render_motion_cover(str(png), str(motion_dir), "cream")
+            recorded_indices.add(slide_idx)
+
+        # Motion completeness guard
+        motion_mp4s = list(motion_dir.glob("*.mp4")) if motion_dir.exists() else []
+        if not motion_mp4s:
+            _send_alert(f"Motion folder empty for '{topic[:40]}' — skipping preview. Check Playwright + record_motion_slides logs.")
+            return None
+
+        # Build carousel reel
+        reel_renderer = "failed"
+        png_count = len(list(png_dir.glob("*.png")))
+        if png_count >= 3:
+            _remotion_reel = render_carousel_reel_remotion(png_dir, motion_dir, slug, clips)
+            if _remotion_reel:
+                reel_built = True
+                reel_renderer = "remotion"
+
+            if not reel_built:
+                _reel_script = Path(__file__).parent / "build_carousel_reel.sh"
+                if _reel_script.exists():
+                    try:
+                        _reel_proc = subprocess.run(
+                            ["bash", str(_reel_script), slug, str(motion_dir)],
+                            capture_output=True, text=True, timeout=300,
+                        )
+                        for _line in _reel_proc.stdout.strip().splitlines():
+                            print(f"  {_line}")
+                        if (motion_dir / "carousel_reel.mp4").exists():
+                            reel_built = True
+                            reel_renderer = "ffmpeg"
+                    except Exception as _reel_err:
+                        print(f"  [carousel_reel] FFmpeg fallback failed (non-fatal): {_reel_err}")
+
+            if not reel_built:
+                _send_alert(f"[REEL_FAILED] Both Remotion and FFmpeg failed for '{topic[:40]}' — no carousel_reel.mp4 produced.")
+    else:
+        print("  [MOTION_DISABLED] Motion skipped (MOTION_ENABLED=0). Static-only post.")
 
     # Media presence check (non-blocking) — alert if images/clips are missing
     media_ok, media_issues = _check_media_presence(
