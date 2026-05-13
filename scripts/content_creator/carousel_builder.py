@@ -1753,11 +1753,56 @@ def generate_opc_per_template_content(topic, plan, tip_content, brief="", model=
                 "=== END SLIDE PURPOSE PILOT ===\n"
             )
 
+    # OPC story spine — MANDATORY, always injected regardless of SLIDE_PURPOSE_PILOT.
+    # Each standalone template must visibly serve its assigned narrative act.
+    _spine_for_standalones = []
+    for _s in slides:
+        _idx = _s.get("slide", 0)
+        _tid = _s.get("template_id", "")
+        if _tid in standalone_ids and _idx in SLIDE_PURPOSE_OPC_BY_INDEX:
+            _spine_for_standalones.append(
+                f"  Slide {_idx} ({_tid}) → {SLIDE_PURPOSE_OPC_BY_INDEX[_idx].upper()}"
+            )
+
+    opc_story_spine_block = ""
+    if _spine_for_standalones:
+        opc_story_spine_block = (
+            "\n=== MANDATORY OPC STORY SPINE — NON-NEGOTIABLE ===\n"
+            "Every OPC carousel tells ONE story in 5 acts:\n"
+            "  Slide 1 HOOK    — stop the scroll with a number, cost, risk, or timeframe.\n"
+            "  Slide 2 COST    — show what goes wrong or what it costs the homeowner.\n"
+            "  Slide 3 TEACH   — reveal one root cause or key decision insight.\n"
+            "  Slide 4 APPLY   — give the ONE concrete action Mike uses on every job.\n"
+            "  Slide 5 SOURCES — result proof + CTA + attribution.\n"
+            "These standalone templates are assigned to specific acts:\n"
+            + "\n".join(_spine_for_standalones) + "\n\n"
+            "Each template's fields MUST serve its act. Examples:\n"
+            "  COST slide: surface a dollar amount or risk ('skip this = $4K repair').\n"
+            "  TEACH slide: reveal a root cause or framework, not just describe the topic.\n"
+            "  APPLY slide: one concrete action Mike recommends. Not a list. One thing.\n"
+            "Generic filling ('here is some information about X') is BANNED.\n\n"
+            "SLIDE 1 HOOK RULES (if any standalone template lands on slide 1):\n"
+            "  cover_hook, subhead, or opening text MUST include at least one of:\n"
+            "    • a number or percentage (e.g. '72% of homeowners skip this')\n"
+            "    • a dollar amount (e.g. 'costs $3K–$8K on average')\n"
+            "    • a timeframe (e.g. 'within 2 years', 'after one rainy season')\n"
+            "    • a loss/risk statement (e.g. 'you’re overpaying', 'most skip this and pay twice')\n"
+            "  BANNED hook openers: 'Here’s what you need to know', 'A quick tip about',\n"
+            "    'Did you know', 'Let’s talk about', 'Today we’re covering'.\n\n"
+            "BANNED GENERIC TITLES (applies to ALL template fields: headline_main, card_titles, title_main):\n"
+            "  NEVER use: THE LIST · WHAT TO KNOW · TIPS · THINGS TO CONSIDER · KEY POINTS\n"
+            "             OVERVIEW · SUMMARY · INTRODUCTION · FACTS · GUIDE · INFO\n"
+            "  Instead: name the specific material, cost, risk, or outcome.\n"
+            "  GOOD: 'HIDDEN COSTS', 'REBAR SPACING', 'PERMIT TRAPS', 'CONCRETE VS PAVERS'\n"
+            "  BAD:  'KEY POINTS', 'WHAT TO KNOW', 'TIPS', 'THE LIST'\n"
+            "=== END MANDATORY OPC STORY SPINE ===\n"
+        )
+
     prompt = f"""You are filling in approved Instagram carousel TEMPLATES for Oak Park Construction (South Florida contractor, license CBC1263425, voice = Mike, first-person, conversational expert).
 
 Topic: "{topic}"
 {_comparison_prompt_block(topic, brief)}
-{purpose_block_smart}
+{opc_story_spine_block}{purpose_block_smart}
 You ALREADY produced this tip-shape carousel content (use as the SOURCE of facts/voice — do NOT contradict it):
 {json.dumps(tip_ctx, indent=2)}
 
