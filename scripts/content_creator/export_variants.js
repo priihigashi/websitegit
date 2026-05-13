@@ -22,7 +22,10 @@ async function run(htmlPath, outputDir) {
   // NN-S11: auto-shrink overflow text before any screenshot.
   // Shrinks font-size on elements whose text clips inside overflow:hidden containers.
   // Text selectors cover all carousel templates (OPC + Brazil + USA).
-  await page.evaluate(() => {
+  // NN-S11: auto-shrink returns block list so Node.js can exit(1) and halt the build.
+  // console.error inside evaluate() goes to the Chromium browser console — NOT to Node.js stderr.
+  // Returning the list is the only way to propagate block status to the outer process.
+  const blockMessages = await page.evaluate(() => {
     const TEXT_SELECTORS = [
       '.headline', '.headline-main', '.headline-italic',
       '.tip-big', '.src-head', '.stat-big',
@@ -40,6 +43,7 @@ async function run(htmlPath, outputDir) {
       'h1': 48, 'h2': 36, 'h3': 28,
     };
     const DEFAULT_MIN_FS = 16;
+    const blocks = [];
     TEXT_SELECTORS.forEach(sel => {
       const minFs = MIN_FS_MAP[sel] !== undefined ? MIN_FS_MAP[sel] : DEFAULT_MIN_FS;
       document.querySelectorAll(sel).forEach(el => {
@@ -54,13 +58,23 @@ async function run(htmlPath, outputDir) {
         if (fs < startFs) {
           console.log(`[auto-shrink] ${sel}: ${startFs.toFixed(0)}px → ${fs.toFixed(0)}px (floor ${minFs}px)`);
         }
-        // If still overflowing after hitting the readable floor, log a hard block.
+        // If still overflowing at the readable floor, collect a block message.
         if ((el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) && fs <= minFs) {
-          console.error(`[BLOCK] ${sel} still overflows at floor ${minFs}px — text too long for container. Do not approve.`);
+          const msg = `[BLOCK] ${sel} still overflows at floor ${minFs}px — text too long for container. Do not approve.`;
+          console.error(msg);  // browser DevTools visibility
+          blocks.push(msg);
         }
       });
     });
+    return blocks;
   });
+  // NN-S11 block guard: if any headline hit the floor and still overflows, exit non-zero.
+  // render_pngs() in carousel_builder.py treats non-zero as render failure → blocks approval email.
+  if (blockMessages.length > 0) {
+    blockMessages.forEach(m => console.error(m));
+    await browser.close();
+    process.exit(1);
+  }
 
   const slides = page.locator('.slide');
   const n = await slides.count();
