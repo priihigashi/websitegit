@@ -4088,7 +4088,12 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
     n_slides = len(slides)   # middle slides only; cover=1, sources=n_slides+2
     total_slides = n_slides + 2  # cover + middles + sources
 
-    css = _brazil_motion_css().format(SLIDE_INSET_PX=SLIDE_INSET_PX)
+    css = (
+        _brazil_motion_css()
+        .replace("{SLIDE_INSET_PX}", str(SLIDE_INSET_PX))
+        .replace("{{", "{")
+        .replace("}}", "}")
+    )
 
     def esc(s):
         return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
@@ -4108,7 +4113,8 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
         # middle-slide array (which would otherwise only be accessed inside the else branch).
         if slide_idx == 1:
             slide_data = {}
-            layout_hint = content.get("cover_layout_hint", content.get("layout_hint", "A")).upper()
+            _env_layout = os.environ.get("MOTION_COVER_LAYOUT", "A").upper()
+            layout_hint = content.get("cover_layout_hint", content.get("layout_hint", _env_layout)).upper()
         else:
             _data_idx = max(0, min(slide_idx - 2, len(slides) - 1)) if slides else 0
             slide_data = slides[_data_idx] if slides else {}

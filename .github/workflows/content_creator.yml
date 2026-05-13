@@ -98,6 +98,24 @@ on:
         options:
           - '0'
           - '1'
+      motion_test:
+        description: 'Phase 1 motion test — enable motion rendering for this single manual run only. Cron always stays at 0. Set to 1 to open motion, leave at 0 for normal static build.'
+        required: false
+        default: '0'
+        type: choice
+        options:
+          - '0'
+          - '1'
+      motion_cover_layout:
+        description: 'Cover slide layout for motion test. A = framed sticker 260×340 top-right. D = full-bleed clip + dark overlay. Leave blank = A.'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - 'A'
+          - 'D'
+          - 'B'
 
 jobs:
   create-content:
@@ -202,6 +220,8 @@ jobs:
           TEST_OUTPUT_FOLDER: ${{ github.event.inputs.test_output_folder || '' }}
           KLING_APPROVE: ${{ github.event.inputs.kling_approve || '' }}
           KLING_API_KEY: ${{ secrets.KLING_API_KEY }}
+          MOTION_ENABLED: ${{ github.event.inputs.motion_test || '0' }}
+          MOTION_COVER_LAYOUT: ${{ github.event.inputs.motion_cover_layout || 'A' }}
 
       - name: Run carousel reviewer (post-build quality check)
         if: always()
