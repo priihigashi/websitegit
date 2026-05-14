@@ -1215,14 +1215,14 @@ Return ONLY a JSON object with these fields:
   "subhead": "1 sentence under the headline — MUST contain at least one of: a specific number, a dollar amount, or a named consequence/fear. BANNED: generic phrases like 'what to look for', 'things you should know', 'tips for'. Good: '$20K mistake most homeowners make before signing' | '3 red flags contractors hope you miss'",
   "slide2_headline": "3-4 word headline for slide 2",
   "slide2_stat": "a big number or stat WITH QUALIFIER (e.g. 'UP TO $15K' not '$12K') — stat_number MUST be 40 characters or fewer including spaces",
-  "slide2_label": "1 line explaining the stat — include source name",
+  "slide2_label": "1 line connecting the stat to a homeowner's real decision — frame as a consequence, not a citation. GOOD: 'That gap erases your patio budget before you pour the slab (NAHB 2023)' | 'One wrong choice here eats 40% of most remodel budgets (Remodeling Magazine 2024)'. BAD: 'According to NAHB, prices vary by material.' Always end with the source in parentheses.",
   "slide3_items": [
-    {{"title": "Item 1 title", "sub": "1 line detail with cost range if applicable"}},
-    {{"title": "Item 2 title", "sub": "1 line detail"}},
-    {{"title": "Item 3 title", "sub": "1 line detail"}}
+    {{"title": "Item 1 title", "sub": "1 line ending with a decision consequence — what does this mean for a homeowner choosing between options? GOOD: '$8–12K upfront, no sealing needed — pays for itself at year 5' | 'Cracks under heavy loads — you replace it, not the contractor'. BAD: 'Costs more than asphalt.'"}},
+    {{"title": "Item 2 title", "sub": "1 line with decision consequence — different angle from item 1"}},
+    {{"title": "Item 3 title", "sub": "1 line with decision consequence — different angle from items 1 and 2"}}
   ],
   "slide4_headline": "3-4 word action headline — name the specific move, not a generic warning label. GOOD: 'COMPARE TOTAL COST', 'CHECK DRAINAGE FIRST', 'PLAN REPAIRS EARLY'. BAD: 'AVOID THIS', 'WATCH OUT', 'RED FLAG', 'THE PRO MOVE', 'PRO TIP'",
-  "slide4_body": "2-3 sentences explaining the tip — educational, no promises",
+  "slide4_body": "2-3 sentences as Mike speaking directly to the homeowner who is about to make the mistake this carousel warns about. First person. Name the one specific thing they should ask or do first, and why it saves money. Conversational, not instructional. No promises, no superlatives. GOOD: 'First thing I ask every client: what\\'s your 10-year plan for this? Concrete costs more today but I\\'ve seen pavers shift and stain by year 3 — that repair bill surprises people.' BAD: 'Homeowners should consider both options carefully before making a decision.'",
   "mentioned_people": [
     {{"name": "Full Name", "role_en": "role / why they're named", "slide": 4, "image_hint": "Wikipedia or editorial headshot search term"}}
   ],
@@ -1232,7 +1232,7 @@ Return ONLY a JSON object with these fields:
     "Source 3 — description",
     "Oak Park Construction — South Florida contractor data, 2023-2025"
   ],
-  "cta": "2-3 word call to action (e.g. SAVE THIS.)",
+  "cta": "4-7 word Mike-voice closer that creates a sense of payoff — not just a save prompt, a mini-resolution. GOOD: 'SAVE THIS BEFORE YOUR NEXT BID.' | 'SHOW THIS TO YOUR CONTRACTOR.' | 'SCREENSHOT BEFORE SIGNING ANYTHING.' | 'KEEP THIS BEFORE YOU CALL ANYONE.' BAD: 'SAVE THIS.' | 'LIKE AND SHARE.' | 'FOLLOW FOR MORE TIPS.'",
   "caption": "Instagram caption: 2-3 sentences max. Hook first line (visible in feed). Describe the topic. Let slides do the teaching. End with 8-12 relevant hashtags.",
   "audience_questions": [
     "Question a viewer would ask after seeing slide 1",
