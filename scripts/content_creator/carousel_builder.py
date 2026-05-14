@@ -1221,7 +1221,7 @@ Return ONLY a JSON object with these fields:
     {{"title": "Item 2 title", "sub": "1 line detail"}},
     {{"title": "Item 3 title", "sub": "1 line detail"}}
   ],
-  "slide4_headline": "3-4 word tip/action headline — if the slide content is about risks, warnings, red flags, mistakes to avoid, or things that can go wrong, the label MUST be one of: RED FLAG, WATCH OUT, or AVOID THIS. NEVER use THE PRO MOVE, PRO TIP, or EXPERT ADVICE on warning slides",
+  "slide4_headline": "3-4 word action headline — name the specific move, not a generic warning label. GOOD: 'COMPARE TOTAL COST', 'CHECK DRAINAGE FIRST', 'PLAN REPAIRS EARLY'. BAD: 'AVOID THIS', 'WATCH OUT', 'RED FLAG', 'THE PRO MOVE', 'PRO TIP'",
   "slide4_body": "2-3 sentences explaining the tip — educational, no promises",
   "mentioned_people": [
     {{"name": "Full Name", "role_en": "role / why they're named", "slide": 4, "image_hint": "Wikipedia or editorial headshot search term"}}
@@ -1306,7 +1306,7 @@ Rules:
   THREAD TEST: if you remove the cover slide, can someone read slides 2-4 and still know they're about the SAME topic? If no, rewrite.
   - slide2_headline MUST name the same risk/material/situation as the cover headline (e.g. cover = "3 OUTDOOR KITCHEN RISKS" → slide2_headline = "WHAT THESE COST" or "THE REAL PRICE TAG")
   - slide3_items are the 3 items/causes/red-flags introduced on the cover — NOT 3 different tips on a different subject
-  - slide4 addresses specifically what the homeowner does to avoid the risk introduced on slide 1
+  - slide4 addresses specifically what the homeowner does to avoid the risk introduced on slide 1; headline must name the action, not a generic warning label
   BANNED: slides that each cover a different sub-topic (e.g. slide 2 = permits, slide 3 = materials, slide 4 = timeline — these feel like 3 different posts crammed together)
 - Caption hook = first line visible in feed — MUST contain at least one of: a specific number, a dollar amount, or a named consequence/risk. BANNED: generic openers like "Here's what you need to know", "Let's talk about", "Important update", "Things homeowners should know". GOOD: "Most homeowners spend $12K-$20K replacing tile they could have saved." | "3 red flags your contractor won't mention until after you sign." | "This one permit mistake delays your project 6-8 weeks."
 - NEVER promise what OPC does for clients
@@ -4619,16 +4619,48 @@ def render_opc_tip_stat(content, v_class, *, context_slot):
     )
 
 
+def _opc_story_slide3_headline(content):
+    """Short slide-3 story title for the fixed legacy list layout."""
+    items = content.get("slide3_items", []) if isinstance(content.get("slide3_items", []), list) else []
+    item_text = " ".join(
+        f"{(i or {}).get('title', '')} {(i or {}).get('sub', '')}"
+        for i in items if isinstance(i, dict)
+    ).lower()
+    pair = content.get("_comparison_pair") if isinstance(content.get("_comparison_pair"), dict) else {}
+    has_comparison = bool(pair.get("left") and pair.get("right"))
+    if "$" in item_text or "cost" in item_text or "price" in item_text or "budget" in item_text:
+        return "COST SPLIT" if has_comparison else "COST DRIVERS"
+    if has_comparison:
+        return "TRADEOFFS"
+    if "risk" in item_text or "red flag" in item_text or "mistake" in item_text:
+        return "THE RISKS"
+    return "THE CAUSE"
+
+
+def _opc_story_slide4_headline(content):
+    """Replace generic warning labels with a specific action headline."""
+    raw = str(content.get("slide4_headline") or "").strip() or "COMPARE TOTAL COST"
+    generic = {
+        "AVOID THIS", "WATCH OUT", "RED FLAG", "THE PRO MOVE",
+        "PRO TIP", "EXPERT ADVICE", "THE FIX",
+    }
+    if raw.upper().strip(".") not in generic:
+        return raw
+    body = str(content.get("slide4_body") or "").lower()
+    if "long-term" in body or "total cost" in body or "upfront" in body:
+        return "COMPARE TOTAL COST"
+    if "repair" in body or "maintenance" in body:
+        return "PLAN REPAIRS EARLY"
+    if "drain" in body or "slope" in body or "water" in body:
+        return "CHECK DRAINAGE FIRST"
+    if "permit" in body or "code" in body:
+        return "CHECK PERMITS FIRST"
+    return "COMPARE TOTAL COST"
+
+
 def render_opc_tip_list(content, v_class, *, items_html, context_slot):
     """OPC tip — slide 3 (TEACH / why-it-happens checklist slide)."""
-    # Keep slide 3 topic-specific without reusing a long cover headline that can
-    # overflow the fixed legacy list layout at the readable 48px floor.
-    _headline_words = re.findall(r"[A-Za-z0-9$]+", (content.get("headline") or "").upper())
-    _accent_word = re.sub(r"[^A-Za-z0-9$]", "", (content.get("accent_word") or "").upper())
-    _s3_hl = next(
-        (w for w in [_accent_word, *reversed(_headline_words), *_headline_words] if 2 <= len(w) <= 10),
-        "THE CAUSE",
-    )
+    _s3_hl = _opc_story_slide3_headline(content)
     return (
         f'<div class="slide slide-list {v_class}">\n'
         f'  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>\n'
@@ -5131,7 +5163,7 @@ def _build_opc_html(content, slug, work_dir, media_paths=None):
     for i, src in enumerate(content.get("sources", []), 1):
         sources_html += f'    <div class="src-row"><span class="src-num">{i:02d}</span><span>{src}</span></div>\n'
 
-    s4_hl = content.get("slide4_headline", "THE PRO MOVE")
+    s4_hl = _opc_story_slide4_headline(content)
     s4_accent = s4_hl.split()[-1] if s4_hl else "MOVE"
     opc_slides_meta = content.get("slides", []) if isinstance(content.get("slides", []), list) else []
     cta = content.get("cta", "SAVE THIS.")
