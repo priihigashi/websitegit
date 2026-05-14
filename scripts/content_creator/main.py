@@ -1288,7 +1288,7 @@ def _animate_cover_kling(png_path, prompt, output_dir, variant):
         return None
 
 
-def _check_media_presence(png_dir, motion_dir, resources_dir, post_id):
+def _check_media_presence(png_dir, motion_dir, resources_dir, post_id, *, motion_enabled=True):
     """Verify media completeness locally before shipping.
     Returns (ok: bool, issues: list[str]).
     Non-blocking — caller sends alert but post still ships.
@@ -1298,9 +1298,10 @@ def _check_media_presence(png_dir, motion_dir, resources_dir, post_id):
     if len(pngs) < 3:
         issues.append(f"PNG count low: {len(pngs)} (expected ≥ 3 slides × 1 variant min)")
 
-    mp4s = list(Path(motion_dir).glob("*.mp4")) if Path(motion_dir).exists() else []
-    if not mp4s:
-        issues.append("Motion folder has no MP4s — motion delivery will fail")
+    if motion_enabled:
+        mp4s = list(Path(motion_dir).glob("*.mp4")) if Path(motion_dir).exists() else []
+        if not mp4s:
+            issues.append("Motion folder has no MP4s — motion delivery will fail")
 
     images_dir = Path(resources_dir) / "images"
     images = [f for f in images_dir.iterdir() if f.is_file()] if images_dir.exists() else []
@@ -1860,7 +1861,8 @@ def process_one_topic(topic_entry, run_date, drive):
 
     # Media presence check (non-blocking) — alert if images/clips are missing
     media_ok, media_issues = _check_media_presence(
-        str(png_dir), str(motion_dir), str(work / "resources"), post_id)
+        str(png_dir), str(motion_dir), str(work / "resources"), post_id,
+        motion_enabled=motion_enabled)
     if media_issues:
         _send_alert(
             f"Media gaps for '{topic[:40]}':\n" +

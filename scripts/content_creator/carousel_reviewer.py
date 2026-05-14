@@ -515,6 +515,15 @@ def check_motion_folder(motion_dir: str) -> list[str]:
     return []
 
 
+def _motion_required(result: dict | None = None) -> bool:
+    """Motion checks are disabled for static-only builds."""
+    if os.environ.get("MOTION_ENABLED", "0") == "0":
+        return False
+    if result and result.get("reel_renderer") == "skipped":
+        return False
+    return True
+
+
 # ─── Placeholder auto-fix: Wikimedia fetch + HTML patch + re-render + Drive upload ──
 
 def _fetch_wikimedia_image(search_query: str, dest_path) -> bool:
@@ -1357,7 +1366,7 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
             except Exception as e:
                 issues.append(f"{p.get('name','?')}: PNG download/QA failed ({e})")
 
-    if os.environ.get("MOTION_ENABLED", "0") != "0":
+    if _motion_required():
         motion_folder_id = _find_folder_id(drive, folder_id, "motion")
         if not motion_folder_id:
             issues.append("Motion folder missing entirely")
@@ -2102,7 +2111,7 @@ def check_built_post(result: dict) -> dict:
 
     # 3. Motion check — skip when pipeline is running with motion disabled
     motion_dir_local = Path(work_dir_env) / post_id / "motion"
-    if os.environ.get("MOTION_ENABLED", "0") != "0":
+    if _motion_required(result):
         all_issues.extend(check_motion_folder(str(motion_dir_local)))
 
     # 4. Provenance check — flag AI-sourced images (real-photo tiers missed)
