@@ -1210,7 +1210,7 @@ Language: {lang}
 {_plan_block}
 Return ONLY a JSON object with these fields:
 {{
-  "headline": "3-4 word cover headline (ALL CAPS, punchy) — prefer a number, cost, or named risk when possible. GOOD: '3 COSTLY MISTAKES', '$20K TRAP', 'AVOID THIS COST'. BAD: 'THINGS TO KNOW', 'TIPS AND TRICKS', 'WHAT TO DO'.",
+  "headline": "3-4 word cover headline (ALL CAPS, punchy) — MUST include a number, dollar amount, timeframe, or named loss/risk. GOOD: '3 COSTLY MISTAKES', '$20K TRAP', 'AVOID THIS COST'. BAD: 'CONCRETE OR PAVERS', 'THINGS TO KNOW', 'TIPS AND TRICKS', 'WHAT TO DO'.",
   "accent_word": "1 word from headline to highlight in accent color",
   "subhead": "1 sentence under the headline — MUST contain at least one of: a specific number, a dollar amount, or a named consequence/fear. BANNED: generic phrases like 'what to look for', 'things you should know', 'tips for'. Good: '$20K mistake most homeowners make before signing' | '3 red flags contractors hope you miss'",
   "slide2_headline": "3-4 word headline for slide 2",
@@ -1301,6 +1301,7 @@ Rules:
 - Stats MUST use ranges (e.g. "$5K-$15K") not exact averages — safer and more honest
 - Every stat must name its source in slide2_label or on the sources slide
 - Headlines in ALL CAPS
+- Slide 1 headline MUST include a number, dollar amount, timeframe, or named loss/risk. Never ship a neutral topic label like "CONCRETE OR PAVERS" as the cover headline.
 - NARRATIVE ARC — NON-NEGOTIABLE: ALL 5 slides must tell ONE connected story. They are chapters, not 5 separate tips.
   SEQUENCE: cover sets the risk/hook → slide2_stat quantifies THAT risk → slide3_items are 3 causes/red-flags OF that same risk → slide4 is the ONE fix for that risk → sources back up the claims.
   THREAD TEST: if you remove the cover slide, can someone read slides 2-4 and still know they're about the SAME topic? If no, rewrite.
@@ -4658,6 +4659,21 @@ def _opc_story_slide4_headline(content):
     return "COMPARE TOTAL COST"
 
 
+def _opc_story_cover_headline(content, slug):
+    """Keep the OPC cover hook from degrading into a neutral topic label."""
+    raw = str(content.get("headline") or "").strip()
+    hl = raw or re.sub(r"[^a-zA-Z0-9 ]", " ", slug or "").upper().strip() or "THE GUIDE"
+    if re.search(r"[$%]|\d", hl) or re.search(r"\b(COST|RISK|TRAP|MISTAKE|LOSS|FAIL|OVERPAY)\b", hl, re.I):
+        return hl.upper()
+    stat = str(content.get("slide2_stat") or "").strip().upper()
+    m = re.search(r"(?:UP TO\s+)?[$]?\d[\d,]*(?:K|M)?(?:\s*[-–]\s*[$]?\d[\d,]*(?:K|M)?)?%?", stat)
+    token = (m.group(0) if m else "").strip()
+    if token:
+        token = re.sub(r"^UP TO\s+", "", token).strip()
+        return f"{token} DECISION"
+    return hl.upper()
+
+
 def render_opc_tip_list(content, v_class, *, items_html, context_slot):
     """OPC tip — slide 3 (TEACH / why-it-happens checklist slide)."""
     _s3_hl = _opc_story_slide3_headline(content)
@@ -5141,7 +5157,8 @@ OPC_TIP_COMPONENT_RENDERERS = {
 
 
 def _build_opc_html(content, slug, work_dir, media_paths=None):
-    hl = content.get("headline") or re.sub(r"[^a-zA-Z0-9 ]", " ", slug or "").upper().strip() or "THE GUIDE"
+    hl = _opc_story_cover_headline(content, slug)
+    content["headline"] = hl
     # Guardrail: keep cover subhead short enough to avoid colliding with the bottom HUD lane.
     raw_subhead = str(content.get("subhead", "")).strip()
     if len(raw_subhead) > 110:
