@@ -1555,9 +1555,9 @@ def _score_copy_coherence(
 ) -> tuple[int, str]:
     """Check B: score narrative arc of slide headlines via Sonnet.
 
-    P2 (SH-142): when SLIDE_PURPOSE_PILOT=1 and purposes are supplied, switches
-    to a purpose-fulfillment prompt — each headline is scored against its declared
-    job (hook/cost/teach/apply/sources) instead of generic arc coherence.
+    P2 (SH-142): when purposes are supplied, switches to a purpose-fulfillment
+    prompt — each headline is scored against its declared job
+    (hook/cost/teach/apply/sources) instead of generic arc coherence.
     """
     if len(headlines) < 2:
         return 0, "too few headlines to score"
@@ -1565,7 +1565,7 @@ def _score_copy_coherence(
     if not numbered.strip():
         return 0, "no headline text"
 
-    if SLIDE_PURPOSE_PILOT and purposes and isinstance(purposes, list):
+    if purposes and isinstance(purposes, list):
         purpose_map = "\n".join(
             f"  Slide {e.get('slide', i + 1)}: declared purpose = '{e.get('purpose', '?')}'"
             for i, e in enumerate(purposes)
@@ -1646,14 +1646,14 @@ def check_text_quality(
     if 0 < hook_score < 2:
         issues.append(f"[hook weak] Cover hook scored {hook_score}/3 — {hook_reason[:120]}")
 
-    # Check B — copy coherence (P2/SH-142: purpose-aware when pilot active)
+    # Check B — copy coherence (P2/SH-142: purpose-aware when purposes exist)
     # Smart-picker carousels mix heterogeneous templates (base + material_profile +
     # four_card_grid + progress_media + sources) by design — there is no cross-slide
     # narrative arc to score. OpenAI fallback (Phase 11.2) is also stricter than Sonnet
     # was, returning 1/3 even for acceptable legacy tips. Treat coherence as advisory:
     # only block on hard error/no headlines (score 0 is already excluded above).
     coh_score, coh_reason = _score_copy_coherence(all_headlines, purposes=purposes)
-    _coh_mode = "purpose-aware" if (SLIDE_PURPOSE_PILOT and purposes) else "arc"
+    _coh_mode = "purpose-aware" if purposes else "arc"
     print(f"  [1B] Coherence {coh_score}/3 ({_coh_mode}) — {coh_reason[:80]}")
     if 0 < coh_score < 2:
         # Print only — do not append to issues. Hook strength remains the gate.
@@ -2184,7 +2184,7 @@ def check_built_post(result: dict) -> dict:
     # Fallback: when LLM fallback (OpenAI/Gemini) omits slide_purposes from JSON,
     # derive them from the deterministic OPC 5-slide mapping — purposes don't change
     # per-topic, they're structural (hook→cost→teach→apply→sources for every OPC tip).
-    if not _purposes and SLIDE_PURPOSE_PILOT and niche == "opc":
+    if not _purposes and niche == "opc":
         _purposes = [
             {"slide": 1, "purpose": "hook"},
             {"slide": 2, "purpose": "cost"},
@@ -2192,9 +2192,10 @@ def check_built_post(result: dict) -> dict:
             {"slide": 4, "purpose": "apply"},
             {"slide": 5, "purpose": "sources"},
         ]
-        print(f"  [SH-139] slide_purpose pilot: LLM omitted slide_purposes — using OPC deterministic mapping")
+        pilot_note = "pilot" if SLIDE_PURPOSE_PILOT else "default"
+        print(f"  [SH-139] slide_purpose {pilot_note}: using OPC deterministic mapping")
     if _purposes and isinstance(_purposes, list):
-        print(f"  [SH-139] slide_purpose pilot active — declared purposes:")
+        print(f"  [SH-139] slide_purpose active — declared purposes:")
         for entry in _purposes:
             if isinstance(entry, dict):
                 idx = entry.get("slide", "?")
