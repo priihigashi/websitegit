@@ -824,18 +824,23 @@ def _trim_to_relevant_window(clip_path: Path, slide_cfg: dict,
 
 TierFn = Callable[[dict, Path], bool]
 
+# Motion v2 Phase 1: real clips → GIPHY → static/no motion.
+# Pexels/Pixabay/stock_scrapers are video tiers not part of Phase 1 cascade.
+# They are preserved for future phases but skipped when MOTION_PHASE1_TEST=1.
+_PHASE1_SKIP_TIERS = {"pexels", "pixabay", "stock_scrapers"}
+
 SOURCE_CHAIN: List[tuple] = [
     ("clip_collections", tier_clip_collections, ("any",)),            # pre-loaded by video-research.yml
     ("ytdlp_search",     tier_ytdlp_search,     ("any",)),            # free yt-dlp search
     ("apify_youtube",    tier_apify_youtube,    ("any",)),            # residential proxy — YouTube
     ("ytdlp_ios",        tier_ytdlp_ios,        ("any",)),            # yt-dlp iOS client
     ("apify_instagram",  tier_apify_instagram,  ("any",)),            # residential proxy — Instagram
-    ("pexels",           tier_pexels,           ("context-image", "place", "event", "product-photo")),
-    ("pixabay",          tier_pixabay,          ("context-image", "place", "event", "product-photo")),
     ("archive_org",      tier_archive_org,      ("any",)),            # public domain
     ("wikimedia",        tier_wikimedia,        ("any",)),            # CC archival
-    ("stock_scrapers",   tier_stock_scrapers,   ("context-image", "place", "event")),
-    ("giphy",            tier_giphy,            ("context-image", "place", "event", "product-photo")),  # silent skip if no key
+    ("giphy",            tier_giphy,            ("context-image", "place", "event", "product-photo")),  # Tier 2 — ambient fallback; silent skip if no key
+    ("pexels",           tier_pexels,           ("context-image", "place", "event", "product-photo")),  # Phase 2+ only (video — blocked on GH Actions IPs)
+    ("pixabay",          tier_pixabay,          ("context-image", "place", "event", "product-photo")),  # Phase 2+ only
+    ("stock_scrapers",   tier_stock_scrapers,   ("context-image", "place", "event")),                   # Phase 2+ only
 ]
 
 
@@ -860,7 +865,10 @@ def fetch_clip_with_fallback(slide_cfg: dict, work_dir: str, filename: str,
     # Resolve effective visual hint (config > arg)
     effective_hint = slide_cfg.get("visual_hint", visual_hint) or visual_hint
 
+    _phase1 = os.environ.get("MOTION_PHASE1_TEST", "0").strip() == "1"
     for tier_name, tier_fn, allowed_hints in SOURCE_CHAIN:
+        if _phase1 and tier_name in _PHASE1_SKIP_TIERS:
+            continue
         # Gate stock-only tiers for people-specific slides
         if allowed_hints != ("any",) and effective_hint not in allowed_hints:
             continue
