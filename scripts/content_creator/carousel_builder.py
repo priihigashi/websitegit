@@ -4029,6 +4029,10 @@ def fetch_clips(content, work_dir):
         return clips, clip_failures
 
     phase1_cover_only = os.environ.get("MOTION_PHASE1_TEST", "0").strip() == "1"
+    if phase1_cover_only and os.environ.get("MOTION_FORCE_NO_CLIP", "0").strip() == "1":
+        print("  fetch_clips: Phase 1 no-clip proof — skipping all clip providers")
+        return clips, clip_failures
+
     slides = content.get("slides", [])
     n_slides = len(slides)
 

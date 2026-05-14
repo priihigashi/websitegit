@@ -115,6 +115,14 @@ on:
           - ''
           - 'A'
           - 'D'
+      motion_force_no_clip:
+        description: 'Phase 1 proof only — force clip fetching to skip so the cover records as a static image/no animation fallback.'
+        required: false
+        default: '0'
+        type: choice
+        options:
+          - '0'
+          - '1'
 
 jobs:
   create-content:
@@ -222,6 +230,7 @@ jobs:
           MOTION_ENABLED: ${{ github.event.inputs.motion_test || '0' }}
           MOTION_PHASE1_TEST: ${{ github.event.inputs.motion_test || '0' }}
           MOTION_COVER_LAYOUT: ${{ github.event.inputs.motion_cover_layout || 'A' }}
+          MOTION_FORCE_NO_CLIP: ${{ github.event.inputs.motion_force_no_clip || '0' }}
 
       - name: Run carousel reviewer (post-build quality check)
         if: always()
