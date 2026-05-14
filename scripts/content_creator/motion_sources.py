@@ -670,7 +670,9 @@ def tier_giphy(slide_cfg: dict, dest_path: Path) -> bool:
     if not GIPHY_KEY:
         return False
     query = (
-        slide_cfg.get("pexels_query")
+        slide_cfg.get("giphy_query")
+        or slide_cfg.get("gif_query")
+        or slide_cfg.get("pexels_query")
         or slide_cfg.get("youtube_query")
         or slide_cfg.get("query") or ""
     )

@@ -1270,8 +1270,12 @@ Return ONLY a JSON object with these fields:
   "clip_suggestions": [
     {{
       "slide": 1,
+      "layout_hint": "A|D — A for framed sticker/tool/product clip; D only when the clip can work as a full-bleed background under dark overlay",
+      "subject_type": "person|place|event|product|tool|process|material|concept",
+      "text_density": "low|medium|high — use low for layout D so text remains readable over video",
       "youtube_query": "YouTube search for COVER — construction tutorial or timelapse matching the topic. GOOD: 'roof shingles installation timelapse 2024', 'concrete driveway pour residential how to', 'kitchen cabinet install frameless tutorial'. Use 4-6 words. Avoid brand names unless they are the subject.",
       "instagram_query": "Instagram/hashtag phrasing for the same subject — lowercase, no hashtag symbol. e.g. 'residential roofing installation'",
+      "giphy_query": "Only for simple tool/material/action accent loops; otherwise empty string. GOOD: 'concrete pour', 'tile installation'. BAD: meme reactions for OPC.",
       "pexels_query": "Pexels stock video — specific material/action for COVER. GOOD: 'roof shingles installation aerial residential', 'concrete driveway pour south florida', 'kitchen remodel frameless cabinet install'. NO proper names. MINIMUM 4 words.",
       "pixabay_query": "Different wording from pexels_query — same subject, different angle. e.g. 'residential roofing contractor work' vs 'asphalt shingle install timelapse'",
       "archive_query": "Public-domain construction footage phrasing. e.g. 'residential construction 1970s archival', 'roofing trade work vintage footage'",
@@ -1282,8 +1286,12 @@ Return ONLY a JSON object with these fields:
     }},
     {{
       "slide": 3,
+      "layout_hint": "A|B — A for small tool/product/action sticker; B for medium place/process window. Never D on dense text slides.",
+      "subject_type": "person|place|event|product|tool|process|material|concept",
+      "text_density": "low|medium|high",
       "youtube_query": "YouTube search matching SLIDE 3 subject — different query from cover. e.g. 'how to inspect roof before buying home', 'permit process residential addition explained'",
       "instagram_query": "Instagram phrasing for slide 3 subject — lowercase, no hashtag symbol",
+      "giphy_query": "Only for simple tool/material/action accent loops; otherwise empty string.",
       "pexels_query": "Pexels stock video matching SLIDE 3 content — specific material/process. Different from cover query.",
       "pixabay_query": "Different wording same subject as slide 3 pexels_query",
       "archive_query": "Archival phrasing for slide 3 subject",
@@ -1302,6 +1310,7 @@ Rules:
 - Every stat must name its source in slide2_label or on the sources slide
 - Headlines in ALL CAPS
 - Slide 1 headline MUST include a number, dollar amount, timeframe, or named loss/risk. Never ship a neutral topic label like "CONCRETE OR PAVERS" as the cover headline.
+- Motion metadata is required but manual-only: choose layout_hint from the content, not variety rotation. Use A for a framed sticker/tool/person/product, B for a medium process/place window on middle slides, D only when the cover can be readable as full background video under dark overlay. If unsure, choose A.
 - NARRATIVE ARC — NON-NEGOTIABLE: ALL 5 slides must tell ONE connected story. They are chapters, not 5 separate tips.
   SEQUENCE: cover sets the risk/hook → slide2_stat quantifies THAT risk → slide3_items are 3 causes/red-flags OF that same risk → slide4 is the ONE fix for that risk → sources back up the claims.
   THREAD TEST: if you remove the cover slide, can someone read slides 2-4 and still know they're about the SAME topic? If no, rewrite.
@@ -4057,7 +4066,7 @@ def fetch_clips(content, work_dir):
         if path:
             clips[slide_idx] = path
         else:
-            print(f"  Clip slot '{slot_name}': every tier missed — Ken Burns floor on PNG")
+            print(f"  Clip slot '{slot_name}': every tier missed — static Phase 1 fallback/no clip slot")
             clip_failures[slide_idx] = slot_name
 
     print(f"  fetch_clips: {len(clips)}/{len(clip_slots)} clip(s) ready: {list(clips.keys())}")
@@ -4074,11 +4083,10 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
       - Middle slides: every other one gets a motion file (slide 3, 5, ...).
       - Sources slide: never gets motion.
 
-    Each motion HTML has:
-      - KB bg: CSS Ken Burns zoom on the background IMAGE layer only — text layer is z-index 2
-        and stays perfectly static. Ken Burns never touches text/logo/arrows.
-      - Clip sticker: looping <video> in the clip-frame/sticker-slot when a clip is available.
-        When no clip → clip-frame is omitted, only KB bg animates.
+    Each motion HTML has static text plus either:
+      - Layout A/B: a looping <video> in a framed clip slot when a clip is available.
+      - Layout D: full-bleed looping <video> behind a dark overlay when a clip is available.
+      - No clip: a static background image with no animation for Phase 1 proof tests.
 
     Works for all niches (brazil, usa, opc). Existing cover.html is NOT modified.
     Returns list of (slide_idx, html_path) tuples.
@@ -4088,6 +4096,11 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
     slides = content.get("slides", [])
     n_slides = len(slides)   # middle slides only; cover=1, sources=n_slides+2
     total_slides = n_slides + 2  # cover + middles + sources
+    suggestions_by_slide = {
+        int(s.get("slide", 0)): s
+        for s in (content.get("clip_suggestions", []) or [])
+        if str(s.get("slide", "")).isdigit()
+    }
 
     css = (
         _brazil_motion_css()
@@ -4115,11 +4128,23 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
         if slide_idx == 1:
             slide_data = {}
             _env_layout = os.environ.get("MOTION_COVER_LAYOUT", "A").upper()
-            layout_hint = content.get("cover_layout_hint", content.get("layout_hint", _env_layout)).upper()
+            cover_sugg = suggestions_by_slide.get(1, {})
+            layout_hint = (
+                content.get("cover_layout_hint")
+                or content.get("layout_hint")
+                or cover_sugg.get("layout_hint")
+                or _env_layout
+            ).upper()
         else:
             _data_idx = max(0, min(slide_idx - 2, len(slides) - 1)) if slides else 0
             slide_data = slides[_data_idx] if slides else {}
-            layout_hint = slide_data.get("layout_hint", "A").upper()
+            slide_sugg = suggestions_by_slide.get(slide_idx, {})
+            layout_hint = (slide_data.get("layout_hint") or slide_sugg.get("layout_hint") or "A").upper()
+        text_density = str(slide_data.get("text_density") or suggestions_by_slide.get(slide_idx, {}).get("text_density") or "").lower()
+        if slide_idx != 1 and layout_hint == "D":
+            layout_hint = "B"
+        if layout_hint == "D" and text_density == "high":
+            layout_hint = "A"
 
         # Build clip block, dark overlay, and slide-class modifier from layout_hint.
         # Layout A: framed sticker 260×340 top-right (default — safe when layout_hint absent).
@@ -4258,7 +4283,7 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
 
 
 def _brazil_motion_css():
-    """CSS for per-slide motion HTML files — Ken Burns animation + clip frame styling."""
+    """CSS for per-slide motion HTML files — static background + clip frame styling."""
     return """
 *{box-sizing:border-box;margin:0;padding:0}
 :root{{--ob:#0E0D0B;--pa:#F2ECE0;--ca:#C9A84C;--gr:#7A7267;--W:1080px;--H:1350px;--P:{SLIDE_INSET_PX}px}}

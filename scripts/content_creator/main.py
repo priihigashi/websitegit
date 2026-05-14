@@ -1717,7 +1717,12 @@ def process_one_topic(topic_entry, run_date, drive):
         print("  [SH-155] HTML completeness gate ✅ — no empty fields, no visible placeholders")
 
     # 2b. Build per-slide motion HTML files (one per clip slot, separate from cover.html)
-    clip_html_files = build_motion_html(content, niche, slug, str(work), clips, media_paths=media_paths, clip_failures=clip_failures)
+    _motion_phase1_test_pre = os.environ.get("MOTION_PHASE1_TEST", "0").strip() == "1"
+    clip_html_files = build_motion_html(
+        content, niche, slug, str(work), clips,
+        media_paths=media_paths,
+        clip_failures=None if _motion_phase1_test_pre else clip_failures,
+    )
 
     # 3. Render PNGs (uses static cover.html — unchanged)
     print("  Rendering PNGs...")
@@ -1755,16 +1760,21 @@ def process_one_topic(topic_entry, run_date, drive):
         print(f"  [SH-159] post-render visual QA ✅ — {len(_png_files)} PNGs, {_variant_label}")
 
     # 4. Render motion — disabled when MOTION_ENABLED=0.
-    # Motion is currently OFF (broken Ken Burns cascade, wrong architecture).
-    # Will be rebuilt from scratch with real video clips + static text overlay.
-    # To re-enable: set MOTION_ENABLED=1 (or remove the env var — default is ON).
+    # Phase 1 manual tests are Playwright-only: no Remotion, Kling, or Ken Burns.
     motion_enabled = os.environ.get("MOTION_ENABLED", "0").strip() != "0"
+    motion_phase1_test = os.environ.get("MOTION_PHASE1_TEST", "0").strip() == "1"
     reel_built = False
     reel_link  = ""
     reel_renderer = "skipped"
 
     if motion_enabled:
-        print("  Rendering motion (cascade: Remotion → Playwright → Ken Burns)...")
+        if motion_phase1_test:
+            print("  Motion Phase 1 Test: ON")
+            print("  Renderer: Playwright only")
+            print(f"  Cover layout: {os.environ.get('MOTION_COVER_LAYOUT', 'A') or 'A'}")
+            print("  Remotion/Kling/Ken Burns: skipped by Phase 1 guard")
+        else:
+            print("  Rendering motion (legacy cascade: Remotion → Playwright → Kling → Ken Burns)...")
         recorded_mp4s = []
         recorded_indices = set()
 
@@ -1776,7 +1786,7 @@ def process_one_topic(topic_entry, run_date, drive):
         cover_renderer_pref = cover_sugg.get("motion_renderer", "remotion")  # default: remotion for cover
         cream_covers = sorted(png_dir.glob("cream_01_*_html.png"))
         remotion_cover_done = False
-        if cream_covers and cover_renderer_pref == "remotion":
+        if not motion_phase1_test and cream_covers and cover_renderer_pref == "remotion":
             remotion_clip = clips.get(1, "")
             r_path = render_motion_remotion(
                 str(cream_covers[0]), remotion_clip, str(motion_dir), "cream",
@@ -1796,12 +1806,12 @@ def process_one_topic(topic_entry, run_date, drive):
                 recorded_indices |= {idx for idx, _ in recorded_mp4s}
                 print(f"  Playwright recorded: {len(recorded_mp4s)} MP4(s) (slides {sorted({idx for idx,_ in recorded_mp4s})})")
 
-        # 4c. Kling — fires automatically when Remotion didn't produce an mp4 and no
-        # real clip exists for the cover. Cascade: Remotion → Kling → Ken Burns.
+        # 4c. Kling — legacy fallback only, never in Phase 1 proof tests.
         kling_disabled = os.environ.get("KLING_APPROVE", "").strip().lower() == "0"
         cover_has_real_clip = bool(clips.get(1))
         cream_covers = sorted(png_dir.glob("cream_01_*_html.png"))
-        if cream_covers and not remotion_cover_done and not cover_has_real_clip and not kling_disabled:
+        if (not motion_phase1_test and cream_covers and not remotion_cover_done
+                and not cover_has_real_clip and not kling_disabled):
             anim_prompt = (
                 content.get("cover_visual", {}).get("option_b", {}).get("prompt", "")
                 or "Subtle cinematic camera movement, documentary editorial style"
@@ -1809,19 +1819,21 @@ def process_one_topic(topic_entry, run_date, drive):
             print(f"  Kling: Remotion missed + no real clip — animating cover PNG...")
             _animate_cover_kling(str(cream_covers[0]), anim_prompt, str(motion_dir), "cream")
 
-        # 4d. Ken Burns floor for any slide that still has no motion MP4.
-        for png in sorted(png_dir.glob("cream_*_html.png")):
-            m = re.search(r"cream_(\d+)_", png.name)
-            if not m:
-                continue
-            slide_idx = int(m.group(1))
-            if slide_idx in recorded_indices:
-                continue
-            kb_existing = list(motion_dir.glob(f"cream_{slide_idx:02d}_*_motion.mp4"))
-            if kb_existing:
-                continue
-            render_motion_cover(str(png), str(motion_dir), "cream")
-            recorded_indices.add(slide_idx)
+        # 4d. Ken Burns floor for legacy motion only. Phase 1 uses static
+        # Playwright recordings when no clip is available.
+        if not motion_phase1_test:
+            for png in sorted(png_dir.glob("cream_*_html.png")):
+                m = re.search(r"cream_(\d+)_", png.name)
+                if not m:
+                    continue
+                slide_idx = int(m.group(1))
+                if slide_idx in recorded_indices:
+                    continue
+                kb_existing = list(motion_dir.glob(f"cream_{slide_idx:02d}_*_motion.mp4"))
+                if kb_existing:
+                    continue
+                render_motion_cover(str(png), str(motion_dir), "cream")
+                recorded_indices.add(slide_idx)
 
         # Motion completeness guard
         motion_mp4s = list(motion_dir.glob("*.mp4")) if motion_dir.exists() else []
@@ -1830,9 +1842,9 @@ def process_one_topic(topic_entry, run_date, drive):
             return None
 
         # Build carousel reel
-        reel_renderer = "failed"
+        reel_renderer = "phase1_playwright_only" if motion_phase1_test else "failed"
         png_count = len(list(png_dir.glob("*.png")))
-        if png_count >= 3:
+        if png_count >= 3 and not motion_phase1_test:
             _remotion_reel = render_carousel_reel_remotion(png_dir, motion_dir, slug, clips)
             if _remotion_reel:
                 reel_built = True

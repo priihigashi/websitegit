@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * record_motion.js — Record a single-slide motion HTML as a video using Playwright.
- * The HTML must show ONE slide at full 1080x1350. Videos autoplay, Ken Burns CSS runs.
+ * The HTML must show ONE slide at full 1080x1350. Videos autoplay when present.
  * Output: a .webm file at the given output path (caller converts to mp4 + gif via ffmpeg).
  * Usage: node record_motion.js <input.html> <output.webm> [duration_seconds=5]
  */
@@ -37,8 +37,23 @@ async function run(htmlPath, outputPath, duration) {
   // networkidle can hang forever when <video autoplay> keeps connections open; use domcontentloaded + explicit wait
   await page.goto(`file://${abs}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
-  // Wait for fonts + CSS animations to start, then let the clip play
-  await page.waitForTimeout(800);  // font load buffer + video element init
+  // Wait for fonts and for any video element to have enough data to play smoothly.
+  await page.evaluate(async () => {
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+    const videos = Array.from(document.querySelectorAll('video'));
+    await Promise.all(videos.map(video => {
+      if (video.readyState >= 3) return Promise.resolve();
+      return new Promise(resolve => {
+        const done = () => resolve();
+        video.addEventListener('canplay', done, { once: true });
+        video.addEventListener('loadeddata', done, { once: true });
+        setTimeout(done, 2500);
+      });
+    }));
+  });
+  await page.waitForTimeout(200);  // settle first painted frame
   await page.waitForTimeout(duration * 1000);  // animation duration
 
   await context.close();  // finalizes the video file
