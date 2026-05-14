@@ -1357,13 +1357,14 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
             except Exception as e:
                 issues.append(f"{p.get('name','?')}: PNG download/QA failed ({e})")
 
-    motion_folder_id = _find_folder_id(drive, folder_id, "motion")
-    if not motion_folder_id:
-        issues.append("Motion folder missing entirely")
-    else:
-        mp4s = [f for f in _list_children(drive, motion_folder_id) if f.get("name", "").lower().endswith(".mp4")]
-        if not mp4s:
-            issues.append("No MP4 files in motion folder — motion render failed")
+    if os.environ.get("MOTION_ENABLED", "0") != "0":
+        motion_folder_id = _find_folder_id(drive, folder_id, "motion")
+        if not motion_folder_id:
+            issues.append("Motion folder missing entirely")
+        else:
+            mp4s = [f for f in _list_children(drive, motion_folder_id) if f.get("name", "").lower().endswith(".mp4")]
+            if not mp4s:
+                issues.append("No MP4 files in motion folder — motion render failed")
 
     # Realism/provenance check (if manifest exists): avoid AI-only look.
     resources_folder_id = _find_folder_id(drive, folder_id, "resources")
@@ -2099,9 +2100,10 @@ def check_built_post(result: dict) -> dict:
         min_slides = 5 if niche == "opc" else 4
         all_issues.extend(check_png_folder(str(png_dir_local), min_slides))
 
-    # 3. Motion check
+    # 3. Motion check — skip when pipeline is running with motion disabled
     motion_dir_local = Path(work_dir_env) / post_id / "motion"
-    all_issues.extend(check_motion_folder(str(motion_dir_local)))
+    if os.environ.get("MOTION_ENABLED", "0") != "0":
+        all_issues.extend(check_motion_folder(str(motion_dir_local)))
 
     # 4. Provenance check — flag AI-sourced images (real-photo tiers missed)
     prov_path = Path(work_dir_env) / post_id / "resources" / "media_provenance.json"
