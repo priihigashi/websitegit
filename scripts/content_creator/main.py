@@ -1800,6 +1800,9 @@ def process_one_topic(topic_entry, run_date, drive):
         if clip_html_files:
             pw_inputs = [(idx, h) for idx, h in clip_html_files
                          if not (idx == 1 and remotion_cover_done)]
+            if motion_phase1_test:
+                pw_inputs = [(idx, h) for idx, h in pw_inputs if idx == 1]
+                print("  Phase 1 proof scope: recording cover only")
             if pw_inputs:
                 print(f"  Recording {len(pw_inputs)} clip slide(s) via Playwright...")
                 recorded_mp4s = record_motion_slides(pw_inputs, str(motion_dir), duration=5)

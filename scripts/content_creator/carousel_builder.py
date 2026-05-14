@@ -4028,6 +4028,7 @@ def fetch_clips(content, work_dir):
     if not suggestions:
         return clips, clip_failures
 
+    phase1_cover_only = os.environ.get("MOTION_PHASE1_TEST", "0").strip() == "1"
     slides = content.get("slides", [])
     n_slides = len(slides)
 
@@ -4039,19 +4040,22 @@ def fetch_clips(content, work_dir):
     if cover_suggestion:
         clip_slots.append(("cover", 1, cover_suggestion))
 
-    middle_candidates = [c for c in suggestions if c.get("slide", 0) not in (1, n_slides + 1)]
-    if len(middle_candidates) >= 2:
-        mid_idx = len(middle_candidates) // 2
-        chosen_middle = [middle_candidates[0]]
-        if mid_idx != 0 and middle_candidates[mid_idx] is not chosen_middle[0]:
-            chosen_middle.append(middle_candidates[mid_idx])
-    elif middle_candidates:
-        chosen_middle = middle_candidates
+    if phase1_cover_only:
+        print("  fetch_clips: Phase 1 proof mode — cover clip only")
     else:
-        chosen_middle = []
+        middle_candidates = [c for c in suggestions if c.get("slide", 0) not in (1, n_slides + 1)]
+        if len(middle_candidates) >= 2:
+            mid_idx = len(middle_candidates) // 2
+            chosen_middle = [middle_candidates[0]]
+            if mid_idx != 0 and middle_candidates[mid_idx] is not chosen_middle[0]:
+                chosen_middle.append(middle_candidates[mid_idx])
+        elif middle_candidates:
+            chosen_middle = middle_candidates
+        else:
+            chosen_middle = []
 
-    for c in chosen_middle:
-        clip_slots.append((f"slide_{c.get('slide',0)}", c.get("slide", 0), c))
+        for c in chosen_middle:
+            clip_slots.append((f"slide_{c.get('slide',0)}", c.get("slide", 0), c))
 
     # Fetch each slot through the unified 7-tier chain
     for slot_name, slide_idx, sugg in clip_slots:
@@ -4112,10 +4116,13 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
     def esc(s):
         return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
-    # Which slide indices get motion: cover + ALL middle slides (never sources).
-    # Regression fix: every-other-slide motion made reels look like "images missing"
-    # because non-recorded middle slides fell back to plain/static variants.
-    motion_indices = [1] + [i for i in range(2, n_slides + 2)]
+    # Which slide indices get motion: Phase 1 proof tests are cover-only.
+    # Legacy/expanded motion can still record cover + all middle slides.
+    if os.environ.get("MOTION_PHASE1_TEST", "0").strip() == "1":
+        motion_indices = [1]
+        print("  build_motion_html: Phase 1 proof mode — cover motion HTML only")
+    else:
+        motion_indices = [1] + [i for i in range(2, n_slides + 2)]
 
     for slide_idx in motion_indices:
         clip_path = clips.get(slide_idx)
