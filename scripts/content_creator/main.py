@@ -1854,22 +1854,6 @@ def process_one_topic(topic_entry, run_date, drive):
             print(f"  Kling: Remotion missed + no real clip — animating cover PNG...")
             _animate_cover_kling(str(cream_covers[0]), anim_prompt, str(motion_dir), "cream")
 
-        # 4d. Ken Burns floor for legacy motion only. Phase 1 uses static
-        # Playwright recordings when no clip is available.
-        if not motion_phase1_test:
-            for png in sorted(png_dir.glob("cream_*_html.png")):
-                m = re.search(r"cream_(\d+)_", png.name)
-                if not m:
-                    continue
-                slide_idx = int(m.group(1))
-                if slide_idx in recorded_indices:
-                    continue
-                kb_existing = list(motion_dir.glob(f"cream_{slide_idx:02d}_*_motion.mp4"))
-                if kb_existing:
-                    continue
-                render_motion_cover(str(png), str(motion_dir), "cream")
-                recorded_indices.add(slide_idx)
-
         # Motion completeness guard
         motion_mp4s = list(motion_dir.glob("*.mp4")) if motion_dir.exists() else []
         if not motion_mp4s:
