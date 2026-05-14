@@ -935,115 +935,105 @@ END OF 2026-05-03 NN-S10/S11 APPEND
   Never rewrite a working script from scratch. Only change what is strictly necessary. Before any edit: read the full file, list what you're changing and why. Good things already in the script must be p
 
 
+
 ═══════════════════════════════════════════════════════════════════════
-MOTION SYSTEM V2 SPEC — appended 2026-05-13 (approved by Priscila)
+MOTION SYSTEM V2 SPEC — updated 2026-05-14 (approved by Priscila)
 ═══════════════════════════════════════════════════════════════════════
 
-NN-M1 — MOTION SOURCE CASCADE IS LOCKED (4 TIERS, NO EXCEPTIONS)
-  Approved cascade for all motion slides:
-    Tier 1: real clip (approved OPC source or relevant real-world clip)
-    Tier 2: GIPHY — only if relevant and not cheesy; skip if no strong match
-    Tier 3: static image, NO animation (Pexels Photos API, not Videos API)
-    Tier 4: skip motion slot entirely — deliver static PNG only, no empty MP4
+NN-M1 — MOTION SOURCE CASCADE (3 TIERS, KEN BURNS PERMANENTLY REMOVED)
 
-  PEXELS FOR VIDEO IS TREATED AS UNAVAILABLE FOR PHASE 1.
-  GitHub Actions runner IPs are blocked by Pexels Videos API (403).
-  This is an external blocker — not a motion-design issue, not fixable in code.
-  The cascade must not depend on Pexels video being healthy.
-  Pexels Photos API (static image fallback, Tier 3) may work and is allowed.
-  File Pexels video 403 as a separate external-dependency ticket — do not block
-  motion Phase 1 on it.
+  Tier 1: Real short clip (~5 sec, looped cleanly)
+    Use when slide topic has: named person, place, room, city, object,
+    institution, project, or source clip. This is the primary path.
 
-NN-M2 — ROUTING LOGIC OVERRIDES ROUTE SETS
-  Per-slide routing_hint from carousel_builder.py (layout_hint, subject_type,
-  text_density) takes precedence over any global route-set rotation.
-  Example: a bio-card slide routes Layout A regardless of which route set
-  is active for that post. Route sets are the default; per-slide hint wins.
+  Tier 2: GIPHY
+    Fallback for generic expressive/ambient motion when no real footage
+    is available AND the topic is safe for that tone.
+    NOT for serious person-evidence or news proof slides unless it is
+    clearly just an accent layer.
 
-NN-M3 — PHASE 1 SCOPE: PLAYWRIGHT/HTML RECORDING ONLY, MANUAL TEST ONLY
-  Phase 1 implementation is scoped to:
-    - Playwright record_motion.js recording CSS-animated HTML
-    - Layout A (framed clip sticker, top-right) and Layout D (full-bleed clip)
-    - Cover slide only — non-cover slides get static PNG, no motion
+  Tier 3: Static image or designed visual motion
+    Last resort only. No Ken Burns — ever. Ken Burns is permanently removed,
+    not deferred. If no clip and no safe GIPHY match: deliver static PNG,
+    no motion slot. No empty MP4.
+
+NN-M2 — MOTION LAYOUT ROUTES (4 TYPES — C IS PHASE 2+)
+
+  A. Sticker Portrait
+     Small to medium vertical video sticker (person/object card).
+     Best for: named people, products, officials, contractors, tools,
+     material samples.
+     Position: framed sticker, typically top-right or inset.
+
+  B. Accent Window
+     Medium rectangle (landscape or portrait), placed like an image slot.
+     Best for: slides with moderate text that need a visual anchor.
+
+  C. Network / Multi-Face Motion  [PHASE 2 — DO NOT IMPLEMENT IN PHASE 1]
+     Mostly static layout with 1 animated main person/object and surrounding
+     static connected faces/items. Design routing hooks now but
+     do NOT implement until Phase 2.
+
+  D. Full Background Clip
+     5-second looping background video + dark overlay + static title on top.
+     Use for: place, institution, city, Congress, house timelapse, jobsite,
+     room, atmosphere.
+     NOT for every post — only when the router labels it as strongly fitting.
+
+NN-M3 — ROUTING LOGIC (PER-SLIDE HINT OVERRIDES ROUTE SET)
+
+  Routing by slide type:
+    Person named              → prefer A
+    Object/material/tool/product → A or B
+    Place/institution/city/room/house → B or D
+    Light text cover + strong visual topic → D allowed
+    Heavy text slide          → smaller A/B only, or static
+    Proof/source slide        → usually static unless the proof IS a clip
+    Many connected people     → C (Phase 2 only)
+    No relevant clip          → static PNG only, not fake motion
+
+  Per-slide routing_hint (layout_hint, subject_type, text_density) from
+  carousel_builder.py takes precedence over any global route-set rotation.
+  Route sets are the default; per-slide hint wins.
+
+NN-M4 — SEQUENCE VARIETY — ROUTE SETS (ROTATION, NOT OVERRIDE)
+
+  Rotate through these sets so posts do not feel repetitive.
+  Per-slide routing (NN-M3) still overrides when content does not fit.
+
+    Route Set 1: cover A   · slide 3 B         · slide 5 static
+    Route Set 2: cover D   · slide 3 A         · slide 5 B
+    Route Set 3: cover static · slide 2 A      · slide 4 B
+    Route Set 4: cover B   · slide 3 C (later) · slide 5 static
+
+NN-M5 — PHASE 1 SCOPE: COVER A + COVER D, PLAYWRIGHT ONLY, MANUAL ONLY
+
+  Phase 1 tests ONLY these two routes:
+    Cover A: static cover + framed sticker video (small/medium portrait clip)
+    Cover D: static text overlay + full background clip with dark overlay
+
   NOT in Phase 1:
-    - CarouselMotion.tsx (Remotion) — deferred to Phase 2
-    - Remotion architecture changes — deferred to Phase 2
-    - cron/prod motion defaults — MOTION_ENABLED stays 0 in prod
-    - Buffer approval logic — unchanged
-    - Smart-picker production cutover — unchanged
-  MOTION_ENABLED=1 is ONLY set manually for local proof tests.
-  Do NOT flip prod/cron motion until Priscila visually approves Phase 1 output.
+    - Middle slides with motion
+    - Ken Burns (permanently removed, not deferred — never bring it back)
+    - Kling (not in Phase 1)
+    - Text movement of any kind
+    - CarouselMotion.tsx / Remotion (deferred to Phase 2)
+    - cron/prod motion defaults (MOTION_ENABLED stays 0 until Priscila approves)
+    - Buffer approval logic changes
+    - Route Set C (multi-face) — Phase 2 only
 
-NN-M4 — CAROUELMOTION.TSX IS FROZEN IN PHASE 1
-  scripts/remotion/src/CarouselMotion.tsx must NOT be touched until Phase 2.
-  The known bug (posterPng zoom includes baked text) is documented but intentionally
-  deferred. Any PR that modifies CarouselMotion.tsx during Phase 1 is rejected.
-
-NN-M5 — PHASE 1 PROOF TESTS REQUIRED BEFORE EXPANSION
-  Before expanding motion to non-cover slides, additional route sets, or any
-  production cron trigger, these 5 tests must pass manually:
-    1. Cover A: framed clip sticker renders at correct position, text is static
-    2. Cover D: full-bleed clip with readable dark overlay, text is static
-    3. No-clip test: when no clip found, static PNG delivered — no empty MP4
+  PROOF TESTS REQUIRED BEFORE EXPANSION:
+    1. Cover A: framed clip sticker renders at correct position, text static
+    2. Cover D: full-bleed clip, readable dark overlay, text static
+    3. No-clip test: no clip found → static PNG only, no empty MP4
     4. Cover-only: only the cover PNG gets a motion version produced
-    5. Layout D text: static title is legible over full-bleed clip
-  Priscila must see output and choose which motion language (A or D) to expand.
-  "I ran the tests" is not sufficient — Drive links to the test output required.
+    5. Layout D text: static title legible over full-bleed clip
+  Drive links to test output are required. "I ran it" is not sufficient.
+  Priscila must visually compare A vs D and choose before any expansion.
+
+  CarouselMotion.tsx (Remotion) is FROZEN until Phase 2.
+  Any PR touching CarouselMotion.tsx during Phase 1 is rejected.
 
 ═══════════════════════════════════════════════════════════════════════
-END OF 2026-05-13 MOTION SYSTEM V2 APPEND
-═══════════════════════════════════════════════════════════════════════
-
-
-- **CREATING CALENDAR EVENTS — try in order, never give up:** (from repo CLAUDE.md, 2026-05-14)
-  ROUTE A: mcp__claude_ai_Google_Calendar__ tools (preferred) ROUTE B: Composio MCP — GOOGLECALENDAR_CREATE_EVENT action ROUTE C: Python OAuth — build('calendar','v3',credentials=creds).events().insert(
-
-
-- **DRIVE — SHARED DRIVE IS DEFAULT, NEVER MY DRIVE** (from repo CLAUDE.md, 2026-05-14)
-  ROUTING BY PROJECT — always check which drive before creating anything: - Higashi / Hig Negócios / mom's site / Alexandra → Shared Drive "Higashi Imobiliária - Claude" (ID: 0AN7aea2IZzE0Uk9PVA) → Clau
-
-
-- **EMAIL SENDING — 3 ROUTES (added 2026-04-12 — prevents "Gmail blocked" from stopp** (from repo CLAUDE.md, 2026-05-14)
-  Gmail MCP = DRAFT only (no send tool exists). For actual sending, use GitHub Actions. - ROUTE A (draft): Load ToolSearch first → mcp__claude_ai_Gmail__gmail_create_draft → Priscila clicks Send - ROUTE
-
-
-- **AIOX AGENT AUDIT — REQUIRED BEFORE AUTOMATION IS "DONE"** (from repo CLAUDE.md, 2026-05-14)
-  Any new automation, workflow, or script is NOT done until audited by the relevant AIOX agents: - /AIOX-architect — system design, API routing, architecture decisions - /AIOX-devops — GitHub Actions wo
-
-
-- **SCRIPT / CODE EDITING RULE — NON-NEGOTIABLE** (from repo CLAUDE.md, 2026-05-14)
-  Never rewrite a working script from scratch. Only change what is strictly necessary. Before any edit: read the full file, list what you're changing and why. Good things already in the script must be p
-
-═══════════════════════════════════════════════════════════════════════
-MOTION PHASE 1 STATUS — appended 2026-05-14
-═══════════════════════════════════════════════════════════════════════
-
-Phase 1 is NOT complete yet.
-
-Status doc:
-  docs/pipeline-fix/motion-phase1-status-2026-05-14.md
-
-Current evidence state:
-  - Initial A/D proof runs passed but exposed a cover-only bug:
-      A run 25840417940 → non-cover motion files produced.
-      D run 25840417955 → non-cover motion files produced.
-  - Cover-only fix shipped:
-      fb6948a — Motion v2: enforce cover-only Phase 1 proofs.
-  - No-clip proof switch shipped:
-      9459c40 — Motion v2: add manual no-clip proof switch.
-  - Fresh proof runs are still evidence-pending:
-      A run 25841356531
-      D run 25841356537
-      no-clip run 25841475772
-
-Do not mark NN-M5 passed until fresh proof runs produce Drive links and confirm:
-  - only cream_01_cover_motion.mp4 exists in motion/
-  - no cream_02 / cream_03 / cream_04 motion files
-  - Remotion/Kling/Ken Burns skipped by Phase 1 guard
-  - Priscila visually chooses A, D, or adjust
-
-Cron/prod motion remains OFF.
-
-═══════════════════════════════════════════════════════════════════════
-END OF 2026-05-14 MOTION PHASE 1 STATUS APPEND
+END OF MOTION SYSTEM V2 SPEC — updated 2026-05-14
 ═══════════════════════════════════════════════════════════════════════
