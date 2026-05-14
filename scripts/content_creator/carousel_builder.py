@@ -910,15 +910,6 @@ THE SWIPE TEST — ask before you write:
 If the honest answer is "they probably wouldn't" — rewrite the hook.
 The hook must do ONE of: reveal a mistake they might be making, close a gap they feel, flip something they believe, give them something free, name a pain they already have.
 
-EVIDENCE RULE — apply before writing the hook:
-Do not put a dollar amount, percentage, lifespan, "most homeowners," or count in the hook UNLESS the body can support it with a named source, qualified range, or visible calculation. Ask yourself: "Can I actually prove this inside slides 2-4?" If the answer is no, remove the number from the hook or use softer wording ("can cost more than you think" instead of "$8K more"). A strong hook with a number you cannot prove is worse than a softer hook with evidence behind it.
-
-FORMAT RULE — narrow the angle before you write:
-Write to the template's slide count. If the topic is too broad for the number of slides, pick ONE decision the viewer faces today and write about that. Do not try to cover the whole subject. A carousel about "concrete vs pavers" is too broad for 5 slides — "the one cost most people miss when choosing concrete" is the right angle. If you genuinely cannot narrow the topic to fit, set needs_longer_format=true in the strategy block.
-
-VISUAL RULE — decide what each image proves before writing the query:
-Every middle-slide image must earn its place by proving, clarifying, or showing the thing that slide teaches. Before writing any image search query, answer: "What does the viewer need to SEE to believe this slide?" A slide about installation cost needs a photo of the work or result — not a generic "construction" photo. Write the query to source that specific proof, not to decorate the slide.
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MANDATORY SAFETY RULES — apply AFTER writing great content
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1274,15 +1265,14 @@ Language: {lang}
 {copy_rules}
 {purpose_block}
 {_plan_block}
-Return ONLY a JSON object. The FIRST fields must be the strategy block — fill these in before writing any slide content:
+BEFORE FILLING IN THE JSON — write this internally (do not include it in the output):
+1. Which hook type am I using? (fear of mistake / curiosity gap / contrarian / teach one thing / pain point)
+2. The reader question slide 1 creates is: "___"
+3. Where exactly in slides 2-4 is that question answered? Which slide, which field?
+If you cannot complete step 3, rewrite the hook until you can.
+
+Return ONLY a JSON object with these fields:
 {{
-  "hook_frame": "which hook type you chose — one of: fear_of_mistake | curiosity_gap | contrarian | teach_one_thing | pain_point",
-  "viewer_question": "the exact question slide 1 creates in the viewer's mind — e.g. 'What IS the mistake?' or 'Why does it cost more?'",
-  "payoff": "the specific useful thing the viewer knows after slide 4 that they did not know before slide 1 — 1 sentence",
-  "proof_needed": "what evidence is required to support the main claim — name the source type: e.g. 'NAHB cost-per-sqft data' or 'ACI lifespan range' or 'rate/range from industry body' or 'OPC project example'. If you cannot name a real source, soften the hook.",
-  "format_fit": true,
-  "needs_longer_format": false,
-  "visual_strategy": "one sentence each for slides 2, 3, 4 — what the viewer needs to SEE to believe that slide. E.g. 'Slide 2: a concrete pour showing labor cost context. Slide 3: side-by-side of cracked concrete vs intact pavers. Slide 4: contractor reviewing quote with homeowner.'",
   "headline": "3-4 word cover headline (ALL CAPS, punchy) — MUST include a number, dollar amount, timeframe, or named loss/risk. GOOD: '3 COSTLY MISTAKES', '$20K TRAP', 'AVOID THIS COST'. BAD: 'CONCRETE OR PAVERS', 'THINGS TO KNOW', 'TIPS AND TRICKS', 'WHAT TO DO'.",
   "accent_word": "1 word from headline to highlight in accent color",
   "subhead": "1 sentence under the headline — MUST contain at least one of: a specific number, a dollar amount, or a named consequence/fear. BANNED: generic phrases like 'what to look for', 'things you should know', 'tips for'. Good: '$20K mistake most homeowners make before signing' | '3 red flags contractors hope you miss'",
@@ -4214,10 +4204,10 @@ def fetch_clips(content, work_dir):
 def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=None, clip_failures=None):
     """Generate per-slide motion HTML files for Playwright video recording.
 
-    Every-other-slide rule (cover + even-indexed middles, never sources):
+    All-middle rule (cover + all middles, sources always excluded):
       - Cover always gets a motion file.
-      - Middle slides: every other one gets a motion file (slide 3, 5, ...).
-      - Sources slide: never gets motion.
+      - Middle slides: all get motion files (Phase 1 guard overrides to cover-only via MOTION_PHASE1_TEST).
+      - Sources slide: never gets motion (sources index = n_slides+2, outside range(2, n_slides+2)).
 
     Each motion HTML has static text plus either:
       - Layout A/B: a looping <video> in a framed clip slot when a clip is available.
