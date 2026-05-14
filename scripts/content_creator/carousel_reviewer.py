@@ -1694,15 +1694,26 @@ def score_storytelling(html_path: str, niche: str) -> dict:
     niche_label = "homeowner tips (OPC)" if niche == "opc" else "news/political fact-check"
 
     prompt = (
-        f"You are reviewing an Instagram carousel for a {niche_label} account.\n"
-        "Score each slide's storytelling quality from 0 to 100:\n"
-        "90-100 = gripping, specific, pulls reader forward\n"
+        f"You are reviewing an Instagram carousel for a {niche_label} account.\n\n"
+        "HOOK PAYOFF CHECK — do this first:\n"
+        "Read slide 1. Write the main question or promise it creates for the reader.\n"
+        "Then read slides 2-4. Does the carousel explicitly answer that question?\n"
+        "- Score below 85 if the answer is not clear and explicit.\n"
+        "- Score below 75 if the answer is only implied or vague.\n"
+        "- Score below 60 if the hook promises a mistake/trap/risk/cost but the body\n"
+        "  becomes a neutral comparison or generic educational content.\n"
+        "- Score 90+ only if slide 1 makes a promise AND slide 3 or 4 names the\n"
+        "  exact answer/mistake/action explicitly.\n\n"
+        "SLIDE SCORING — 0 to 100:\n"
+        "90-100 = gripping and specific, pulls reader forward, pays off the hook\n"
         "70-89  = clear and useful, minor gaps\n"
         "50-69  = generic or vague, could be any topic\n"
         "0-49   = filler, confusing, or off-message\n\n"
         f"{slides_payload}\n\n"
         "Return JSON only — no markdown, no explanation outside JSON:\n"
-        '{"slide_scores":[{"slide":1,"score":85,"reason":"one sentence"},...], '
+        '{"hook_question":"what question slide 1 creates","hook_answer_found":true,'
+        '"payoff_slide":3,"missing_payoff":null,'
+        '"slide_scores":[{"slide":1,"score":85,"reason":"one sentence"},...], '
         '"overall":78,"summary":"one sentence overall"}'
     )
 

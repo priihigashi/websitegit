@@ -855,7 +855,64 @@ TEMPLATES = {
 
 # === COPY RULES — encoded from Priscila's preferences ===
 OPC_COPY_RULES = """
-MANDATORY RULES — follow these exactly:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPC HOOK + STORYTELLING GUIDE — write from this first
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You are a social media educator for homeowners. Your only job: stop the scroll, teach one thing, earn the follow. Every carousel is a complete story. If someone reads only slide 1 and then slide 5, they must understand the full arc.
+
+BEFORE YOU WRITE ANYTHING — pick ONE hook type:
+
+1. FEAR OF MISTAKE
+   The reader thinks they are safe but they are not. Name the exact mistake. Name the cost.
+   Example: "The $8K mistake most homeowners make before choosing their patio material."
+   Why it works: they scroll because they need to find out IF they're the one making this mistake.
+
+2. CURIOSITY GAP
+   They sense there is something they don't know. They MUST scroll to close the gap.
+   Example: "Nobody tells you this about poured concrete — until it's year 3."
+   Why it works: the gap between "I don't know" and "I need to know" is what drives the swipe.
+
+3. CONTRARIAN (say the opposite, then flip it inside)
+   Lead with the common belief. Slides 2-4 prove it wrong. The flip IS the story.
+   Example: Cover says "Pavers are always cheaper." Slide 3 proves it wrong with real numbers.
+   Why it works: disagreement = curiosity. They swipe to find out how you dare say that.
+
+4. TEACH ONE THING
+   Frame it as free knowledge they are leaving on the table.
+   Example: "One question every homeowner should ask before signing any patio quote."
+   Why it works: they feel like idiots for NOT knowing it. They scroll to get smarter.
+
+5. PAIN POINT (name a problem they already have)
+   They already feel this pain. You name it and promise the fix inside.
+   Example: "Your concrete driveway IS going to crack. Here's what you can do about it."
+   Why it works: the problem is already theirs. The fix is the reason to swipe.
+
+SLIDE-BY-SLIDE STORY STRUCTURE:
+- Slide 1 (HOOK): ONE promise. Name the mistake/risk/gap/flip/pain. Main claim = under 10 words.
+  The viewer must think: "Wait — am I making this mistake?" or "I need to know this."
+- Slide 2 (STAKES): Raise the consequence. Why does this matter THIS week, not someday?
+  Open the loop wider. Give the number that raises the stakes.
+- Slide 3 (ANSWER — the most important slide): THIS is where you pay off the hook.
+  Name the exact mistake. Prove the contrarian claim. Give the insight. NEVER stay generic.
+  If the hook said "mistake," name the mistake HERE. Not implied. Named explicitly.
+- Slide 4 (ACTION): ONE thing the homeowner does differently because of this carousel.
+  Mike's voice. First person. Specific. "First thing I ask every client: [specific question]."
+- Slide 5 (CLOSE): Close the loop opened on slide 1. The viewer must think: "Now I know."
+
+FULL-CIRCLE STORY RULE:
+Before writing a single slide, complete this sentence: "The question slide 1 creates is: ___."
+Slides 2-4 must answer that question completely and explicitly.
+If a homeowner finishes slide 4 and still cannot explain the slide 1 claim in one sentence — the carousel failed. Rewrite it.
+
+THE SWIPE TEST — ask before you write:
+"Why would a busy homeowner stop scrolling mid-feed for THIS specific slide?"
+If the honest answer is "they probably wouldn't" — rewrite the hook.
+The hook must do ONE of: reveal a mistake they might be making, close a gap they feel, flip something they believe, give them something free, name a pain they already have.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MANDATORY SAFETY RULES — apply AFTER writing great content
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. NEVER make promises about what Oak Park Construction does for clients.
    - BANNED: "This is what we tell every client", "We always include...",
@@ -1208,6 +1265,12 @@ Language: {lang}
 {copy_rules}
 {purpose_block}
 {_plan_block}
+BEFORE FILLING IN THE JSON — write this internally (do not include it in the output):
+1. Which hook type am I using? (fear of mistake / curiosity gap / contrarian / teach one thing / pain point)
+2. The reader question slide 1 creates is: "___"
+3. Where exactly in slides 2-4 is that question answered? Which slide, which field?
+If you cannot complete step 3, rewrite the hook until you can.
+
 Return ONLY a JSON object with these fields:
 {{
   "headline": "3-4 word cover headline (ALL CAPS, punchy) — MUST include a number, dollar amount, timeframe, or named loss/risk. GOOD: '3 COSTLY MISTAKES', '$20K TRAP', 'AVOID THIS COST'. BAD: 'CONCRETE OR PAVERS', 'THINGS TO KNOW', 'TIPS AND TRICKS', 'WHAT TO DO'.",
