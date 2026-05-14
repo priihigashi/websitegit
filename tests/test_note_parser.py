@@ -203,3 +203,42 @@ def test_empty_note_safe_default():
     assert r["build_now"] is True   # safe default — don't accidentally block
     assert r["routing_confidence"] == "low"
     assert r["action"] == "build_now"
+
+
+def test_note9_note_links_create_download_jobs():
+    note = (
+        "Use these two videos in the carousel. "
+        "https://www.instagram.com/reel/ABC123/ cut the hook on slide 1. "
+        "https://www.youtube.com/watch?v=xyz987 use main point on slide 4."
+    )
+    r = note_parser(note, project="brazil", **_KB)
+
+    assert r["build_now"] is True
+    assert r["clip_required"] is True
+    assert "download_note_links" in r["intent_labels"]
+    assert "download_note_links" in r["required_functions"]
+    assert "write_clip_manifest" in r["required_functions"]
+    assert len(r["note_urls"]) == 2
+    jobs = [j for j in r["resource_requests"] if j["type"] == "download_note_link"]
+    assert len(jobs) == 2
+    assert all(j["target"] == "resources/clips" for j in jobs)
+    assert any(j["slide_hint"] == "slide 1" for j in jobs)
+
+
+def test_note10_research_more_videos_creates_research_job():
+    note = (
+        "I don't have the links. Go research on this topic and bring videos "
+        "about this senator, find public clips, then use the best proof."
+    )
+    r = note_parser(note, project="brazil", **_KB)
+
+    assert r["action"] == "research_first"
+    assert r["build_now"] is False
+    assert r["research_required"] is True
+    assert r["clip_required"] is True
+    assert "video_research_needed" in r["intent_labels"]
+    assert "video_research" in r["required_functions"]
+    jobs = [j for j in r["resource_requests"] if j["type"] == "research_videos"]
+    assert len(jobs) == 1
+    assert jobs[0]["target"] == "Clip Collections"
+    assert jobs[0]["downstream_target"] == "resources/clips"

@@ -1,0 +1,125 @@
+name: Video Resource Downloader
+
+# Flow A — Drop a URL in notes → yt-dlp → stage to resources/clips/ → upload to Drive
+# Flow B — notes say "find videos" → ytsearch5 → top 3 candidates → email approval
+#
+# Doc: https://docs.google.com/document/d/1iC5F--kZ4A9ffXaonKrzxke2PQTkrNwnCn_9FTrwKnc/edit
+# Script: scripts/capture/resource_router.py  (route_and_execute entry point)
+#
+# Triggered manually when you want resource routing WITHOUT a full capture
+# (the full capture_pipeline.yml also calls resource_router automatically).
+
+on:
+  workflow_dispatch:
+    inputs:
+      story_id:
+        description: "Story / post ID (e.g. NWS-001, CNT-024) — used as folder slug"
+        required: true
+        type: string
+      project:
+        description: "Niche routing"
+        required: true
+        type: choice
+        options:
+          - brazil
+          - usa
+          - opc
+          - ugc
+          - stocks
+          - higashi
+          - book
+        default: brazil
+      notes:
+        description: "Notes — paste URL for Flow A, or words like 'find videos / research clips' for Flow B"
+        required: true
+        type: string
+      seed_url:
+        description: "Optional seed URL (for context only — not downloaded again)"
+        required: false
+        type: string
+        default: ""
+      send_emails:
+        description: "Send approval email for Flow B candidates"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  download:
+    name: "${{ inputs.project }} — ${{ inputs.story_id }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          pip install \
+            yt-dlp \
+            google-auth \
+            google-api-python-client \
+            requests \
+            python-dotenv
+
+      - name: Run resource router
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          PRI_OP_YT_COOKIES: ${{ secrets.PRI_OP_YT_COOKIES }}
+          PRI_OP_IG_COOKIES: ${{ secrets.PRI_OP_IG_COOKIES }}
+          PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI: "true"
+        run: |
+          python scripts/capture/resource_router.py \
+            --story-id "${{ inputs.story_id }}" \
+            --project "${{ inputs.project }}" \
+            --notes "${{ inputs.notes }}" \
+            --seed-url "${{ inputs.seed_url }}" \
+            --output-dir "transcripts" \
+            --execute \
+            ${{ inputs.send_emails == false && '--no-email' || '' }}
+
+      - name: Upload manifest + clips artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "resource-router-${{ inputs.story_id }}-${{ inputs.project }}"
+          path: |
+            transcripts/
+            /tmp/clips/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Failure alert
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: priscila@oakpark-construction.com
+          password: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          to: priscila@oakpark-construction.com
+          from: Oak Park AI <priscila@oakpark-construction.com>
+          subject: "Video Resource Downloader FAILED — ${{ inputs.story_id }}"
+          body: |
+            The Video Resource Downloader workflow failed.
+
+            Story ID: ${{ inputs.story_id }}
+            Project:  ${{ inputs.project }}
+            Notes:    ${{ inputs.notes }}
+
+            Logs: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}

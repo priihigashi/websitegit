@@ -4678,6 +4678,33 @@ def main():
     except Exception as _e_em:
         print(f"\n[SH-104] evidence-mining hook failed (non-fatal): {_e_em}")
 
+    # Video Resource Downloader — Flow A (URL in notes) + Flow B (research mode).
+    # See docs/pipeline-fix/resource-routing-flow-2026-05-14.md.
+    # Non-blocking: any failure here logs but does NOT break the normal capture.
+    # Skipped automatically when notes have no URLs and no research keywords.
+    try:
+        from resource_router import route_and_execute as _route_and_execute
+        _notes = getattr(args, "notes", "") or ""
+        _story_id = getattr(args, "story_id", "") or ""
+        _resource_status = _route_and_execute(
+            story_id=_story_id,
+            project=args.project,
+            notes=_notes,
+            transcript=transcript or "",
+            seed_url=args.url,
+            output_dir="transcripts",
+            use_llm=False,
+            send_emails=True,
+        )
+        _jobs_count = len(_resource_status.get("jobs", []))
+        if _jobs_count:
+            _exec = _resource_status.get("execution") or {}
+            print(f"\n[resource_router] {_jobs_count} job(s) processed — "
+                  f"folder: {_exec.get('drive_folder_link', '(local only)')} "
+                  f"candidates_emailed={_exec.get('candidates_emailed', 0)}")
+    except Exception as _e_rr:
+        print(f"\n[resource_router] hook failed (non-fatal): {_e_rr}")
+
 
 if __name__ == "__main__":
     _url_for_failure = sys.argv[1] if len(sys.argv) > 1 else ""

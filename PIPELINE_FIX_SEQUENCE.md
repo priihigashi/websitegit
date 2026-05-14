@@ -88,6 +88,7 @@ STILL PENDING:
 ⬜ Photo catalog 401 — real OPC photos never load (photo_matcher.py auth bug)
 ⬜ Per-slide image queries — all slides use same carousel-level query (IMG-03)
 ⬜ Build history tab — same topics can repeat after 30+ posts
+🔄 Resource routing flow — notes/transcripts now emit resource_requests; next wire capture resource_router.py + resource_manifest.json
 ⬜ Clip pipeline dual output — video-research.yml doesn't write to resources/clips/ in version folders
 ⬜ Review-only mode in content_creator.yml (run reviewer on existing Drive folder)
 ⬜ Template organization in Marketing shared drive (visual template browser for Priscila)

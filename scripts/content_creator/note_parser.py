@@ -47,6 +47,8 @@ _EMPTY_SCHEMA: dict = {
     "clip_required": False,
     "motion_required": False,
     "image_required": False,
+    "note_urls": [],
+    "resource_requests": [],
     "source_standard": "",
     "tone": [],
     "market": [],
@@ -267,6 +269,8 @@ transcription_required: boolean
 clip_required: boolean
 motion_required: boolean
 image_required: boolean
+note_urls: explicit URLs found in the note
+resource_requests: list of routing jobs for downloader/research/image/proof resources
 source_standard: journalistic | multi_source_verified | declassified_evidence | (empty)
 tone: list (journalistic | neutral_no_spin | point_extraction)
 market: list of market strings (brazil | usa | opc | stocks)
@@ -305,7 +309,7 @@ def _validate_and_fill(parsed: dict) -> dict:
         result[bf] = bool(result.get(bf, _EMPTY_SCHEMA[bf]))
     for lf in ("intent_labels", "required_functions", "secondary_outputs",
                "hard_requirements", "soft_preferences", "reviewer_blockers",
-               "tone", "market"):
+               "tone", "market", "note_urls", "resource_requests"):
         v = result.get(lf)
         if isinstance(v, str):
             result[lf] = [v] if v else []
@@ -367,6 +371,7 @@ def _parse_rule_based(note_text: str, project: str = "") -> dict:
     """Keyword-based parser. Deterministic, used for golden tests and API fallback."""
     n = note_text.lower()
     result = dict(_EMPTY_SCHEMA)
+    urls = _extract_urls(note_text)
 
     # --- ACTION (most specific first) ---
     _archive_kws = [
@@ -377,6 +382,8 @@ def _parse_rule_based(note_text: str, project: str = "") -> dict:
         "research first", "post after", "transcribed first", "research before",
         "transcribe candidates", "evidence-mining", "evidence mining",
         "find public clips", "find clips", "find 6-10", "find 6 to 10",
+        "need more videos", "more videos for this", "go research on this topic",
+        "research videos", "bring videos", "find videos", "look for more videos",
         "keep only matches", "verify before", "investigate before",
         "check before building", "fact.check first", "verify first",
     ]
@@ -404,6 +411,18 @@ def _parse_rule_based(note_text: str, project: str = "") -> dict:
         labels += ["archive_defer", "do_not_build_now", "future_use", "transcribe_only"]
     if action == "research_first":
         labels += ["balanced_framing", "research_first", "source_video_review"]
+    if urls:
+        labels += ["note_links_present", "download_note_links"]
+    if any(kw in n for kw in [
+        "need more videos", "more videos for this", "go research on this topic",
+        "research videos", "bring videos", "find videos", "look for more videos",
+    ]):
+        labels += ["video_research_needed", "clip_discovery_needed"]
+    if any(kw in n for kw in [
+        "find image", "research the image", "download image", "show this object",
+        "find photo", "find picture", "need image",
+    ]):
+        labels += ["image_research_needed"]
     if action == "create_series_plan":
         labels += ["chronological_series", "locked_slide_structure", "series_plan"]
     if "motion carousel" in n or "motion version" in n:
@@ -426,6 +445,18 @@ def _parse_rule_based(note_text: str, project: str = "") -> dict:
             funcs.append("youtube_transcription")
         if "ig reel" in n or "instagram" in n:
             funcs.append("instagram_reel_transcription")
+    if urls:
+        funcs += ["download_note_links", "write_clip_manifest"]
+    if any(kw in n for kw in [
+        "need more videos", "more videos for this", "go research on this topic",
+        "research videos", "bring videos", "find videos", "look for more videos",
+    ]):
+        funcs += ["video_research", "clip_discovery", "write_clip_manifest"]
+    if any(kw in n for kw in [
+        "find image", "research the image", "download image", "show this object",
+        "find photo", "find picture", "need image",
+    ]):
+        funcs += ["image_research", "download_image_resource"]
     if action == "archive_defer":
         funcs.append("youtube_transcription")
     if action == "create_series_plan":
@@ -482,6 +513,10 @@ def _parse_rule_based(note_text: str, project: str = "") -> dict:
     blockers = []
     if action == "research_first":
         blockers += ["missing_transcription", "posted_before_required_research"]
+    if urls:
+        blockers += ["missing_downloaded_note_link", "missing_clip_manifest"]
+    if "write_clip_manifest" in funcs:
+        blockers.append("missing_clip_manifest")
     if "both sides" in n or "both side" in n:
         blockers.append("missing_both_sides")
     if "no fake news debunk" in n or "avoid debunk" in n:
@@ -505,7 +540,8 @@ def _parse_rule_based(note_text: str, project: str = "") -> dict:
     result["research_required"] = any(kw in n for kw in [
         "verify", "research", "look up", "look her up", "find proof", "investigate",
         "transcribed", "youtube videos", "ig reels", "create a content",
-        "create points", "propaganda", "check",
+        "create points", "propaganda", "check", "need more videos",
+        "more videos for this", "find videos", "bring videos",
     ])
     result["proof_required"] = any(kw in n for kw in [
         "find proof", "proof", "verify this case", "verify", "declassified",
@@ -516,7 +552,10 @@ def _parse_rule_based(note_text: str, project: str = "") -> dict:
         "save and transcribe",
     ])
     result["clip_required"] = (
-        any(kw in n for kw in ["put the clips", "clips", "showing her"])
+        any(kw in n for kw in [
+            "put the clips", "clips", "showing her", "video", "videos",
+            "repost it", "download", "cut it", "timestamp", "reel", "youtube",
+        ])
         and action != "archive_defer"
     )
     result["motion_required"] = (
@@ -524,7 +563,8 @@ def _parse_rule_based(note_text: str, project: str = "") -> dict:
         or action == "create_series_plan"
     )
     result["image_required"] = any(kw in n for kw in [
-        "photo", "big image", "face", "cover",
+        "photo", "big image", "face", "cover", "find image",
+        "download image", "show this object", "picture",
     ])
     result["future_use"] = any(kw in n for kw in ["later", "plans later", "future"])
 
@@ -569,6 +609,8 @@ def _parse_rule_based(note_text: str, project: str = "") -> dict:
     # --- ROUTING CONFIDENCE ---
     if action in ("archive_defer", "create_series_plan"):
         result["routing_confidence"] = "high"
+    elif urls:
+        result["routing_confidence"] = "high"
     elif action == "research_first" and len(note_text) > 80:
         result["routing_confidence"] = "high"
     elif not project or len(note_text.split()) < 20:
@@ -576,7 +618,105 @@ def _parse_rule_based(note_text: str, project: str = "") -> dict:
     else:
         result["routing_confidence"] = "medium"
 
+    result["note_urls"] = urls
+    result["resource_requests"] = _build_resource_requests(note_text, project, action, urls)
+    if any(req.get("kind") == "video_clip" for req in result["resource_requests"]):
+        result["clip_required"] = True
+    if any(req.get("kind") == "image" for req in result["resource_requests"]):
+        result["image_required"] = True
+
     return result
+
+
+def _extract_urls(note_text: str) -> list:
+    """Extract explicit URLs from voice/typed notes, stripping punctuation."""
+    if not note_text:
+        return []
+    found = re.findall(r"https?://[^\s)\]>\"']+", note_text)
+    cleaned = []
+    for url in found:
+        u = url.rstrip(".,;:!?)]}")
+        if u and u not in cleaned:
+            cleaned.append(u)
+    return cleaned
+
+
+def _build_resource_requests(note_text: str, project: str, action: str, urls: list) -> list:
+    """Map notes to resource jobs the downloader/research stages can consume."""
+    n = (note_text or "").lower()
+    requests = []
+    for idx, url in enumerate(urls, start=1):
+        kind = "video_clip"
+        if re.search(r"\.(?:jpg|jpeg|png|webp|gif)(?:\?|$)", url, re.IGNORECASE):
+            kind = "image"
+        requests.append({
+            "type": "download_note_link",
+            "kind": kind,
+            "source_url": url,
+            "target": "resources/clips" if kind == "video_clip" else "resources/images",
+            "role": "note_link",
+            "slide_hint": _extract_slide_hint(note_text, url),
+            "cut_hint": _extract_cut_hint(note_text, url),
+            "priority": idx,
+        })
+    if any(kw in n for kw in [
+        "need more videos", "more videos for this", "go research on this topic",
+        "research videos", "bring videos", "find videos", "look for more videos",
+        "find public clips", "find clips",
+    ]):
+        requests.append({
+            "type": "research_videos",
+            "kind": "video_clip",
+            "query": _compact_query(note_text),
+            "target": "Clip Collections",
+            "downstream_target": "resources/clips",
+            "niche": project or "",
+            "hold_build": action == "research_first",
+        })
+    if any(kw in n for kw in [
+        "find image", "research the image", "download image", "show this object",
+        "find photo", "find picture", "need image",
+    ]):
+        requests.append({
+            "type": "research_images",
+            "kind": "image",
+            "query": _compact_query(note_text),
+            "target": "resources/images",
+            "niche": project or "",
+            "hold_build": action == "research_first",
+        })
+    return requests
+
+
+def _extract_slide_hint(note_text: str, url: str) -> str:
+    window = _window_around(note_text, url)
+    m = re.search(r"\b(?:slide|card)\s*(\d{1,2}|cover|last)\b", window, re.IGNORECASE)
+    return m.group(0).lower() if m else ""
+
+
+def _extract_cut_hint(note_text: str, url: str) -> str:
+    window = _window_around(note_text, url)
+    m = re.search(
+        r"(?:(?:cut|clip|use|get)\s+(?:at|from|the)?\s*)?"
+        r"(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[-–]\s*\d{1,2}:\d{2}(?::\d{2})?)?|"
+        r"\b(?:hook|main point|main clip|best part)\b)",
+        window,
+        re.IGNORECASE,
+    )
+    return m.group(1).strip().lower() if m else ""
+
+
+def _window_around(text: str, needle: str, radius: int = 180) -> str:
+    i = text.find(needle)
+    if i < 0:
+        return text[: radius * 2]
+    return text[max(0, i - radius): i + len(needle) + radius]
+
+
+def _compact_query(note_text: str) -> str:
+    q = re.sub(r"https?://\S+", " ", note_text or "")
+    q = re.sub(r"\s+", " ", q).strip()
+    return q[:240]
 
 
 # ---------------------------------------------------------------------------
