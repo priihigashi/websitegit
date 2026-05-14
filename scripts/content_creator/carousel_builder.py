@@ -1213,11 +1213,12 @@ Return ONLY a JSON object with these fields:
   "headline": "3-4 word cover headline (ALL CAPS, punchy) — MUST include a number, dollar amount, timeframe, or named loss/risk. GOOD: '3 COSTLY MISTAKES', '$20K TRAP', 'AVOID THIS COST'. BAD: 'CONCRETE OR PAVERS', 'THINGS TO KNOW', 'TIPS AND TRICKS', 'WHAT TO DO'.",
   "accent_word": "1 word from headline to highlight in accent color",
   "subhead": "1 sentence under the headline — MUST contain at least one of: a specific number, a dollar amount, or a named consequence/fear. BANNED: generic phrases like 'what to look for', 'things you should know', 'tips for'. Good: '$20K mistake most homeowners make before signing' | '3 red flags contractors hope you miss'",
+  "hook_answer": "1 plain sentence that directly answers the cover promise. If headline says MISTAKE/TRAP/AVOID/COST, name exactly what the mistake/trap/cost driver is. MUST start with 'The mistake:' or 'The trap:' or 'The risk:'. GOOD: 'The mistake: comparing only the install price instead of the total 10-year cost.' BAD: 'Concrete and pavers have different pros and cons.'",
   "slide2_headline": "3-4 word headline for slide 2",
   "slide2_stat": "a big number or stat WITH QUALIFIER (e.g. 'UP TO $15K' not '$12K') — stat_number MUST be 40 characters or fewer including spaces",
   "slide2_label": "1 line connecting the stat to a homeowner's real decision — frame as a consequence, not a citation. GOOD: 'That gap erases your patio budget before you pour the slab (NAHB 2023)' | 'One wrong choice here eats 40% of most remodel budgets (Remodeling Magazine 2024)'. BAD: 'According to NAHB, prices vary by material.' Always end with the source in parentheses.",
   "slide3_items": [
-    {{"title": "Item 1 title", "sub": "1 line ending with a decision consequence — what does this mean for a homeowner choosing between options? GOOD: '$8–12K upfront, no sealing needed — pays for itself at year 5' | 'Cracks under heavy loads — you replace it, not the contractor'. BAD: 'Costs more than asphalt.'"}},
+    {{"title": "Item 1 title", "sub": "1 line ending with a decision consequence — for mistake/trap hooks, this MUST state or prove hook_answer. GOOD: '$8–12K upfront, no sealing needed — pays for itself at year 5' | 'Cracks under heavy loads — you replace it, not the contractor'. BAD: 'Costs more than asphalt.'"}},
     {{"title": "Item 2 title", "sub": "1 line with decision consequence — different angle from item 1"}},
     {{"title": "Item 3 title", "sub": "1 line with decision consequence — different angle from items 1 and 2"}}
   ],
@@ -1313,6 +1314,7 @@ Rules:
 - Motion metadata is required but manual-only: choose layout_hint from the content, not variety rotation. Use A for a framed sticker/tool/person/product, B for a medium process/place window on middle slides, D only when the cover can be readable as full background video under dark overlay. If unsure, choose A.
 - NARRATIVE ARC — NON-NEGOTIABLE: ALL 5 slides must tell ONE connected story. They are chapters, not 5 separate tips.
   SEQUENCE: cover sets the risk/hook → slide2_stat quantifies THAT risk → slide3_items are 3 causes/red-flags OF that same risk → slide4 is the ONE fix for that risk → sources back up the claims.
+  HOOK PAYOFF CONTRACT: before writing slide 2, define hook_answer. The carousel must answer the cover promise in plain language by slide 3. If the cover says "AVOID THE $5K MISTAKE", slide 2 or slide 3 must explicitly name the mistake; do not merely compare options.
   THREAD TEST: if you remove the cover slide, can someone read slides 2-4 and still know they're about the SAME topic? If no, rewrite.
   - slide2_headline MUST name the same risk/material/situation as the cover headline (e.g. cover = "3 OUTDOOR KITCHEN RISKS" → slide2_headline = "WHAT THESE COST" or "THE REAL PRICE TAG")
   - slide3_items are the 3 items/causes/red-flags introduced on the cover — NOT 3 different tips on a different subject
@@ -1390,13 +1392,66 @@ Rules:
                 words = re.sub(r"[^a-zA-Z0-9 ]", " ", topic).upper().split()[:4]
                 parsed["headline"] = " ".join(words) or "THE GUIDE"
                 print(f"  [carousel_builder] headline missing in LLM response — using fallback: {parsed['headline']!r}")
-            return parsed
+            return _apply_opc_hook_answer_contract(parsed, topic)
         except json.JSONDecodeError as e:
             print(f"  OPC JSON parse error (attempt {attempt+1}): {e}")
             continue
 
     print(f"  OPC content generation failed after 2 attempts for: {topic}")
     return None
+
+
+def _apply_opc_hook_answer_contract(content, topic=""):
+    """Make strong OPC hooks pay off visibly before the CTA slide."""
+    if not isinstance(content, dict):
+        return content
+    hook_text = " ".join([
+        str(content.get("headline") or ""),
+        str(content.get("subhead") or ""),
+        str(topic or ""),
+    ])
+    strong_hook = bool(
+        re.search(r"\b(mistake|trap|avoid|cost|overpay|risk|loss|lose|surprise)\b", hook_text, re.I)
+        and re.search(r"[$%]|\d", hook_text)
+    )
+    if not strong_hook:
+        return content
+
+    answer = str(content.get("hook_answer") or "").strip()
+    if not answer:
+        answer = "The mistake: comparing only the upfront price instead of the total cost over time."
+        content["hook_answer"] = answer
+    elif not re.match(r"^\s*the\s+(mistake|trap|risk|answer)\s*:", answer, re.I):
+        answer = f"The mistake: {answer[0].lower()}{answer[1:]}" if answer else answer
+        content["hook_answer"] = answer
+
+    items = content.get("slide3_items")
+    if not isinstance(items, list):
+        items = []
+    while len(items) < 3:
+        items.append({"title": "Decision point", "sub": ""})
+
+    visible = " ".join([
+        str(content.get("slide2_label") or ""),
+        " ".join(str((i or {}).get("title", "")) + " " + str((i or {}).get("sub", "")) for i in items if isinstance(i, dict)),
+        str(content.get("slide4_body") or ""),
+    ]).lower()
+    answer_core = re.sub(r"^\s*the\s+(mistake|trap|risk|answer)\s*:\s*", "", answer, flags=re.I).strip()
+    if answer_core and answer_core.lower() not in visible:
+        first = items[0] if isinstance(items[0], dict) else {}
+        first["title"] = "THE MISTAKE"
+        first["sub"] = answer_core[:120]
+        items[0] = first
+        content["slide3_items"] = items[:3]
+
+    body = str(content.get("slide4_body") or "").strip()
+    if answer_core and answer_core.lower() not in body.lower():
+        content["slide4_body"] = (
+            f"That's the mistake I want you to avoid: {answer_core} "
+            f"{body}"
+        ).strip()
+
+    return content
 
 
 # ── Phase 8A — per-template OPC content generation ─────────────────────────
