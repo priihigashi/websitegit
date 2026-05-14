@@ -1013,3 +1013,37 @@ END OF 2026-05-13 MOTION SYSTEM V2 APPEND
 
 - **SCRIPT / CODE EDITING RULE — NON-NEGOTIABLE** (from repo CLAUDE.md, 2026-05-14)
   Never rewrite a working script from scratch. Only change what is strictly necessary. Before any edit: read the full file, list what you're changing and why. Good things already in the script must be p
+
+═══════════════════════════════════════════════════════════════════════
+MOTION PHASE 1 STATUS — appended 2026-05-14
+═══════════════════════════════════════════════════════════════════════
+
+Phase 1 is NOT complete yet.
+
+Status doc:
+  docs/pipeline-fix/motion-phase1-status-2026-05-14.md
+
+Current evidence state:
+  - Initial A/D proof runs passed but exposed a cover-only bug:
+      A run 25840417940 → non-cover motion files produced.
+      D run 25840417955 → non-cover motion files produced.
+  - Cover-only fix shipped:
+      fb6948a — Motion v2: enforce cover-only Phase 1 proofs.
+  - No-clip proof switch shipped:
+      9459c40 — Motion v2: add manual no-clip proof switch.
+  - Fresh proof runs are still evidence-pending:
+      A run 25841356531
+      D run 25841356537
+      no-clip run 25841475772
+
+Do not mark NN-M5 passed until fresh proof runs produce Drive links and confirm:
+  - only cream_01_cover_motion.mp4 exists in motion/
+  - no cream_02 / cream_03 / cream_04 motion files
+  - Remotion/Kling/Ken Burns skipped by Phase 1 guard
+  - Priscila visually chooses A, D, or adjust
+
+Cron/prod motion remains OFF.
+
+═══════════════════════════════════════════════════════════════════════
+END OF 2026-05-14 MOTION PHASE 1 STATUS APPEND
+═══════════════════════════════════════════════════════════════════════
