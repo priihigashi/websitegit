@@ -215,3 +215,53 @@ Example:
 
 - Bad audit: `_apply_opc_hook_answer_contract()` exists and has comparison-pair logic.
 - Correct audit: `_apply_opc_hook_answer_contract()` exists, has comparison-pair logic, and contains zero banned phrases such as `plan to sell`, `resale`, `not staying long`, or `flipping timeline`.
+
+## Prompt A.1 Run Result
+
+Run:
+
+- https://github.com/priihigashi/oak-park-ai-hub/actions/runs/25938522662
+
+Commit:
+
+- `42790b3`
+
+Result:
+
+- Failed strict reviewer.
+
+What passed:
+
+- The old `work` crash did not recur.
+- The 16 grep verification gate passed before the run.
+- Storytelling passed with `SH-028 Storytelling overall=88/100`.
+- No ethics failure appeared in the failed log.
+- Slide 3 was visually readable.
+- Slide 4 was visually fully visible and used structural/use-case language, not resale language.
+
+What failed:
+
+- Reviewer flagged: `Stat clipping risk: stat-big 1 is 22 chars ('UP TO $20K in 10 years').`
+- Visual QA confirmed Slide 2 clips below the frame. The stat is too tall/long for the fixed stat slide layout, and bottom supporting text is cut off.
+- Pre-email reviewer blocked preview sending: `[SH-157] No results passed pre-email reviewer — skipping send_preview`.
+
+Drive evidence:
+
+- Version folder: `https://drive.google.com/drive/folders/1SDfn5KJWjJNMb417Mvend7Fugb0n0iKh`
+- PNG folder: `https://drive.google.com/drive/folders/1KERzc0MuEMftxNOAqH1hTIB6iGsnXV1_`
+- Motion folder: `https://drive.google.com/drive/folders/1R_m1d5JZraQGQOTyp94TdHecuXNWD8YD`
+
+Issue filed:
+
+- https://github.com/priihigashi/oak-park-ai-hub/issues/151
+
+Next prompt-level fix:
+
+- Constrain OPC stat slide output so `stat-big` stays short enough for the fixed layout, or add responsive/dynamic sizing for long stat strings.
+- For this exact content, split the stat into a shorter headline such as `$20K` and move `in 10 years` into supporting copy.
+- Likely surfaces: `scripts/content_creator/carousel_builder.py` stat prompt/schema/fallback; `scripts/content_creator/opc_tip_base.css` `.stat-big` sizing/layout; `scripts/content_creator/carousel_reviewer.py` existing stat clipping threshold.
+
+Approval status:
+
+- Do not approve this post.
+- No Buffer scheduling happened.
