@@ -2327,6 +2327,7 @@ def update_inspiration_library(url, transcript, classification, hub_url="", doc_
         _set_col(base_row, "series_override",   classification.get("series_override", ""))
         _set_col(base_row, "fake_news_route",   classification.get("fake_news_route", ""))
         _set_col(base_row, "fake_news_confidence", classification.get("fake_news_confidence", ""))
+        _set_col(base_row, "story_id",          classification.get("story_id", "") or metadata.get("story_id", ""))
         if sibling_of:
             _set_col(base_row, "sibling_of", sibling_of)
         if classification.get("credibility"):
@@ -2829,6 +2830,7 @@ def run_bias(args, transcript, video_path: str = "", metadata: dict = None, srt_
         "niche": "News",
         "content_type": "FORMAT-019 — Dados ou Agenda?",
         "summary": f"Bias check: {creator_name or args.story_id}",
+        "story_id": args.story_id,
         "hook": "",
         "series_override": "DADOS OU AGENDA",
         "fake_news_route": "",
@@ -3062,6 +3064,7 @@ def run_news(args, transcript, video_path: str = "", srt_content: str = "", crea
 
     # Add to Inspiration Library so news captures are discoverable (ported from run_opc)
     news_cl = {"niche": "News", "summary": args.story_id, "content_type": "News Capture",
+               "story_id": args.story_id,
                "hook": "", "series_override": "", "fake_news_route": "", "fake_news_confidence": ""}
     update_inspiration_library(args.url, transcript, news_cl,
                                hub_url=doc_url or "", doc_url=brief_doc_url,
@@ -3909,6 +3912,7 @@ def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_c
             "content_type": "Other",
             "classification": "NEEDS_REVIEW",
             "summary": "TRANSCRIPT UNAVAILABLE — NEEDS SOURCE REVIEW",
+            "story_id": sid,
             "hook": "",
             "notes": "No audio/video content was available. No brief was generated. Retry after adding a source.",
             "credibility": "UNVERIFIED",
@@ -3930,6 +3934,7 @@ def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_c
     if "TRANSCRIPT UNAVAILABLE" in (cl.get("summary") or ""):
         print("  [OPC] analyze_opc returned TRANSCRIPT UNAVAILABLE — skipping brief generation.")
         sid = args.story_id or f"CNT-{datetime.now().strftime('%Y%m%d%H%M')}"
+        cl["story_id"] = sid
         update_inspiration_library(
             args.url, transcript, cl,
             hub_url="", doc_url="",
@@ -3939,6 +3944,7 @@ def run_opc(args, transcript, video_path: str = "", metadata: dict = None, srt_c
         return
 
     sid = args.story_id or f"CNT-{datetime.now().strftime('%Y%m%d%H%M')}"
+    cl["story_id"] = sid
 
     # Research notes before writing the brief — facts land IN the doc, not lost
     print("  Researching user notes before brief generation...")
@@ -4275,6 +4281,7 @@ def run_unrouted(args, transcript: str, video_path: str = "", metadata: dict = N
                 "niche": "Not Identified",
                 "status": "Not Identified",
                 "content_type": "unrouted",
+                "story_id": args.story_id,
                 "description": (metadata.get("caption", "") or transcript[:200])[:300],
                 "hook": "",
                 "hook_type": "",

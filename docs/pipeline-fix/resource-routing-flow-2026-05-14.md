@@ -383,11 +383,39 @@ Interpretation:
 - Need to confirm the final Drive version folder includes both the clip files
   and `clips.json`.
 
-Next Fix:
-- Run Flow A live proof first because it is the shortest route:
-  note URL → downloader → `clips.json` → builder bridge → final carousel folder.
-- After Flow A passes, run Flow B live proof:
-  research request → candidates → email → approved/staged clip handoff.
+## Cross-Runner Bridge Patch — 2026-05-15
+
+Audit correction before another live run:
+- Added `story_id` columns to the live Ideas & Inbox spreadsheet:
+  * `📋 Content Queue!AK1`
+  * `📥 Inspiration Library!AH1`
+- `capture_pipeline.py` now writes the capture `story_id` into Inspiration
+  Library rows, including normal OPC/news/bias/unrouted paths.
+- `topic_picker.py` now propagates `story_id` from Inspiration Library into
+  Content Queue when the column exists.
+- `main.py` now reads `story_id`/`capture_story_id` aliases from Content Queue
+  and also accepts `CAPTURE_STORY_ID` from workflow dispatch.
+- `content_creator.yml` now has a `capture_story_id` manual input, passes it as
+  `CAPTURE_STORY_ID`, pins checkout/setup-python/upload-artifact, and sets
+  `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`.
+- `main.py` fetches `resources_<story_id>/clips.json` and
+  `story_resources.json` from Drive before content generation so the clip
+  intelligence summary can influence the carousel prompt.
+
+Verified locally:
+- `python3.12 -m py_compile scripts/capture/capture_pipeline.py scripts/content_creator/main.py scripts/content_creator/topic_picker.py`
+- `python3.12 -m pytest tests/test_note_parser.py tests/test_resource_router.py tests/test_clips_manifest.py tests/test_video_downloader.py -q`
+  → 38 passed.
+- `content_creator.yml` parsed successfully with Ruby YAML.
+
+Current remaining proof:
+- Run one normal capture with links in notes and confirm the generated
+  Inspiration Library row has `story_id`.
+- Promote/build the matching Content Queue row and confirm logs show:
+  `[drive_fetch] fetched ...` and `clips.json bridge: merged ...`.
+- Then run Flow B approval proof:
+  research request → candidates → email → approval reply → Drive `clips.json`
+  status flips to `APPROVED` → content creator uses approved clips.
 
 Acceptance Criteria:
 - Test with a real capture note containing a URL.

@@ -123,12 +123,17 @@ on:
         options:
           - '0'
           - '1'
+      capture_story_id:
+        description: 'Optional capture/resource story ID for fetching resources_<story_id>/clips.json into this run.'
+        required: false
+        default: ''
 
 jobs:
   create-content:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
       CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -154,18 +159,19 @@ jobs:
       # Spec: doc 1BDg9ORggVsWH-WQPBx4iQnYNu2UA5vHWcuNRkXCY5v8 (v3 FINAL).
       # OPC purposes: hook|cost|teach|apply|sources. News purposes: claim|number|evidence|opposition|implication|sources.
       SLIDE_PURPOSE_PILOT: ${{ github.event.inputs.slide_purpose_pilot || '0' }}
+      CAPTURE_STORY_ID: ${{ github.event.inputs.capture_story_id || '' }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
-      - name: Setup Node 20
+      - name: Setup Node 24
         uses: actions/setup-node@v4
         with:
           node-version: '24'
 
       - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v5.6.0
         with:
           python-version: '3.11'
 
@@ -231,6 +237,7 @@ jobs:
           MOTION_PHASE1_TEST: ${{ github.event.inputs.motion_test || '0' }}
           MOTION_COVER_LAYOUT: ${{ github.event.inputs.motion_cover_layout || 'A' }}
           MOTION_FORCE_NO_CLIP: ${{ github.event.inputs.motion_force_no_clip || '0' }}
+          CAPTURE_STORY_ID: ${{ github.event.inputs.capture_story_id || '' }}
 
       - name: Run carousel reviewer (post-build quality check)
         if: always()
@@ -273,7 +280,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: content-creator-output
           path: /tmp/content_creator_run/
@@ -312,6 +319,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
       CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -338,18 +346,19 @@ jobs:
       # Spec: doc 1BDg9ORggVsWH-WQPBx4iQnYNu2UA5vHWcuNRkXCY5v8 (v3 FINAL).
       # OPC purposes: hook|cost|teach|apply|sources. News purposes: claim|number|evidence|opposition|implication|sources.
       SLIDE_PURPOSE_PILOT: ${{ github.event.inputs.slide_purpose_pilot || '0' }}
+      CAPTURE_STORY_ID: ${{ github.event.inputs.capture_story_id || '' }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
-      - name: Setup Node 20
+      - name: Setup Node 24
         uses: actions/setup-node@v4
         with:
           node-version: '24'
 
       - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v5.6.0
         with:
           python-version: '3.11'
 
@@ -383,6 +392,7 @@ jobs:
           MOTION_PHASE1_TEST: ${{ github.event.inputs.motion_test || '0' }}
           MOTION_COVER_LAYOUT: ${{ github.event.inputs.motion_cover_layout || 'A' }}
           MOTION_FORCE_NO_CLIP: ${{ github.event.inputs.motion_force_no_clip || '0' }}
+          CAPTURE_STORY_ID: ${{ github.event.inputs.capture_story_id || '' }}
 
       - name: Run carousel reviewer (post-build quality check)
         if: always()
@@ -425,7 +435,7 @@ jobs:
 
       - name: Upload retry artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: content-creator-retry-output
           path: /tmp/content_creator_run/

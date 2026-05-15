@@ -148,6 +148,18 @@ def insert_queue_row(topic_entry, inspo_status):
     put("date moved to queue", today)
     put("brief / angle", topic_entry.get("brief", ""))
     put("format", series)
+    story_id = (
+        topic_entry.get("story_id")
+        or topic_entry.get("capture_story_id")
+        or topic_entry.get("resource_story_id")
+        or topic_entry.get("source_story_id")
+        or ""
+    )
+    if story_id:
+        for col in ("story_id", "story id", "capture_story_id", "capture story id"):
+            if col in hmap:
+                put(col, story_id)
+                break
     # Propagate series_override and fake_news_route so pipeline routes correctly
     _so = topic_entry.get("series_override", "")
     if _so:
@@ -313,6 +325,13 @@ def pick_topics(count_opc=2, count_brazil=1, count_usa=1):
             idx2 = header_map.get(col_name.lower())
             return row[idx2].strip() if idx2 is not None and idx2 < len(row) else ""
 
+        def _rv_any(col_names):
+            for col_name in col_names:
+                val = _rv(col_name)
+                if val:
+                    return val
+            return ""
+
         entry = {
             "row_idx": idx,
             "score": score,
@@ -324,6 +343,7 @@ def pick_topics(count_opc=2, count_brazil=1, count_usa=1):
             "clips_needed": clips_needed_val,
             "series_override": _rv("series_override"),
             "fake_news_route": _rv("fake_news_route"),
+            "story_id": _rv_any(("story_id", "story id", "capture_story_id", "capture story id", "resource_story_id", "source_story_id")),
         }
         if niche == "opc":
             opc_candidates.append(entry)
@@ -380,4 +400,3 @@ def pick_topics(count_opc=2, count_brazil=1, count_usa=1):
 if __name__ == "__main__":
     topics = pick_topics()
     print(json.dumps(topics, indent=2))
-

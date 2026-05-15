@@ -525,6 +525,13 @@ def get_approved_queue_rows():
         idx = hmap.get(name.lower())
         return row[idx].strip() if idx is not None and idx < len(row) else ""
 
+    def v_any(row, names):
+        for name in names:
+            val = v(row, name)
+            if val:
+                return val
+        return ""
+
     approved = []
     for idx, row in enumerate(rows[1:], start=2):
         if v(row, "status").lower() != "approved":
@@ -545,8 +552,18 @@ def get_approved_queue_rows():
             "fake_news_route": v(row, "fake_news_route") or "B",
             "fake_news_confidence": _safe_float(v(row, "fake_news_confidence"), 0.0),
             "clips_needed": v(row, "clips_needed"),
+            "story_id": v_any(row, ("story_id", "story id", "capture_story_id", "capture story id", "resource_story_id", "source_story_id")),
         })
     return approved
+
+
+def _resource_story_id(topic_entry: dict) -> str:
+    """Resolve the capture/resource story id for cross-runner clip fetches."""
+    for key in ("story_id", "capture_story_id", "resource_story_id", "source_story_id"):
+        val = str(topic_entry.get(key, "") or "").strip()
+        if val:
+            return val
+    return os.environ.get("CAPTURE_STORY_ID", "").strip()
 
 
 def _caption_fallback(topic, niche):
@@ -1538,6 +1555,18 @@ def process_one_topic(topic_entry, run_date, drive):
     png_dir = work / "png"
     motion_dir = work / "motion"
 
+    _story_id = _resource_story_id(topic_entry)
+    if _story_id:
+        _target = work / "resources" / "clips"
+        _fetched = fetch_resources_from_drive(_story_id, _target)
+        if _fetched:
+            print(f"  [drive_fetch] fetched {_fetched} resource file(s) from Drive for story_id={_story_id}")
+        _sr_in_clips = _target / "story_resources.json"
+        _sr_in_resources = work / "resources" / "story_resources.json"
+        if _sr_in_clips.exists() and not _sr_in_resources.exists():
+            _sr_in_resources.parent.mkdir(parents=True, exist_ok=True)
+            _sr_in_resources.write_bytes(_sr_in_clips.read_bytes())
+
     # Clip Intelligence Layer — if story_resources.json exists for this post,
     # prepend the combined_summary to the brief so Haiku writes the carousel
     # AROUND the available source clips rather than treating them as afterthoughts.
@@ -1715,8 +1744,7 @@ def process_one_topic(topic_entry, run_date, drive):
     # available (from topic_entry or CAPTURE_STORY_ID env), fetch clips.json
     # and story_resources.json from Drive so we can use the staged clips.
     if not _clips_json.exists():
-        _story_id = (topic_entry.get("story_id") or
-                     os.environ.get("CAPTURE_STORY_ID", "")).strip()
+        _story_id = _resource_story_id(topic_entry)
         if _story_id:
             _target = work / "resources" / "clips"
             _fetched = fetch_resources_from_drive(_story_id, _target)
