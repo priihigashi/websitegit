@@ -900,6 +900,24 @@ SLIDE-BY-SLIDE STORY STRUCTURE:
   Mike's voice. First person. Specific. "First thing I ask every client: [specific question]."
 - Slide 5 (CLOSE): Close the loop opened on slide 1. The viewer must think: "Now I know."
 
+CLOSING CALLBACK RULE — CHECK THIS LAST BEFORE SUBMITTING:
+After writing slide 4, read slide 1 and slide 4 together. Slide 4 must contain the explicit
+answer to the question slide 1 created — not an implication, not a general tip, the named answer.
+
+  BAD: Slide 1 says "The $5K mistake homeowners make." Slide 4 says "Talk to your contractor first."
+       Why it fails: the $5K mistake was never named or resolved. The viewer swiped 4 times for nothing.
+
+  GOOD: Slide 1 says "The $5K mistake homeowners make." Slide 4 says "The mistake is comparing
+        upfront price only. Concrete block costs $18K more today — but wood framing repair
+        runs $6K-$12K by year 10. That's the gap. Run total-cost math before you choose."
+        Why it works: the hook is paid off. The viewer knows exactly what the $5K refers to.
+
+FOR COMPARISON TOPICS (X vs Y): slide 4 MUST end with a winner-condition sentence.
+  Format: "Go with [left] when [specific situation]. Go with [right] when [specific situation]."
+  Example: "Go with concrete block when you're building for 20+ years. Go with wood framing when
+  you need a faster permit timeline and plan to sell within 10 years."
+  Never end a comparison carousel with "it depends" — name the condition, then stop.
+
 FULL-CIRCLE STORY RULE:
 Before writing a single slide, complete this sentence: "The question slide 1 creates is: ___."
 Slides 2-4 must answer that question completely and explicitly.
@@ -1087,6 +1105,27 @@ CAROUSEL STRUCTURE RULES (Brazil/News fact-check):
     before the sources slide. Format: one sentence raising the objection,
     one sentence with the fact-based response. Keep it under 20 words each.
     NEVER ignore the objection — readers who see it pre-empted trust the rest.
+
+15. VERDICT RULE — CLOSING CALLBACK (non-negotiable for all Brazil/USA series):
+    The SECOND-TO-LAST slide (before sources) MUST contain an explicit verdict on the cover claim.
+    One sentence confirming, refuting, or qualifying the claim. Without it the viewer swiped for nothing.
+
+    Verdict formats (Portuguese):
+    - Claim TRUE:     "O documento confirma: [restate the claim in one plain sentence]."
+    - Claim PARTIAL:  "Mas a história completa é: [what the source actually shows vs. the claim]."
+    - Claim FALSE:    "Na verdade, [real number/fact] — fonte: [source name]."
+    - Claim CONTEXT:  "O dado é real, mas o contexto muda tudo: [one clarifying sentence]."
+
+    Verdict formats (English — USA content):
+    - Claim TRUE:     "The document confirms: [restate the claim in one plain sentence]."
+    - Claim PARTIAL:  "The full picture is: [what the source actually shows]."
+    - Claim FALSE:    "Actually, [real fact] — source: [source name]."
+    - Claim CONTEXT:  "The number is real, but the context changes everything: [one clarifying sentence]."
+
+    NEVER end without naming a verdict. If the evidence is still genuinely inconclusive, say:
+    "O documento não confirma nem nega — o que existe é: [what the record actually shows]."
+    WHY: the viewer swiped 4-5 slides to get the answer. If slide 4 does not give it,
+    they feel cheated and will not trust the account for the next post.
 """
 
 
@@ -1325,7 +1364,7 @@ Return ONLY a JSON object. The FIRST fields must be the strategy block — fill 
     {{"title": "Item 3 title", "sub": "1 line with decision consequence — different angle from items 1 and 2"}}
   ],
   "slide4_headline": "3-4 word action headline — name the specific move, not a generic warning label. GOOD: 'COMPARE TOTAL COST', 'CHECK DRAINAGE FIRST', 'PLAN REPAIRS EARLY'. BAD: 'AVOID THIS', 'WATCH OUT', 'RED FLAG', 'THE PRO MOVE', 'PRO TIP'",
-  "slide4_body": "2-3 sentences as Mike speaking directly to the homeowner who is about to make the mistake this carousel warns about. First person. Name the one specific thing they should ask or do first, and why it saves money. Conversational, not instructional. No promises, no superlatives. BANNED OPENERS: 'That\\'s the mistake I want you to avoid' (echoes slide 1, adds nothing) | 'That\\'s why' | 'This is exactly why'. Always start with the SPECIFIC ACTION Mike recommends. GOOD: 'First thing I ask every client: what\\'s your 10-year plan for this? Concrete costs more today but I\\'ve seen pavers shift and stain by year 3 — that repair bill surprises people.' BAD: 'Homeowners should consider both options carefully before making a decision.'",
+  "slide4_body": "2-3 sentences as Mike speaking directly to the homeowner who is about to make the mistake this carousel warns about. First person. Name the one specific thing they should ask or do first, and why it saves money. Conversational, not instructional. No promises, no superlatives. BANNED OPENERS: 'That\\'s the mistake I want you to avoid' (echoes slide 1, adds nothing) | 'That\\'s why' | 'This is exactly why'. Always start with the SPECIFIC ACTION Mike recommends. GOOD: 'First thing I ask every client: what\\'s your 10-year plan for this? Concrete costs more today but I\\'ve seen pavers shift and stain by year 3 — that repair bill surprises people.' BAD: 'Homeowners should consider both options carefully before making a decision.' CLOSING CALLBACK REQUIRED: the LAST sentence of slide4_body must directly resolve the hook from slide 1. If slide 1 named a mistake, name what the mistake is and what avoiding it costs or saves. For COMPARISON topics: end with 'Go with [left material] when [specific condition]. Go with [right material] when [specific condition].' — this winner-condition sentence is non-negotiable for comparisons. Without it the carousel has no payoff.",
   "mentioned_people": [
     {{"name": "Full Name", "role_en": "role / why they're named", "slide": 4, "image_hint": "Wikipedia or editorial headshot search term"}}
   ],
@@ -1495,6 +1534,9 @@ Rules:
                 words = re.sub(r"[^a-zA-Z0-9 ]", " ", topic).upper().split()[:4]
                 parsed["headline"] = " ".join(words) or "THE GUIDE"
                 print(f"  [carousel_builder] headline missing in LLM response — using fallback: {parsed['headline']!r}")
+            if parsed.get("needs_longer_format"):
+                print(f"  [format] ⚠ needs_longer_format=true — topic may be too broad for 5 slides: {topic!r}")
+                parsed["_longer_format_warning"] = True
             return _apply_opc_hook_answer_contract(parsed, topic)
         except json.JSONDecodeError as e:
             print(f"  OPC JSON parse error (attempt {attempt+1}): {e}")
@@ -1551,13 +1593,24 @@ def _apply_opc_hook_answer_contract(content, topic=""):
         content["slide3_items"] = items[:3]
 
     body = str(content.get("slide4_body") or "").strip()
-    # Only prepend canned opener if slide4_body is empty.
-    # When the model wrote a specific action opener, preserve it — the canned
-    # "That's the mistake I want you to avoid" opener is what we're banning.
+    # Only inject if slide4_body is empty — never overwrite model-written content.
+    # Use the CLOSING CALLBACK pattern, not the banned canned opener.
+    # "That's the mistake I want you to avoid" is in the BANNED OPENERS list — never write it.
     if answer_core and not body:
-        content["slide4_body"] = (
-            f"That's the mistake I want you to avoid: {answer_core}."
-        ).strip()
+        pair = content.get("_comparison_pair") or {}
+        left = str(pair.get("left", "")).strip()
+        right = str(pair.get("right", "")).strip()
+        if left and right:
+            content["slide4_body"] = (
+                f"The real difference is in total cost over time, not just the upfront number. "
+                f"Go with {left} when durability over 20+ years is the priority — the upfront cost pays back. "
+                f"Go with {right} when budget today is the constraint and you plan to sell within 10 years."
+            )
+        else:
+            content["slide4_body"] = (
+                f"Here is what I tell every client before they decide: {answer_core} "
+                f"Run those numbers before you sign anything — that is where the real savings live."
+            )
 
     return content
 
@@ -4876,8 +4929,9 @@ def _opc_story_cover_headline(content, slug):
 def render_opc_tip_list(content, v_class, *, items_html, context_slot):
     """OPC tip — slide 3 (TEACH / why-it-happens checklist slide)."""
     _s3_hl = _opc_story_slide3_headline(content)
+    _img_cls = " has-context-image" if "<img" in context_slot else ""
     return (
-        f'<div class="slide slide-list {v_class}">\n'
+        f'<div class="slide slide-list {v_class}{_img_cls}">\n'
         f'  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>\n'
         f'  <div class="tag">Why It Happens</div>\n'
         f'  <div class="headline" style="font-size:96px; margin-bottom:36px;">{_s3_hl}<span class="accent">.</span></div>\n'
@@ -4893,8 +4947,9 @@ def render_opc_tip_list(content, v_class, *, items_html, context_slot):
 def render_opc_tip_explainer(content, v_class, *, s4_hl, s4_accent, s4_accent_style, context_slot):
     """OPC tip — slide 4 (THE PRO MOVE explainer slide)."""
     s4_with_accent = s4_hl.replace(s4_accent, f'<span style="color:{s4_accent_style};">{s4_accent}</span>')
+    _img_cls = " has-context-image" if "<img" in context_slot else ""
     return (
-        f'<div class="slide slide-tip {v_class}">\n'
+        f'<div class="slide slide-tip {v_class}{_img_cls}">\n'
         f'  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>\n'
         f'  <div class="tag">Pro Tip</div>\n'
         f'  <div class="tip-label"><span class="tip-arrow">&#9658;</span> The Pro Move</div>\n'

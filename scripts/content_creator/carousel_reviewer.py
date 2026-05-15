@@ -1718,6 +1718,21 @@ def score_storytelling(html_path: str, niche: str) -> dict:
         "the slide's claim, or would they just fill space? Generic images (just\n"
         "'construction' or 'home') that don't show the specific thing the slide teaches\n"
         "reduce the score by 3 points per slide.\n\n"
+        "CHECK 5 — CLOSING CALLBACK (most important check):\n"
+        "Read slide 1. Read the second-to-last slide (slide 4 in a 5-slide carousel).\n"
+        "Does slide 4 explicitly resolve the promise slide 1 made — not with a generic tip,\n"
+        "but with the actual named answer?\n"
+        "  For OPC: if slide 1 named a mistake or cost, slide 4 must NAME what the mistake\n"
+        "  is and what it costs or saves. For comparisons: slide 4 must contain a\n"
+        "  winner-condition sentence ('Go with X when Y. Go with Z when W.') — 'it depends'\n"
+        "  without naming the condition is a failure.\n"
+        "  For News: slide 4 must contain a verdict sentence — TRUE / PARTIAL / FALSE —\n"
+        "  with a named source. 'The evidence is unclear' without naming what IS clear fails.\n"
+        "Scoring:\n"
+        "  - Score below 75 if the closing callback is completely absent.\n"
+        "  - Score below 85 if the callback is implied or vague (story trails off).\n"
+        "  - Score 90+ only if a viewer reading slide 1 then slide 4 back-to-back would say\n"
+        "    'I got the exact answer I came for.'\n\n"
         "SLIDE SCORING — 0 to 100 (after applying all penalties above):\n"
         "90-100 = gripping and specific, pulls reader forward, pays off the hook\n"
         "70-89  = clear and useful, minor gaps\n"
@@ -1728,6 +1743,7 @@ def score_storytelling(html_path: str, niche: str) -> dict:
         '{"hook_question":"what question slide 1 creates","hook_answer_found":true,'
         '"payoff_slide":3,"missing_payoff":null,'
         '"strategy_delivered":true,"strategy_gap":null,'
+        '"closing_callback_found":true,"closing_callback_text":"exact sentence from slide 4 that resolves slide 1, or null if absent",'
         '"unsupported_claims":[],"visual_gaps":[],'
         '"slide_scores":[{"slide":1,"score":85,"reason":"one sentence"},...], '
         '"overall":78,"summary":"one sentence overall"}'
@@ -2105,6 +2121,31 @@ def check_slide_plan(content: dict) -> list[str]:
     return issues
 
 
+def check_slide_layout_overflow(html_path: str) -> list[str]:
+    """Warn when a slide has both a context image and long body text (>400 chars).
+    This combination causes visible text overflow in exported PNGs when no overflow
+    guard CSS class is present. Checks slide-list and slide-tip divs."""
+    issues = []
+    try:
+        html = Path(html_path).read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return issues
+    import re
+    slide_pattern = re.compile(
+        r'<div[^>]+class="[^"]*slide(?:-list|-tip)[^"]*has-context-image[^"]*"[^>]*>(.*?)</div>',
+        re.DOTALL,
+    )
+    for m in slide_pattern.finditer(html):
+        block = m.group(1)
+        text = re.sub(r"<[^>]+>", "", block)
+        if len(text.strip()) > 400:
+            issues.append(
+                f"[layout] slide with has-context-image has {len(text.strip())} chars of visible text "
+                "(>400) — may overflow. Shorten slide4_body or slide3 list items."
+            )
+    return issues
+
+
 def check_built_post(result: dict) -> dict:
     """Run all checks on a single built post result dict.
     Returns {post_id, topic, niche, issues: [str], passed: bool}."""
@@ -2118,10 +2159,17 @@ def check_built_post(result: dict) -> dict:
     # Runs FIRST so a hallucinated/banned plan blocks the post before any
     # render/PNG/Drive cost. No-op for posts that don't use the planner.
     if niche == "opc":
-        all_issues.extend(check_slide_plan(result.get("content", {}) or {}))
+        _content_dict = result.get("content", {}) or {}
+        all_issues.extend(check_slide_plan(_content_dict))
         # Phase 10 — sources-vs-claims gate. If $/%/years appear on any
         # slide, the sources list must cite a credible external authority.
-        all_issues.extend(check_sources_match_claims(result.get("content", {}) or {}))
+        all_issues.extend(check_sources_match_claims(_content_dict))
+        # Flag when the LLM signaled the topic is too broad for 5 slides.
+        if _content_dict.get("_longer_format_warning"):
+            all_issues.append(
+                "[info] needs_longer_format=true — topic may be too broad for 5 slides. "
+                "Consider narrowing the angle before next run."
+            )
 
     # 1. HTML placeholder check — look for cover.html in version folder (local path)
     # The content_creator already cleaned up work_dir, so we check Drive link heuristically.
@@ -2130,10 +2178,12 @@ def check_built_post(result: dict) -> dict:
     html_local = Path(work_dir_env) / post_id / "cover.html"
     if html_local.exists():
         all_issues.extend(check_html_placeholders(str(html_local)))
+        all_issues.extend(check_slide_layout_overflow(str(html_local)))
     else:
         # Try common temp pattern
         for candidate in Path(work_dir_env).glob(f"**/{post_id}/cover.html"):
             all_issues.extend(check_html_placeholders(str(candidate)))
+            all_issues.extend(check_slide_layout_overflow(str(candidate)))
             break
         else:
             # Work dir cleaned up — can't check HTML placeholders locally
@@ -2352,6 +2402,12 @@ def send_review_email(failed_posts: list[dict], all_posts: list[dict]):
         if ss:
             overall = ss.get("overall", "?")
             lines.append(f"       ── storytelling {overall}/100: {ss.get('summary','')[:80]} ──")
+            cb_found = ss.get("closing_callback_found")
+            cb_text = ss.get("closing_callback_text") or ""
+            if cb_found is True:
+                lines.append(f"         ✅ Closing callback: \"{cb_text[:120]}\"")
+            elif cb_found is False:
+                lines.append("         ⚠️  CLOSING CALLBACK MISSING — slide 4 does not explicitly resolve the slide 1 promise.")
             for s in (ss.get("slide_scores") or [])[:8]:
                 lines.append(
                     f"         · slide {s.get('slide','?')}: {s.get('score','?')}/100 — {s.get('reason','')[:60]}"
