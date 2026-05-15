@@ -658,6 +658,56 @@ def get_drive_service():
     return build("drive", "v3", credentials=creds)
 
 
+def fetch_resources_from_drive(story_id: str, target_dir: Path) -> int:
+    """Find Drive folder 'resources_{story_id}' and download clips.json +
+    story_resources.json into target_dir. Returns count of files fetched.
+
+    Cross-runner bridge: capture pipeline writes to Drive; content_creator runs
+    later on a different runner — this is how it picks up the source clips.
+    """
+    if not story_id:
+        return 0
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", story_id)
+    folder_name = f"resources_{slug}"
+    try:
+        drive = get_drive_service()
+        folders = drive.files().list(
+            q=f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+            fields="files(id,name)", pageSize=5,
+        ).execute().get("files", [])
+        if not folders:
+            print(f"  [drive_fetch] folder '{folder_name}' not found")
+            return 0
+        folder_id = folders[0]["id"]
+        files = drive.files().list(
+            q=f"'{folder_id}' in parents and trashed=false and "
+              f"(name='clips.json' or name='story_resources.json')",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+            fields="files(id,name)",
+        ).execute().get("files", [])
+        if not files:
+            print(f"  [drive_fetch] no clips.json/story_resources.json in '{folder_name}'")
+            return 0
+        from googleapiclient.http import MediaIoBaseDownload
+        target_dir.mkdir(parents=True, exist_ok=True)
+        fetched = 0
+        for f in files:
+            local = target_dir / f["name"]
+            req = drive.files().get_media(fileId=f["id"], supportsAllDrives=True)
+            with local.open("wb") as fh:
+                dl = MediaIoBaseDownload(fh, req)
+                done = False
+                while not done:
+                    _, done = dl.next_chunk()
+            fetched += 1
+            print(f"  [drive_fetch] {f['name']} → {local}")
+        return fetched
+    except Exception as exc:
+        print(f"  [drive_fetch] non-fatal error for '{folder_name}': {exc}")
+        return 0
+
+
 def next_version_number(parent_folder_id, slug, drive):
     """List folders under parent matching v<N>_<slug>, return next available N."""
     resp = drive.files().list(
@@ -1660,6 +1710,25 @@ def process_one_topic(topic_entry, run_date, drive):
     # indices are excluded from the Apify/Pexels fetch chain (saves API credits).
     _pre_staged: dict[int, str] = {}
     _clips_json = work / "resources" / "clips" / "clips.json"
+
+    # Cross-runner bridge: if local clips.json missing AND a story_id is
+    # available (from topic_entry or CAPTURE_STORY_ID env), fetch clips.json
+    # and story_resources.json from Drive so we can use the staged clips.
+    if not _clips_json.exists():
+        _story_id = (topic_entry.get("story_id") or
+                     os.environ.get("CAPTURE_STORY_ID", "")).strip()
+        if _story_id:
+            _target = work / "resources" / "clips"
+            _fetched = fetch_resources_from_drive(_story_id, _target)
+            if _fetched:
+                print(f"  [drive_fetch] fetched {_fetched} resource file(s) from Drive for story_id={_story_id}")
+            # Also mirror story_resources.json to parent (where bridge looks for it)
+            _sr_in_clips = _target / "story_resources.json"
+            _sr_in_resources = work / "resources" / "story_resources.json"
+            if _sr_in_clips.exists() and not _sr_in_resources.exists():
+                _sr_in_resources.parent.mkdir(parents=True, exist_ok=True)
+                _sr_in_resources.write_bytes(_sr_in_clips.read_bytes())
+
     if _clips_json.exists():
         try:
             import json as _json

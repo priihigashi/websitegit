@@ -1611,9 +1611,11 @@ def process_replies():
         _check_stale_reminders(pending)
         return {"approved": 0, "changes": 0, "skipped": 0}
 
+    # NOTE: empty `pending` does NOT skip the loop — ResourceRouter clip approvals
+    # and SH-104 manifest replies are independent of carousel pending state.
+    # The carousel-approval branch handles empty pending via empty scoped_posts.
     if not pending:
-        print("  No pending_approval posts in catalog")
-        return {"approved": 0, "changes": 0, "skipped": 0}
+        print("  No pending_approval posts in catalog — still processing RR/SH-104 replies")
 
     stats = {"approved": 0, "changes": 0, "skipped": 0,
              "sh104_actions": 0, "sh104_unknown": 0, "rr_approvals": 0}

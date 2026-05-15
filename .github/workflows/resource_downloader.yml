@@ -76,7 +76,9 @@ jobs:
             google-auth \
             google-api-python-client \
             requests \
-            python-dotenv
+            python-dotenv \
+            faster-whisper \
+            anthropic
 
       - name: Run resource router
         env:
@@ -85,6 +87,7 @@ jobs:
           PRI_OP_YT_COOKIES: ${{ secrets.PRI_OP_YT_COOKIES }}
           PRI_OP_IG_COOKIES: ${{ secrets.PRI_OP_IG_COOKIES }}
           PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: "true"
         run: |
