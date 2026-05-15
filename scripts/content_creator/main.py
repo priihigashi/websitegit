@@ -1480,6 +1480,14 @@ def process_one_topic(topic_entry, run_date, drive):
             print(f"  smart-plan (early): error {exc!r} — using legacy tip path")
             _early_plan = None
 
+    # Create the per-post work directory before any resource lookups. The clip
+    # intelligence layer can read staged files from work/resources before the
+    # carousel content is generated.
+    work = WORK_DIR / post_id
+    work.mkdir(parents=True, exist_ok=True)
+    png_dir = work / "png"
+    motion_dir = work / "motion"
+
     # Clip Intelligence Layer — if story_resources.json exists for this post,
     # prepend the combined_summary to the brief so Haiku writes the carousel
     # AROUND the available source clips rather than treating them as afterthoughts.
@@ -1617,12 +1625,6 @@ def process_one_topic(topic_entry, run_date, drive):
     print(f"  {audit_summary}")
     if audit_issues:
         _send_alert(f"Visual audit issues for '{topic[:50]}':\n\n{audit_summary}")
-
-    # 2. Build HTML
-    work = WORK_DIR / post_id
-    work.mkdir(parents=True, exist_ok=True)
-    png_dir = work / "png"
-    motion_dir = work / "motion"
 
     # 1c. Fetch media (CC context images + AI cover) before building HTML so
     # _build_brazil_html() can inject real <img> tags instead of placeholder text.
