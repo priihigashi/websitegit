@@ -32,7 +32,7 @@ Related nearby commits:
 - Manual workflow input `motion_cover_layout=A|D` exists.
 - Manual workflow input `motion_force_no_clip=1` exists for the no-clip proof.
 - Motion System v2 spec is locked in `NONNEGOTIABLES.md` by commit `190003c`.
-- Spec-alignment patch completed locally on 2026-05-14:
+- Spec-alignment patch shipped by commit `374f575` on 2026-05-14:
   - active Ken Burns fallback removed from `process_one_topic()`.
   - legacy `MANUAL_TEMPLATE=motion` path blocked so ffmpeg full-PNG zoom cannot run.
   - workflow UI labels `motion` as disabled by NN-M1.
