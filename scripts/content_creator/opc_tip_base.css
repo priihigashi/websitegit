@@ -89,7 +89,7 @@ body { display:flex; flex-direction:column; align-items:center; gap:32px; paddin
   color:var(--c-head); line-height:1.15; flex:1;
 }
 .list-sub {
-  font-family:'Roboto Condensed', sans-serif; font-size:20px; font-weight:400;
+  font-family:'Roboto Condensed', sans-serif; font-size:24px; font-weight:400;
   color:var(--c-body); margin-top:6px; line-height:1.3;
 }
 
