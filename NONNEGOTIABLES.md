@@ -33,13 +33,16 @@ _Last updated: 2026-05-15 (auto-updated by nonnegotiables_updater.py)_
 
 ## LOCKED — Content & Carousel Pipeline
 
-**MOTION IS CURRENTLY DISABLED (MOTION_ENABLED=0) — overrides prior "default ON" rule**
-Pipeline produces static PNGs only. No MP4, GIF, or reel is built.
-Reason: entire motion cascade (Ken Burns/Remotion/Playwright) was broken in 4 ways —
-wrong slides animated, text zoomed with background, wrong frames on cover, wrong tool entirely.
-Do NOT re-enable until a new motion plan is designed and approved by Priscila.
-To re-enable: set MOTION_ENABLED=1 in GitHub secrets AND get explicit approval.
-Updated: 2026-05-13. See commit bf1d7c1.
+**MOTION SYSTEM V2 — See NN-M1..M5 below (lines 943–1040)**
+The legacy motion cascade (Ken Burns / 8-tier / Remotion) described in older
+versions of this file has been replaced. The current law is NN-M1..M5 at the
+bottom of this file. Key changes:
+- Source cascade: real clip → GIPHY → static/no motion (3 tiers, not 8)
+- Ken Burns: permanently removed. Not gated. Do not re-add.
+- Kling: not in Phase 1.
+- Remotion / CarouselMotion.tsx: frozen until Phase 2.
+- Cover-only Phase 1 proof running. See NN-M5 for proof requirements.
+Updated: 2026-05-15. Spec commit: 190003c.
 
 **CAROUSEL FOLDER STANDARD**
 Every carousel lands at: `<Series>/_TEMPLATE_CAROUSEL/v<N>_<slug>/` with `png/` + `motion/` siblings.
@@ -48,31 +51,26 @@ Every carousel lands at: `<Series>/_TEMPLATE_CAROUSEL/v<N>_<slug>/` with `png/` 
 - Static and motion are SIBLINGS inside `_TEMPLATE_CAROUSEL`, never nested
 Source: CLAUDE.md — CAROUSEL FOLDER STANDARD
 
-**MOTION RENDERER CASCADE (added 2026-04-20, updated 2026-04-29)**
-Main pipeline renders in this order:
-1. Remotion (`scripts/remotion/src/CarouselMotion.tsx`, composition id `CarouselMotion`) — used when `cover_renderer_pref == "remotion"`.
-2. Playwright `record_motion.js` — records per-slide motion HTMLs built by `build_motion_html()`. Each HTML has CSS Ken Burns on `.kb-bg` (background layer only — text is z-index 2, stays static) + optional clip sticker (looping `<video>` in `.clip-frame`). This is the PRIMARY motion renderer for all HTML-source templates.
-3. Alert — if motion/ folder is empty after Remotion + Playwright, pipeline alerts and skips the post. Motion is never silently absent.
+**MOTION RENDERER CASCADE — RETIRED (2026-05-15)**
+This block described the Ken Burns / Remotion / 8-tier cascade. That system
+has been replaced. See **MOTION SYSTEM V2** block above and NN-M1..M5 below.
+Ken Burns is permanently removed. Remotion is frozen (Phase 2). Do not use
+as reference for any new motion work.
 
-ffmpeg Ken Burns zoompan on full PNG is ONLY used by `run_motion_only()` (manual_template=motion) and writes to `motion_remotion/` subfolder for comparison — it is NOT part of the automatic new-build flow.
-Never substitute an AI video tool (Kling / Runway / Pika) unless Priscila explicitly approves per post.
-Source: CLAUDE.md — MOTION RENDERER CASCADE + scripts/content_creator/MOTION_SOURCES_RESEARCH.md
-
-**VIDEO SOURCE CASCADE — 8 TIERS (added 2026-04-20)**
-For any slide that needs a live clip (speech / event / institutional b-roll), `motion_sources.fetch_clip_with_fallback` tries 8 sources before Ken Burns:
-YouTube (Apify) → Instagram (Apify) → Pexels → Pixabay → Archive.org → Wikimedia Commons → Stock scrapers → Ken Burns floor.
-- Haiku must emit DIFFERENT query phrasing per tier (`youtube_query` ≠ `pexels_query` ≠ `pixabay_query`).
-- Every successful fetch writes `<clip>.source.txt` sidecar with tier, url, license, attribution, query, fetched_at.
-- Stock tiers (Pexels/Pixabay/Archive/Wikimedia) skip for `visual_hint == "bio-card"` — faces never come from generic stock.
-- If every tier fails, Ken Burns animates the poster. Never empty motion folder.
-Source: scripts/content_creator/motion_sources.py + MOTION_SOURCES_RESEARCH.md
+**VIDEO SOURCE CASCADE — RETIRED (2026-05-15)**
+The 8-tier cascade (Pexels/Pixabay/stock scrapers/Ken Burns floor) is retired.
+Current v2 chain (3 tiers, in motion_sources.py SOURCE_CHAIN):
+  Tier 1: real clip (clip_collections / yt-dlp / apify_youtube / apify_instagram / archive_org / wikimedia)
+  Tier 2: GIPHY (context-image, place, event, product-photo, ugc-reaction slides only)
+  Tier 3: static PNG delivery — no motion emitted (clean fallback, not Ken Burns)
+Pexels, Pixabay, and stock_scrapers completely removed from chain (commit 374f575).
 
 **BRAZIL NATIVE TEMPLATE — V1 RACHADINHA MOTION TREATMENT (added 2026-04-29)**
 Every Brazil native carousel uses the Rachadinha v1 visual system. Applies to all agents (carousel_reviewer, content_creator, 4AM agent, any skill that builds or reviews Brazil carousels):
 - Cover slide: full-bleed CC photo as `.bg-photo` with `filter:grayscale(1) contrast(1.1) brightness(.55)` + `.halftone` dot overlay + `.sticker-slot` portrait (absolute right 7% top 18%, same photo, `filter:grayscale(1) contrast(1.15) brightness(.95)`). Cover text constrained to max-width 54% to avoid collision.
 - Middle slides: ODD indices (3, 5, 7…) = motion slide with `.bg-photo` + `.halftone`. EVEN indices (2, 4, 6…) = static, no background.
 - Photo source: `photo_query` field in `clip_suggestions` → Wikipedia REST → Wikimedia Commons → Pexels fallback. Haiku MUST emit `photo_query` + `photo_bg_position` for every motion slide.
-- `motion_renderer` must be `"kenburns"` for Brazil native — Playwright records the CSS Ken Burns animation on the `.kb-bg` background layer only (text/logo stay perfectly static via z-index). This is CSS `@keyframes kb-zoom` on the div behind the text, NOT ffmpeg zoompan on the full rendered PNG. ffmpeg on a full PNG moves text too — that is wrong.
+- `motion_renderer` for Brazil native: **RETIRED — Ken Burns permanently removed per NN-M1 (2026-05-15)**. Brazil native cover motion follows NN-M1 Cover-only Phase 1 rules: real clip in `.clip-frame` if available, GIPHY if not, static if neither. No CSS Ken Burns animation, no ffmpeg zoompan.
 - NO placeholder divs ever. If no photo fetched → slide renders as clean dark text, no dashed box.
 Source: v1_rachadinha/cover.html (Drive 1TgH7nDM2BDFznL9jS9jmzCdt9XNT3y0y) + carousel_builder.py::_build_brazil_html
 
