@@ -298,6 +298,46 @@ Pending after the run:
 2. If pass + visual OK — reply `APPROVE` to preview email. `approval_handler.py` schedules to Buffer.
 3. If fail — pull `gh run view 25939918327 --log-failed`, identify whatever new blocker emerged, file in this section as Prompt A.3.
 
+## Prompt A.2 RESULT — 2026-05-15 16:38 ET
+
+Run 25939918327 (f5bd143 with my fix) completed in 6m55s — `conclusion: success`.
+
+What passed:
+
+- Stat clipping fix WORKED — no `Stat clipping risk` warning fired.
+- Visual audit ✅ all slides have visual anchors.
+- SH-146 contract ✅
+- SH-149 Comparison parity ✅ — concrete block vs wood framing balanced.
+- SH-155 HTML completeness gate ✅ — no empty fields, no visible placeholders.
+- SH-159 post-render visual QA ✅ — 5 PNGs, family `['cream']`.
+- SH-157 Pre-email reviewer ✅ 1/1 passed.
+- Carousel reviewer ✅ Summary 1/1 passed.
+- Preview email sent to priscila@oakpark-construction.com.
+
+Drive artifacts:
+
+- Version folder: https://drive.google.com/drive/folders/13qr-ixQcTF8qG4K4MeKHqWjRf6CfNp9u
+- Motion folder: https://drive.google.com/drive/folders/1OkS0NDlwzxb07Mt_oWdPEuk5pLqXRky1
+
+Soft warnings (advisory — did not block ship):
+
+- SH-028 Storytelling JSON parse error twice (`Unterminated string` and `Expecting ',' delimiter`). Score was lost — `closing_callback_found` was effectively never validated. Non-fatal but means the closing-callback gate didn't actually run on this build. Followup: investigate Haiku JSON output stability for storytelling scorer.
+- AI Content Audit (3 agents) — 0/1 passed all 3:
+  - Fact Checker ❌ FAIL (no detail in log — see audit email)
+  - Brand & Tone Reviewer ❌ FAIL (7/10)
+  - Structure & Format ✅ PASS (8/10)
+  - Detailed reasoning was emailed separately as "Audit report" to priscila@oakpark-construction.com.
+
+What Priscila must do next:
+
+1. Open the preview email — verify subject + storytelling section.
+2. Open the audit email — read Fact Checker + Brand & Tone failure reasons.
+3. Open Drive version folder + open all 5 PNGs.
+4. Run the Drive Visual QA checklist above.
+5. If everything looks correct + the audit failures are acceptable → reply `APPROVE` to preview email. If audit raised real issues → do NOT approve, file Prompt A.3.
+
+This is the first build to reach the preview-email stage. Even if she rejects this specific build on content grounds, the pipeline itself is now end-to-end functional.
+
 Deferred Prompt A debt (still applies — does NOT block first approved post):
 
 - Wire `check_opc_professional_ethics()` into `check_drive_folder()` (carousel_reviewer.py:1309)
