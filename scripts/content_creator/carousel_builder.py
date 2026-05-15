@@ -976,6 +976,15 @@ MANDATORY SAFETY RULES — apply AFTER writing great content
      Remodeling Magazine Cost vs Value, NAHB cost benchmarks, Houzz survey,
      or a contractor range ("estimated $X–$Y depending on scope") — one of
      these must be in proof_needed before using a dollar figure in the hook.
+   - CONTRACTOR RANGE — VALID SOURCES: HomeAdvisor, Angi, Fixr, Thumbtack
+     publish aggregate consumer quote data for maintenance and repair tasks
+     (concrete repair, driveway work, minor masonry, etc.) — these are
+     acceptable external sources for cost ranges. Use them instead of citing
+     OPC's own data when the topic is a standard maintenance cost.
+     RULE: If proof_needed = "contractor range," the sources slide MUST cite
+     HomeAdvisor, Angi, Fixr, Thumbtack, or Remodeling Magazine as the cost
+     anchor — NOT "Oak Park Construction" alone. OPC data = internal ops, not
+     a public benchmark. A brand cannot be its own external source for pricing.
 
 6. Tone: Direct, matter-of-fact, no jargon, no hype.
    - Write like a contractor explaining something to a homeowner over coffee.
@@ -1411,6 +1420,7 @@ Rules:
   THREAD TEST: if you remove the cover slide, can someone read slides 2-4 and still know they're about the SAME topic? If no, rewrite.
   - slide2_headline MUST name the same risk/material/situation as the cover headline (e.g. cover = "3 OUTDOOR KITCHEN RISKS" → slide2_headline = "WHAT THESE COST" or "THE REAL PRICE TAG")
   - slide3_items are the 3 items/causes/red-flags introduced on the cover — NOT 3 different tips on a different subject
+  - slide3_items[0] MUST NOT repeat or rephrase the hook_answer or cover headline. slide3_items[0] must introduce the FIRST specific cause or mechanism — the deeper WHY behind the risk, not an echo of the hook. BANNED: slide3_items[0].sub that is word-for-word or phrase-for-phrase the same as hook_answer. GOOD: slide3_items[0] names the specific physical/technical cause (e.g. "water infiltration widens cracks from inside" not "ignoring cracks causes damage"). The items should expand the story, never summarize slide 1 again.
   - slide4 addresses specifically what the homeowner does to avoid the risk introduced on slide 1; headline must name the action, not a generic warning label
   BANNED: slides that each cover a different sub-topic (e.g. slide 2 = permits, slide 3 = materials, slide 4 = timeline — these feel like 3 different posts crammed together)
 - Caption hook = first line visible in feed — MUST contain at least one of: a specific number, a dollar amount, or a named consequence/risk. BANNED: generic openers like "Here's what you need to know", "Let's talk about", "Important update", "Things homeowners should know". GOOD: "Most homeowners spend $12K-$20K replacing tile they could have saved." | "3 red flags your contractor won't mention until after you sign." | "This one permit mistake delays your project 6-8 weeks."
