@@ -977,6 +977,32 @@ def check_sources_match_claims(content: dict) -> list[str]:
     return []
 
 
+_OPC_RESALE_INTENT_PHRASES = [
+    "plan to sell", "planning to sell", "if you sell", "when you sell",
+    "resale", "flipping", "flip the", "not staying", "won't be staying",
+    "sell within", "selling within", "sell in", "before you sell",
+]
+
+def check_opc_professional_ethics(content: dict) -> list[str]:
+    """Flag OPC slide copy that recommends material choices based on resale
+    intent — implies cutting corners on quality for the next owner's property.
+    A licensed contractor must never give advice tied to flip/resale timelines."""
+    issues = []
+    if not isinstance(content, dict):
+        return issues
+    s4 = str(content.get("slide4_body") or "").lower()
+    cta = str(content.get("cta") or "").lower()
+    for phrase in _OPC_RESALE_INTENT_PHRASES:
+        if phrase in s4 or phrase in cta:
+            issues.append(
+                f"[ethics] OPC slide4_body or CTA contains resale-intent language "
+                f"('{phrase}') — Mike cannot recommend materials based on whether "
+                f"the client plans to sell. Use objective structural/climate criteria only."
+            )
+            break
+    return issues
+
+
 def _check_provenance(prov: dict, topic: str = "") -> list[str]:
     """Read media_provenance.json dict and flag AI-sourced images +
     category mismatches (Phase 10 wrong-image gate).
@@ -2164,6 +2190,8 @@ def check_built_post(result: dict) -> dict:
         # Phase 10 — sources-vs-claims gate. If $/%/years appear on any
         # slide, the sources list must cite a credible external authority.
         all_issues.extend(check_sources_match_claims(_content_dict))
+        # Ethics gate — OPC copy must not recommend materials based on resale intent.
+        all_issues.extend(check_opc_professional_ethics(_content_dict))
         # Flag when the LLM signaled the topic is too broad for 5 slides.
         if _content_dict.get("_longer_format_warning"):
             all_issues.append(

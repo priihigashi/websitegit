@@ -914,9 +914,18 @@ answer to the question slide 1 created — not an implication, not a general tip
 
 FOR COMPARISON TOPICS (X vs Y): slide 4 MUST end with a winner-condition sentence.
   Format: "Go with [left] when [specific situation]. Go with [right] when [specific situation]."
-  Example: "Go with concrete block when you're building for 20+ years. Go with wood framing when
-  you need a faster permit timeline and plan to sell within 10 years."
+  Example: "Go with concrete block when the project is in a high-humidity or hurricane zone and
+  long-term maintenance cost matters. Go with wood framing when the floor plan is complex, the
+  timeline is tight, and interior finish is the priority."
   Never end a comparison carousel with "it depends" — name the condition, then stop.
+
+  PROFESSIONAL ETHICS RULE — MANDATORY FOR OPC:
+  The winning condition MUST be based on objective structural, climate, code, or use-case factors.
+  BANNED conditions: resale intent, flipping timeline, "plan to sell," "not staying long," budget
+  shortcuts for someone else's property. Mike does not tell clients to use a cheaper material
+  because they plan to leave. That implies the next owner's safety is not his concern — it is.
+  If the honest answer is that one material is almost always better in South Florida conditions,
+  say that directly. Do not manufacture false balance to appear neutral.
 
 FULL-CIRCLE STORY RULE:
 Before writing a single slide, complete this sentence: "The question slide 1 creates is: ___."
