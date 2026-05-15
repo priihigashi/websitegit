@@ -66,6 +66,27 @@ Fresh proof runs after cover-only fix:
 
 Do not use the initial proof pair as final NN-M5 evidence because those runs exposed the cover-only bug.
 
+Spec-aligned proof attempt, 2026-05-15:
+- Cover A: `25926538426` — produced cover-only proof before late cancellation request.
+  - Version: https://drive.google.com/drive/folders/12mbp4Y5fybQgRHwhZeZAsHTH4sdy6Bgq
+  - Motion: https://drive.google.com/drive/folders/1xHxeTzNFxuX5YWMd_nZyPV7s-W_1CsyZ
+  - Drive folder contains one MP4: `cream_01_cover_motion.mp4`.
+- Cover D: `25926538378` — produced cover-only proofs before late cancellation request.
+  - Version 1: https://drive.google.com/drive/folders/14bxRFHuQMiWLObjQRcIoq1F7fLwMBBoT
+  - Motion 1: https://drive.google.com/drive/folders/10D1PB17oIj4Z5F-_Om9KpYEvrlt1gOdx
+  - Version 2: https://drive.google.com/drive/folders/1YBomEqBIL0xLmhFE38QDhxJdUq8jwQ2D
+  - Motion 2: https://drive.google.com/drive/folders/1IIINGMBzf2si6CtEctWo7YrrcFtSmRtw
+  - Each Drive motion folder contains one MP4: `cream_01_cover_motion.mp4`.
+- No-clip: `25926538324` — FAILED NN-M5 before fix.
+  - Version: https://drive.google.com/drive/folders/140DTwYBuTTKOtDno4cTW9p5-fpp4RCir
+  - Motion: https://drive.google.com/drive/folders/1SAWGHWRsxFKMUO7_Ufjzu0TmUOHQZykj
+  - Failure: `MOTION_FORCE_NO_CLIP=1` still produced `cream_01_cover_motion.mp4`.
+- No-clip fix shipped:
+  - `e62b179` — Motion v2: make Phase 1 no-clip proof static-only.
+- No-clip rerun:
+  - `25927210711` — cancelled because the workflow stayed stale in `Run content creator`.
+  - Status: no clean no-clip production proof yet after `e62b179`.
+
 ## Errors / Gaps
 
 - Gate 1 visual decision is not done. Priscila still needs to choose A, D, or adjust.
@@ -74,11 +95,10 @@ Do not use the initial proof pair as final NN-M5 evidence because those runs exp
   - The legacy `render_motion_cover()` helper still exists for historical reference, but active dispatch/fallback paths are blocked/removed.
   - Cron/prod motion is still off and must stay off.
 - Gate 3 proof tests are not complete:
-  - Fresh A proof needs final status and Drive link.
-  - Fresh D proof needs final status and Drive link.
-  - No-clip proof needs final status and Drive link.
-  - Need to verify exactly one MP4 exists in `motion/`: `cream_01_cover_motion.mp4`.
-  - Need to verify no `cream_02`, `cream_03`, or `cream_04` motion files.
+  - Cover A/D produced usable Drive proofs, but runs were marked cancelled after proof output due late cancellation request.
+  - No-clip proof needs one clean successful workflow run after `e62b179`.
+  - A/D Drive folders verified exactly one MP4 exists in `motion/`: `cream_01_cover_motion.mp4`.
+  - A/D Drive folders verified no `cream_02`, `cream_03`, or `cream_04` motion MP4 files.
 - Gate 4 sign-off is blocked until Gates 1-3 pass.
 
 ## Current Gate Status
@@ -92,6 +112,7 @@ Gate 2 — Code Cleanup: PARTIAL.
 - Kling default is off; explicit Kling path remains out of Phase 1.
 
 Gate 3 — Remaining NN-M5 Tests: RUNNING / EVIDENCE PENDING.
+Gate 3 update — 2026-05-15: A/D proof artifacts exist; no-clip still evidence-pending after fix `e62b179`.
 
 Gate 4 — Phase 1 Sign-Off: BLOCKED.
 
