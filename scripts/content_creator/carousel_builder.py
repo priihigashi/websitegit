@@ -970,6 +970,12 @@ MANDATORY SAFETY RULES — apply AFTER writing great content
    - If a number is not in the source's actual published data, do not cite that
      source. Either find a source that actually publishes it, use a qualified
      range without a source name, or remove the number entirely.
+   - CRITICAL: If proof_needed lists FBC, ACI, IRC, or IBC as the primary
+     source, the headline and slide2_stat CANNOT contain a dollar amount.
+     Code documents have no cost data. Dollar amounts in the headline require
+     Remodeling Magazine Cost vs Value, NAHB cost benchmarks, Houzz survey,
+     or a contractor range ("estimated $X–$Y depending on scope") — one of
+     these must be in proof_needed before using a dollar figure in the hook.
 
 6. Tone: Direct, matter-of-fact, no jargon, no hype.
    - Write like a contractor explaining something to a homeowner over coffee.

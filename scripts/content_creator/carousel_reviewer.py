@@ -1762,13 +1762,17 @@ def score_storytelling(html_path: str, niche: str) -> dict:
                 pass
             # Phase 11.2 — credits/capacity/5xx fallback to OpenAI gpt-4o so the
             # storytelling score keeps working when Anthropic balance is dry.
-            # NOTE: 400 = malformed request (bad schema/param) — do NOT fall back,
-            # log it as a bug. 401/402/429/5xx = capacity/auth — fall back is correct.
-            if status == 400:
+            # NOTE: Anthropic returns HTTP 400 for BOTH malformed requests AND
+            # credit-balance-too-low errors. Parse the body to distinguish:
+            # - "credit balance is too low" → treat as credit error, fall back to OpenAI
+            # - anything else → real malformed request (bug), return {} and log it
+            openai_key = os.environ.get("OPENAI_API_KEY", "")
+            is_credit_error = status == 400 and "credit balance" in body.lower()
+            is_capacity_error = status in (401, 402, 429, 500, 502, 503, 504, 529)
+            if status == 400 and not is_credit_error:
                 print(f"  [SH-028] Anthropic HTTP 400 — malformed request (bug): {body[:200]}")
                 return {}
-            openai_key = os.environ.get("OPENAI_API_KEY", "")
-            if status in (401, 402, 429, 500, 502, 503, 504, 529) and openai_key:
+            if (is_credit_error or is_capacity_error) and openai_key:
                 try:
                     oai_payload = json.dumps({
                         "model": "gpt-4o",
