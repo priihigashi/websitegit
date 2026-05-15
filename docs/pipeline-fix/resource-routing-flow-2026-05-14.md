@@ -358,7 +358,7 @@ Patched:
 
 Verified locally:
 - `python3.12 -m pytest tests/test_note_parser.py tests/test_resource_router.py tests/test_clips_manifest.py tests/test_video_downloader.py -q`
-  → 37 passed.
+  → 38 passed.
 - Python compile check passed for the edited scripts.
 - `resource_downloader.yml` parsed successfully with Ruby YAML.
 - Need to confirm the final Drive version folder includes both the clip files

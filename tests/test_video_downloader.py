@@ -89,13 +89,27 @@ def test_instagram_post_can_stage_image_resource(monkeypatch, tmp_path):
         "displayUrl": "https://cdn.example.com/post.jpg",
         "caption": "Image post",
     }])
-    monkeypatch.setattr(vd, "_download_http_media", lambda media_url, target: target.write_bytes(b"x" * 200000) or True)
+    monkeypatch.setattr(vd, "_download_http_media", lambda media_url, target, **kw: target.write_bytes(b"x" * 200000) or True)
 
     res = vd.download_url("https://www.instagram.com/p/ABC123/", staging=tmp_path)
 
     assert res["ok"] is True
     assert res["media_kind"] == "image"
     assert res["local_path"].endswith("_apify.jpg")
+
+
+def test_http_media_partial_file_counts_when_large_enough(monkeypatch, tmp_path):
+    target = tmp_path / "post.jpg"
+
+    class FakeRequests:
+        @staticmethod
+        def get(*a, **kw):
+            target.write_bytes(b"x" * 200000)
+            raise RuntimeError("connection closed after body")
+
+    monkeypatch.setitem(sys.modules, "requests", FakeRequests)
+
+    assert vd._download_http_media("https://cdn.example.com/post.jpg", target, min_bytes=10_000)
 
 
 def test_download_url_handles_subprocess_failure(monkeypatch, tmp_path):

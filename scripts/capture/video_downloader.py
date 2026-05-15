@@ -137,7 +137,7 @@ def _dump_metadata(url: str, cookie_args: list[str]) -> dict:
     return {}
 
 
-def _download_http_media(media_url: str, target: Path) -> bool:
+def _download_http_media(media_url: str, target: Path, *, min_bytes: int = 100_000) -> bool:
     """Download a direct media URL to target. Used for Apify CDN results."""
     if not media_url:
         return False
@@ -155,8 +155,10 @@ def _download_http_media(media_url: str, target: Path) -> bool:
                 for chunk in resp.iter_content(1024 * 256):
                     if chunk:
                         fh.write(chunk)
-        return target.exists() and target.stat().st_size > 100_000
+        return target.exists() and target.stat().st_size > min_bytes
     except Exception as exc:
+        if target.exists() and target.stat().st_size > min_bytes:
+            return True
         print(f"  [video_downloader] direct media download failed: {str(exc)[:180]}")
         return False
 
@@ -283,7 +285,7 @@ def _download_via_apify_instagram(url: str, staging: Path, filename_hint: str) -
         image_url = _extract_image_url(item)
         if image_url:
             target = staging / f"{filename_hint}_apify.jpg"
-            if _download_http_media(image_url, target):
+            if _download_http_media(image_url, target, min_bytes=10_000):
                 return {
                     "ok": True,
                     "source_url": url,
