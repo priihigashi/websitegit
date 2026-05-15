@@ -64,7 +64,7 @@ stage 1 — topic_picker.py
 stage 2 — carousel_builder.py
   generate_carousel_content() → routes to correct template function
   fetch_all_media() → images (catalog → Gemini → Seedream → Replicate → DALL-E → Pexels → Pixabay)
-  fetch_clips() → video clips (YouTube Apify → Instagram Apify → Pexels → Pixabay → Archive → Wikimedia → Ken Burns)
+  fetch_clips() → Motion v2 clips (clip collections / YouTube / Instagram / Archive / Wikimedia → GIPHY → static PNG/no motion)
   build_html() → renders HTML
   render_pngs() → Playwright → PNG files
   build_motion_html() + record_motion.js → MP4 + GIF
