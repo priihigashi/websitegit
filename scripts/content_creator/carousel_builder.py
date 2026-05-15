@@ -4422,7 +4422,7 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
         <source src="{rel_clip}" type="video/mp4">
       </video>
     </div>"""
-        elif (clip_failures or {}).get(slide_idx):
+        elif (clip_failures or {}).get(slide_idx) and os.environ.get("MOTION_PHASE1_TEST", "0").strip() != "1":
             slot = (clip_failures or {}).get(slide_idx, "cover")
             clip_block = f"""
     <div class="clip-frame{'  clip-frame-mid' if slide_idx != 1 else ''} clip-frame-missing">
@@ -4544,7 +4544,7 @@ body{background:var(--ob);overflow:hidden}
 .cover-en{font-family:'Inter',sans-serif;font-style:italic;font-size:30px;color:rgba(242,236,224,0.75);text-shadow:0 2px 12px rgba(0,0,0,.7);max-width:720px;}
 /* OPC cover motion: vertical distribution — tag top, headline+sub centered, swipe bottom. */
 .slide-content-opc-cover{justify-content:space-between;}
-.cover-main{margin-top:auto;margin-bottom:auto;}
+.cover-main{margin-top:auto;margin-bottom:auto;padding-left:32px;}
 .slide-hl{font-family:'Fraunces',serif;font-weight:700;font-size:68px;line-height:1.1;text-transform:uppercase;margin-bottom:12px;text-shadow:0 2px 20px rgba(0,0,0,.8);}
 .slide-en{font-family:'Inter',sans-serif;font-style:italic;font-size:26px;color:var(--gr);margin-bottom:28px}
 .swipe{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);right:var(--P)}

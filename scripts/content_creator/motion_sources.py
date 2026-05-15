@@ -26,6 +26,7 @@ See MOTION_SOURCES_RESEARCH.md for full schema + failure behaviour spec.
 from __future__ import annotations
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -678,6 +679,31 @@ def tier_giphy(slide_cfg: dict, dest_path: Path) -> bool:
     )
     if not query:
         return False
+    def _relevance_tokens(text: str) -> list:
+        stop = {
+            "the", "and", "for", "with", "that", "this", "from", "into", "your",
+            "mistake", "blunder", "avoid", "cost", "costs", "repair", "bill",
+            "construction", "residential", "home", "house", "project",
+        }
+        return [
+            tok for tok in re.sub(r"[^\w\s]", " ", (text or "").lower()).split()
+            if len(tok) >= 4 and tok not in stop
+        ]
+
+    def _gif_matches_query(gif: dict, q: str) -> bool:
+        """Reject random/expressive GIFs when metadata doesn't match the topic.
+
+        GIPHY can return aesthetic or reaction loops for construction queries. For
+        OPC Phase 1, fake motion is worse than no motion, so require at least one
+        meaningful query token (bathroom, tile, remodel, roof, etc.) in the GIF
+        metadata before accepting it.
+        """
+        wanted = _relevance_tokens(q)
+        if not wanted:
+            return False
+        meta = " ".join(str(gif.get(k, "")) for k in ("title", "slug", "url", "content_description")).lower()
+        return any(tok in meta for tok in wanted)
+
     try:
         q = urllib.parse.urlencode({"api_key": GIPHY_KEY, "q": query, "limit": "3", "rating": "g"})
         url = f"https://api.giphy.com/v1/gifs/search?{q}"
@@ -695,6 +721,9 @@ def tier_giphy(slide_cfg: dict, dest_path: Path) -> bool:
             except (ValueError, TypeError):
                 orig_w = 0
             if 0 < orig_w < 400:
+                continue
+            if not _gif_matches_query(gif, query):
+                print(f"  motion_sources: GIPHY skip unrelated result for '{query[:40]}'")
                 continue
             # Prefer normalized large sizes (better quality-to-size, less variance)
             # over raw 'original' which can be any speed/size including blurry time-lapses.
