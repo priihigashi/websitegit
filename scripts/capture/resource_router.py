@@ -434,21 +434,25 @@ def _analyze_clip_with_haiku(entry: dict, transcript: str) -> dict:
     if not api_key:
         return {}
     title = (entry.get("title") or "")[:200]
-    duration = entry.get("duration_sec", 0)
+    try:
+        duration = float(entry.get("duration_sec", 0) or 0)
+    except (TypeError, ValueError):
+        duration = 0.0
     url = entry.get("source_url", "")
     prompt = (
         "You are a social media content strategist. Analyze this video clip for carousel/reel production.\n\n"
-        f"Title: {title}\nURL: {url}\nDuration: {duration:.1f}s\n"
-        f"Transcript (may be partial): {transcript[:1200] or '(no transcript)'}\n\n"
+        f"Title: {title or '(none)'}\nURL: {url or '(none)'}\nDuration: {duration:.1f}s\n"
+        f"Transcript (may be partial): {transcript[:1200] if transcript else '(no transcript)'}\n\n"
         "Return ONLY a JSON object with these exact keys:\n"
         "  clip_role: one of evidence|hook|b-roll|testimony|context\n"
-        "  best_moment: timestamp range or quote that is most impactful (e.g. '0:10-0:30 — quote')\n"
+        "  best_moment: timestamp range or quote that is most impactful\n"
         "  story_use: one sentence on how to use this clip in a carousel or reel\n"
         "  carousel_fit: one of cover|middle|sources|any\n"
         "  confidence: float 0.0-1.0 (how relevant this clip is to the story)\n"
         "Respond with JSON only, no explanation."
     )
     import urllib.request as _urlreq
+    import urllib.error as _urlerr
     payload = json.dumps({
         "model": "claude-haiku-4-5-20251001",
         "max_tokens": 300,
@@ -467,8 +471,14 @@ def _analyze_clip_with_haiku(entry: dict, transcript: str) -> dict:
         m = re.search(r"\{.*\}", text, re.DOTALL)
         if m:
             return json.loads(m.group())
+    except _urlerr.HTTPError as http_exc:
+        try:
+            err_body = http_exc.read().decode("utf-8", errors="replace")[:500]
+        except Exception:
+            err_body = "(no body)"
+        print(f"  [clip_intel] Haiku HTTP {http_exc.code}: {err_body}")
     except Exception as exc:
-        print(f"  [clip_intel] Haiku analysis failed: {exc}")
+        print(f"  [clip_intel] Haiku analysis failed: {exc!r}")
     return {}
 
 
