@@ -103,6 +103,50 @@ Spec-aligned proof attempt, 2026-05-15:
 
 ## Current Gate Status
 
+## 2026-05-15 Cover D Visual Stabilization Update
+
+Status remains: IN PROGRESS — Cover D is not approved yet.
+
+Priscila's Cover D run 1 complaints preserved as open visual criteria:
+- content was concentrated too high on the slide.
+- title needed to be larger with cleaner three-line breaks.
+- right-side motion rectangle position was wrong.
+- subhead was barely readable.
+- MP4/GIF quality made text feel degraded.
+- loop flashed deep black.
+- GIPHY returned time-lapse / unrelated-feeling motion.
+- cover photo kept repeating the same kitchen image for unrelated topics.
+- middle-slide motion placeholder formats are still Phase 2.
+- full-bleed slow ambient background without a rectangle is still Phase 2 / later.
+
+Shipped fixes:
+- `55aaa8b` — Cover D layout, subhead readability, right-side frame position, loop poster, initial photo-query and GIPHY quality work.
+- `6cb4192` — fixed workflow crash: create `work` dir before clip intelligence lookup.
+- `00c8d9c` — real fix for repeated kitchen cover bug: prefer workflow topic before generated headline in OPC cover photo matching.
+- `7387bc0` — prevent clipped Cover D title and reject unrelated GIPHY clips.
+
+Fresh proof evidence after latest fixes:
+- Run `25937372249` — SUCCESS on commit `7387bc0`.
+- Version: https://drive.google.com/drive/folders/1u0qmn51nQC7l1cwqMwj9MC4DpKzkDbwB
+- Motion: https://drive.google.com/drive/folders/1YzQCtFnp16sGuF60Jw3WlyoLYqRrZSko
+- Log proof:
+  - `MOTION_ENABLED=1`
+  - `MOTION_PHASE1_TEST=1`
+  - `MOTION_COVER_LAYOUT=D`
+  - `KLING_APPROVE=0`
+  - `Motion Phase 1 Test: ON`
+  - `Renderer: Playwright only`
+  - `Remotion/Kling/Ken Burns: skipped by Phase 1 guard`
+  - `Playwright recorded: 1 MP4(s) (slides [1])`
+  - cover photo matched `Bathroom remodel planning` → `IMG_6595.jpeg (Bathrooms)`.
+- Drive motion folder contains one MP4 only: `cream_01_cover_motion.mp4`.
+- Static PNGs for slides 2-5 are present; no middle-slide motion MP4s were produced.
+
+Known remaining visual review risk:
+- Priscila still needs to watch the v4 MP4 and decide OK vs adjust.
+- Text-quality/bitrate is not separately fixed; judge visually from the v4 output.
+- GIPHY relevance is improved by metadata filtering, but Priscila must decide whether the selected clip feels right.
+
 Gate 1 — Visual Decision: BLOCKED on Priscila review.
 
 Gate 2 — Code Cleanup: PARTIAL.
