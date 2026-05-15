@@ -1695,16 +1695,30 @@ def score_storytelling(html_path: str, niche: str) -> dict:
 
     prompt = (
         f"You are reviewing an Instagram carousel for a {niche_label} account.\n\n"
-        "HOOK PAYOFF CHECK — do this first:\n"
-        "Read slide 1. Write the main question or promise it creates for the reader.\n"
+        "CHECK 1 — HOOK PAYOFF:\n"
+        "Read slide 1. Write the main question or promise it creates.\n"
         "Then read slides 2-4. Does the carousel explicitly answer that question?\n"
         "- Score below 85 if the answer is not clear and explicit.\n"
         "- Score below 75 if the answer is only implied or vague.\n"
         "- Score below 60 if the hook promises a mistake/trap/risk/cost but the body\n"
-        "  becomes a neutral comparison or generic educational content.\n"
+        "  becomes neutral comparison or generic educational content.\n"
         "- Score 90+ only if slide 1 makes a promise AND slide 3 or 4 names the\n"
-        "  exact answer/mistake/action explicitly.\n\n"
-        "SLIDE SCORING — 0 to 100:\n"
+        "  exact answer/mistake/action explicitly — mechanism, not category.\n\n"
+        "CHECK 2 — STRATEGY FOLLOW:\n"
+        "Does slide 1 match its declared angle? If hook says 'mistake,' slide 3 must\n"
+        "NAME the mistake (not describe that mistakes exist). If hook says 'contrarian,'\n"
+        "the carousel must flip a specific belief inside, not just say 'it depends.'\n"
+        "Penalize 10 points if the frame is declared but not delivered.\n\n"
+        "CHECK 3 — EVIDENCE DISCIPLINE:\n"
+        "Does any slide make a dollar claim, percentage, lifespan, or 'most homeowners'\n"
+        "assertion without a source visible on that slide or on a sources slide?\n"
+        "Penalize 5 points per unsupported specific number.\n\n"
+        "CHECK 4 — VISUAL CONTRIBUTION:\n"
+        "Based on the slide text, would the described images (if any) prove or clarify\n"
+        "the slide's claim, or would they just fill space? Generic images (just\n"
+        "'construction' or 'home') that don't show the specific thing the slide teaches\n"
+        "reduce the score by 3 points per slide.\n\n"
+        "SLIDE SCORING — 0 to 100 (after applying all penalties above):\n"
         "90-100 = gripping and specific, pulls reader forward, pays off the hook\n"
         "70-89  = clear and useful, minor gaps\n"
         "50-69  = generic or vague, could be any topic\n"
@@ -1713,6 +1727,8 @@ def score_storytelling(html_path: str, niche: str) -> dict:
         "Return JSON only — no markdown, no explanation outside JSON:\n"
         '{"hook_question":"what question slide 1 creates","hook_answer_found":true,'
         '"payoff_slide":3,"missing_payoff":null,'
+        '"strategy_delivered":true,"strategy_gap":null,'
+        '"unsupported_claims":[],"visual_gaps":[],'
         '"slide_scores":[{"slide":1,"score":85,"reason":"one sentence"},...], '
         '"overall":78,"summary":"one sentence overall"}'
     )
@@ -1720,7 +1736,7 @@ def score_storytelling(html_path: str, niche: str) -> dict:
     try:
         payload = json.dumps({
             "model": "claude-sonnet-4-6",  # Phase 10 — Sonnet for vision/text quality
-            "max_tokens": 400,
+            "max_tokens": 650,  # 400 was too tight for 5-slide schema with 4 checks
             "messages": [{"role": "user", "content": prompt}],
         }).encode()
         req = urllib.request.Request(
@@ -1746,12 +1762,17 @@ def score_storytelling(html_path: str, niche: str) -> dict:
                 pass
             # Phase 11.2 — credits/capacity/5xx fallback to OpenAI gpt-4o so the
             # storytelling score keeps working when Anthropic balance is dry.
+            # NOTE: 400 = malformed request (bad schema/param) — do NOT fall back,
+            # log it as a bug. 401/402/429/5xx = capacity/auth — fall back is correct.
+            if status == 400:
+                print(f"  [SH-028] Anthropic HTTP 400 — malformed request (bug): {body[:200]}")
+                return {}
             openai_key = os.environ.get("OPENAI_API_KEY", "")
-            if status in (400, 401, 402, 429, 500, 502, 503, 504, 529) and openai_key:
+            if status in (401, 402, 429, 500, 502, 503, 504, 529) and openai_key:
                 try:
                     oai_payload = json.dumps({
                         "model": "gpt-4o",
-                        "max_tokens": 400,
+                        "max_tokens": 650,
                         "messages": [{"role": "user", "content": prompt}],
                     }).encode()
                     oai_req = urllib.request.Request(

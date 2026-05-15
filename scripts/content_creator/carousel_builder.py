@@ -958,6 +958,19 @@ MANDATORY SAFETY RULES — apply AFTER writing great content
    - BANNED: vague unsourced "studies show", "industry average", "experts
      say". If you can't name the source, drop the claim.
 
+5a. SOURCE DISCIPLINE — only cite a source for data it actually publishes:
+   - NAHB publishes: construction cost surveys, housing starts, material cost
+     indexes. NAHB does NOT publish: patio repair costs, drainage failure rates,
+     flooring lifespan by material, tile vs. grout failure data.
+   - ACI publishes: concrete mix specs, structural standards, curing tables.
+     ACI does NOT publish: homeowner cost ranges or ROI comparisons.
+   - Remodeling Magazine publishes: Cost vs. Value annual report for specific
+     project types. ONLY cite it for projects that appear in that report.
+   - FBC / IRC publish: code minimums. They do NOT publish cost estimates.
+   - If a number is not in the source's actual published data, do not cite that
+     source. Either find a source that actually publishes it, use a qualified
+     range without a source name, or remove the number entirely.
+
 6. Tone: Direct, matter-of-fact, no jargon, no hype.
    - Write like a contractor explaining something to a homeowner over coffee.
    - No exclamation marks in slide text. One max in caption.
@@ -1276,17 +1289,18 @@ Language: {lang}
 {_plan_block}
 Return ONLY a JSON object. The FIRST fields must be the strategy block — fill these honestly before writing any slide content. If you cannot complete viewer_question and payoff before writing slides, rewrite the hook until you can.
 {{
-  "hook_frame": "which hook type you chose — one of: fear_of_mistake | curiosity_gap | contrarian | teach_one_thing | pain_point",
-  "viewer_question": "the exact question slide 1 creates in the viewer's mind — e.g. 'What IS the mistake?' or 'Why does it cost more?'",
-  "payoff": "the specific useful thing the viewer knows after slide 4 that they did not know before slide 1 — 1 sentence",
-  "proof_needed": "what evidence supports the main claim — name the source type: e.g. 'NAHB cost-per-sqft data' or 'ACI lifespan range' or 'rate/range from industry body'. If you cannot name a real source, soften the hook claim.",
+  "hook_frame": "OPC frame name — pick ONE: costly_mistake (warns about a money-wasting decision) | hidden_risk (reveals a problem homeowners miss early) | contrarian_take (challenges a common belief) | decision_tension (helps choose between two real options) | fear_of_regret (I wish I knew this before signing) | before_after_lesson (teaches through transformation) | maintenance_surprise (costs/problems that appear later, not upfront) | contractor_red_flag (warns about something in a bid, quote, or install)",
+  "viewer_question": "the exact question slide 1 creates — must be specific, not meta. BAD: 'What is the drainage mistake?' GOOD: 'Am I making this mistake right now on my current project?'",
+  "payoff": "the concrete specific thing the viewer can DO or DECIDE after slide 4 — must name the action or decision, not the topic. BAD: 'Homeowners learn the importance of drainage planning.' GOOD: 'Homeowners know to ask their contractor for a slope calculation before signing any patio quote.'",
+  "why_this_matters_now": "why a homeowner should care TODAY, not someday — connect to a real decision, cost window, season, or current risk. E.g. 'Florida rainy season starts in June — patio drainage decisions made now determine whether they flood this summer.'",
+  "proof_needed": "name the SPECIFIC data point and its actual publisher — not just the organization name. Source-topic rules: NAHB = construction cost benchmarks and housing starts only (NOT drainage, NOT specialty repair costs, NOT flooring or tile). ACI = concrete mix specs and structural standards (NOT homeowner cost ranges). Remodeling Magazine = Cost vs Value report for named project types only. FBC/IRC = code minimums only, never cost estimates. If the number you want to use is not in that source's actual published data, say so here and use a qualified contractor-experience range instead. BAD: 'NAHB data on drainage repair costs' — NAHB does not publish this. GOOD: 'qualified contractor range — not in published industry data, using $X–$Y with scope qualifier'.",
   "format_fit": true,
   "needs_longer_format": false,
-  "visual_strategy": "one sentence each for slides 2, 3, 4 — what the viewer needs to SEE to believe that slide. E.g. 'Slide 2: concrete pour showing labor cost. Slide 3: cracked concrete vs intact pavers year 3. Slide 4: homeowner reviewing quote with contractor.'",
+  "visual_strategy": "what the viewer needs to SEE on each middle slide to believe it — one sentence per slide. If no realistic image exists for a slide, note it and write the slide as text-only. GOOD: 'Slide 2: water pooling on an existing residential patio — proves the damage is real. Slide 3: a French drain or channel drain installation — proves the fix exists. Slide 4: contractor pointing at patio slope with level tool — proves this is something you can ask about.' BAD: 'Slide 2: construction. Slide 3: home improvement. Slide 4: contractor.'",
   "headline": "3-4 word cover headline (ALL CAPS, punchy) — MUST include a number, dollar amount, timeframe, or named loss/risk. GOOD: '3 COSTLY MISTAKES', '$20K TRAP', 'AVOID THIS COST'. BAD: 'CONCRETE OR PAVERS', 'THINGS TO KNOW', 'TIPS AND TRICKS', 'WHAT TO DO'.",
   "accent_word": "1 word from headline to highlight in accent color",
   "subhead": "1 sentence under the headline — MUST contain at least one of: a specific number, a dollar amount, or a named consequence/fear. BANNED: generic phrases like 'what to look for', 'things you should know', 'tips for'. Good: '$20K mistake most homeowners make before signing' | '3 red flags contractors hope you miss'",
-  "hook_answer": "1 plain sentence that directly answers the cover promise. If headline says MISTAKE/TRAP/AVOID/COST, name exactly what the mistake/trap/cost driver is. MUST start with 'The mistake:' or 'The trap:' or 'The risk:'. GOOD: 'The mistake: comparing only the install price instead of the total 10-year cost.' BAD: 'Concrete and pavers have different pros and cons.'",
+  "hook_answer": "1 plain sentence naming the EXACT MECHANISM of the mistake/risk/trap — not the category, the specific thing. MUST start with 'The mistake:' or 'The trap:' or 'The risk:'. GOOD: 'The mistake: skipping the slope calculation before pouring — water follows gravity toward your foundation.' BAD: 'The mistake: ignoring drainage needs.' (too vague — every homeowner already knows drainage matters; say WHY or HOW they get it wrong)",
   "slide2_headline": "3-4 word headline for slide 2",
   "slide2_stat": "a big number or stat WITH QUALIFIER (e.g. 'UP TO $15K' not '$12K') — stat_number MUST be 40 characters or fewer including spaces",
   "slide2_label": "1 line connecting the stat to a homeowner's real decision — frame as a consequence, not a citation. GOOD: 'That gap erases your patio budget before you pour the slab (NAHB 2023)' | 'One wrong choice here eats 40% of most remodel budgets (Remodeling Magazine 2024)'. BAD: 'According to NAHB, prices vary by material.' Always end with the source in parentheses.",
