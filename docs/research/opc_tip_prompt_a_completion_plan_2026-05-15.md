@@ -265,3 +265,47 @@ Approval status:
 
 - Do not approve this post.
 - No Buffer scheduling happened.
+
+## Prompt A.2 — stat-clipping fix (in flight 2026-05-15 ~16:31 ET)
+
+Fix shipped:
+
+- Commit: `86fd041 fix(opc-tip): tighten slide2_stat to 18 chars to prevent clipping`
+- Sits under: `f5bd143 feat(opc): PR0 — OPC_STANDALONE_ALLOWLIST per-template SH-158 bypass (#152)`
+- File: `scripts/content_creator/carousel_builder.py` — line 509 (RULES block) + line 1368 (schema field)
+- Change: `Max 40 chars` → `MAX 18 CHARS` with explicit GOOD/BAD examples and explicit ban on time-period qualifiers ("in 10 years", "over 5 years", "per year") in the stat field. Time/duration moves to slide2_label.
+- Rationale: reviewer fires at >=22 char stats. 18-char limit gives 4-char buffer.
+- Did NOT touch CSS or reviewer threshold — kept fix to one surface (Haiku prompt) for minimal blast radius.
+
+Runs in flight on `f5bd143` (with the fix):
+
+- 25939918327 — primary watch
+- 25939935208 — secondary (same SHA)
+- 25939892038 — on `709d5e0` (without fix, will fail)
+- 25939847126 — on `709d5e0` (without fix, will fail)
+
+Audit trail of all relevant runs:
+
+- 25934460919 (5e9f5c9) — failed, original `work` UnboundLocalError
+- 25936288580 (55aaa8b) — failed
+- 25936639010 (6cb4192) — first SUCCESS (work-fix)
+- 25938522662 (42790b3) — failed strict reviewer (stat clipping — caught the new blocker)
+- 25939918327 (f5bd143) — IN FLIGHT, expected to pass
+
+Pending after the run:
+
+1. If pass — preview email lands in priscila@oakpark-construction.com — VISUAL QA per Drive Visual QA checklist above (slide 2 stat now `$20K` or `UP TO $20K`, no clipping).
+2. If pass + visual OK — reply `APPROVE` to preview email. `approval_handler.py` schedules to Buffer.
+3. If fail — pull `gh run view 25939918327 --log-failed`, identify whatever new blocker emerged, file in this section as Prompt A.3.
+
+Deferred Prompt A debt (still applies — does NOT block first approved post):
+
+- Wire `check_opc_professional_ethics()` into `check_drive_folder()` (carousel_reviewer.py:1309)
+- Wire `check_slide_layout_overflow()` into `check_drive_folder()` (carousel_reviewer.py:1309)
+- Surface `closing_callback_found` explicitly in Drive-folder review output (carousel_reviewer.py:1361)
+
+These 3 cross-path gaps mean the manual Drive-folder review path is missing checks that the local CONTENT_CREATOR_RUN path has. Architect Aria flagged them in the audit. Bundle into one PR after Prompt A ships.
+
+Audit lesson #2:
+
+When operating in parallel with the user (she commits from her Mac while Claude commits via gh CLI), ALWAYS `git fetch + git pull --rebase` before push. Push was rejected once because she landed `709d5e0` while I was editing.
