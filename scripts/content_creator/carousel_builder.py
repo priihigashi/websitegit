@@ -1534,24 +1534,29 @@ def _apply_opc_hook_answer_contract(content, topic=""):
     while len(items) < 3:
         items.append({"title": "Decision point", "sub": ""})
 
-    visible = " ".join([
-        str(content.get("slide2_label") or ""),
-        " ".join(str((i or {}).get("title", "")) + " " + str((i or {}).get("sub", "")) for i in items if isinstance(i, dict)),
-        str(content.get("slide4_body") or ""),
-    ]).lower()
     answer_core = re.sub(r"^\s*the\s+(mistake|trap|risk|answer)\s*:\s*", "", answer, flags=re.I).strip()
-    if answer_core and answer_core.lower() not in visible:
-        first = items[0] if isinstance(items[0], dict) else {}
+
+    # Only inject hook_answer into items[0] if that slot is empty or a placeholder.
+    # When the model wrote real content (specific mechanism), preserve it — overwriting
+    # it with hook_answer verbatim is exactly the S3[0] echo bug we're fixing.
+    first = items[0] if isinstance(items[0], dict) else {}
+    first_sub = str(first.get("sub") or "").strip()
+    first_is_placeholder = not first_sub or first_sub.lower() in ("", "decision point", "see below")
+    if answer_core and first_is_placeholder:
         first["title"] = "THE MISTAKE"
         first["sub"] = answer_core[:120]
         items[0] = first
         content["slide3_items"] = items[:3]
+    else:
+        content["slide3_items"] = items[:3]
 
     body = str(content.get("slide4_body") or "").strip()
-    if answer_core and answer_core.lower() not in body.lower():
+    # Only prepend canned opener if slide4_body is empty.
+    # When the model wrote a specific action opener, preserve it — the canned
+    # "That's the mistake I want you to avoid" opener is what we're banning.
+    if answer_core and not body:
         content["slide4_body"] = (
-            f"That's the mistake I want you to avoid: {answer_core} "
-            f"{body}"
+            f"That's the mistake I want you to avoid: {answer_core}."
         ).strip()
 
     return content
