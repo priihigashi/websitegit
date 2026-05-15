@@ -1770,11 +1770,16 @@ def process_one_topic(topic_entry, run_date, drive):
 
     # 2b. Build per-slide motion HTML files (one per clip slot, separate from cover.html)
     _motion_phase1_test_pre = os.environ.get("MOTION_PHASE1_TEST", "0").strip() == "1"
-    clip_html_files = build_motion_html(
-        content, niche, slug, str(work), clips,
-        media_paths=media_paths,
-        clip_failures=None if _motion_phase1_test_pre else clip_failures,
-    )
+    _motion_force_no_clip_pre = os.environ.get("MOTION_FORCE_NO_CLIP", "0").strip() == "1"
+    if _motion_phase1_test_pre and _motion_force_no_clip_pre:
+        print("  build_motion_html: Phase 1 no-clip proof — no motion HTML emitted")
+        clip_html_files = []
+    else:
+        clip_html_files = build_motion_html(
+            content, niche, slug, str(work), clips,
+            media_paths=media_paths,
+            clip_failures=None if _motion_phase1_test_pre else clip_failures,
+        )
 
     # 3. Render PNGs (uses static cover.html — unchanged)
     print("  Rendering PNGs...")
@@ -1877,11 +1882,18 @@ def process_one_topic(topic_entry, run_date, drive):
         # Motion completeness guard
         motion_mp4s = list(motion_dir.glob("*.mp4")) if motion_dir.exists() else []
         if not motion_mp4s:
-            _send_alert(f"Motion folder empty for '{topic[:40]}' — skipping preview. Check Playwright + record_motion_slides logs.")
-            return None
+            if motion_phase1_test and os.environ.get("MOTION_FORCE_NO_CLIP", "0").strip() == "1":
+                print("  Phase 1 no-clip proof: no MP4 produced; static PNG delivery continues")
+                reel_renderer = "phase1_no_clip_static"
+            else:
+                _send_alert(f"Motion folder empty for '{topic[:40]}' — skipping preview. Check Playwright + record_motion_slides logs.")
+                return None
 
         # Build carousel reel
-        reel_renderer = "phase1_playwright_only" if motion_phase1_test else "failed"
+        if motion_phase1_test and os.environ.get("MOTION_FORCE_NO_CLIP", "0").strip() == "1":
+            reel_renderer = "phase1_no_clip_static"
+        else:
+            reel_renderer = "phase1_playwright_only" if motion_phase1_test else "failed"
         png_count = len(list(png_dir.glob("*.png")))
         if png_count >= 3 and not motion_phase1_test:
             _remotion_reel = render_carousel_reel_remotion(png_dir, motion_dir, slug, clips)
