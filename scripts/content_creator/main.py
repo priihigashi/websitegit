@@ -1480,6 +1480,25 @@ def process_one_topic(topic_entry, run_date, drive):
             print(f"  smart-plan (early): error {exc!r} — using legacy tip path")
             _early_plan = None
 
+    # Clip Intelligence Layer — if story_resources.json exists for this post,
+    # prepend the combined_summary to the brief so Haiku writes the carousel
+    # AROUND the available source clips rather than treating them as afterthoughts.
+    _sr_json = work / "resources" / "clips" / "story_resources.json"
+    if not _sr_json.exists():
+        # Also check directly in work/resources (resource_router writes to staging_root)
+        _sr_json_alt = work / "resources" / "story_resources.json"
+        if _sr_json_alt.exists():
+            _sr_json = _sr_json_alt
+    if _sr_json.exists():
+        try:
+            _sr = json.loads(_sr_json.read_text(encoding="utf-8"))
+            _summary = _sr.get("combined_summary", "")
+            if _summary:
+                brief = f"SOURCE CLIPS AVAILABLE:\n{_summary}\n\n{brief}".strip()
+                print(f"  [clip_intel] injected story_resources summary into brief ({len(_summary)} chars)")
+        except Exception as _sr_e:
+            print(f"  [clip_intel] story_resources.json load skipped: {_sr_e}")
+
     content = generate_carousel_content(topic, niche, template_key, brief=brief, slide_plan=_early_plan)
     if not content:
         print("  FAILED: content generation")
@@ -1635,22 +1654,9 @@ def process_one_topic(topic_entry, run_date, drive):
                 + "\nProceeding with cleaned media paths (fallback placeholders where needed)."
             )
 
-    # 1d. Fetch video clips for motion version (Clip Collections → Apify → Pexels → ...)
-    # Inject topic into each suggestion so tier_clip_collections can match by topic name.
-    for sugg in content.get("clip_suggestions", []):
-        sugg.setdefault("topic", topic)
-    print("  Fetching video clips for motion...")
-    clips, clip_failures = fetch_clips(content, str(work))
-
-    # Thread clips into media_paths so HTML builders can render first-frame stills
-    # on motion slides in the static cover.html (alternating clip-bg pattern).
-    if clips:
-        media_paths["clips"] = clips
-
-    # Bridge: merge pre-staged clips from resources/clips/clips.json (written by
-    # video_downloader / resource_router) into the clips dict BEFORE rendering.
-    # STAGED/APPROVED entries with a target_slide override fetch_clips results for
-    # that slide; slides not in clips.json fall through to fetch_clips as before.
+    # 1d. Pre-load staged clips from clips.json BEFORE fetch_clips so covered slide
+    # indices are excluded from the Apify/Pexels fetch chain (saves API credits).
+    _pre_staged: dict[int, str] = {}
     _clips_json = work / "resources" / "clips" / "clips.json"
     if _clips_json.exists():
         try:
@@ -1658,7 +1664,6 @@ def process_one_topic(topic_entry, run_date, drive):
             _manifest = _json.loads(_clips_json.read_text(encoding="utf-8"))
             if isinstance(_manifest, dict) and "clips" in _manifest:
                 _manifest = _manifest["clips"]
-            _injected = 0
             for _entry in (_manifest if isinstance(_manifest, list) else []):
                 if _entry.get("status") not in ("STAGED", "APPROVED"):
                     continue
@@ -1690,14 +1695,35 @@ def process_one_topic(topic_entry, run_date, drive):
                     _slide_idx = int(_slide)
                 except (TypeError, ValueError):
                     continue
-                # Pre-staged clip wins — overwrite whatever fetch_clips found
-                clips[_slide_idx] = _path
-                _injected += 1
-            if _injected:
-                print(f"  clips.json bridge: injected {_injected} pre-staged clip(s) into render")
-                media_paths["clips"] = clips
+                _pre_staged[_slide_idx] = _path
         except Exception as _e:
             print(f"  clips.json bridge: non-fatal load error — {_e}")
+
+    # Fetch video clips for motion version (Clip Collections → Apify → Pexels → ...)
+    # Inject topic into each suggestion so tier_clip_collections can match by topic name.
+    # Skip slides already covered by pre-staged clips so we don't burn Apify credits.
+    _orig_suggestions = content.get("clip_suggestions", [])
+    for sugg in _orig_suggestions:
+        sugg.setdefault("topic", topic)
+    if _pre_staged:
+        content["clip_suggestions"] = [
+            s for s in _orig_suggestions
+            if s.get("slide") not in _pre_staged
+        ]
+        print(f"  clips.json bridge: {len(_pre_staged)} pre-staged clip(s) — skipping fetch for slide(s) {sorted(_pre_staged)}")
+    print("  Fetching video clips for motion...")
+    clips, clip_failures = fetch_clips(content, str(work))
+    content["clip_suggestions"] = _orig_suggestions
+
+    # Merge pre-staged clips (they win over fetch_clips for same slide index)
+    if _pre_staged:
+        clips.update(_pre_staged)
+        print(f"  clips.json bridge: merged {len(_pre_staged)} pre-staged clip(s) into render")
+
+    # Thread clips into media_paths so HTML builders can render first-frame stills
+    # on motion slides in the static cover.html (alternating clip-bg pattern).
+    if clips:
+        media_paths["clips"] = clips
 
     # SH-146 pre-render gate — validate every selected template has required fields;
     # run a targeted repair pass for any gaps before handing off to the renderer.

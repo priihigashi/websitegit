@@ -1,0 +1,60 @@
+name: Cookie Refresh Reminder
+
+# Runs every 2 weeks — reminds Priscila to refresh yt-dlp cookies before they expire.
+# Subject starts with [ACTION NEEDED] so the ⚡ Action Items Gmail filter auto-labels it.
+
+on:
+  schedule:
+    - cron: "0 14 1,15 * *"   # 1st and 15th of each month at 9 AM ET
+  workflow_dispatch:            # manual trigger if cookies already failed
+
+permissions:
+  contents: read
+
+jobs:
+  send-reminder:
+    name: Send cookie refresh reminder
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Send reminder email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: priscila@oakpark-construction.com
+          password: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          subject: "[ACTION NEEDED] Refresh yt-dlp cookies (bi-weekly)"
+          to: priscila@oakpark-construction.com
+          from: Oak Park AI <priscila@oakpark-construction.com>
+          body: |
+            Time to refresh your yt-dlp cookies — takes ~5 minutes.
+            Keeping them fresh prevents YouTube and Instagram download failures in the pipeline.
+
+            HOW TO REFRESH:
+
+            1. Open Safari on your Mac and confirm you are logged in to YouTube (youtube.com).
+
+            2. Open Terminal and run:
+               yt-dlp --cookies-from-browser safari --cookies /tmp/fresh_yt_cookies.txt --skip-download "https://www.youtube.com/watch?v=jNQXAC9IVRw"
+
+            3. Encode to base64 and copy to clipboard:
+               base64 -i /tmp/fresh_yt_cookies.txt | tr -d '\n' | pbcopy
+
+            4. Update the GitHub secret:
+               https://github.com/priihigashi/oak-park-ai-hub/settings/secrets/actions
+               Click PRI_OP_YT_COOKIES → Update secret → paste → Save.
+
+            5. For Instagram cookies (if you use Instagram capture):
+               Open Safari logged in to Instagram, then:
+               yt-dlp --cookies-from-browser safari --cookies /tmp/fresh_ig_cookies.txt --skip-download "https://www.instagram.com/"
+               base64 -i /tmp/fresh_ig_cookies.txt | tr -d '\n' | pbcopy
+               Update secret: PRI_OP_IG_COOKIES (same page as step 4).
+
+            6. Reply DONE to this email when finished.
+
+            The 4AM agent also checks cookie freshness on every run and will alert you separately if it detects expiry before the next reminder.
+
+            Run: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}

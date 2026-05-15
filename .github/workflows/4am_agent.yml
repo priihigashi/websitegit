@@ -24,7 +24,64 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install anthropic openai google-generativeai replicate google-auth google-auth-httplib2 google-api-python-client requests pytz beautifulsoup4
+        run: pip install anthropic openai google-generativeai replicate google-auth google-auth-httplib2 google-api-python-client requests pytz beautifulsoup4 yt-dlp
+
+      - name: Check yt-dlp cookie freshness
+        id: cookie_check
+        env:
+          PRI_OP_YT_COOKIES: ${{ secrets.PRI_OP_YT_COOKIES }}
+        continue-on-error: true
+        run: |
+          if [ -n "$PRI_OP_YT_COOKIES" ]; then
+            python3 -c 'import os,base64,pathlib; b=os.environ.get("PRI_OP_YT_COOKIES",""); p=pathlib.Path("/tmp/yt_cookies_check.txt"); exec("try:\n  p.write_bytes(base64.b64decode(b))\nexcept Exception:\n  p.write_text(b)") if b else None'
+            COOKIE_ARGS="--cookies /tmp/yt_cookies_check.txt"
+          else
+            COOKIE_ARGS=""
+          fi
+          yt-dlp --simulate --quiet --no-warnings $COOKIE_ARGS \
+            "https://www.youtube.com/watch?v=jNQXAC9IVRw" > /tmp/ytdlp_out.txt 2>&1
+          EXIT=$?
+          if [ $EXIT -ne 0 ] && grep -qiE "sign.in|not a bot|cookie|403|forbidden" /tmp/ytdlp_out.txt; then
+            echo "cookie_expired=true" >> $GITHUB_OUTPUT
+            echo "  [cookie_check] yt-dlp bot/cookie error detected"
+          else
+            echo "cookie_expired=false" >> $GITHUB_OUTPUT
+            echo "  [cookie_check] cookies OK (exit=$EXIT)"
+          fi
+
+      - name: Alert - yt-dlp cookies may be expired
+        if: steps.cookie_check.outputs.cookie_expired == 'true'
+        continue-on-error: true
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: priscila@oakpark-construction.com
+          password: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          subject: "[ACTION NEEDED] yt-dlp YouTube cookies may be expired"
+          to: priscila@oakpark-construction.com
+          from: Oak Park AI <priscila@oakpark-construction.com>
+          body: |
+            The 4AM agent detected that your yt-dlp YouTube cookies may be expired.
+
+            HOW TO REFRESH (takes ~5 minutes):
+
+            1. Open Safari on your Mac and confirm you are logged in to YouTube.
+
+            2. Open Terminal and run:
+               yt-dlp --cookies-from-browser safari --cookies /tmp/fresh_yt_cookies.txt --skip-download "https://www.youtube.com/watch?v=jNQXAC9IVRw"
+
+            3. Encode to base64 and copy to clipboard:
+               base64 -i /tmp/fresh_yt_cookies.txt | tr -d '\n' | pbcopy
+
+            4. Update the GitHub secret:
+               https://github.com/priihigashi/oak-park-ai-hub/settings/secrets/actions
+               Click PRI_OP_YT_COOKIES → Update secret → paste → Save.
+
+            5. Reply DONE. The next agent run will re-check automatically.
+
+            Run: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/${{ github.run_id }}
 
       - name: Restore CLAUDE.md for mirror step
         env:

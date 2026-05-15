@@ -102,6 +102,37 @@ def _cookie_args(url: str, prefer_browser: bool = True) -> list[str]:
     return []
 
 
+_BOT_PATTERNS = ("403", "sign in", "login required", "cookie", "captcha", "bot detected",
+                  "private video", "video unavailable")
+
+
+def _should_skip_retry(stderr: str) -> bool:
+    low = (stderr or "").lower()
+    return any(pat in low for pat in _BOT_PATTERNS)
+
+
+def _run_with_retry(
+    cmd: list[str],
+    *,
+    max_attempts: int = 2,
+    backoff_sec: int = 5,
+    timeout: int | None = None,
+) -> "subprocess.CompletedProcess[str]":
+    """Run cmd up to max_attempts times. Skip second attempt on bot-detection patterns."""
+    for attempt in range(max_attempts):
+        kw: dict = {"capture_output": True, "text": True}
+        if timeout:
+            kw["timeout"] = timeout
+        proc = subprocess.run(cmd, **kw)
+        if proc.returncode == 0:
+            return proc
+        if attempt < max_attempts - 1 and not _should_skip_retry(proc.stderr):
+            time.sleep(backoff_sec)
+            continue
+        return proc
+    return proc  # unreachable but satisfies type checkers
+
+
 def _probe_duration(path: str) -> float:
     """Use ffprobe to get duration in seconds. Returns 0.0 on failure."""
     if not _which("ffprobe"):
@@ -396,7 +427,7 @@ def download_url(
     cmd.extend(cookie_args)
     cmd.append(url)
 
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = _run_with_retry(cmd, max_attempts=2, backoff_sec=5)
     if proc.returncode != 0:
         if _is_youtube(url):
             apify_res = _download_via_apify_youtube(url, staging, safe)
@@ -464,7 +495,7 @@ def search_youtube(
         "--match-filter", f"duration <= {max_duration_sec}" if max_duration_sec else "duration > 0",
         search_term,
     ]
-    proc = subprocess.run(list_cmd, capture_output=True, text=True, timeout=120)
+    proc = _run_with_retry(list_cmd, max_attempts=2, backoff_sec=5, timeout=120)
     if proc.returncode != 0:
         return [{"ok": False, "source_url": "", "local_path": "", "duration_sec": 0.0,
                  "title": "", "error": (proc.stderr or "")[:400]}]

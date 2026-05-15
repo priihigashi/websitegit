@@ -401,6 +401,139 @@ def _format_candidate_email(*, story_id: str, project: str, query: str,
     return subj, body
 
 
+# ---------------------------------------------------------------------------
+# Clip Intelligence Layer
+# ---------------------------------------------------------------------------
+
+def _transcribe_clip(local_path: str, *, timeout_sec: int = 600) -> str:
+    """Transcribe a video/audio clip with faster-whisper. Returns text or ''."""
+    if not local_path or not Path(local_path).exists():
+        return ""
+    suffix = Path(local_path).suffix.lower()
+    if suffix in (".jpg", ".jpeg", ".png", ".gif", ".webp"):
+        return ""
+    try:
+        from faster_whisper import WhisperModel
+        model = WhisperModel("tiny", device="cpu", compute_type="int8")
+        segments, _ = model.transcribe(local_path, beam_size=1, language="pt")
+        return " ".join(seg.text.strip() for seg in segments).strip()
+    except ImportError:
+        pass
+    except Exception as exc:
+        print(f"  [clip_intel] faster-whisper failed ({local_path[-40:]}): {exc}")
+    return ""
+
+
+def _analyze_clip_with_haiku(entry: dict, transcript: str) -> dict:
+    """Send clip metadata + transcript to Claude Haiku for story analysis.
+
+    Returns dict with clip_role, best_moment, story_use, carousel_fit, confidence.
+    Returns {} on failure so caller can skip gracefully.
+    """
+    api_key = os.environ.get("CLAUDE_KEY_4_CONTENT", "") or os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return {}
+    title = (entry.get("title") or "")[:200]
+    duration = entry.get("duration_sec", 0)
+    url = entry.get("source_url", "")
+    prompt = (
+        "You are a social media content strategist. Analyze this video clip for carousel/reel production.\n\n"
+        f"Title: {title}\nURL: {url}\nDuration: {duration:.1f}s\n"
+        f"Transcript (may be partial): {transcript[:1200] or '(no transcript)'}\n\n"
+        "Return ONLY a JSON object with these exact keys:\n"
+        "  clip_role: one of evidence|hook|b-roll|testimony|context\n"
+        "  best_moment: timestamp range or quote that is most impactful (e.g. '0:10-0:30 — quote')\n"
+        "  story_use: one sentence on how to use this clip in a carousel or reel\n"
+        "  carousel_fit: one of cover|middle|sources|any\n"
+        "  confidence: float 0.0-1.0 (how relevant this clip is to the story)\n"
+        "Respond with JSON only, no explanation."
+    )
+    import urllib.request as _urlreq
+    payload = json.dumps({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 300,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    try:
+        req = _urlreq.Request(
+            "https://api.anthropic.com/v1/messages", data=payload,
+            headers={
+                "x-api-key": api_key, "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+        )
+        resp = json.loads(_urlreq.urlopen(req, timeout=30).read())
+        text = resp["content"][0]["text"].strip()
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if m:
+            return json.loads(m.group())
+    except Exception as exc:
+        print(f"  [clip_intel] Haiku analysis failed: {exc}")
+    return {}
+
+
+def build_story_resources(
+    clips_entries: list[dict],
+    staging_root: Path,
+    story_id: str,
+) -> Path | None:
+    """Transcribe + analyze all downloaded clips, write story_resources.json.
+
+    Only processes STAGED, APPROVED, or CANDIDATE entries with a local_path.
+    Writes <staging_root>/story_resources.json and returns its Path.
+    Returns None if no clips to process.
+    """
+    processable = [
+        e for e in clips_entries
+        if e.get("status") in ("STAGED", "APPROVED", "CANDIDATE")
+        and e.get("local_path")
+        and Path(e["local_path"]).exists()
+    ]
+    if not processable:
+        return None
+
+    enriched = []
+    for entry in processable:
+        local_path = entry["local_path"]
+        print(f"  [clip_intel] transcribing {Path(local_path).name} ...")
+        transcript = _transcribe_clip(local_path)
+        print(f"  [clip_intel] analyzing with Haiku ...")
+        analysis = _analyze_clip_with_haiku(entry, transcript)
+        enriched.append({
+            "source_url": entry.get("source_url", ""),
+            "local_path": local_path,
+            "drive_file_id": entry.get("drive_file_id", ""),
+            "drive_view_link": entry.get("drive_view_link", ""),
+            "duration_sec": entry.get("duration_sec", 0),
+            "media_kind": entry.get("media_kind", "video"),
+            "title": entry.get("title", ""),
+            "transcript": transcript,
+            "clip_role": analysis.get("clip_role", "context"),
+            "best_moment": analysis.get("best_moment", ""),
+            "story_use": analysis.get("story_use", ""),
+            "carousel_fit": analysis.get("carousel_fit", "any"),
+            "confidence": analysis.get("confidence", 0.5),
+        })
+
+    # Build a combined summary for the carousel brief
+    uses = [e["story_use"] for e in enriched if e.get("story_use")]
+    combined_summary = (
+        f"{len(enriched)} source clip(s) available for '{story_id}':\n"
+        + "\n".join(f"  [{i+1}] {u}" for i, u in enumerate(uses))
+    ) if uses else f"{len(enriched)} clip(s) staged — no Haiku analysis (check CLAUDE_KEY_4_CONTENT)"
+
+    out = {
+        "story_id": story_id,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "clips": enriched,
+        "combined_summary": combined_summary,
+    }
+    out_path = staging_root / "story_resources.json"
+    out_path.write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"  [clip_intel] story_resources.json written ({len(enriched)} clips, {len(combined_summary)} chars summary)")
+    return out_path
+
+
 def execute_resource_jobs(
     manifest: dict,
     *,
@@ -562,6 +695,20 @@ def execute_resource_jobs(
             # research_images / unsupported — leave for later
             job["status"] = job.get("status") or "skipped"
             job["error"] = job.get("error") or f"unsupported job type: {job_type}"
+
+    # Clip Intelligence Layer — transcribe + analyze every downloaded clip,
+    # write story_resources.json so the carousel builder has full source context.
+    try:
+        all_entries = clips_manifest.load(staging_root) if clips_manifest else []
+        sr_path = build_story_resources(all_entries, staging_root, story_id)
+        if sr_path and (drive_subfolder_id or drive_parent_id):
+            upload_clip_to_drive(
+                str(sr_path),
+                drive_subfolder_id or drive_parent_id,
+                drive=drive,
+            )
+    except Exception as exc:
+        print(f"  [resource_router] clip intelligence layer failed (non-fatal): {exc}")
 
     # Upload the full clips.json itself to Drive for visibility
     try:

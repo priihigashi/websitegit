@@ -112,7 +112,7 @@ def search_gmail_replies(token, after_date=None):
     # Reply preserves the bracket header so we match Re: subject:"[SH-104]".
     query = urllib.parse.quote(
         '(subject:"Re: [REVIEW]" OR subject:"Re: DAILY CONTENT" '
-        'OR subject:"Re: [SH-104]") after:' + after_date
+        'OR subject:"Re: [SH-104]" OR subject:"Re: [ResourceRouter]") after:' + after_date
     )
     url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages?q={query}&maxResults=20"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
@@ -1471,6 +1471,136 @@ def _check_stale_reminders(pending):
         _send_approval_reminder(posts, group)
 
 
+# ---------------------------------------------------------------------------
+# Flow B clip-candidate approval (Resource Router)
+# ---------------------------------------------------------------------------
+
+def is_resource_router_reply(subject: str) -> bool:
+    return "[resourcerouter]" in (subject or "").lower()
+
+
+def _extract_rr_story_id(subject: str) -> str:
+    """Extract story_id from '[ResourceRouter] NWS-001 — 3 clip candidates ...'"""
+    m = re.search(r"\[ResourceRouter\]\s+(.+?)\s+[—\-]+", subject or "", re.IGNORECASE)
+    return m.group(1).strip() if m else ""
+
+
+def parse_resource_router_reply(reply_text: str) -> dict:
+    """Parse APPROVE 1,3 / APPROVE ALL / REJECT ALL from reply body.
+
+    Returns:
+      {"action": "approve"|"reject"|"unknown",
+       "indices": [1, 3]  or  "all"  (for APPROVE ALL)}
+    """
+    upper = (reply_text or "").strip().upper()
+    if upper.startswith("REJECT"):
+        return {"action": "reject", "indices": "all"}
+    if upper.startswith("APPROVE"):
+        rest = upper[len("APPROVE"):].strip(" -:,")
+        if not rest or rest == "ALL":
+            return {"action": "approve", "indices": "all"}
+        nums = [int(x) for x in re.findall(r"\d+", rest)]
+        return {"action": "approve", "indices": nums}
+    return {"action": "unknown", "indices": []}
+
+
+def _update_clip_candidates_on_drive(story_id: str, action: str, indices) -> int:
+    """Find clips.json on Drive for story_id, update CANDIDATE status.
+
+    action='approve' with indices='all' or [1,3,...] → CANDIDATE→APPROVED
+    action='reject'  → CANDIDATE→REJECTED
+    Returns count of entries updated.
+    """
+    if not story_id:
+        return 0
+    try:
+        drive = _get_drive_service()
+        slug = re.sub(r"[^A-Za-z0-9._-]+", "_", story_id)
+        folder_name = f"resources_{slug}"
+        # Search shared drives for the story's resources folder
+        folders = drive.files().list(
+            q=f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+            fields="files(id,name)",
+            pageSize=5,
+        ).execute().get("files", [])
+        if not folders:
+            print(f"  [rr_approve] folder '{folder_name}' not found on Drive")
+            return 0
+        folder_id = folders[0]["id"]
+
+        # Find clips.json in that folder
+        clips_files = drive.files().list(
+            q=f"'{folder_id}' in parents and name='clips.json' and trashed=false",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+            fields="files(id,name)",
+        ).execute().get("files", [])
+        if not clips_files:
+            print(f"  [rr_approve] clips.json not found in Drive folder '{folder_name}'")
+            return 0
+        file_id = clips_files[0]["id"]
+
+        # Download current clips.json
+        from googleapiclient.http import MediaIoBaseDownload
+        import io, base64 as _b64
+        fh = io.BytesIO()
+        req = drive.files().get_media(fileId=file_id, supportsAllDrives=True)
+        dl = MediaIoBaseDownload(fh, req)
+        done = False
+        while not done:
+            _, done = dl.next_chunk()
+        manifest = json.loads(fh.getvalue().decode("utf-8"))
+        if isinstance(manifest, dict) and "clips" in manifest:
+            clips_list = manifest["clips"]
+        elif isinstance(manifest, list):
+            clips_list = manifest
+        else:
+            return 0
+
+        # Determine which 1-based positions are CANDIDATE
+        candidate_positions = [
+            i + 1 for i, e in enumerate(clips_list)
+            if e.get("status") == "CANDIDATE"
+        ]
+        updated = 0
+        for i, entry in enumerate(clips_list):
+            if entry.get("status") != "CANDIDATE":
+                continue
+            pos = i + 1  # 1-based
+            should_update = (
+                indices == "all"
+                or (isinstance(indices, list) and pos in indices)
+            )
+            if not should_update:
+                continue
+            if action == "approve":
+                entry["status"] = "APPROVED"
+            else:
+                entry["status"] = "REJECTED"
+            updated += 1
+
+        if not updated:
+            print(f"  [rr_approve] no CANDIDATE entries matched (candidates at positions {candidate_positions})")
+            return 0
+
+        # Re-upload updated clips.json
+        updated_bytes = json.dumps(
+            clips_list if isinstance(manifest, list) else {**manifest, "clips": clips_list},
+            indent=2, ensure_ascii=False,
+        ).encode("utf-8")
+        from googleapiclient.http import MediaInMemoryUpload
+        drive.files().update(
+            fileId=file_id,
+            media_body=MediaInMemoryUpload(updated_bytes, mimetype="application/json"),
+            supportsAllDrives=True,
+        ).execute()
+        print(f"  [rr_approve] updated {updated} CANDIDATE → {action.upper()} in Drive clips.json")
+        return updated
+    except Exception as exc:
+        print(f"  [rr_approve] non-fatal error: {exc}")
+        return 0
+
+
 def process_replies():
     token, _ = get_gmail_token()
     replies = search_gmail_replies(token)
@@ -1486,9 +1616,23 @@ def process_replies():
         return {"approved": 0, "changes": 0, "skipped": 0}
 
     stats = {"approved": 0, "changes": 0, "skipped": 0,
-             "sh104_actions": 0, "sh104_unknown": 0}
+             "sh104_actions": 0, "sh104_unknown": 0, "rr_approvals": 0}
 
     for reply in replies:
+        # ResourceRouter Flow B clip-candidate approval.
+        if is_resource_router_reply(reply.get("subject", "")):
+            story_id = _extract_rr_story_id(reply.get("subject", ""))
+            rr = parse_resource_router_reply(reply["reply_text"])
+            print(
+                f"  ResourceRouter reply: '{reply['reply_text'][:60]}' → "
+                f"{rr['action']} indices={rr['indices']} story_id={story_id}"
+            )
+            if rr["action"] in ("approve", "reject") and story_id:
+                n = _update_clip_candidates_on_drive(story_id, rr["action"], rr["indices"])
+                if n:
+                    stats["rr_approvals"] += n
+            continue
+
         # SH-104 reply routing — separate from carousel preview replies.
         if is_sh104_reply(reply.get("subject", "")):
             sh = parse_sh104_reply(reply["reply_text"])
