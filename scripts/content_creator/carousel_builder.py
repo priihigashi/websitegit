@@ -3488,10 +3488,10 @@ def fetch_all_media(content, niche, work_dir, brief="", topic=""):
         except ImportError:
             match_opc_photo = None
         if match_opc_photo:
-            # Use full post topic first (richer keywords like "bathroom remodel planning")
-            # then fall back to headline ("AVOID THE $2K MISTAKE" has zero catalog keywords)
-            # then fall back to function topic parameter. Fixes "same kitchen photo every run" bug.
-            topic_text = content.get("topic", "") or content.get("headline", "") or topic
+            # Use the real post topic first (richer keywords like "bathroom remodel planning").
+            # Generated headlines like "AVOID THE $15K MISTAKE" have no catalog keywords and
+            # fall back to generic quality scoring, which repeatedly picked the same kitchen.
+            topic_text = content.get("topic", "") or topic or content.get("headline", "")
             img_dir = Path(work_dir) / "resources" / "images"
             img_dir.mkdir(parents=True, exist_ok=True)
             # SH-151: pass real post topic as fallback so the bucket guard works
