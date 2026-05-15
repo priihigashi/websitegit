@@ -506,7 +506,7 @@ OUTPUT FORMAT — return ONE JSON object keyed by template_id, like this:
 Only include the templates listed above. Only include the missing fields. Do not return prose. Do not nest deeper than this.
 
 RULES:
-- slide2_stat: big number WITH qualifier (e.g. "UP TO $12K"). Max 40 chars.
+- slide2_stat: big number WITH qualifier (e.g. "UP TO $12K"). MAX 18 CHARS — fixed-slot layout clips longer strings. Move time/duration context into slide2_label.
 - slide2_label: 1 line explaining the stat with source. Max 60 chars.
 - slide3_items: exactly 3 items as [{{"title": ..., "sub": ...}}]. title max 34 chars. sub max 80 chars.
 - slide4_body: 2-3 sentences. No promises. No superlatives.
@@ -1365,7 +1365,7 @@ Return ONLY a JSON object. The FIRST fields must be the strategy block — fill 
   "subhead": "1 sentence under the headline — MUST contain at least one of: a specific number, a dollar amount, or a named consequence/fear. BANNED: generic phrases like 'what to look for', 'things you should know', 'tips for'. Good: '$20K mistake most homeowners make before signing' | '3 red flags contractors hope you miss'",
   "hook_answer": "1 plain sentence naming the EXACT MECHANISM of the mistake/risk/trap — not the category, the specific thing. MUST start with 'The mistake:' or 'The trap:' or 'The risk:'. GOOD: 'The mistake: skipping the slope calculation before pouring — water follows gravity toward your foundation.' BAD: 'The mistake: ignoring drainage needs.' (too vague — every homeowner already knows drainage matters; say WHY or HOW they get it wrong)",
   "slide2_headline": "3-4 word headline for slide 2",
-  "slide2_stat": "a big number or stat WITH QUALIFIER (e.g. 'UP TO $15K' not '$12K') — stat_number MUST be 40 characters or fewer including spaces",
+  "slide2_stat": "a big number or stat WITH QUALIFIER (e.g. 'UP TO $15K' not '$12K') — stat_number MUST be 18 characters or fewer including spaces. Fixed-slot layout clips longer strings — never include time periods like 'in 10 years', 'over 5 years', 'per year' here. Move time/duration into slide2_label instead. GOOD: 'UP TO $20K', '$15K-$20K', '40% MORE'. BAD: 'UP TO $20K in 10 years' (22 chars), '$15K SAVED PER YEAR' (19 chars).",
   "slide2_label": "1 line connecting the stat to a homeowner's real decision — frame as a consequence, not a citation. GOOD: 'That gap erases your patio budget before you pour the slab (NAHB 2023)' | 'One wrong choice here eats 40% of most remodel budgets (Remodeling Magazine 2024)'. BAD: 'According to NAHB, prices vary by material.' Always end with the source in parentheses.",
   "slide3_items": [
     {{"title": "Item 1 title", "sub": "1 line with a SPECIFIC NEW FACT that EXPANDS on hook_answer — name the specific physical consequence, failure mode, or cost driver. NEVER restate hook_answer. GOOD: '$8–12K upfront, no sealing needed — pays for itself at year 5' | 'Cracks under heavy loads — you replace it, not the contractor' | 'Water infiltration widens hairline cracks within one freeze cycle.' BAD: 'Ignoring cracks causes damage.' (that IS hook_answer — say the specific mechanism instead)"}},
