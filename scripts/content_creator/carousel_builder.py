@@ -1374,7 +1374,7 @@ Return ONLY a JSON object. The FIRST fields must be the strategy block — fill 
     "Source 3 — description",
     "Oak Park Construction — South Florida contractor data, 2023-2025"
   ],
-  "cta": "4-7 word Mike-voice closer that creates a sense of payoff — not just a save prompt, a mini-resolution. GOOD: 'SAVE THIS BEFORE YOUR NEXT BID.' | 'SHOW THIS TO YOUR CONTRACTOR.' | 'SCREENSHOT BEFORE SIGNING ANYTHING.' | 'KEEP THIS BEFORE YOU CALL ANYONE.' BAD: 'SAVE THIS.' | 'LIKE AND SHARE.' | 'FOLLOW FOR MORE TIPS.'",
+  "cta": "4-7 word Mike-voice closer that creates a sense of payoff — not just a save prompt, a mini-resolution. GOOD: 'SAVE THIS BEFORE YOUR NEXT BID.' | 'SHOW THIS TO YOUR CONTRACTOR FIRST.' | 'SEND THIS BEFORE YOU SIGN A QUOTE.' | 'KEEP THIS FOR YOUR NEXT PROJECT.' BAD: 'SAVE THIS.' | 'LIKE AND SHARE.' | 'FOLLOW FOR MORE TIPS.' | 'SCREENSHOT BEFORE SIGNING ANYTHING.' (banned — sounds robotic, not Mike's voice).",
   "caption": "Instagram caption: 2-3 sentences max. Hook first line (visible in feed). Describe the topic. Let slides do the teaching. End with 8-12 relevant hashtags.",
   "audience_questions": [
     "Question a viewer would ask after seeing slide 1",
