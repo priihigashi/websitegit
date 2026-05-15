@@ -687,7 +687,22 @@ def tier_giphy(slide_cfg: dict, dest_path: Path) -> bool:
             print(f"  motion_sources: GIPHY miss for '{query[:40]}'")
             return False
         for gif in gifs:
-            gif_url = gif.get("images", {}).get("original", {}).get("url", "")
+            images = gif.get("images", {}) or {}
+            orig = images.get("original", {}) or {}
+            # Quality filter: skip tiny GIFs (width < 400) — they degrade on 1080px canvas.
+            try:
+                orig_w = int(orig.get("width", "0") or 0)
+            except (ValueError, TypeError):
+                orig_w = 0
+            if 0 < orig_w < 400:
+                continue
+            # Prefer normalized large sizes (better quality-to-size, less variance)
+            # over raw 'original' which can be any speed/size including blurry time-lapses.
+            gif_url = (
+                (images.get("downsized_large", {}) or {}).get("url", "")
+                or (images.get("fixed_height", {}) or {}).get("url", "")
+                or orig.get("url", "")
+            )
             if not gif_url:
                 continue
             raw = _http_get_bytes(gif_url, timeout=30)

@@ -3488,7 +3488,10 @@ def fetch_all_media(content, niche, work_dir, brief="", topic=""):
         except ImportError:
             match_opc_photo = None
         if match_opc_photo:
-            topic_text = content.get("headline", "") or content.get("topic", "")
+            # Use full post topic first (richer keywords like "bathroom remodel planning")
+            # then fall back to headline ("AVOID THE $2K MISTAKE" has zero catalog keywords)
+            # then fall back to function topic parameter. Fixes "same kitchen photo every run" bug.
+            topic_text = content.get("topic", "") or content.get("headline", "") or topic
             img_dir = Path(work_dir) / "resources" / "images"
             img_dir.mkdir(parents=True, exist_ok=True)
             # SH-151: pass real post topic as fallback so the bucket guard works
@@ -4392,9 +4395,14 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
         layout_class = ""
         if rel_clip:
             if layout_hint == "D":
+                # Poster fallback for Cover D loop gap — when video loops, the static
+                # cover photo shows for 1-2 frames instead of black. Only meaningful on
+                # the cover slide (slide_idx == 1) where cover_img is the slide's bg.
+                _poster_path = (media_paths or {}).get("cover", "") if slide_idx == 1 else ""
+                _poster_attr = f' poster="{_poster_path}"' if _poster_path else ""
                 clip_block = f"""
     <div class="clip-layout-d">
-      <video class="clip-video" autoplay muted loop playsinline>
+      <video class="clip-video" autoplay muted loop playsinline{_poster_attr}>
         <source src="{rel_clip}" type="video/mp4">
       </video>
     </div>"""
@@ -4438,10 +4446,12 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
   <div class="kb-bg" {bg_style}></div>
   {clip_block}
   {overlay_block}
-  <div class="slide-content">
+  <div class="slide-content slide-content-opc-cover">
     <div class="tag">{tag_text}</div>
-    <div class="cover-hl">{headline}</div>
-    <div class="cover-en">{subhead}</div>
+    <div class="cover-main">
+      <div class="cover-hl">{headline}</div>
+      <div class="cover-en">{subhead}</div>
+    </div>
     <div class="swipe">SWIPE &#8594;</div>
   </div>
 </div>"""
@@ -4530,17 +4540,21 @@ body{background:var(--ob);overflow:hidden}
 .tag{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--gr);letter-spacing:.06em;text-transform:uppercase;margin-bottom:28px}
 .accent{color:var(--ca)}
 .cover-date{font-family:'JetBrains Mono',monospace;font-size:24px;color:var(--gr);margin-bottom:40px}
-.cover-hl{font-family:'Fraunces',serif;font-weight:700;font-size:88px;line-height:1.0;text-transform:uppercase;margin-bottom:20px;text-shadow:0 2px 20px rgba(0,0,0,.8);}
-.cover-en{font-family:'Inter',sans-serif;font-style:italic;font-size:30px;color:var(--gr)}
+.cover-hl{font-family:'Fraunces',serif;font-weight:700;font-size:116px;line-height:1.0;text-transform:uppercase;margin-bottom:20px;text-shadow:0 2px 20px rgba(0,0,0,.8);max-width:720px;}
+.cover-en{font-family:'Inter',sans-serif;font-style:italic;font-size:30px;color:rgba(242,236,224,0.75);text-shadow:0 2px 12px rgba(0,0,0,.7);max-width:720px;}
+/* OPC cover motion: vertical distribution — tag top, headline+sub centered, swipe bottom. */
+.slide-content-opc-cover{justify-content:space-between;}
+.cover-main{margin-top:auto;margin-bottom:auto;}
 .slide-hl{font-family:'Fraunces',serif;font-weight:700;font-size:68px;line-height:1.1;text-transform:uppercase;margin-bottom:12px;text-shadow:0 2px 20px rgba(0,0,0,.8);}
 .slide-en{font-family:'Inter',sans-serif;font-style:italic;font-size:26px;color:var(--gr);margin-bottom:28px}
 .swipe{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);right:var(--P)}
 /* CLIP FRAME — Layout A (default): framed sticker 260×340, top-right. z-index:1 < .slide-content z-index:2. Text always wins. */
-.clip-frame{position:absolute;top:120px;right:var(--P);width:260px;height:340px;
+.clip-frame{position:absolute;top:50%;right:var(--P);width:260px;height:340px;
+            transform:translateY(-50%);
             z-index:1;border:2px solid var(--ca);background:#000;overflow:hidden;
             border-radius:14px;
             box-shadow:0 4px 18px rgba(0,0,0,.55),0 12px 48px rgba(0,0,0,.45),0 0 0 1px rgba(203,204,16,.18);}
-.clip-frame-mid{top:auto;bottom:200px;}
+.clip-frame-mid{top:auto;bottom:200px;transform:none;}
 /* Layout B: landscape clip 380×220, bottom-left — place/event/institution. */
 .clip-layout-b{position:absolute;bottom:200px;left:var(--P);width:380px;height:220px;
                z-index:1;border:2px solid var(--ca);background:#000;overflow:hidden;
