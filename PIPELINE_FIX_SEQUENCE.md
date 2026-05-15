@@ -88,8 +88,9 @@ STILL PENDING:
 ⬜ Photo catalog 401 — real OPC photos never load (photo_matcher.py auth bug)
 ⬜ Per-slide image queries — all slides use same carousel-level query (IMG-03)
 ⬜ Build history tab — same topics can repeat after 30+ posts
-🔄 Resource routing flow — Flow A/B downloader + clips.json + builder bridge wired; 2026-05-15 audit fixed Apify-first Instagram route, numeric target_slide, non-zero failure exits, Pipeline Failures logging, send_emails toggle, and Drive fallback in builder; next live proof with real URL in notes
-🔄 Clip pipeline dual output — clips.json is written and builder bridge reads STAGED/APPROVED target_slide entries; normal capture now stages under transcripts/resources/clips; final Drive folder live proof pending
+✅ Resource routing Flow A live proof — run 25927085076 passed; Instagram /p/ staged as image, Instagram Reel staged as video, clips.json uploaded to Drive folder resources_NWS-SOPHIA-001
+🔄 Resource routing Flow B — research videos + candidate email exists; approval-loop wiring still pending
+🔄 Clip pipeline dual output — clips.json is written and builder bridge reads STAGED/APPROVED target_slide video entries; next proof is a content_creator carousel run that consumes the staged video
 ⬜ Review-only mode in content_creator.yml (run reviewer on existing Drive folder)
 ⬜ Template organization in Marketing shared drive (visual template browser for Priscila)
 ⬜ NanoBanana credits — ⚠️ ONLY PRISCILA: nanobanana.com → add credits

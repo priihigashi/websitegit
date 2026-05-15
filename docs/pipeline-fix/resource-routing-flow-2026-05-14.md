@@ -361,6 +361,25 @@ Verified locally:
   → 38 passed.
 - Python compile check passed for the edited scripts.
 - `resource_downloader.yml` parsed successfully with Ruby YAML.
+
+Live proof:
+- Run `25927085076` passed on GitHub Actions.
+- Drive folder: `resources_NWS-SOPHIA-001`
+  (`1360MvheZEOTsrk1tg7lePJN3ymOVAZGT`).
+- Uploaded:
+  * `clip_001_apify.jpg` — Instagram `/p/` post staged as image resource,
+    status `STAGED`, `media_kind=image`, `target_slide=1`,
+    Drive file `1VMwYX3Cjk9cLBxW4h2uFJhNi0QaIrsv6`.
+  * `clip_002_apify.mp4` — Instagram Reel staged as video resource,
+    status `STAGED`, `media_kind=video`, `target_slide=2`, duration `43.84s`,
+    Drive file `1NDg1IJcwM2BkYxJiG-ODgr19HI1kJgZD`.
+  * `clips.json` — Drive file `1jSr-HGOidmnwxHPH_DEIYWnwoMDfNqP2`.
+
+Interpretation:
+- Flow A resource downloading is live for this proof case.
+- The builder bridge will inject only `media_kind=video` clips into motion
+  render; image resources are staged for the resources folder but not forced
+  into the video-clip bridge yet.
 - Need to confirm the final Drive version folder includes both the clip files
   and `clips.json`.
 
