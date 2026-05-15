@@ -39,3 +39,13 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
         run: python scripts/daily_content_processor.py
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow daily-content-processor.yml \
+            --status "${{ job.status }}"

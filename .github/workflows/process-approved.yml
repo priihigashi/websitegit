@@ -29,3 +29,13 @@ jobs:
           SHEETS_TOKEN_PATH: /tmp/oak_park_creds/sheets_token.json
           SHEET_ID: ${{ secrets.CONTENT_SHEET_ID }}
         run: python scripts/process_approved_cloud.py
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow process-approved.yml \
+            --status "${{ job.status }}"

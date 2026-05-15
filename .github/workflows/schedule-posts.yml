@@ -28,3 +28,13 @@ jobs:
           CONTENT_SHEET_ID:  ${{ secrets.CONTENT_SHEET_ID }}
           BUFFER_API_KEY:    ${{ secrets.BUFFER_API_KEY_EXP04092027 }}
         run: python scripts/schedule_posts.py
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow schedule-posts.yml \
+            --status "${{ job.status }}"

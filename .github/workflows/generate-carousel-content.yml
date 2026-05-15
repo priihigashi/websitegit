@@ -77,3 +77,13 @@ jobs:
           echo "**Hook style:** ${{ inputs.hook_style }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Next step:** Add photo filename to column D in Content Queue, then run build-carousels.yml" >> $GITHUB_STEP_SUMMARY
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow generate-carousel-content.yml \
+            --status "${{ job.status }}"

@@ -301,3 +301,13 @@ jobs:
             /tmp/${{ github.event.inputs.story_id }}_vo_en.mp3
             /tmp/${{ github.event.inputs.story_id }}_vo_pt.mp3
           retention-days: 30
+
+      - name: Update Build Tracker
+        if: always()
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+        run: |
+          pip install pytz -q
+          python3 scripts/build_tracker_writer.py \
+            --workflow render-video.yml \
+            --status "${{ job.status }}"
