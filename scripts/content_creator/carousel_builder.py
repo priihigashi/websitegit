@@ -1613,7 +1613,7 @@ def _apply_opc_hook_answer_contract(content, topic=""):
             content["slide4_body"] = (
                 f"The real difference is in total cost over time, not just the upfront number. "
                 f"Go with {left} when durability over 20+ years is the priority — the upfront cost pays back. "
-                f"Go with {right} when budget today is the constraint and you plan to sell within 10 years."
+                f"Go with {right} when the floor plan is complex, the timeline is tight, and interior finish flexibility is the priority."
             )
         else:
             content["slide4_body"] = (
