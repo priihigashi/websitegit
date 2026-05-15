@@ -227,34 +227,77 @@ def _extract_media_url(item: dict) -> str:
     return ""
 
 
+def _extract_image_url(item: dict) -> str:
+    """Find a representative image URL for Instagram /p/ posts/carousels."""
+    if not isinstance(item, dict):
+        return ""
+    images = item.get("images") or []
+    if isinstance(images, list):
+        for img in images:
+            if isinstance(img, str) and img.startswith("http"):
+                return img
+            if isinstance(img, dict):
+                val = img.get("url") or img.get("src")
+                if isinstance(val, str) and val.startswith("http"):
+                    return val
+    for key in ("displayUrl", "display_url", "imageUrl", "thumbnailUrl"):
+        val = item.get(key)
+        if isinstance(val, str) and val.startswith("http"):
+            return val
+    return ""
+
+
 def _download_via_apify_instagram(url: str, staging: Path, filename_hint: str) -> dict:
     """Instagram route copied from capture flow: Apify metadata/videoUrl first."""
     if not APIFY_API_KEY:
         return {"ok": False, "error": "APIFY_API_KEY not set"}
-    payload = {
-        "directUrls": [url.split("?")[0]],
-        "resultsType": "posts",
-        "resultsLimit": 1,
-        "addParentData": False,
-        "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["DATACENTER"]},
-    }
-    items = _apify_run_items("apify~instagram-scraper", payload, limit=1)
-    if not items:
-        return {"ok": False, "error": "Apify Instagram returned no items"}
-    media_url = _extract_media_url(items[0])
-    if not media_url:
-        return {"ok": False, "error": "Apify Instagram returned no direct media URL"}
-    target = staging / f"{filename_hint}_apify.mp4"
-    if not _download_http_media(media_url, target):
-        return {"ok": False, "error": "Apify Instagram media download failed"}
-    return {
-        "ok": True,
-        "source_url": url,
-        "local_path": str(target),
-        "duration_sec": _probe_duration(str(target)),
-        "title": (items[0].get("caption") or "")[:120],
-        "error": "",
-    }
+    last_error = ""
+    for proxy_groups in (["DATACENTER"], ["RESIDENTIAL"]):
+        payload = {
+            "directUrls": [url.split("?")[0]],
+            "resultsType": "posts",
+            "resultsLimit": 1,
+            "addParentData": False,
+            "proxy": {"useApifyProxy": True, "apifyProxyGroups": proxy_groups},
+        }
+        items = _apify_run_items("apify~instagram-scraper", payload, limit=1)
+        if not items:
+            last_error = f"Apify Instagram returned no items via {proxy_groups[0]}"
+            continue
+        item = items[0]
+        media_url = _extract_media_url(item)
+        if media_url:
+            target = staging / f"{filename_hint}_apify.mp4"
+            if _download_http_media(media_url, target):
+                return {
+                    "ok": True,
+                    "source_url": url,
+                    "local_path": str(target),
+                    "duration_sec": _probe_duration(str(target)),
+                    "title": (item.get("caption") or "")[:120],
+                    "media_kind": "video",
+                    "error": "",
+                }
+            last_error = f"Apify Instagram media download failed via {proxy_groups[0]}"
+            continue
+        image_url = _extract_image_url(item)
+        if image_url:
+            target = staging / f"{filename_hint}_apify.jpg"
+            if _download_http_media(image_url, target):
+                return {
+                    "ok": True,
+                    "source_url": url,
+                    "local_path": str(target),
+                    "duration_sec": 0.0,
+                    "title": (item.get("caption") or "")[:120],
+                    "media_kind": "image",
+                    "error": "",
+                }
+            last_error = f"Apify Instagram image download failed via {proxy_groups[0]}"
+            continue
+        keys = ",".join(sorted(item.keys())[:24])
+        last_error = f"Apify Instagram returned no direct media/image URL via {proxy_groups[0]} (keys={keys})"
+    return {"ok": False, "error": last_error or "Apify Instagram returned no media"}
 
 
 def _download_via_apify_youtube(url: str, staging: Path, filename_hint: str) -> dict:

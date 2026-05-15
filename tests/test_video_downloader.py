@@ -83,6 +83,21 @@ def test_instagram_download_uses_apify_before_yt_dlp(monkeypatch, tmp_path):
     assert res["local_path"].endswith("_apify.mp4")
 
 
+def test_instagram_post_can_stage_image_resource(monkeypatch, tmp_path):
+    monkeypatch.setattr(vd, "APIFY_API_KEY", "fake")
+    monkeypatch.setattr(vd, "_apify_run_items", lambda *a, **kw: [{
+        "displayUrl": "https://cdn.example.com/post.jpg",
+        "caption": "Image post",
+    }])
+    monkeypatch.setattr(vd, "_download_http_media", lambda media_url, target: target.write_bytes(b"x" * 200000) or True)
+
+    res = vd.download_url("https://www.instagram.com/p/ABC123/", staging=tmp_path)
+
+    assert res["ok"] is True
+    assert res["media_kind"] == "image"
+    assert res["local_path"].endswith("_apify.jpg")
+
+
 def test_download_url_handles_subprocess_failure(monkeypatch, tmp_path):
     monkeypatch.setattr(vd, "_which", lambda c: "/usr/bin/" + c)
     monkeypatch.setattr(vd, "_cookie_args", lambda url, **kw: [])

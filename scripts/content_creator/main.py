@@ -1662,6 +1662,8 @@ def process_one_topic(topic_entry, run_date, drive):
             for _entry in (_manifest if isinstance(_manifest, list) else []):
                 if _entry.get("status") not in ("STAGED", "APPROVED"):
                     continue
+                if _entry.get("media_kind", "video") != "video":
+                    continue
                 _slide = _entry.get("target_slide")
                 _path = _entry.get("local_path", "")
                 if _path and not Path(_path).exists() and _entry.get("drive_file_id"):

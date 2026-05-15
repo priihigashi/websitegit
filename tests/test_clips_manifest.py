@@ -21,7 +21,7 @@ def test_make_entry_shape():
     )
     for key in ("source_url", "local_path", "drive_file_id", "drive_view_link",
                 "duration_sec", "suggested_cut_start", "target_slide", "status",
-                "title", "search_query", "flow", "added_at"):
+                "title", "search_query", "flow", "media_kind", "added_at"):
         assert key in e, f"missing key {key}"
     assert e["status"] == "STAGED"
     assert e["flow"] == "A"

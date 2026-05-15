@@ -14,6 +14,7 @@ Shape (one entry per clip):
       "drive_file_id":      "1abc...",
       "drive_view_link":    "https://drive.google.com/...",
       "duration_sec":       12.4,
+      "media_kind":         "video" | "image",
       "suggested_cut_start": null,
       "target_slide":       null,
       "status":             "STAGED" | "CANDIDATE" | "APPROVED" | "REJECTED" | "DOWNLOADED",
@@ -87,6 +88,7 @@ def make_entry(
     drive_file_id: str = "",
     drive_view_link: str = "",
     error: str = "",
+    media_kind: str = "video",
 ) -> dict:
     """Build a single manifest entry matching the documented shape."""
     return {
@@ -96,6 +98,7 @@ def make_entry(
         "drive_file_id": drive_file_id,
         "drive_view_link": drive_view_link,
         "duration_sec": float(duration_sec or 0.0),
+        "media_kind": media_kind or "video",
         "suggested_cut_start": suggested_cut_start,
         "target_slide": target_slide,
         "status": status,

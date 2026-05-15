@@ -343,6 +343,8 @@ Patched:
   boolean/string comparison.
 - `video_downloader.py` now uses Apify Instagram video URL/CDN before `yt-dlp`.
   It also supports raw or base64 cookie secrets only as fallback compatibility.
+  Instagram `/p/` posts with no video are staged as image resources instead of
+  failing the whole run.
 - `note_parser.py` now extracts numeric `target_slide` and role hints per URL
   (`hook`, `apology_video`, `main_point`, `proof_clip`) instead of one vague
   string hint shared across nearby links.
@@ -356,7 +358,7 @@ Patched:
 
 Verified locally:
 - `python3.12 -m pytest tests/test_note_parser.py tests/test_resource_router.py tests/test_clips_manifest.py tests/test_video_downloader.py -q`
-  → 36 passed.
+  → 37 passed.
 - Python compile check passed for the edited scripts.
 - `resource_downloader.yml` parsed successfully with Ruby YAML.
 - Need to confirm the final Drive version folder includes both the clip files

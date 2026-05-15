@@ -469,6 +469,7 @@ def execute_resource_jobs(
                 "duration_sec": res.get("duration_sec", 0.0),
                 "title": res.get("title", ""),
                 "flow": "A",
+                "media_kind": res.get("media_kind", "video"),
                 "target_slide": item.get("target_slide") or req.get("target_slide"),
                 "suggested_cut_start": None,
                 "search_query": "",
