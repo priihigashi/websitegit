@@ -31,6 +31,13 @@ Related nearby commits:
 - Manual workflow input `motion_test=1` exists.
 - Manual workflow input `motion_cover_layout=A|D` exists.
 - Manual workflow input `motion_force_no_clip=1` exists for the no-clip proof.
+- Motion System v2 spec is locked in `NONNEGOTIABLES.md` by commit `190003c`.
+- Spec-alignment patch completed locally on 2026-05-14:
+  - active Ken Burns fallback removed from `process_one_topic()`.
+  - legacy `MANUAL_TEMPLATE=motion` path blocked so ffmpeg full-PNG zoom cannot run.
+  - workflow UI labels `motion` as disabled by NN-M1.
+  - `motion_sources.py` active chain is now real clips → GIPHY → static PNG/no motion.
+  - old prompt/docstrings no longer tell the model to use Ken Burns as the last resort.
 - Phase 1 guard logs when enabled:
   - `Motion Phase 1 Test: ON`
   - `Renderer: Playwright only`
@@ -63,8 +70,8 @@ Do not use the initial proof pair as final NN-M5 evidence because those runs exp
 
 - Gate 1 visual decision is not done. Priscila still needs to choose A, D, or adjust.
 - Gate 2 cleanup is not fully done:
-  - Kling is still present as a workflow/manual input and legacy fallback path.
-  - Some old Ken Burns comments/log strings remain in legacy code/docs.
+  - Kling is still present as explicit/manual-only legacy code, but workflow default is `KLING_APPROVE=0`.
+  - The legacy `render_motion_cover()` helper still exists for historical reference, but active dispatch/fallback paths are blocked/removed.
   - Cron/prod motion is still off and must stay off.
 - Gate 3 proof tests are not complete:
   - Fresh A proof needs final status and Drive link.
@@ -81,7 +88,8 @@ Gate 1 — Visual Decision: BLOCKED on Priscila review.
 Gate 2 — Code Cleanup: PARTIAL.
 - Cover-only bug fixed.
 - No-clip switch added.
-- Kling/Ken Burns legacy cleanup still pending before cron expansion.
+- Ken Burns active fallback removed; legacy manual route blocked.
+- Kling default is off; explicit Kling path remains out of Phase 1.
 
 Gate 3 — Remaining NN-M5 Tests: RUNNING / EVIDENCE PENDING.
 
@@ -90,16 +98,20 @@ Gate 4 — Phase 1 Sign-Off: BLOCKED.
 ## Next Actions
 
 1. Wait for runs `25841356531`, `25841356537`, and `25841475772` to complete.
-2. Inspect logs for:
+2. After the spec-alignment patch is pushed, run fresh proof pair again if needed:
+   - Cover A with `motion_test=1`, `motion_cover_layout=A`.
+   - Cover D with `motion_test=1`, `motion_cover_layout=D`.
+   - No-clip with `motion_test=1`, `motion_force_no_clip=1`.
+3. Inspect logs for:
    - `Phase 1 proof mode — cover clip only`
    - `cover motion HTML only`
    - `Phase 1 proof scope: recording cover only`
    - exactly one `Motion recorded: cream_01_cover_motion.mp4`
-3. Inspect Drive `motion/` folders:
+4. Inspect Drive `motion/` folders:
    - confirm only cover MP4 is present.
    - confirm no orphan middle-slide MP4s.
-4. Priscila reviews cover MP4s and chooses A, D, or adjust.
-5. Only after proof evidence and visual decision: update NN-M5 with Drive links and mark Phase 1 complete.
+5. Priscila reviews cover MP4s and chooses A, D, or adjust.
+6. Only after proof evidence and visual decision: update NN-M5 with Drive links and mark Phase 1 complete.
 
 ## Do Not Do Yet
 
@@ -109,4 +121,3 @@ Gate 4 — Phase 1 Sign-Off: BLOCKED.
 - Do not mark Motion Phase 1 complete.
 - Do not expand motion to non-cover slides.
 - Do not schedule/post motion output to Buffer.
-

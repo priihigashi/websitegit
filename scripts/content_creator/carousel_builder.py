@@ -2567,24 +2567,24 @@ First choice for Brazilian institutions: Agência Brasil CC BY 3.0 search terms.
 BANNED context_image_query patterns: NEVER copy words from heading_pt or heading_en into the query. The query is a stock photo search term — it must be a place/institution/person name, NOT a phrase from the slide copy. BAD: "Se comparar igual com igual" or "O ponto que importa". GOOD: "Conselho Nacional de Justiça STF fachada" or "STF Brasília Supremo Tribunal Federal". For comparison slides about judicial spending: always reference a specific court or government body (STF, CNJ, Câmara, TCU).
 
 CLIP SUGGESTIONS + MOTION PROMPTS RULE (non-negotiable):
-The motion pipeline runs an 8-tier source cascade per clip: YouTube (Apify) → Instagram (Apify) → Pexels → Pixabay → Archive.org → Wikimedia Commons → stock scrapers → Ken Burns zoom (last resort). You must write DIFFERENT phrasing per tier so each tier can succeed even if the others fail.
+The motion pipeline runs the Motion System v2 source cascade per clip: real short clips (clip collections / YouTube / Instagram / Archive.org / Wikimedia) → GIPHY → static PNG/no motion. You must write DIFFERENT phrasing per tier so each tier can succeed even if the others fail.
 
 QUERY QUALITY RULE: Every query must be specific enough that a researcher could find the RIGHT clip — not just any clip. A good youtube_query for a slide about "Flávio Bolsonaro CPI 2021" is "Flávio Bolsonaro CPI senado 2021 depoimento" not "Bolsonaro corruption". For a Congress scene: "Câmara dos Deputados votação sessão 2023" not just "congress". Include: full name (if person) + year + context keyword (hearing/speech/vote/signing). Generic queries produce unrelated clips that don't match the story.
 
 For every slide that would benefit from motion (cover + any slide naming a speech, law, institution, event, leader, or iconic moment):
   - youtube_query   → SPECIFIC: full name + year + event type. Best for speeches, press conferences, hearings. e.g. "Viktor Orbán concede derrota eleição Hungria 2026"
   - instagram_query → lowercase, hashtag-friendly, creator-reel phrasing. e.g. "hungria eleicao 2026 orbán perdeu"
-  - pexels_query    → stock-safe: place/institution/event, NO proper names, NO party names. e.g. "parliament building Budapest exterior"
-  - pixabay_query   → different wording than pexels_query (avoid duplicate failure). e.g. "European parliament vote session"
+  - pexels_query    → legacy/static-photo hint only: place/institution/event, NO proper names, NO party names. e.g. "parliament building Budapest exterior"
+  - pixabay_query   → legacy/static-photo hint only, different wording than pexels_query. e.g. "European parliament vote session"
   - archive_query   → public-domain / archival phrasing (vintage footage, historical film). e.g. "Hungary Budapest 1990 democratic transition archival"
   - wikimedia_query → CC-licensed historical or institutional footage. e.g. "Hungarian National Assembly Budapest"
   - motion_prompt   → 5-second directorial note: camera move + mood + framing (e.g. "slow push-in on Brasília facade, dusk, cinematic, 24mm", "archival grain, slight zoom on signing ceremony"). This drives Remotion animation + serves as AI-video prompt if we escalate to Runway/Kling.
   - photo_query     → Wikipedia/Wikimedia search term for a CC still photo used as slide background. For people: English full name. For places: landmark name. This is the PRIMARY source — always populate.
   - photo_bg_position → CSS background-position for the crop (default "center 20%"). Use "center top" for portraits, "50% 40%" for buildings.
-  - motion_renderer → always "kenburns" for Brazil native template. "kenburns" = Playwright records CSS KB zoom animation on the `.kb-bg` background layer only (text stays static). NOT ffmpeg on the full PNG. Never omit.
+  - motion_renderer → "playwright" for Motion v2 Phase 1. No Ken Burns, no zoompan, no text movement.
   - visual_hint     → same values as slides.visual_hint, plus "ugc-reaction" for UGC/reaction GIF-style motion. Determines whether stock tiers are allowed (stock skips for bio-card).
 
-If NO tier could plausibly succeed (hyper-local story, no public footage, no place to film) return an empty clip_suggestions array — do not invent false queries. Ken Burns floor will still animate the poster image, so every cover gets motion regardless.
+If NO tier could plausibly succeed (hyper-local story, no public footage, no place to film) return an empty clip_suggestions array — do not invent false queries. The pipeline must deliver static PNG/no motion instead of fake motion.
 
 NAMED-PERSON → FACE RULE (non-negotiable):
 For every slide, populate `mentioned_people` with EVERY named person referenced in that
@@ -4127,9 +4127,9 @@ def fetch_clips(content, work_dir):
 
     Distribution: cover + up to 2 evenly spaced middle slides (never sources).
     Source chain per slot is delegated to motion_sources.fetch_clip_with_fallback:
-      1. Apify YouTube  →  2. Apify Instagram  →  3. Pexels
-      4. Pixabay        →  5. Archive.org      →  6. Wikimedia Commons
-      7. (stock scrapers — placeholder)         →  empty = Ken Burns fallback by caller.
+      1. Real short clips (clip collections / YouTube / Instagram / Archive.org / Wikimedia)
+      2. GIPHY when safe/relevant
+      3. Empty = static PNG/no motion fallback by caller.
 
     Philosophy (Priscila, 2026-04-20): "so many fallbacks that something will go through."
     Legacy keep-alive: _fetch_youtube_clip_apify and _fetch_pexels_video remain as
@@ -4405,7 +4405,7 @@ def build_motion_html(content, niche, topic_slug, work_dir, clips, media_paths=N
         out_path = Path(work_dir) / fname
         out_path.write_text(html, encoding="utf-8")
         results.append((slide_idx, str(out_path)))
-        clip_info = f"clip: {os.path.basename(clip_path)}" if clip_path else "no clip — KB bg only"
+        clip_info = f"clip: {os.path.basename(clip_path)}" if clip_path else "no clip — static bg only"
         print(f"  Motion HTML: {fname} ({clip_info})")
 
     return results

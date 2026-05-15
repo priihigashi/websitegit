@@ -40,7 +40,7 @@ on:
         required: false
         default: ''
       manual_template:
-        description: 'Manual template (single). Use "motion" to re-render the legacy motion-only path on existing PNGs without rebuilding carousel.'
+        description: 'Manual template (single). "motion" is disabled by NN-M1; use motion_test=1 for Phase 1 proofs.'
         required: false
         default: 'auto'
         type: choice

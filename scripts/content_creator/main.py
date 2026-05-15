@@ -846,11 +846,11 @@ def create_story_doc(parent_folder_id, slug, version, topic, niche, brief, conte
 def record_motion_slides(clip_html_files, output_dir, duration=5):
     """Record each per-slide motion HTML via Playwright → MP4 + GIF.
     clip_html_files: list of (slide_idx, html_path) from build_motion_html().
-    Saves canonical names so Ken Burns won't overwrite:
+    Saves canonical names:
       slide_idx == 1 (cover): cream_01_cover_motion.mp4 + .gif
       slide_idx >= 2 (middle): cream_<NN>_slide_<N>_motion.mp4 + .gif
-    Returns list of (slide_idx, mp4_path) — main loop skips these indices when running Ken Burns.
-    Falls back silently per slot; Ken Burns is safety net for every other slide.
+    Returns list of (slide_idx, mp4_path).
+    Falls back silently per slot; caller may deliver static PNG only.
     """
     os.makedirs(output_dir, exist_ok=True)
     record_script = Path(__file__).parent / "record_motion.js"
@@ -908,13 +908,13 @@ def render_motion_remotion(cover_png_path, clip_path, output_dir, variant,
       • Output file never appears
 
     Philosophy: this is the preferred cover renderer. If it fails, main.py
-    falls through to Playwright, then to Ken Burns (ffmpeg zoompan on PNG).
+    falls through to Playwright, then static PNG/no motion.
     """
     remotion_root = Path(__file__).resolve().parents[1] / "remotion"
     if not (remotion_root / "package.json").exists():
         return None
     if not (remotion_root / "node_modules").exists():
-        print("  Remotion: node_modules missing — skipping (Playwright/Ken Burns will handle)")
+        print("  Remotion: node_modules missing — skipping (Playwright/static fallback will handle)")
         return None
 
     os.makedirs(output_dir, exist_ok=True)
@@ -1806,7 +1806,7 @@ def process_one_topic(topic_entry, run_date, drive):
             print(f"  Cover layout: {os.environ.get('MOTION_COVER_LAYOUT', 'A') or 'A'}")
             print("  Remotion/Kling/Ken Burns: skipped by Phase 1 guard")
         else:
-            print("  Rendering motion (legacy cascade: Remotion → Playwright → Kling → Ken Burns)...")
+            print("  Rendering motion (legacy cascade: Remotion → Playwright → optional Kling → static fallback)...")
         recorded_mp4s = []
         recorded_indices = set()
 
@@ -2385,24 +2385,16 @@ def main():
 
     # Phase A: Manual build mode (workflow-dispatch controls) OR queue-driven build
 
-    # Motion-only shortcut: re-run Ken Burns on existing PNGs without rebuilding carousel.
+    # Motion-only shortcut: legacy Ken Burns path is intentionally blocked by NN-M1.
     # Use: MANUAL_TEMPLATE=motion, MANUAL_TOPIC=<slug>, MANUAL_NICHE=<niche>
     if MANUAL_MODE and MANUAL_TEMPLATE == "motion" and MANUAL_TOPIC and MANUAL_NICHE in ("opc", "brazil", "usa"):
-        import re as _re_slug
-        slug = _re_slug.sub(r"[^a-z0-9-]", "-", MANUAL_TOPIC.strip().lower())[:50].strip("-")
-        print(f"\n--- Motion-only mode: re-render Ken Burns for '{slug}' ({MANUAL_NICHE}) ---")
-        drive = get_drive_service()
-        res = run_motion_only(slug, MANUAL_NICHE, drive)
-        if res:
-            print(f"  Motion folder: {res['motion_link']}")
-            results_file = WORK_DIR / "results.json"
-            try:
-                results_file.write_text(json.dumps([res], ensure_ascii=False, indent=2))
-            except Exception as e:
-                print(f"  Could not write results.json: {e}")
-        else:
-            print("  Motion-only run produced no output — check slug + niche")
-            sys.exit(1)
+        msg = (
+            "MANUAL_TEMPLATE=motion is disabled by NN-M1. "
+            "Ken Burns/full-PNG zoom is permanently removed; use MOTION_ENABLED=1 "
+            "with MOTION_PHASE1_TEST=1 for Cover A/D proofs."
+        )
+        print(f"\n[motion-only disabled] {msg}")
+        _send_alert(msg, fatal=True)
         return
 
     if MANUAL_MODE and MANUAL_TOPIC and MANUAL_NICHE in ("opc", "brazil", "usa"):

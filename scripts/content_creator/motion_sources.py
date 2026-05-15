@@ -650,7 +650,7 @@ def tier_stock_scrapers(slide_cfg: dict, dest_path: Path) -> bool:
 
     PLACEHOLDER: mixkit.co / coverr.co / videvo.net. These sites expose og:video
     meta tags on page URLs; a generic Apify web-scraper actor can extract them.
-    Implementation deferred — returns False silently so Ken Burns kicks in.
+    Implementation deferred — returns False silently so the caller uses static PNG/no motion.
     Wire here when Priscila authorizes the scraper cost.
     """
     query = (slide_cfg.get("query")
@@ -824,23 +824,15 @@ def _trim_to_relevant_window(clip_path: Path, slide_cfg: dict,
 
 TierFn = Callable[[dict, Path], bool]
 
-# Motion v2 Phase 1: real clips → GIPHY → static/no motion.
-# Pexels/Pixabay/stock_scrapers are video tiers not part of Phase 1 cascade.
-# They are preserved for future phases but skipped when MOTION_PHASE1_TEST=1.
-_PHASE1_SKIP_TIERS = {"pexels", "pixabay", "stock_scrapers"}
-
 SOURCE_CHAIN: List[tuple] = [
-    ("clip_collections", tier_clip_collections, ("any",)),            # pre-loaded by video-research.yml
-    ("ytdlp_search",     tier_ytdlp_search,     ("any",)),            # free yt-dlp search
-    ("apify_youtube",    tier_apify_youtube,    ("any",)),            # residential proxy — YouTube
-    ("ytdlp_ios",        tier_ytdlp_ios,        ("any",)),            # yt-dlp iOS client
-    ("apify_instagram",  tier_apify_instagram,  ("any",)),            # residential proxy — Instagram
-    ("archive_org",      tier_archive_org,      ("any",)),            # public domain
-    ("wikimedia",        tier_wikimedia,        ("any",)),            # CC archival
-    ("giphy",            tier_giphy,            ("context-image", "place", "event", "product-photo")),  # Tier 2 — ambient fallback; silent skip if no key
-    ("pexels",           tier_pexels,           ("context-image", "place", "event", "product-photo")),  # Phase 2+ only (video — blocked on GH Actions IPs)
-    ("pixabay",          tier_pixabay,          ("context-image", "place", "event", "product-photo")),  # Phase 2+ only
-    ("stock_scrapers",   tier_stock_scrapers,   ("context-image", "place", "event")),                   # Phase 2+ only
+    ("clip_collections", tier_clip_collections, ("any",)),            # Tier 1: pre-loaded real clips
+    ("ytdlp_search",     tier_ytdlp_search,     ("any",)),            # Tier 1: real YouTube clips
+    ("apify_youtube",    tier_apify_youtube,    ("any",)),            # Tier 1: real YouTube via proxy
+    ("ytdlp_ios",        tier_ytdlp_ios,        ("any",)),            # Tier 1: real YouTube iOS client
+    ("apify_instagram",  tier_apify_instagram,  ("any",)),            # Tier 1: real Instagram clips
+    ("archive_org",      tier_archive_org,      ("any",)),            # Tier 1: public domain / archival
+    ("wikimedia",        tier_wikimedia,        ("any",)),            # Tier 1: CC archival
+    ("giphy",            tier_giphy,            ("context-image", "place", "event", "product-photo", "ugc-reaction")),  # Tier 2 — ambient fallback; silent skip if no key
 ]
 
 
@@ -865,10 +857,7 @@ def fetch_clip_with_fallback(slide_cfg: dict, work_dir: str, filename: str,
     # Resolve effective visual hint (config > arg)
     effective_hint = slide_cfg.get("visual_hint", visual_hint) or visual_hint
 
-    _phase1 = os.environ.get("MOTION_PHASE1_TEST", "0").strip() == "1"
     for tier_name, tier_fn, allowed_hints in SOURCE_CHAIN:
-        if _phase1 and tier_name in _PHASE1_SKIP_TIERS:
-            continue
         # Gate stock-only tiers for people-specific slides
         if allowed_hints != ("any",) and effective_hint not in allowed_hints:
             continue
@@ -880,7 +869,7 @@ def fetch_clip_with_fallback(slide_cfg: dict, work_dir: str, filename: str,
         except Exception as e:
             print(f"  motion_sources: {tier_name} unexpected error: {e}")
 
-    print(f"  motion_sources: all sources empty for '{filename}' — Ken Burns will fall back on PNG")
+    print(f"  motion_sources: all sources empty for '{filename}' — using static PNG/no motion fallback")
     return ""
 
 
