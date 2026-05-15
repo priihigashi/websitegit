@@ -732,20 +732,32 @@ def plan_carousel_slides(
     # driveway carousel). Until per-card vision validation is reliable, the
     # conservative all-tip plan is the production path.
     _disable_standalones = os.environ.get("OPC_DISABLE_STANDALONES", "1").strip().lower() in {"1", "true", "yes"}
+    # PR0 (2026-05-15): per-template allowlist — vetted standalones survive the SH-158 rollback.
+    # Default empty = full rollback (back-compat). Each new ID must clear its media-relevance
+    # gate before being added (see docs/research/opc_standalone_failure_mode.md re-enable criteria).
+    _allowlist_raw = os.environ.get("OPC_STANDALONE_ALLOWLIST", "").strip()
+    _allowed_standalones = {t.strip() for t in _allowlist_raw.split(",") if t.strip()}
     if _disable_standalones:
         _safe_tips = {"opc_tip_cover", "opc_tip_stat", "opc_tip_list", "opc_tip_explainer", "opc_tip_sources"}
         rolled_back = []
+        kept_standalones = []
         for slide in plan_slides:
             tid = slide.get("template_id", "")
-            if tid not in _safe_tips:
-                fb = STANDALONE_TO_TIP_FALLBACK.get(tid) or "opc_tip_explainer"
-                rolled_back.append(f"slide{slide['slide']}:{tid}→{fb}")
-                slide["_original_template_id"] = tid
-                slide["template_id"] = fb
-                slide["production_safe"] = True
-                slide["fallback_template_id"] = None
+            if tid in _safe_tips:
+                continue
+            if tid in _allowed_standalones:
+                kept_standalones.append(f"slide{slide['slide']}:{tid}")
+                continue
+            fb = STANDALONE_TO_TIP_FALLBACK.get(tid) or "opc_tip_explainer"
+            rolled_back.append(f"slide{slide['slide']}:{tid}→{fb}")
+            slide["_original_template_id"] = tid
+            slide["template_id"] = fb
+            slide["production_safe"] = True
+            slide["fallback_template_id"] = None
         if rolled_back:
             print(f"  [SH-158] OPC_DISABLE_STANDALONES=1 — rolled back: {', '.join(rolled_back)}")
+        if kept_standalones:
+            print(f"  [PR0] OPC_STANDALONE_ALLOWLIST kept: {', '.join(kept_standalones)}")
 
     return {
         "topic": topic,
@@ -759,6 +771,7 @@ def plan_carousel_slides(
             "All 7 standalone Python builders shipped in Phase 6 (commit 690873f); fallback_template_id is now a defensive escape hatch only.",
             "Banned legacy keys cutout/illustrated cannot appear in any slot.",
             "SH-158 rollback active by default — set OPC_DISABLE_STANDALONES=0 to re-enable standalones once card-image vision validation is verified.",
+            "PR0 (2026-05-15) — vetted standalones may bypass the SH-158 rollback via OPC_STANDALONE_ALLOWLIST=opc_statement,opc_material_profile (comma-separated).",
         ],
     }
 

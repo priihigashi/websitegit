@@ -90,6 +90,11 @@ on:
         required: false
         default: ''
         type: string
+      opc_standalone_allowlist:
+        description: 'PR0 (2026-05-15) — comma-separated standalone template IDs allowed to survive SH-158 rollback. Empty = full rollback (production-safe). Suggested first allowlist: opc_statement,opc_material_profile.'
+        required: false
+        default: ''
+        type: string
       slide_purpose_pilot:
         description: 'SH-137 — pilot: enable slide_purpose generation + reviewer/auditor purpose-awareness. Default OFF on cron. Manual-only test flag during pilot. See doc 1BDg9ORg.'
         required: false
@@ -155,6 +160,9 @@ jobs:
       # Phase 8 — SH-OPC-SMART-SLIDE-PICKER smart slide planner. Default ON on cron (SH-126, 2026-05-08).
       # Manual runs can override via workflow_dispatch input opc_slide_planner=0 to fall back to legacy planner.
       OPC_SLIDE_PLANNER_ENABLED: ${{ github.event.inputs.opc_slide_planner || '1' }}
+      # PR0 (2026-05-15) — per-template allowlist for SH-158 standalone rollback. Default empty = full rollback (back-compat).
+      # Each ID added must clear its media-relevance gate first. See docs/research/opc_standalone_failure_mode.md.
+      OPC_STANDALONE_ALLOWLIST: ${{ github.event.inputs.opc_standalone_allowlist || '' }}
       # SH-137 — slide_purpose pilot. Default OFF (cron stays unchanged). Manual-only flag for pilot tests.
       # Spec: doc 1BDg9ORggVsWH-WQPBx4iQnYNu2UA5vHWcuNRkXCY5v8 (v3 FINAL).
       # OPC purposes: hook|cost|teach|apply|sources. News purposes: claim|number|evidence|opposition|implication|sources.
@@ -342,6 +350,9 @@ jobs:
       # Phase 8 — SH-OPC-SMART-SLIDE-PICKER smart slide planner. Default ON on cron (SH-126, 2026-05-08).
       # Manual runs can override via workflow_dispatch input opc_slide_planner=0 to fall back to legacy planner.
       OPC_SLIDE_PLANNER_ENABLED: ${{ github.event.inputs.opc_slide_planner || '1' }}
+      # PR0 (2026-05-15) — per-template allowlist for SH-158 standalone rollback. Default empty = full rollback (back-compat).
+      # Each ID added must clear its media-relevance gate first. See docs/research/opc_standalone_failure_mode.md.
+      OPC_STANDALONE_ALLOWLIST: ${{ github.event.inputs.opc_standalone_allowlist || '' }}
       # SH-137 — slide_purpose pilot. Default OFF (cron stays unchanged). Manual-only flag for pilot tests.
       # Spec: doc 1BDg9ORggVsWH-WQPBx4iQnYNu2UA5vHWcuNRkXCY5v8 (v3 FINAL).
       # OPC purposes: hook|cost|teach|apply|sources. News purposes: claim|number|evidence|opposition|implication|sources.
