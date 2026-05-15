@@ -4537,7 +4537,7 @@ body{background:var(--ob);overflow:hidden}
 .slide{width:var(--W);height:var(--H);background:var(--ob);color:var(--pa);position:relative;overflow:hidden;font-family:'Inter',sans-serif}
 .kb-bg{position:absolute;inset:0;background-size:cover;background-position:center top;}
 .slide-content{position:relative;z-index:2;padding:var(--P);height:100%;display:flex;flex-direction:column;}
-.tag{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--gr);letter-spacing:.06em;text-transform:uppercase;margin-bottom:28px}
+.tag{font-family:'JetBrains Mono',monospace;font-size:26px;color:rgba(242,236,224,0.85);letter-spacing:.06em;text-transform:uppercase;margin-bottom:28px;text-shadow:0 2px 12px rgba(0,0,0,.7);}
 .accent{color:var(--ca)}
 .cover-date{font-family:'JetBrains Mono',monospace;font-size:24px;color:var(--gr);margin-bottom:40px}
 .cover-hl{font-family:'Fraunces',serif;font-weight:700;font-size:116px;line-height:1.0;text-transform:uppercase;margin-bottom:20px;text-shadow:0 2px 20px rgba(0,0,0,.8);max-width:720px;}
@@ -4547,7 +4547,7 @@ body{background:var(--ob);overflow:hidden}
 .cover-main{margin-top:auto;margin-bottom:auto;padding-left:32px;}
 .slide-hl{font-family:'Fraunces',serif;font-weight:700;font-size:68px;line-height:1.1;text-transform:uppercase;margin-bottom:12px;text-shadow:0 2px 20px rgba(0,0,0,.8);}
 .slide-en{font-family:'Inter',sans-serif;font-style:italic;font-size:26px;color:var(--gr);margin-bottom:28px}
-.swipe{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--gr);position:absolute;bottom:var(--P);right:var(--P)}
+.swipe{font-family:'JetBrains Mono',monospace;font-size:22px;color:rgba(242,236,224,0.90);position:absolute;bottom:var(--P);right:var(--P);text-shadow:0 2px 12px rgba(0,0,0,.8);letter-spacing:.08em;}
 /* CLIP FRAME — Layout A (default): framed sticker 260×340, top-right. z-index:1 < .slide-content z-index:2. Text always wins. */
 .clip-frame{position:absolute;top:50%;right:var(--P);width:260px;height:340px;
             transform:translateY(-50%);
