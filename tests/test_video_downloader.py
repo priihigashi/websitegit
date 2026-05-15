@@ -60,6 +60,29 @@ def test_download_url_handles_missing_yt_dlp(monkeypatch, tmp_path):
     assert "yt-dlp not installed" in res["error"]
 
 
+def test_instagram_download_uses_apify_before_yt_dlp(monkeypatch, tmp_path):
+    monkeypatch.setattr(vd, "_which", lambda c: "")
+
+    def fake_apify(url, staging, filename_hint):
+        local = Path(staging) / f"{filename_hint}_apify.mp4"
+        local.write_bytes(b"fake-video" * 20000)
+        return {
+            "ok": True,
+            "source_url": url,
+            "local_path": str(local),
+            "duration_sec": 9.0,
+            "title": "Apify Reel",
+            "error": "",
+        }
+
+    monkeypatch.setattr(vd, "_download_via_apify_instagram", fake_apify)
+    res = vd.download_url("https://www.instagram.com/reel/ABC123/", staging=tmp_path)
+
+    assert res["ok"] is True
+    assert res["title"] == "Apify Reel"
+    assert res["local_path"].endswith("_apify.mp4")
+
+
 def test_download_url_handles_subprocess_failure(monkeypatch, tmp_path):
     monkeypatch.setattr(vd, "_which", lambda c: "/usr/bin/" + c)
     monkeypatch.setattr(vd, "_cookie_args", lambda url, **kw: [])

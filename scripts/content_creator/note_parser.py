@@ -654,8 +654,9 @@ def _build_resource_requests(note_text: str, project: str, action: str, urls: li
             "kind": kind,
             "source_url": url,
             "target": "resources/clips" if kind == "video_clip" else "resources/images",
-            "role": "note_link",
+            "role": _extract_role_hint(note_text, url) or "note_link",
             "slide_hint": _extract_slide_hint(note_text, url),
+            "target_slide": _extract_slide_number(note_text, url),
             "cut_hint": _extract_cut_hint(note_text, url),
             "priority": idx,
         })
@@ -689,9 +690,15 @@ def _build_resource_requests(note_text: str, project: str, action: str, urls: li
 
 
 def _extract_slide_hint(note_text: str, url: str) -> str:
-    window = _window_around(note_text, url)
+    window = _window_after_url(note_text, url) or _window_around(note_text, url)
     m = re.search(r"\b(?:slide|card)\s*(\d{1,2}|cover|last)\b", window, re.IGNORECASE)
     return m.group(0).lower() if m else ""
+
+
+def _extract_slide_number(note_text: str, url: str):
+    window = _window_after_url(note_text, url) or _window_around(note_text, url)
+    m = re.search(r"\b(?:slide|card)\s*(\d{1,2})\b", window, re.IGNORECASE)
+    return int(m.group(1)) if m else None
 
 
 def _extract_cut_hint(note_text: str, url: str) -> str:
@@ -706,11 +713,35 @@ def _extract_cut_hint(note_text: str, url: str) -> str:
     return m.group(1).strip().lower() if m else ""
 
 
+def _extract_role_hint(note_text: str, url: str) -> str:
+    window = _window_after_url(note_text, url) or _window_around(note_text, url)
+    role_patterns = [
+        ("hook", r"\bhook\b"),
+        ("apology_video", r"\bapolog(?:y|izing|ize|ised|ized)\b"),
+        ("main_point", r"\bmain point\b"),
+        ("proof_clip", r"\bproof\b"),
+    ]
+    for role, pattern in role_patterns:
+        if re.search(pattern, window, re.IGNORECASE):
+            return role
+    return ""
+
+
 def _window_around(text: str, needle: str, radius: int = 180) -> str:
     i = text.find(needle)
     if i < 0:
         return text[: radius * 2]
     return text[max(0, i - radius): i + len(needle) + radius]
+
+
+def _window_after_url(text: str, needle: str, radius: int = 220) -> str:
+    i = text.find(needle)
+    if i < 0:
+        return ""
+    start = i + len(needle)
+    next_url = re.search(r"https?://", text[start:])
+    end = start + next_url.start() if next_url else start + radius
+    return text[i:end]
 
 
 def _compact_query(note_text: str) -> str:

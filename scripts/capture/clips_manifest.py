@@ -9,6 +9,7 @@ Shape (one entry per clip):
 
     {
       "source_url":         "https://...",
+      "story_id":           "NWS-001",
       "local_path":         "/tmp/clips/.../candidate_01_xyz.mp4",
       "drive_file_id":      "1abc...",
       "drive_view_link":    "https://drive.google.com/...",
@@ -22,8 +23,8 @@ Shape (one entry per clip):
       "search_query":       ""        # only set for Flow B candidates
     }
 
-File lives next to other manifest files. Append-only by entry id (source_url),
-so re-runs do not duplicate rows.
+File lives next to other manifest files. Upserted by (story_id, source_url)
+when story_id is present, otherwise source_url, so re-runs do not duplicate rows.
 """
 
 from __future__ import annotations
@@ -74,6 +75,7 @@ def save(clips_dir: Path | str, clips: list[dict]) -> Path:
 def make_entry(
     *,
     source_url: str,
+    story_id: str = "",
     local_path: str = "",
     duration_sec: float = 0.0,
     status: str = "STAGED",
@@ -89,6 +91,7 @@ def make_entry(
     """Build a single manifest entry matching the documented shape."""
     return {
         "source_url": source_url,
+        "story_id": story_id or "",
         "local_path": local_path,
         "drive_file_id": drive_file_id,
         "drive_view_link": drive_view_link,
@@ -112,9 +115,10 @@ def upsert(
 ) -> list[dict]:
     """Insert or update a single entry by `key`. Persists and returns full list."""
     clips = load(clips_dir)
+    entry_key = _entry_key(entry, key)
     matched = False
     for i, existing in enumerate(clips):
-        if existing.get(key) and existing.get(key) == entry.get(key):
+        if entry_key and _entry_key(existing, key) == entry_key:
             merged = dict(existing)
             merged.update({k: v for k, v in entry.items() if v not in (None, "")})
             # Preserve the older added_at; record updated_at separately
@@ -132,9 +136,9 @@ def upsert(
 def upsert_many(clips_dir: Path | str, entries: Iterable[dict], *, key: str = "source_url") -> list[dict]:
     """Bulk upsert — single read/write."""
     clips = load(clips_dir)
-    by_key = {c.get(key): i for i, c in enumerate(clips) if c.get(key)}
+    by_key = {_entry_key(c, key): i for i, c in enumerate(clips) if _entry_key(c, key)}
     for entry in entries:
-        k = entry.get(key)
+        k = _entry_key(entry, key)
         if k and k in by_key:
             idx = by_key[k]
             merged = dict(clips[idx])
@@ -148,6 +152,14 @@ def upsert_many(clips_dir: Path | str, entries: Iterable[dict], *, key: str = "s
                 by_key[k] = len(clips) - 1
     save(clips_dir, clips)
     return clips
+
+
+def _entry_key(entry: dict, key: str):
+    if not isinstance(entry, dict):
+        return ""
+    if key == "source_url" and entry.get("story_id") and entry.get("source_url"):
+        return (entry.get("story_id"), entry.get("source_url"))
+    return entry.get(key)
 
 
 if __name__ == "__main__":

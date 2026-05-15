@@ -223,6 +223,24 @@ def test_note9_note_links_create_download_jobs():
     assert len(jobs) == 2
     assert all(j["target"] == "resources/clips" for j in jobs)
     assert any(j["slide_hint"] == "slide 1" for j in jobs)
+    assert jobs[0]["target_slide"] == 1
+    assert jobs[1]["target_slide"] == 4
+
+
+def test_note_links_extract_per_url_slide_and_role():
+    note = (
+        "Sophia Barclay case. Use https://www.instagram.com/p/DW4tVaJkQAb/ "
+        "as hook on slide 1. Use https://www.instagram.com/reel/C98BzR7SmNX/ "
+        "as the apology video on slide 2."
+    )
+    r = note_parser(note, project="brazil", **_KB)
+    jobs = [j for j in r["resource_requests"] if j["type"] == "download_note_link"]
+
+    assert len(jobs) == 2
+    assert jobs[0]["target_slide"] == 1
+    assert jobs[0]["role"] == "hook"
+    assert jobs[1]["target_slide"] == 2
+    assert jobs[1]["role"] == "apology_video"
 
 
 def test_note10_research_more_videos_creates_research_job():

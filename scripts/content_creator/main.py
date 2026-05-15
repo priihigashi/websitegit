@@ -1664,6 +1664,24 @@ def process_one_topic(topic_entry, run_date, drive):
                     continue
                 _slide = _entry.get("target_slide")
                 _path = _entry.get("local_path", "")
+                if _path and not Path(_path).exists() and _entry.get("drive_file_id"):
+                    try:
+                        from googleapiclient.http import MediaIoBaseDownload
+                        _name = Path(_path).name if _path else f"clip_{_entry.get('drive_file_id')}.mp4"
+                        _local = _clips_json.parent / _name
+                        _drive = get_drive_service()
+                        _request = _drive.files().get_media(
+                            fileId=_entry.get("drive_file_id"),
+                            supportsAllDrives=True,
+                        )
+                        with _local.open("wb") as _fh:
+                            _downloader = MediaIoBaseDownload(_fh, _request)
+                            _done = False
+                            while not _done:
+                                _, _done = _downloader.next_chunk()
+                        _path = str(_local)
+                    except Exception as _dl_e:
+                        print(f"  clips.json bridge: Drive download skipped — {_dl_e}")
                 if _slide is None or not _path or not Path(_path).exists():
                     continue
                 try:

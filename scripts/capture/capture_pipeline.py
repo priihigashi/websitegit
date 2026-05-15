@@ -4695,6 +4695,7 @@ def main():
             output_dir="transcripts",
             use_llm=False,
             send_emails=True,
+            clips_dir=TRANSCRIPTS_DIR / "resources" / "clips",
         )
         _jobs_count = len(_resource_status.get("jobs", []))
         if _jobs_count:

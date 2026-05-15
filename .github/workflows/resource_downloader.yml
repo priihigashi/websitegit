@@ -44,6 +44,10 @@ on:
         type: boolean
         default: true
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   download:
     name: "${{ inputs.project }} — ${{ inputs.story_id }}"
@@ -77,6 +81,7 @@ jobs:
       - name: Run resource router
         env:
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
           PRI_OP_YT_COOKIES: ${{ secrets.PRI_OP_YT_COOKIES }}
           PRI_OP_IG_COOKIES: ${{ secrets.PRI_OP_IG_COOKIES }}
           PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
@@ -90,7 +95,7 @@ jobs:
             --seed-url "${{ inputs.seed_url }}" \
             --output-dir "transcripts" \
             --execute \
-            ${{ inputs.send_emails == false && '--no-email' || '' }}
+            ${{ inputs.send_emails == 'false' && '--no-email' || '' }}
 
       - name: Upload manifest + clips artifact
         if: always()

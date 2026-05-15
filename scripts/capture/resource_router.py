@@ -83,6 +83,7 @@ def build_resource_manifest(
             "local_path": local_path,
             "drive_file_id": "",
             "slide_hint": req.get("slide_hint", ""),
+            "target_slide": req.get("target_slide"),
             "cut_hint": req.get("cut_hint", ""),
             "usage": req.get("role", req.get("type", "")),
             "required": True,
@@ -206,6 +207,67 @@ def _get_drive_service():
     except Exception as exc:
         print(f"  [resource_router] Drive auth failed: {exc}")
         return None
+
+
+def _get_sheets_service():
+    """OAuth Sheets service for Pipeline Failures logging."""
+    token_path = (
+        os.environ.get("SHEETS_TOKEN_PATH")
+        or "/Users/priscilahigashi/ClaudeWorkspace/Credentials/sheets_token.json"
+    )
+    try:
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        sheets_token_env = os.environ.get("SHEETS_TOKEN", "")
+        if sheets_token_env and sheets_token_env.strip().startswith("{"):
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+            tmp.write(sheets_token_env)
+            tmp.flush()
+            tmp.close()
+            token_path = tmp.name
+        if not os.path.exists(token_path):
+            return None
+        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+        creds = Credentials.from_authorized_user_file(token_path, scopes=scopes)
+        return build("sheets", "v4", credentials=creds)
+    except Exception as exc:
+        print(f"  [resource_router] Sheets auth failed: {exc}")
+        return None
+
+
+def log_pipeline_failure(*, story_id: str, project: str, stage: str,
+                         error: str, source_url: str = "") -> bool:
+    """Append a resource-router failure row to Ideas & Inbox Pipeline Failures."""
+    spreadsheet_id = os.environ.get(
+        "IDEAS_INBOX_SPREADSHEET_ID",
+        "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU",
+    )
+    tab = os.environ.get("PIPELINE_FAILURES_TAB", "🚨 Pipeline Failures")
+    service = _get_sheets_service()
+    if not service:
+        return False
+    row = [
+        datetime.now(timezone.utc).isoformat(),
+        "resource_router",
+        story_id or "",
+        project or "",
+        stage or "",
+        source_url or "",
+        (error or "")[:1000],
+    ]
+    try:
+        service.spreadsheets().values().append(
+            spreadsheetId=spreadsheet_id,
+            range=f"'{tab}'!A:G",
+            valueInputOption="USER_ENTERED",
+            insertDataOption="INSERT_ROWS",
+            body={"values": [row]},
+        ).execute()
+        return True
+    except Exception as exc:
+        print(f"  [resource_router] Pipeline Failures log failed: {exc}")
+        return False
 
 
 def upload_clip_to_drive(local_path: str, parent_folder_id: str, *, drive=None) -> dict:
@@ -402,11 +464,12 @@ def execute_resource_jobs(
             )
             entry_kwargs = {
                 "source_url": url,
+                "story_id": story_id,
                 "local_path": res.get("local_path", ""),
                 "duration_sec": res.get("duration_sec", 0.0),
                 "title": res.get("title", ""),
                 "flow": "A",
-                "target_slide": item.get("slide_hint") or None,
+                "target_slide": item.get("target_slide") or req.get("target_slide"),
                 "suggested_cut_start": None,
                 "search_query": "",
             }
@@ -428,6 +491,13 @@ def execute_resource_jobs(
                 entry_kwargs["error"] = res.get("error", "")
                 job["status"] = "error"
                 job["error"] = res.get("error", "")
+                log_pipeline_failure(
+                    story_id=story_id,
+                    project=niche,
+                    stage="download_note_link",
+                    source_url=url,
+                    error=res.get("error", ""),
+                )
                 if item:
                     item["status"] = "download_failed"
                     item["error"] = res.get("error", "")
@@ -460,6 +530,7 @@ def execute_resource_jobs(
                 )
                 entry = clips_manifest.make_entry(
                     source_url=res.get("source_url", ""),
+                    story_id=story_id,
                     local_path=res.get("local_path", ""),
                     duration_sec=res.get("duration_sec", 0.0),
                     status="CANDIDATE",
@@ -477,6 +548,14 @@ def execute_resource_jobs(
                     print(f"  [resource_router] clips.json write failed: {exc}")
                 candidate_entries_for_email.append(entry)
             job["status"] = "done" if candidate_entries_for_email else "no_results"
+            if not candidate_entries_for_email:
+                log_pipeline_failure(
+                    story_id=story_id,
+                    project=niche,
+                    stage="research_videos",
+                    source_url="",
+                    error="no successful candidates downloaded",
+                )
 
         else:
             # research_images / unsupported — leave for later
@@ -556,6 +635,14 @@ def route_and_execute(
     return manifest
 
 
+def _has_failed_jobs(result: dict) -> bool:
+    jobs = result.get("jobs") or []
+    if not jobs:
+        return False
+    failed_statuses = {"error", "download_failed", "no_results"}
+    return any((job.get("status") or "").lower() in failed_statuses for job in jobs)
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -606,3 +693,13 @@ if __name__ == "__main__":
         "labels": result.get("intent", {}).get("intent_labels", []),
         "execution": result.get("execution"),
     }, indent=2))
+
+    if args.execute and _has_failed_jobs(result):
+        log_pipeline_failure(
+            story_id=args.story_id,
+            project=args.project,
+            stage="resource_router_cli",
+            source_url=args.seed_url,
+            error="one or more resource jobs failed",
+        )
+        sys.exit(1)

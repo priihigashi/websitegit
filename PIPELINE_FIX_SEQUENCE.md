@@ -88,8 +88,8 @@ STILL PENDING:
 ⬜ Photo catalog 401 — real OPC photos never load (photo_matcher.py auth bug)
 ⬜ Per-slide image queries — all slides use same carousel-level query (IMG-03)
 ⬜ Build history tab — same topics can repeat after 30+ posts
-🔄 Resource routing flow — notes/transcripts now emit resource_requests; next wire capture resource_router.py + resource_manifest.json
-⬜ Clip pipeline dual output — video-research.yml doesn't write to resources/clips/ in version folders
+🔄 Resource routing flow — Flow A/B downloader + clips.json + builder bridge wired; 2026-05-15 audit fixed Apify-first Instagram route, numeric target_slide, non-zero failure exits, Pipeline Failures logging, send_emails toggle, and Drive fallback in builder; next live proof with real URL in notes
+🔄 Clip pipeline dual output — clips.json is written and builder bridge reads STAGED/APPROVED target_slide entries; normal capture now stages under transcripts/resources/clips; final Drive folder live proof pending
 ⬜ Review-only mode in content_creator.yml (run reviewer on existing Drive folder)
 ⬜ Template organization in Marketing shared drive (visual template browser for Priscila)
 ⬜ NanoBanana credits — ⚠️ ONLY PRISCILA: nanobanana.com → add credits

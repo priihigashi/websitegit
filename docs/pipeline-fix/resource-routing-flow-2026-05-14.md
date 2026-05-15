@@ -217,14 +217,15 @@ Verified:
 
 Built end-to-end on top of the scaffolding above. Both Flow A and Flow B now
 download, upload, write a clips manifest, and (for Flow B) email Priscila for
-approval. All via deterministic OAuth + yt-dlp — no banned MCP `create_file`
-content uploads.
+approval. Drive upload is deterministic OAuth + `MediaFileUpload` with
+`supportsAllDrives=True` — no banned MCP `create_file` content uploads.
 
 Added:
-- `scripts/capture/video_downloader.py` — yt-dlp wrapper with two entry points:
-  * `download_url(url, …)`  → Flow A direct download. Uses
-    `--cookies-from-browser safari` on macOS, falls back to
-    `PRI_OP_YT_COOKIES` / `PRI_OP_IG_COOKIES` cookie files in CI.
+- `scripts/capture/video_downloader.py` — resource downloader with two entry points:
+  * `download_url(url, …)`  → Flow A direct download. Instagram uses the same
+    Apify/CDN route as the existing capture pipeline first; `yt-dlp` and cookies
+    are fallback only. YouTube tries `yt-dlp`, then the existing Apify YouTube
+    actor route when `yt-dlp` is blocked.
   * `search_youtube(query, n_results=3, search_size=5, …)` → Flow B
     `ytsearch5:<query>` + download top 3 candidates.
   * Duration extracted via `ffprobe`, falls back to `yt-dlp --dump-single-json`.
@@ -258,23 +259,23 @@ New workflow:
 - `.github/workflows/resource_downloader.yml` — manual `workflow_dispatch`
   entry point for standalone runs (without a full capture). Inputs:
   `story_id`, `project`, `notes`, optional `seed_url`, optional
-  `send_emails` toggle. Uses `SHEETS_TOKEN`, `PRI_OP_YT_COOKIES`,
-  `PRI_OP_IG_COOKIES`, `PRI_OP_GMAIL_APP_PASSWORD`.
+  `send_emails` toggle. Uses `SHEETS_TOKEN`, `APIFY_API_KEY`,
+  `PRI_OP_YT_COOKIES`, `PRI_OP_IG_COOKIES`, `PRI_OP_GMAIL_APP_PASSWORD`.
 
 Tests (all passing):
-- `tests/test_clips_manifest.py` — 7 tests covering shape, roundtrip,
+- `tests/test_clips_manifest.py` — 8 tests covering shape, roundtrip,
   upsert insert/update, bulk upsert, missing-file, malformed JSON.
-- `tests/test_video_downloader.py` — 10 tests covering URL classification,
-  cookie selection, staging dir sanitization, success path, failure path,
-  search parsing (all yt-dlp subprocess calls monkeypatched).
+- `tests/test_video_downloader.py` — 11 tests covering URL classification,
+  cookie selection, Apify-first Instagram route, staging dir sanitization,
+  success path, failure path, search parsing (network/subprocess calls mocked).
 - `tests/test_resource_router.py` — extended with 3 executor tests:
   * Flow A end-to-end with mocked downloader + Drive — verifies STAGED clip
     written, drive_file_id propagated.
   * Flow B end-to-end with 3 fake candidates — verifies CANDIDATE entries +
     approval email triggered with 3 candidates in body.
   * No-jobs notes → safe no-op.
-- `tests/test_note_parser.py` — 11 existing tests still pass after the
-  resource_request additions.
+- `tests/test_note_parser.py` — 12 tests, including per-URL slide/role parsing
+  so two links in one note do not both inherit the same slide hint.
 
 Drive routing (verified against `scripts/routing.py`):
 - Brazil → `1DZWbS4bF4XF_OjJSnD02WD2N83ljXwHd` (News/Brazil/Captures)
@@ -294,3 +295,86 @@ gh workflow run resource_downloader.yml \
 
 Or, automatic — any normal Capture Pipeline run will trigger it from the
 notes field with zero extra config.
+
+## Tracker — Current Goal State
+
+Updated: 2026-05-14.
+
+Goal:
+- A normal capture should turn Priscila's notes into usable editing resources.
+- Flow A: if notes already contain URLs, download those clips/images, save them,
+  and expose them to the carousel/editor with slide/cut hints.
+- Flow B: if notes ask for more videos, research candidates, download them,
+  save them, ask for approval when needed, and expose approved/staged clips to
+  the carousel/editor.
+- Final success means the generated carousel version folder uses the staged
+  resources instead of ignoring them or re-downloading unrelated clips.
+
+Done:
+- Notes parser emits resource jobs.
+- Direct URL downloader exists.
+- YouTube research downloader exists.
+- `clips.json` writer exists.
+- Resource router executes Flow A and Flow B.
+- Capture pipeline auto-calls the resource router.
+- Manual `resource_downloader.yml` exists.
+- Tests cover parser, downloader, manifest, and router execution.
+- Builder bridge is wired in `scripts/content_creator/main.py`: after
+  `fetch_clips()`, it loads `<work>/resources/clips/clips.json`, injects
+  `STAGED` / `APPROVED` entries with numeric `target_slide` and existing local
+  files into the `clips` dict, and lets uncovered slides keep the existing
+  `fetch_clips()` result.
+
+Remaining Gap:
+- Needs a live proof with a real URL in capture notes.
+- The bridge currently uses `target_slide`; `suggested_cut_start` is preserved
+  in `clips.json` but not consumed by the renderer yet.
+
+## Reliability Patch — 2026-05-15
+
+Audit correction after reviewing the existing capture pipeline:
+- The downloader must not depend on Priscila manually refreshing Instagram or
+  YouTube cookies. The existing capture system already avoids that by using
+  Apify/official routes first and only using cookies/`yt-dlp` as fallback.
+
+Patched:
+- `resource_downloader.yml` now passes `APIFY_API_KEY`, has
+  `permissions: actions: write, contents: read`, and fixes the `send_emails`
+  boolean/string comparison.
+- `video_downloader.py` now uses Apify Instagram video URL/CDN before `yt-dlp`.
+  It also supports raw or base64 cookie secrets only as fallback compatibility.
+- `note_parser.py` now extracts numeric `target_slide` and role hints per URL
+  (`hook`, `apology_video`, `main_point`, `proof_clip`) instead of one vague
+  string hint shared across nearby links.
+- `resource_router.py` writes `story_id`, numeric `target_slide`, logs failed
+  jobs to the Pipeline Failures sheet, and exits non-zero when executable jobs
+  fail.
+- `capture_pipeline.py` stages resource clips under `transcripts/resources/clips`
+  during normal capture runs so the capture artifact includes `clips.json`.
+- `main.py` bridge now downloads missing local clip files from Drive using
+  `drive_file_id` before injecting clips into render.
+
+Verified locally:
+- `python3.12 -m pytest tests/test_note_parser.py tests/test_resource_router.py tests/test_clips_manifest.py tests/test_video_downloader.py -q`
+  → 36 passed.
+- Python compile check passed for the edited scripts.
+- `resource_downloader.yml` parsed successfully with Ruby YAML.
+- Need to confirm the final Drive version folder includes both the clip files
+  and `clips.json`.
+
+Next Fix:
+- Run Flow A live proof first because it is the shortest route:
+  note URL → downloader → `clips.json` → builder bridge → final carousel folder.
+- After Flow A passes, run Flow B live proof:
+  research request → candidates → email → approved/staged clip handoff.
+
+Acceptance Criteria:
+- Test with a real capture note containing a URL.
+- Verify `clips.json` is created under the story resource folder.
+- Verify the carousel build reads that manifest and logs
+  `clips.json bridge: injected ...`.
+- Verify `resources/clips/` in the final carousel version folder contains the
+  staged clip and `clips.json`.
+- Verify motion HTML/render uses the staged clip on the intended slide.
+- Verify existing `fetch_clips()` still runs for slides not covered by the
+  manifest.

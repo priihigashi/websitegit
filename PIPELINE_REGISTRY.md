@@ -65,6 +65,7 @@ stage 2 — carousel_builder.py
   generate_carousel_content() → routes to correct template function
   fetch_all_media() → images (catalog → Gemini → Seedream → Replicate → DALL-E → Pexels → Pixabay)
   fetch_clips() → Motion v2 clips (clip collections / YouTube / Instagram / Archive / Wikimedia → GIPHY → static PNG/no motion)
+  resources/clips/clips.json bridge → STAGED/APPROVED target_slide clips from resource_downloader override fetch_clips() for covered slides; missing local clips are downloaded from Drive by drive_file_id before render
   build_html() → renders HTML
   render_pngs() → Playwright → PNG files
   build_motion_html() + record_motion.js → MP4 + GIF

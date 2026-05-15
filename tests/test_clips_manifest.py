@@ -59,6 +59,15 @@ def test_upsert_updates_existing(tmp_path):
     assert "updated_at" in out[0]
 
 
+def test_upsert_same_url_different_story_keeps_both(tmp_path):
+    a = clips_manifest.make_entry(source_url="https://x/a", story_id="S1", status="STAGED")
+    b = clips_manifest.make_entry(source_url="https://x/a", story_id="S2", status="STAGED")
+    out = clips_manifest.upsert_many(tmp_path, [a, b])
+
+    assert len(out) == 2
+    assert {c["story_id"] for c in out} == {"S1", "S2"}
+
+
 def test_upsert_many(tmp_path):
     entries = [
         clips_manifest.make_entry(source_url="https://x/a", status="STAGED"),

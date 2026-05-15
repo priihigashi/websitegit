@@ -100,6 +100,8 @@ def test_execute_resource_jobs_flow_a_downloads_uploads_writes_manifest(monkeypa
     assert clips[0]["flow"] == "A"
     assert clips[0]["drive_file_id"] == "FAKE_DRIVE_ID"
     assert clips[0]["duration_sec"] == 7.2
+    assert clips[0]["story_id"] == "BCI-A1"
+    assert clips[0]["target_slide"] == 1
 
 
 def test_execute_resource_jobs_flow_b_emails_candidates(monkeypatch, tmp_path):
