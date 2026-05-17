@@ -349,3 +349,59 @@ These 3 cross-path gaps mean the manual Drive-folder review path is missing chec
 Audit lesson #2:
 
 When operating in parallel with the user (she commits from her Mac while Claude commits via gh CLI), ALWAYS `git fetch + git pull --rebase` before push. Push was rejected once because she landed `709d5e0` while I was editing.
+
+## Prompt A.3 — weak-source + stat-slide layout fix (2026-05-16/17)
+
+Reason:
+
+- Prompt A.2 reached preview email, but the content audit failed.
+- The preview was not approved.
+
+Blocking audit findings:
+
+- Fact Checker failed because the carousel cited Angi/HomeAdvisor quote data as if it were audit-grade proof for repair-cost ranges.
+- Fact Checker flagged `ACI 314.1R` as a bad/misattributed masonry source.
+- Brand/Tone failed because Slide 3 had source/copy risk and the sourcing did not meet OPC rules.
+- Visual QA also showed Slide 2's project note still sitting too close to/over the footer lane.
+
+Fix shipped:
+
+- Commit: `629e79c fix(opc-tip): block weak sources and tighten stat slide layout`
+
+Files changed:
+
+- `scripts/content_creator/carousel_builder.py`
+- `scripts/content_creator/carousel_reviewer.py`
+- `scripts/content_creator/opc_tip_base.css`
+
+Changes:
+
+- Strengthened OPC source prompt rules:
+  - Angi/HomeAdvisor banned as primary proof for OPC numeric claims.
+  - `ACI 314.1R` banned.
+  - Masonry/concrete structural criteria must use TMS 402/602 or ACI 530/ASCE 5 only when relevant.
+  - UF IFAS allowed for termite/wood-destroying organism risk.
+  - FBC/IRC allowed for code minimums, not cost estimates.
+  - NAHB allowed for construction cost category shares, not exact concrete-vs-wood repair ranges.
+- Tightened `slide2_label` to max 95 characters.
+- Tightened `slide3_items[].sub` to max 115 characters and told the model to avoid unsupported dollar ranges.
+- Added reviewer gate for banned OPC source patterns:
+  - `ACI 314.1R`
+  - `Angi`
+  - `HomeAdvisor`
+- Tightened stat-slide CSS so the note and label stay out of the footer/legal lane.
+
+Verification before rerun:
+
+- `python3 -m py_compile scripts/content_creator/carousel_builder.py scripts/content_creator/carousel_reviewer.py` passed.
+- Original 16 Prompt A grep checks passed: `16/16`.
+
+Run in flight:
+
+- https://github.com/priihigashi/oak-park-ai-hub/actions/runs/25979995564
+
+Next:
+
+- If the run passes, inspect preview email + audit email + all 5 PNGs.
+- Do not approve unless content audit passes or failures are clearly false positives.
+- If visual/content QA passes, reply `APPROVE` to the preview email and confirm Buffer scheduling.

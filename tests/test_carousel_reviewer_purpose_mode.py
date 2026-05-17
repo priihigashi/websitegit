@@ -27,6 +27,34 @@ import carousel_reviewer
 
 
 class CarouselReviewerPurposeModeTest(unittest.TestCase):
+    def test_sources_gate_rejects_banned_opc_numeric_sources(self):
+        issues = carousel_reviewer.check_sources_match_claims(
+            {
+                "slide2_stat": "UP TO $20K",
+                "slide2_label": "Repair costs can blow up a bid.",
+                "sources": [
+                    "Angi/HomeAdvisor aggregate repair data",
+                    "NAHB Cost of Constructing a Home",
+                ],
+            }
+        )
+
+        self.assertTrue(any("banned OPC source" in issue for issue in issues))
+        self.assertTrue(any("Angi/HomeAdvisor" in issue for issue in issues))
+
+    def test_sources_gate_rejects_aci_314_even_with_numeric_claim(self):
+        issues = carousel_reviewer.check_sources_match_claims(
+            {
+                "slide2_stat": "40% MORE",
+                "sources": [
+                    "ACI 314.1R concrete maintenance guide",
+                    "Oak Park Construction contractor notes",
+                ],
+            }
+        )
+
+        self.assertTrue(any("ACI 314.1R" in issue for issue in issues))
+
     def test_copy_coherence_uses_purpose_prompt_when_purposes_supplied(self):
         seen = {}
 
