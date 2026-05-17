@@ -481,6 +481,10 @@ Carousel bridge proof:
 Status:
 - Flow A is proven through normal capture → Drive resources → content creator
   bridge → staged clip merged into render.
+- Follow-up fix: normal capture rows now write `topic / title`, `topic`, and
+  `title` from classification topic/title/summary. The Flow A proof row had
+  `story_id` but a blank topic, which could block normal queue promotion even
+  though the video resource bridge worked.
 - Remaining proof is Flow B approval loop:
   research request → CANDIDATE clips → approval reply → Drive status flips to
   `APPROVED` → content creator uses approved clip.

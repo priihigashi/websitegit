@@ -2314,6 +2314,15 @@ def update_inspiration_library(url, transcript, classification, hub_url="", doc_
         _set_col(base_row, "platform",          _detect_platform(url))
         _set_col(base_row, "url",               url)
         _set_col(base_row, "creator / account", creator)
+        _topic_title = (
+            classification.get("topic")
+            or classification.get("title")
+            or classification.get("summary")
+            or ""
+        )
+        _set_col(base_row, "topic / title",     _topic_title)
+        _set_col(base_row, "topic",             _topic_title)
+        _set_col(base_row, "title",             _topic_title)
         # F = source format (where it came from); R = production format (what we'll build).
         # LLM-classified content_type ("Talking Head", "Progress", "Before-After", FORMAT-XXX) → R.
         _set_col(base_row, "content type",      _detect_source_format(url))
