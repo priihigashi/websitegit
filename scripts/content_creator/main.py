@@ -1926,6 +1926,9 @@ def process_one_topic(topic_entry, run_date, drive):
     if _motion_phase1_test_pre and _motion_force_no_clip_pre:
         print("  build_motion_html: Phase 1 no-clip proof — no motion HTML emitted")
         clip_html_files = []
+    elif _motion_phase1_test_pre and not clips.get(1):
+        print("  build_motion_html: Phase 1 cover has no relevant clip — no motion HTML emitted")
+        clip_html_files = []
     else:
         clip_html_files = build_motion_html(
             content, niche, slug, str(work), clips,
@@ -2034,15 +2037,21 @@ def process_one_topic(topic_entry, run_date, drive):
         # Motion completeness guard
         motion_mp4s = list(motion_dir.glob("*.mp4")) if motion_dir.exists() else []
         if not motion_mp4s:
-            if motion_phase1_test and os.environ.get("MOTION_FORCE_NO_CLIP", "0").strip() == "1":
-                print("  Phase 1 no-clip proof: no MP4 produced; static PNG delivery continues")
+            if motion_phase1_test and (
+                os.environ.get("MOTION_FORCE_NO_CLIP", "0").strip() == "1"
+                or not clips.get(1)
+            ):
+                print("  Phase 1 no-clip/static fallback: no MP4 produced; static PNG delivery continues")
                 reel_renderer = "phase1_no_clip_static"
             else:
                 _send_alert(f"Motion folder empty for '{topic[:40]}' — skipping preview. Check Playwright + record_motion_slides logs.")
                 return None
 
         # Build carousel reel
-        if motion_phase1_test and os.environ.get("MOTION_FORCE_NO_CLIP", "0").strip() == "1":
+        if motion_phase1_test and (
+            os.environ.get("MOTION_FORCE_NO_CLIP", "0").strip() == "1"
+            or not clips.get(1)
+        ):
             reel_renderer = "phase1_no_clip_static"
         else:
             reel_renderer = "phase1_playwright_only" if motion_phase1_test else "failed"
