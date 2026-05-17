@@ -485,6 +485,13 @@ Status:
   `title` from classification topic/title/summary. The Flow A proof row had
   `story_id` but a blank topic, which could block normal queue promotion even
   though the video resource bridge worked.
+- Follow-up fix: normal captures now auto-promote eligible OPC/Brazil/USA rows
+  into `📋 Content Queue` after writing Inspiration Library. The hook reuses
+  `topic_picker.insert_queue_row()`, checks existing queue rows by story_id,
+  source URL, or topic before inserting, and remains non-fatal. OPC rows can
+  auto-build as Approved; Brazil/USA rows still respect the existing news
+  approval gate and land as Draft unless the capture classification is already
+  approved.
 - Remaining proof is Flow B approval loop:
   research request → CANDIDATE clips → approval reply → Drive status flips to
   `APPROVED` → content creator uses approved clip.

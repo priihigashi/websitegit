@@ -97,6 +97,45 @@ def get_queued_topics():
     return {r[0].lower().strip() for r in rows[1:] if r and r[0].strip()}
 
 
+def queue_contains(topic: str = "", story_id: str = "", url: str = "") -> bool:
+    """Return True when Content Queue already has this story/topic/source URL."""
+    try:
+        rows = sheet_get(f"'{QUEUE_TAB}'")
+    except Exception as exc:
+        print(f"  Queue duplicate check skipped: {exc}")
+        return False
+    if len(rows) < 2:
+        return False
+
+    header = [h.strip().lower() for h in rows[0]]
+    hmap = {h: i for i, h in enumerate(header)}
+
+    topic_norm = (topic or "").strip().lower()
+    story_norm = (story_id or "").strip().lower()
+    url_norm = (url or "").strip().lower()
+
+    def row_value(row, aliases):
+        for name in aliases:
+            idx = hmap.get(name)
+            if idx is not None and idx < len(row):
+                val = (row[idx] or "").strip()
+                if val:
+                    return val
+        return ""
+
+    for row in rows[1:]:
+        row_topic = row_value(row, ("project name", "topic", "topic / title", "title")).lower()
+        row_story = row_value(row, ("story_id", "story id", "capture_story_id", "capture story id")).lower()
+        row_url = row_value(row, ("inspo url", "url", "source url")).lower()
+        if story_norm and row_story == story_norm:
+            return True
+        if url_norm and row_url == url_norm:
+            return True
+        if topic_norm and row_topic == topic_norm:
+            return True
+    return False
+
+
 def col_letter(n):
     r = ""
     while n > 0:

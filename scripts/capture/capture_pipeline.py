@@ -2351,8 +2351,73 @@ def update_inspiration_library(url, transcript, classification, hub_url="", doc_
 
         lib.append_row(base_row, value_input_option="USER_ENTERED")
         print(f"  Inspiration Library updated (user_notes={'yes' if user_notes else 'no'})")
+        if not sibling_of:
+            _auto_promote_capture_to_content_queue(
+                url,
+                classification,
+                user_notes=user_notes,
+                doc_url=doc_url,
+                brief_doc_url=brief_doc_url,
+            )
     except Exception as e:
         print(f"  WARNING Sheets: {e}")
+
+
+def _auto_promote_capture_to_content_queue(url: str, classification: dict,
+                                           *, user_notes: str = "",
+                                           doc_url: str = "",
+                                           brief_doc_url: str = "") -> None:
+    """Create a Content Queue row for a fresh capture, without duplicating reruns."""
+    if os.getenv("AUTO_PROMOTE_CAPTURE_TO_CONTENT_QUEUE", "1").strip().lower() in ("0", "false", "no"):
+        return
+    if not isinstance(classification, dict):
+        return
+
+    raw_niche = (classification.get("niche") or "").strip().lower()
+    if raw_niche in ("oak park", "oak park construction", "opc"):
+        niche = "opc"
+    elif raw_niche in ("brazil", "brasil", "news-brazil"):
+        niche = "brazil"
+    elif raw_niche in ("usa", "us", "news-usa", "news-us", "united states", "america"):
+        niche = "usa"
+    else:
+        return
+
+    topic = (
+        classification.get("topic")
+        or classification.get("title")
+        or classification.get("summary")
+        or ""
+    ).strip()
+    story_id = (classification.get("story_id") or "").strip()
+    if not topic or len(topic) < 12:
+        print("  Auto-promote skipped: missing usable topic/title")
+        return
+
+    try:
+        content_dir = Path(__file__).resolve().parent.parent / "content_creator"
+        if str(content_dir) not in sys.path:
+            sys.path.insert(0, str(content_dir))
+        from topic_picker import insert_queue_row, queue_contains
+
+        if queue_contains(topic=topic, story_id=story_id, url=url):
+            print(f"  Auto-promote skipped: already in Content Queue ({story_id or topic[:50]})")
+            return
+
+        entry = {
+            "niche": niche,
+            "topic": topic,
+            "brief": brief_doc_url or doc_url or user_notes or classification.get("summary", ""),
+            "url": url,
+            "story_id": story_id,
+            "series_override": classification.get("series_override", ""),
+            "fake_news_route": classification.get("fake_news_route", ""),
+        }
+        row_num = insert_queue_row(entry, classification.get("status", ""))
+        if row_num:
+            print(f"  Auto-promote: Content Queue row {row_num} created for {story_id or topic[:50]}")
+    except Exception as exc:
+        print(f"  Auto-promote skipped (non-fatal): {exc}")
 
 
 # ─── CALENDAR ─────────────────────────────────────────────────────────────────
