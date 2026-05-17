@@ -450,6 +450,44 @@ Current remaining proof:
   research request → CANDIDATE clips → approval reply → Drive `clips.json`
   status flips → next content run uses `APPROVED` clips.
 
+## Flow A Proof — 2026-05-17
+
+Normal capture proof:
+- Run: `25979977823`
+- Story: `NWS-FULL-PROOF-001`
+- Result: capture workflow succeeded.
+- Evidence:
+  * Log shows `Story ID: NWS-FULL-PROOF-001`.
+  * Inspiration Library row `860` has `story_id=NWS-FULL-PROOF-001`.
+  * Resource router fired inside normal capture:
+    `Flow A: download https://www.instagram.com/reel/C98BzR7SmNX/...`
+  * Drive folder created:
+    `resources_NWS-FULL-PROOF-001`
+    (`https://drive.google.com/drive/folders/1l-XiTNK7t14KJ1JeYx9r_NpwMuL-Kcr7`)
+  * Folder contains `clips.json`, `story_resources.json`, and
+    `clip_001_apify.mp4`.
+
+Carousel bridge proof:
+- Run: `25980092138`
+- Result: content creator rendered, then strict reviewer failed on weak hook.
+  That is a content-quality failure, not a resource bridge failure.
+- Evidence:
+  * `CAPTURE_STORY_ID: NWS-FULL-PROOF-001`
+  * `[drive_fetch] fetched 2 resource file(s) from Drive for story_id=NWS-FULL-PROOF-001`
+  * `[clip_intel] injected story_resources summary into brief`
+  * `clips.json bridge: 1 pre-staged clip(s) — skipping fetch for slide(s) [3]`
+  * `clips.json bridge: merged 1 pre-staged clip(s) into render`
+
+Status:
+- Flow A is proven through normal capture → Drive resources → content creator
+  bridge → staged clip merged into render.
+- Remaining proof is Flow B approval loop:
+  research request → CANDIDATE clips → approval reply → Drive status flips to
+  `APPROVED` → content creator uses approved clip.
+- Added `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` to capture and resource
+  downloader workflows to remove the GitHub Actions Node 20 warning on the next
+  run.
+
 Acceptance Criteria:
 - Test with a real capture note containing a URL.
 - Verify `clips.json` is created under the story resource folder.
