@@ -9,11 +9,15 @@ Handles:
   - "skip" → mark skipped in catalog
   - anything else → treat as change request, flag for next content_creator run
 """
-import json, os, re, time, urllib.request, urllib.parse, urllib.error
+import json, os, re, sys, time, urllib.request, urllib.parse, urllib.error
 from datetime import datetime, timedelta
 import pytz
 
 ET = pytz.timezone("America/New_York")
+
+
+class BufferAuthError(RuntimeError):
+    """Raised when Buffer rejects the configured API token."""
 
 
 def _call_claude_json(prompt: str, model: str = "claude-sonnet-4-6", max_tokens: int = 512) -> str:
@@ -775,6 +779,14 @@ def schedule_to_buffer(variant, drive_folder_id, caption="", platform="instagram
         profiles_url = f"{BUFFER_API}/profiles.json?access_token={BUFFER_KEY}"
         try:
             profiles = json.loads(urllib.request.urlopen(profiles_url, timeout=15).read())
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                raise BufferAuthError(
+                    "Buffer API token rejected with HTTP 401 on /profiles.json. "
+                    "Renew BUFFER_API_KEY_EXP04092027."
+                ) from e
+            print(f"  Buffer profiles error: {e}")
+            return False
         except Exception as e:
             print(f"  Buffer profiles error: {e}")
             return False
@@ -837,6 +849,11 @@ def schedule_to_buffer(variant, drive_folder_id, caption="", platform="instagram
             return False
         except urllib.error.HTTPError as he:
             last_error = he
+            if he.code == 401:
+                raise BufferAuthError(
+                    "Buffer API token rejected with HTTP 401 on /updates/create.json. "
+                    "Renew BUFFER_API_KEY_EXP04092027."
+                ) from he
             if he.code in (429, 500, 502, 503, 504):
                 wait = 2 ** attempt
                 print(f"  Buffer attempt {attempt + 1} failed (HTTP {he.code}) — retry in {wait}s")
@@ -1336,6 +1353,7 @@ def _normalize_niche(raw):
 
 
 def _get_pending_posts():
+    retry_post_id = os.environ.get("RETRY_BUFFER_POST_ID", "").strip()
     token, _ = get_gmail_token()
     enc = urllib.parse.quote(f"'{CATALOG_TAB}'!A:O", safe="!:'")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
@@ -1352,9 +1370,11 @@ def _get_pending_posts():
             idx = header_map.get(name.lower())
             return row[idx].strip() if idx is not None and idx < len(row) else ""
         VALID_NICHES = {"opc", "brazil", "usa", "ugc", "stocks", "higashi", "book"}
-        if v("status") == "pending_approval":
+        post_id = v("post_id") or (row[0] if len(row) > 0 else "")
+        status = v("status").lower()
+        include_retry = bool(retry_post_id and post_id == retry_post_id and status == "approved")
+        if status == "pending_approval" or include_retry:
             raw_niche = v("niche") or ""
-            post_id = v("post_id") or (row[0] if len(row) > 0 else "")
             # Infer niche from post_id prefix when catalog has no niche col or invalid value
             if raw_niche.lower() not in VALID_NICHES:
                 if post_id.startswith("opc-"):
@@ -1371,6 +1391,8 @@ def _get_pending_posts():
                 "topic": v("topic") or (row[13] if len(row) > 13 else ""),
                 "date_created": v("date_created") or v("date") or (row[6] if len(row) > 6 else ""),
             })
+            if include_retry:
+                print(f"  RETRY_BUFFER_POST_ID matched approved row: {post_id}")
     return pending
 
 
@@ -1632,7 +1654,7 @@ def process_replies():
     if not pending:
         print("  No pending_approval posts in catalog — still processing RR/SH-104 replies")
 
-    stats = {"approved": 0, "changes": 0, "skipped": 0,
+    stats = {"approved": 0, "changes": 0, "skipped": 0, "buffer_failures": 0,
              "sh104_actions": 0, "sh104_unknown": 0, "rr_approvals": 0}
 
     for reply in replies:
@@ -1696,6 +1718,7 @@ def process_replies():
                         print(f"  Buffer scheduled OK: {post_id} ({variant})")
                     except Exception as _buf_exc:
                         _err_str = str(_buf_exc)
+                        stats["buffer_failures"] += 1
                         _log_pipeline_failure_to_sheet("buffer_schedule", _err_str)
                         _send_failure_alert(
                             f"❌ Buffer scheduling failed — {post_id}",
@@ -1802,3 +1825,5 @@ def process_replies():
 if __name__ == "__main__":
     stats = process_replies()
     print(json.dumps(stats, indent=2))
+    if stats.get("buffer_failures", 0) > 0:
+        sys.exit(1)

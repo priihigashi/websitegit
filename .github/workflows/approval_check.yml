@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '30 */4 * * *'   # every 4 hours at :30 UTC (cost cut from hourly — 2026-05-07)
   workflow_dispatch:        # manual trigger anytime from GitHub Actions UI
+    inputs:
+      retry_post_id:
+        description: "Optional: retry Buffer scheduling for an already-approved post_id"
+        required: false
+        default: ""
 
 jobs:
   check-replies:
@@ -20,6 +25,7 @@ jobs:
       PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY_EXP04092027 }}
+      RETRY_BUFFER_POST_ID: ${{ github.event.inputs.retry_post_id || '' }}
       CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
       BRAZIL_TEMPLATES_FOLDER: '1gDOjtW_X-_jWtu94pffbDaUsw6VGCKuA'
 
