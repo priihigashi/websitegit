@@ -1,67 +1,7 @@
 [
   {
-    "task": "Improve post with a new hook: Avoid This 5K Mistake.",
-    "context": "This will enhance the post's appeal and address the weaknesses identified in V1.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Watch cream_01_cover_motion.mp4 in Cover A and Cover D Drive folders. Pick A or D.",
-    "context": "This task is crucial for finalizing the selection between Cover A and Cover D, which impacts the overall motion design.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Fix cream_04 sources-slide bug by excluding sources slides.",
-    "context": "Excluding sources slides is necessary to correct the motion indices and improve the final output quality.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Complete M-005 tail: step 4d only gated in main.py, not removed. KLING_APPROVE not hardcoded 0.",
-    "context": "This is essential to ensure the proper functionality of the motion system and adherence to the planned specifications.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Complete M-006 tail: Add Tier 3 static image to motion_sources.py.",
-    "context": "Adding the static image is important for the full functionality of the motion system as specified.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Complete 3 remaining NN-M5 proof tests: no-clip, cover-only enforcement, Layout D text legibility.",
-    "context": "These tests are necessary to validate the motion system's effectiveness and usability.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Verify run 25815159206 completed and preview email arrived with readable titles.",
-    "context": "Ensures the titles are fixed and the run completed successfully.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Contractor AI Code.gs: paste updated script into live Google Apps Script + run createControlSheet().",
-    "context": "Updates the live script for Contractor AI functionality.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Restore Anthropic credits at console.anthropic.com.",
-    "context": "Necessary for continued use of the Anthropic services.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Pipeline-fix Phases 4-8 gaps (see audit section).",
-    "context": "Addressing gaps in the pipeline fix is crucial for stabilization.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Item 2.5: data signals gate (deferred).",
-    "context": "Important for ensuring data integrity in the pipeline.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Empty lower-half space + broken images in some slides (root cause unknown).",
-    "context": "Fixing this improves the overall quality of the content.",
-    "auto_actionable": true
-  },
-  {
-    "task": "Motion rebuild plan session (Prompt B).",
-    "context": "Necessary for addressing the motion system issues.",
+    "task": "Validation run for fixes 3, 4, and 5",
+    "context": "These fixes still need to be validated to ensure that the changes made are functioning as intended.",
     "auto_actionable": true
   }
 ]
