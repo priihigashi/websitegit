@@ -458,21 +458,38 @@ def call_haiku(system_prompt: str, user_content: str, agent_name: str) -> dict:
     verdict_m = re.search(r'VERDICT:\s*(PASS|FAIL)', text, re.IGNORECASE)
 
     score   = float(score_m.group(1)) if score_m else None
+    parse_error = None
     if verdict_m:
         verdict = verdict_m.group(1).upper()
     elif score is not None:
         verdict = "PASS" if score >= 6 else "FAIL"
     else:
         verdict = "FAIL"  # can't parse → assume fail
+        parse_error = "parse_failed: missing OVERALL SCORE and VERDICT in agent response"
 
     return {
         "agent": agent_name,
         "score": score,
         "verdict": verdict,
         "full_response": text,
-        "error": None,
+        "error": parse_error,
         "model_used": used,
     }
+
+
+def _audit_failure_reason(agent_result: dict) -> str:
+    """Compact console reason for FAIL/ERROR rows; full text remains in email."""
+    if agent_result.get("error"):
+        return str(agent_result["error"])[:140]
+    text = agent_result.get("full_response") or ""
+    notes = re.search(r"NOTES:\s*(.+)", text, re.IGNORECASE | re.DOTALL)
+    if notes:
+        return re.sub(r"\s+", " ", notes.group(1)).strip()[:140]
+    for line in text.splitlines():
+        clean = line.strip()
+        if clean and not clean.upper().startswith(("OVERALL SCORE:", "VERDICT:")):
+            return clean[:140]
+    return "no reason captured"
 
 
 # ─── Audit one post (3 sequential agent calls) ────────────────────────────────
@@ -496,7 +513,10 @@ def audit_post(result: dict) -> dict:
         agent_results.append(r)
         icon      = "✅" if r["verdict"] == "PASS" else ("⚠️" if r["verdict"] == "SKIP" else "❌")
         score_str = f"{r['score']:.0f}/10" if r["score"] is not None else "?"
-        print(f" {icon} {r['verdict']} ({score_str})")
+        reason = ""
+        if r["verdict"] not in ("PASS", "SKIP"):
+            reason = f" — {_audit_failure_reason(r)}"
+        print(f" {icon} {r['verdict']} ({score_str}){reason}")
         time.sleep(0.3)  # small pause between calls
 
     all_pass = all(r["verdict"] in ("PASS", "SKIP") for r in agent_results)

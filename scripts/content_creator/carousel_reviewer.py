@@ -1370,7 +1370,7 @@ def check_drive_folder(folder_id: str, drive, input_ref: str = "") -> dict:
                 st_scores = score_storytelling(str(tmp), niche_guess)
                 if st_scores:
                     overall = st_scores.get("overall", 0)
-                    if overall < 60:
+                    if isinstance(overall, (int, float)) and overall < 60:
                         issues.append(
                             f"[storytelling] Overall quality score {overall}/100 — "
                             f"{st_scores.get('summary', '')[:100]}"
@@ -1699,6 +1699,116 @@ def check_text_quality(
     return issues
 
 
+STORYTELLING_MAX_TOKENS = 2000
+STORYTELLING_RECOVERY_MAX_TOKENS = 700
+
+
+def _clean_llm_json_text(raw: str) -> str:
+    raw = (raw or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
+    return raw
+
+
+def _storytelling_warning(message: str) -> dict:
+    return {
+        "_warning": f"[storytelling-warning] {message}",
+        "summary": message,
+    }
+
+
+def _request_storytelling_score(prompt: str, max_tokens: int) -> tuple[str, str]:
+    """Return (raw_text, warning). Warning means score should be advisory only."""
+    payload = json.dumps({
+        "model": "claude-sonnet-4-6",  # Phase 10 — Sonnet for vision/text quality
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=payload,
+        headers={
+            "x-api-key": ANTHROPIC_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+    )
+    try:
+        raw_resp = urllib.request.urlopen(req, timeout=30).read()
+        resp = json.loads(raw_resp)
+        return resp["content"][0]["text"].strip(), ""
+    except urllib.error.HTTPError as http_err:
+        status = http_err.code
+        body = ""
+        try:
+            body = http_err.read().decode(errors="ignore")
+        except Exception:
+            pass
+        # Phase 11.2 — credits/capacity/5xx fallback to OpenAI gpt-4o so the
+        # storytelling score keeps working when Anthropic balance is dry.
+        # NOTE: Anthropic returns HTTP 400 for BOTH malformed requests AND
+        # credit-balance-too-low errors. Parse the body to distinguish:
+        # - "credit balance is too low" → treat as credit error, fall back to OpenAI
+        # - anything else → real malformed request (bug), return warning and log it
+        openai_key = os.environ.get("OPENAI_API_KEY", "")
+        is_credit_error = status == 400 and "credit balance" in body.lower()
+        is_capacity_error = status in (401, 402, 429, 500, 502, 503, 504, 529)
+        if status == 400 and not is_credit_error:
+            msg = f"Anthropic HTTP 400 malformed request: {body[:200]}"
+            print(f"  [SH-028] {msg}")
+            return "", msg
+        if (is_credit_error or is_capacity_error) and openai_key:
+            try:
+                oai_payload = json.dumps({
+                    "model": "gpt-4o",
+                    "max_tokens": max_tokens,
+                    "messages": [{"role": "user", "content": prompt}],
+                }).encode()
+                oai_req = urllib.request.Request(
+                    "https://api.openai.com/v1/chat/completions",
+                    data=oai_payload,
+                    headers={"Authorization": f"Bearer {openai_key}",
+                             "Content-Type": "application/json"},
+                )
+                oai_resp = json.loads(urllib.request.urlopen(oai_req, timeout=30).read())
+                print(f"  [SH-028] Storytelling: Anthropic HTTP {status} → OpenAI fallback")
+                return oai_resp["choices"][0]["message"]["content"].strip(), ""
+            except Exception as oai_err:
+                msg = f"Anthropic HTTP {status} + OpenAI fallback failed: {oai_err}"
+                print(f"  [SH-028] {msg}")
+                return "", msg
+        if status == 529 or "overloaded" in body.lower() or "credit" in body.lower():
+            msg = f"Anthropic credits/capacity issue (HTTP {status}) — storytelling score skipped"
+            print(f"  [SH-028] ⚠ WARN: {msg}")
+        else:
+            msg = f"Storytelling score HTTP error {status}: {body[:120]}"
+            print(f"  [SH-028] {msg} (non-fatal)")
+        return "", msg
+
+
+def _parse_storytelling_json(raw: str) -> tuple[dict, str]:
+    raw = _clean_llm_json_text(raw)
+    try:
+        data = json.loads(raw)
+    except Exception as exc:
+        return {}, f"{type(exc).__name__}: {exc}"
+    if not isinstance(data, dict):
+        return {}, f"expected object, got {type(data).__name__}"
+    return data, ""
+
+
+def _compact_storytelling_prompt(slides_payload: str, niche_label: str, parse_error: str) -> str:
+    return (
+        f"You are reviewing an Instagram carousel for a {niche_label} account.\n"
+        "The previous JSON response was invalid/truncated. Return a MUCH SHORTER JSON object only.\n"
+        f"Previous parse error: {parse_error[:180]}\n\n"
+        "Score whether the carousel pays off slide 1, follows a clear strategy, and avoids unsupported claims.\n"
+        f"{slides_payload}\n\n"
+        'Return JSON only: {"overall":78,"summary":"one sentence",'
+        '"closing_callback_found":true,"closing_callback_text":"exact sentence or null"}'
+    )
+
+
 def score_storytelling(html_path: str, niche: str) -> dict:
     """SH-028: Score storytelling quality 0-100 per slide via Haiku.
 
@@ -1787,79 +1897,27 @@ def score_storytelling(html_path: str, niche: str) -> dict:
     )
 
     try:
-        payload = json.dumps({
-            "model": "claude-sonnet-4-6",  # Phase 10 — Sonnet for vision/text quality
-            "max_tokens": 650,  # 400 was too tight for 5-slide schema with 4 checks
-            "messages": [{"role": "user", "content": prompt}],
-        }).encode()
-        req = urllib.request.Request(
-            "https://api.anthropic.com/v1/messages",
-            data=payload,
-            headers={
-                "x-api-key": ANTHROPIC_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-        )
-        raw = ""
-        try:
-            raw_resp = urllib.request.urlopen(req, timeout=30).read()
-            resp = json.loads(raw_resp)
-            raw = resp["content"][0]["text"].strip()
-        except urllib.error.HTTPError as http_err:
-            status = http_err.code
-            body = ""
-            try:
-                body = http_err.read().decode(errors="ignore")
-            except Exception:
-                pass
-            # Phase 11.2 — credits/capacity/5xx fallback to OpenAI gpt-4o so the
-            # storytelling score keeps working when Anthropic balance is dry.
-            # NOTE: Anthropic returns HTTP 400 for BOTH malformed requests AND
-            # credit-balance-too-low errors. Parse the body to distinguish:
-            # - "credit balance is too low" → treat as credit error, fall back to OpenAI
-            # - anything else → real malformed request (bug), return {} and log it
-            openai_key = os.environ.get("OPENAI_API_KEY", "")
-            is_credit_error = status == 400 and "credit balance" in body.lower()
-            is_capacity_error = status in (401, 402, 429, 500, 502, 503, 504, 529)
-            if status == 400 and not is_credit_error:
-                print(f"  [SH-028] Anthropic HTTP 400 — malformed request (bug): {body[:200]}")
-                return {}
-            if (is_credit_error or is_capacity_error) and openai_key:
-                try:
-                    oai_payload = json.dumps({
-                        "model": "gpt-4o",
-                        "max_tokens": 650,
-                        "messages": [{"role": "user", "content": prompt}],
-                    }).encode()
-                    oai_req = urllib.request.Request(
-                        "https://api.openai.com/v1/chat/completions",
-                        data=oai_payload,
-                        headers={"Authorization": f"Bearer {openai_key}",
-                                 "Content-Type": "application/json"},
-                    )
-                    oai_resp = json.loads(urllib.request.urlopen(oai_req, timeout=30).read())
-                    raw = oai_resp["choices"][0]["message"]["content"].strip()
-                    print(f"  [SH-028] Storytelling: Anthropic HTTP {status} → OpenAI fallback")
-                except Exception as oai_err:
-                    print(f"  [SH-028] Anthropic HTTP {status} + OpenAI fallback failed: {oai_err}")
-                    return {}
-            else:
-                if status == 529 or "overloaded" in body.lower() or "credit" in body.lower():
-                    print(f"  [SH-028] ⚠ WARN: Anthropic credits/capacity issue (HTTP {status}) — storytelling score skipped")
-                else:
-                    print(f"  [SH-028] Storytelling score HTTP error {status} (non-fatal): {body[:120]}")
-                return {}
-        if raw.startswith("```"):
-            raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
-        data = json.loads(raw)
+        raw, warning = _request_storytelling_score(prompt, STORYTELLING_MAX_TOKENS)
+        if warning:
+            return _storytelling_warning(warning)
+        data, parse_error = _parse_storytelling_json(raw)
+        if parse_error:
+            print(f"  [SH-028] Storytelling JSON parse failed; retrying compact score: {parse_error[:160]}")
+            compact = _compact_storytelling_prompt(slides_payload, niche_label, parse_error)
+            raw, warning = _request_storytelling_score(compact, STORYTELLING_RECOVERY_MAX_TOKENS)
+            if warning:
+                return _storytelling_warning(warning)
+            data, parse_error = _parse_storytelling_json(raw)
+            if parse_error:
+                return _storytelling_warning(f"Storytelling JSON unparseable after compact retry: {parse_error[:180]}")
         print(
             f"  [SH-028] Storytelling overall={data.get('overall','?')}/100 — {data.get('summary','')[:80]}"
         )
         return data
     except Exception as e:
-        print(f"  [SH-028] Storytelling score error (non-fatal): {e}")
-        return {}
+        msg = f"Storytelling score error: {e}"
+        print(f"  [SH-028] {msg} (non-fatal)")
+        return _storytelling_warning(msg)
 
 
 # =============================================================================
@@ -2343,7 +2401,7 @@ def check_built_post(result: dict) -> dict:
             storytelling_scores = score_storytelling(str(_html_for_text), niche)
             if storytelling_scores:
                 overall = storytelling_scores.get("overall", 0)
-                if overall < 60:
+                if isinstance(overall, (int, float)) and overall < 60:
                     all_issues.append(
                         f"[storytelling] Overall quality score {overall}/100 — "
                         f"{storytelling_scores.get('summary', '')[:100]}"
@@ -2439,6 +2497,9 @@ def send_review_email(failed_posts: list[dict], all_posts: list[dict]):
         # Storytelling scores (SH-028)
         ss = p.get("storytelling_scores") or {}
         if ss:
+            if ss.get("_warning"):
+                lines.append(f"       ⚠  {ss['_warning'][:160]}")
+                continue
             overall = ss.get("overall", "?")
             lines.append(f"       ── storytelling {overall}/100: {ss.get('summary','')[:80]} ──")
             cb_found = ss.get("closing_callback_found")
