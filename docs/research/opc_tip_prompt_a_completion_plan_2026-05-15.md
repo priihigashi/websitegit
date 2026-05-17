@@ -487,3 +487,49 @@ Next:
 - Re-run the exact Prompt A workflow.
 - Open the latest preview email and confirm the callback line appears.
 - If visual QA still passes and preview score is at least 80, reply `APPROVE` and confirm Buffer scheduling.
+
+## Prompt A final state — content approved, Buffer blocked (2026-05-17)
+
+Completed:
+
+- Final content run succeeded: `25980913663`
+- Final approval run succeeded mechanically: `25981041442`
+- Preview email: `19e3421029d1e7f6`
+- Approval reply sent: `19e3422a0c443b9d`
+- Final Drive version folder: `1LyGQowJU2x48MrOGc_zP82peV2t2zCU_`
+- Final PNG folder: `1aOCd3wY43g9KFsbDqMPXLyMiIk-vMesD`
+- Motion folder: `13kUkaKDnBN4HzctqHbnjX4aVH4IdT16U`
+- Prompt A content/layout issue closed: GitHub issue `#151`
+
+Final checks:
+
+- Preview email score: `86/100`
+- Preview email contains `Closing callback found: "..."`
+- Post-build reviewer score: `85/100`
+- Reviewer summary: `1/1 passed`
+- AI Content Audit: Fact Checker PASS, Brand & Tone PASS, Structure & Format PASS
+- Visual QA passed:
+  - Slide 2 stat fully visible
+  - Slide 3 sub-text readable
+  - Slide 4 exactly 2 sentences, fully visible, and uses structural criteria
+  - Slide 4 has no resale / sell-intent language
+  - Slide 5 CTA is `SHOW THIS TO YOUR CONTRACTOR FIRST.`
+
+Blocked:
+
+- Buffer scheduling failed in `approval_check.yml` run `25981041442`.
+- Log evidence:
+  - `Reply: 'APPROVE' → approve (targets=1)`
+  - `Buffer profiles error: HTTP Error 401: Unauthorized`
+  - `Pipeline failure logged [buffer_schedule]: schedule_to_buffer returned False`
+  - `Catalog: opc-tip-20260517-concrete-block-vs-wo → approved`
+
+Open blocker:
+
+- GitHub issue `#154`: Buffer scheduling blocked after Prompt A approval: 401 Unauthorized.
+
+Only remaining task:
+
+- Renew/regenerate the Buffer API token and update GitHub secret `BUFFER_API_KEY_EXP04092027`.
+- Then rerun `approval_check.yml` or a narrow approval-handler retry for `opc-tip-20260517-concrete-block-vs-wo`.
+- Done condition: approval handler logs `Buffer scheduled OK: opc-tip-20260517-concrete-block-vs-wo` and the post exists in Buffer.
