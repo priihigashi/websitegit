@@ -186,3 +186,48 @@ Gate 4 — Phase 1 Sign-Off: BLOCKED.
 - Do not mark Motion Phase 1 complete.
 - Do not expand motion to non-cover slides.
 - Do not schedule/post motion output to Buffer.
+
+## 2026-05-17 Cover D Clip-Sourcing / Static Fallback Update
+
+Status remains: IN PROGRESS — Cover D is still not visually signed off.
+
+What changed after the v4/v5 visual review:
+- Priscila approved the stronger Cover D positioning/readability direction and the bathroom cover photo direction.
+- Priscila did not approve the random / generic GIPHY motion clip.
+- The next problem was no longer layout; it was clip sourcing and fallback behavior.
+
+Shipped fixes:
+- `ff1e16b` — disables GIPHY by default for OPC Cover D Phase 1 proofs unless explicitly allowed. This prevents random/irrelevant motion from being treated as acceptable proof.
+- `d977f4f` — treats missing Phase 1 cover clip as static fallback. If no real relevant clip exists, the pipeline emits no motion HTML and no MP4 instead of recording a fake/static motion file.
+- `153893a` — suppresses stale MP4-required checks for the Phase 1 static fallback path so no-clip/static fallback is not flagged as a motion delivery failure.
+
+Fresh proof evidence:
+- Run `25980337247` — completed as a workflow failure, but the failure was not motion-specific.
+- Version: https://drive.google.com/drive/folders/1EarhMSsVLzEHW4gE2elAcWyHbJM32wtP
+- Motion: https://drive.google.com/drive/folders/1MmPWfR_z2C61IZIggf2GT0QDsB4x38Oy
+- Motion log proof:
+  - `MOTION_ENABLED=1`
+  - `MOTION_PHASE1_TEST=1`
+  - `MOTION_COVER_LAYOUT=D`
+  - `GIPHY disabled for this slot — using real clips or static fallback`
+  - `all sources empty for 'cover.mp4' — using static PNG/no motion fallback`
+  - `build_motion_html: Phase 1 cover has no relevant clip — no motion HTML emitted`
+  - `Phase 1 no-clip/static fallback: no MP4 produced; static PNG delivery continues`
+- Failure reason:
+  - content/reviewer gate, not motion.
+  - Storytelling score was below threshold.
+  - OPC source gate rejected Angi/HomeAdvisor consumer quote guides as primary proof for numeric claims.
+
+Current truth:
+- The system now correctly refuses random GIPHY for OPC Cover D.
+- The system now correctly falls back to static PNG when no relevant real clip is available.
+- Phase 1 cannot be marked complete yet because Priscila has not approved a final Cover D motion proof.
+
+Remaining decision:
+- Either Priscila approves the static fallback behavior for “no relevant clip found,” or
+- a real OPC / bathroom remodel clip must be provided or curated into the motion source path so Cover D can be tested with actual relevant motion.
+
+Next safest action:
+1. Do not rerun the full content workflow just to test motion; the current topic fails content/source gates unrelated to motion.
+2. Decide whether Phase 1 can close with static fallback accepted for no-clip cases.
+3. If actual Cover D motion is required, add a curated real clip source first, then rerun a narrow Cover D proof.
