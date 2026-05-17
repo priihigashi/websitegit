@@ -492,6 +492,10 @@ Status:
   auto-build as Approved; Brazil/USA rows still respect the existing news
   approval gate and land as Draft unless the capture classification is already
   approved.
+- Follow-up hardening: `resource_router.py` clip analysis now uses the shared
+  Claude → OpenAI → Gemini text cascade before falling back to direct Haiku.
+  This protects `story_resources.json` enrichment from Anthropic-only credit or
+  auth failures.
 - Remaining proof is Flow B approval loop:
   research request → CANDIDATE clips → approval reply → Drive status flips to
   `APPROVED` → content creator uses approved clip.

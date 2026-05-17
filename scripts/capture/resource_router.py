@@ -43,6 +43,11 @@ except ImportError:  # pragma: no cover - import errors surface at runtime only
     video_downloader = None  # type: ignore
     clips_manifest = None  # type: ignore
 
+try:
+    from _llm_fallback import llm_text as _llm_text_cascade  # noqa: E402
+except Exception:  # pragma: no cover - direct HTTP fallback below covers this
+    _llm_text_cascade = None  # type: ignore
+
 
 def slugify(text: str, max_len: int = 60) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
@@ -425,14 +430,11 @@ def _transcribe_clip(local_path: str, *, timeout_sec: int = 600) -> str:
 
 
 def _analyze_clip_with_haiku(entry: dict, transcript: str) -> dict:
-    """Send clip metadata + transcript to Claude Haiku for story analysis.
+    """Analyze clip metadata/transcript for story use.
 
     Returns dict with clip_role, best_moment, story_use, carousel_fit, confidence.
     Returns {} on failure so caller can skip gracefully.
     """
-    api_key = os.environ.get("CLAUDE_KEY_4_CONTENT", "") or os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return {}
     title = (entry.get("title") or "")[:200]
     try:
         duration = float(entry.get("duration_sec", 0) or 0)
@@ -451,6 +453,25 @@ def _analyze_clip_with_haiku(entry: dict, transcript: str) -> dict:
         "  confidence: float 0.0-1.0 (how relevant this clip is to the story)\n"
         "Respond with JSON only, no explanation."
     )
+
+    if _llm_text_cascade:
+        try:
+            text = _llm_text_cascade(
+                prompt,
+                model_tier="haiku",
+                max_tokens=300,
+                context="resource_router.clip_intel",
+                url=url,
+            ).strip()
+            m = re.search(r"\{.*\}", text, re.DOTALL)
+            if m:
+                return json.loads(m.group())
+        except Exception as exc:
+            print(f"  [clip_intel] LLM cascade failed: {exc!r} — trying direct Haiku")
+
+    api_key = os.environ.get("CLAUDE_KEY_4_CONTENT", "") or os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return {}
     import urllib.request as _urlreq
     import urllib.error as _urlerr
     payload = json.dumps({

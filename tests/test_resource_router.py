@@ -182,3 +182,29 @@ def test_execute_resource_jobs_no_jobs_is_safe(monkeypatch, tmp_path):
     result = rr.execute_resource_jobs(manifest, project="brazil", send_emails=False)
     assert "execution" in result
     assert result["execution"]["candidates_emailed"] == 0
+
+
+def test_clip_analysis_uses_llm_cascade(monkeypatch):
+    calls = {}
+
+    def fake_cascade(prompt, **kwargs):
+        calls["prompt"] = prompt
+        calls["kwargs"] = kwargs
+        return json.dumps({
+            "clip_role": "hook",
+            "best_moment": "00:03-00:08",
+            "story_use": "Use this as the opening proof clip.",
+            "carousel_fit": "cover",
+            "confidence": 0.91,
+        })
+
+    monkeypatch.setattr(rr, "_llm_text_cascade", fake_cascade)
+    out = rr._analyze_clip_with_haiku(
+        {"title": "Apology video", "duration_sec": 12, "source_url": "https://example.com/v"},
+        "I apologize for what happened.",
+    )
+
+    assert out["clip_role"] == "hook"
+    assert out["carousel_fit"] == "cover"
+    assert calls["kwargs"]["model_tier"] == "haiku"
+    assert calls["kwargs"]["context"] == "resource_router.clip_intel"
