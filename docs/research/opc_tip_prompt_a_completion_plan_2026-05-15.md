@@ -455,3 +455,35 @@ Next:
   - Slide 4 uses climate/code/structural criteria, not resale intent
   - Slide 5 CTA is not `SCREENSHOT BEFORE SIGNING ANYTHING`
 - If all pass, reply `APPROVE` to the preview email and confirm Buffer scheduling.
+
+## Prompt A.5 — preview email closing-callback surfacing (2026-05-17)
+
+Reason:
+
+- Run `25980751261` succeeded, visual QA passed, and the preview email story score was `86/100`.
+- The preview email still did not contain the required literal line: `Closing callback found: "..."`.
+- Prompt A requires that line before approval, so v7 was not approved even though the carousel itself looked acceptable.
+
+Fix being shipped:
+
+- File: `scripts/content_creator/email_preview.py`
+- Function: `_build_one_carousel_html(post, slides)`
+- Section: Story Quality block, using `post["_storytelling_scores"]`.
+- Behavior:
+  - if `closing_callback_found is True`, show `Closing callback found: "{closing_callback_text}"`
+  - if `closing_callback_found is False`, show `CLOSING CALLBACK MISSING`
+  - otherwise show `Closing callback found: unknown`
+
+Verification before rerun:
+
+- `python3 -m py_compile scripts/content_creator/email_preview.py scripts/content_creator/carousel_builder.py scripts/content_creator/carousel_reviewer.py` passed.
+- Direct HTML render test passed:
+  - includes `Closing callback found:`
+  - does not include `CLOSING CALLBACK MISSING` when callback is true
+
+Next:
+
+- Commit + push this email-only surfacing fix.
+- Re-run the exact Prompt A workflow.
+- Open the latest preview email and confirm the callback line appears.
+- If visual QA still passes and preview score is at least 80, reply `APPROVE` and confirm Buffer scheduling.

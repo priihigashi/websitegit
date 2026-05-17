@@ -162,6 +162,14 @@ def _build_one_carousel_html(post: dict, slides: list[dict]) -> str:
     if storytelling_scores:
         _st_overall = storytelling_scores.get("overall", "?")
         _st_summary = storytelling_scores.get("summary", "")[:160]
+        _cb_found = storytelling_scores.get("closing_callback_found")
+        _cb_text = str(storytelling_scores.get("closing_callback_text") or "")[:160]
+        if _cb_found is True:
+            _cb_line = f'Closing callback found: "{_cb_text}"'
+        elif _cb_found is False:
+            _cb_line = "CLOSING CALLBACK MISSING"
+        else:
+            _cb_line = "Closing callback found: unknown"
         _st_slide_lines = "<br/>".join(
             "· slide " + str(s.get("slide", "?")) + ": " + str(s.get("score", "?")) + "/100 — " + str(s.get("reason", ""))[:80]
             for s in (storytelling_scores.get("slide_scores") or [])[:8]
@@ -170,6 +178,7 @@ def _build_one_carousel_html(post: dict, slides: list[dict]) -> str:
             f'<div style="background:#0d1a0a;border-left:3px solid #86efac;padding:14px 16px;margin-top:20px;border-radius:4px;">'
             f'<div style="font-family:Arial,sans-serif;color:#86efac;font-size:13px;font-weight:700;">&#128214; STORY QUALITY &#8212; {_st_overall} / 100</div>'
             f'<div style="font-family:Arial,sans-serif;color:#d0d0d0;font-size:13px;line-height:1.6;margin-top:8px;">{_st_summary}</div>'
+            f'<div style="font-family:monospace;color:#86efac;font-size:12px;line-height:1.8;margin-top:8px;">{_cb_line}</div>'
             f'<div style="font-family:monospace;color:#aaaaaa;font-size:12px;line-height:1.8;margin-top:8px;">{_st_slide_lines}</div>'
             f'</div>'
         )
