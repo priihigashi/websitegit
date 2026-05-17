@@ -2083,12 +2083,13 @@ def process_one_topic(topic_entry, run_date, drive):
     else:
         print("  [MOTION_DISABLED] Motion skipped (MOTION_ENABLED=0). Static-only post.")
 
-    # Media presence check (non-blocking) — alert if images/clips are missing
-    # Suppress MP4 check when MOTION_FORCE_NO_CLIP=1 — no MP4 is expected by design.
+    # Media presence check (non-blocking) — alert if images/clips are missing.
+    # Suppress MP4 check when Phase 1 intentionally falls back to static output.
     _force_no_clip = os.environ.get("MOTION_FORCE_NO_CLIP", "0").strip() == "1"
+    _phase1_static_fallback = motion_phase1_test and (_force_no_clip or not clips.get(1))
     media_ok, media_issues = _check_media_presence(
         str(png_dir), str(motion_dir), str(work / "resources"), post_id,
-        motion_enabled=motion_enabled and not _force_no_clip)
+        motion_enabled=motion_enabled and not _phase1_static_fallback)
     if media_issues:
         _send_alert(
             f"Media gaps for '{topic[:40]}':\n" +

@@ -521,6 +521,8 @@ def _motion_required(result: dict | None = None) -> bool:
         return False
     if result and result.get("reel_renderer") == "skipped":
         return False
+    if result and result.get("reel_renderer") == "phase1_no_clip_static":
+        return False
     return True
 
 
