@@ -531,5 +531,61 @@ Open blocker:
 Only remaining task:
 
 - Renew/regenerate the Buffer API token and update GitHub secret `BUFFER_API_KEY_EXP04092027`.
-- Then rerun `approval_check.yml` or a narrow approval-handler retry for `opc-tip-20260517-concrete-block-vs-wo`.
+- Then rerun `approval_check.yml` with the narrow retry input for `opc-tip-20260517-concrete-block-vs-wo`.
 - Done condition: approval handler logs `Buffer scheduled OK: opc-tip-20260517-concrete-block-vs-wo` and the post exists in Buffer.
+
+## Prompt A scheduling retry patch (2026-05-17)
+
+Reason:
+
+- After the failed Buffer attempt, `approval_handler.py` marked the Prompt A catalog row as `approved`.
+- A plain rerun of `approval_check.yml` would not pick that post up again because normal selection reads only `pending_approval` rows.
+- The workflow also exited green even when Buffer scheduling failed, because the failure was logged but not reflected in the process exit code.
+
+Fix shipped:
+
+- Commit: `093006d fix(approval): fail on Buffer schedule errors and add post retry input`
+- File: `.github/workflows/approval_check.yml`
+  - added workflow_dispatch input `retry_post_id`
+  - exports it as `RETRY_BUFFER_POST_ID`
+- File: `scripts/content_creator/approval_handler.py`
+  - if `RETRY_BUFFER_POST_ID` matches an already-approved row, include that row for one scheduling retry
+  - Buffer HTTP 401 now raises a clear auth error that says to renew `BUFFER_API_KEY_EXP04092027`
+  - Buffer scheduling failures increment `buffer_failures`
+  - `__main__` exits non-zero when `buffer_failures > 0`, so GitHub Actions no longer shows fake success
+
+Verified:
+
+- `python3 -m py_compile scripts/content_creator/approval_handler.py` passed.
+- Local retry selector test with `RETRY_BUFFER_POST_ID=opc-tip-20260517-concrete-block-vs-wo` found the approved row and final Drive folders:
+  - static: `1LyGQowJU2x48MrOGc_zP82peV2t2zCU_`
+  - motion: `13kUkaKDnBN4HzctqHbnjX4aVH4IdT16U`
+
+Correct rerun command after Buffer token is renewed:
+
+```bash
+~/bin/gh workflow run approval_check.yml --repo priihigashi/oak-park-ai-hub \
+  -f retry_post_id="opc-tip-20260517-concrete-block-vs-wo"
+```
+
+Done condition:
+
+- workflow conclusion is success
+- log contains `RETRY_BUFFER_POST_ID matched approved row: opc-tip-20260517-concrete-block-vs-wo`
+- log contains `Buffer scheduled OK: opc-tip-20260517-concrete-block-vs-wo`
+- Buffer dashboard shows the Instagram carousel scheduled
+
+## News follow-up captured (2026-05-17)
+
+Priscila flagged a separate News issue: chosen News items/templates/assets are not being used downstream.
+
+Tracking issue:
+
+- `#156` — Audit News pipeline: chosen items/templates are not being used downstream.
+
+Scope:
+
+- Do not mix with Prompt A.
+- After Buffer is unblocked, audit News rows/items that were chosen or approved but not used.
+- Trace through `content_creator.yml`, `main.py`, `carousel_builder.py`, `approval_handler.py`, and any News template chooser logic.
+- Produce one concrete stuck News example before patching.
