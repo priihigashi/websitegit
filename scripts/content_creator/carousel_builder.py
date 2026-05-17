@@ -1602,13 +1602,21 @@ def _apply_opc_hook_answer_contract(content, topic=""):
         content["slide3_items"] = items[:3]
 
     body = str(content.get("slide4_body") or "").strip()
+    pair = content.get("_comparison_pair") or {}
+    left = str(pair.get("left", "")).strip()
+    right = str(pair.get("right", "")).strip()
+    if body and left and right:
+        sentence_count = len(re.findall(r"[.!?](?:\s|$)", body))
+        if sentence_count != 2:
+            content["slide4_body"] = (
+                f"Go with {left} when long-term durability and lower maintenance matter. "
+                f"Go with {right} when the floor plan is complex and interior finish flexibility is the priority."
+            )
+            body = content["slide4_body"]
     # Only inject if slide4_body is empty — never overwrite model-written content.
     # Use the CLOSING CALLBACK pattern, not the banned canned opener.
     # "That's the mistake I want you to avoid" is in the BANNED OPENERS list — never write it.
     if answer_core and not body:
-        pair = content.get("_comparison_pair") or {}
-        left = str(pair.get("left", "")).strip()
-        right = str(pair.get("right", "")).strip()
         if left and right:
             content["slide4_body"] = (
                 f"The real difference is in total cost over time, not just the upfront number. "
