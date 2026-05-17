@@ -362,6 +362,15 @@ def enforce_opc_comparison_parity(content: dict, topic: str, brief: str = "") ->
     content["_comparison_pair"] = {"left": left, "right": right}
     cover_query = f"{left} and {right} {_comparison_context_word(topic)} residential comparison south florida"
 
+    body = str(content.get("slide4_body") or "").strip()
+    if body:
+        sentence_count = len(re.findall(r"[.!?](?:\s|$)", body))
+        if sentence_count != 2:
+            content["slide4_body"] = (
+                f"Go with {left} when long-term durability and lower maintenance matter. "
+                f"Go with {right} when the floor plan is complex and interior finish flexibility is the priority."
+            )
+
     cover_visual = content.setdefault("cover_visual", {})
     if isinstance(cover_visual, dict):
         option_a = cover_visual.setdefault("option_a", {})

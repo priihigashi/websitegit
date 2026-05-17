@@ -405,3 +405,53 @@ Next:
 - If the run passes, inspect preview email + audit email + all 5 PNGs.
 - Do not approve unless content audit passes or failures are clearly false positives.
 - If visual/content QA passes, reply `APPROVE` to the preview email and confirm Buffer scheduling.
+
+## Prompt A.4 — final Slide 4 sentence-count escape (2026-05-17)
+
+Reason:
+
+- Run `25980560036` succeeded and the AI content audit passed, but visual QA still showed Slide 4 rendering as four sentences.
+- The original Prompt A rule requires `slide4_body` to be exactly 2 sentences and max 260 characters.
+- The existing normalization in `_apply_opc_hook_answer_contract()` only fired before `_comparison_pair` was attached, so comparison topics could still render model-written 4-sentence copy.
+
+Blocking visual finding:
+
+- Drive folder: `1s8tJ7BGOwv_ivxrRpRS8ELdlmTqUdxf7`
+- Slide 4 text rendered:
+  - `Ask your contractor about the maintenance history of homes in your area before choosing framing material. Wood might seem cheaper now, but termite damage can cost up to $15K by year 10. Go with concrete block when durability is key. Choose wood framing when initial cost savings and flexibility matter more.`
+- This avoided resale language, but it violated the hard 2-sentence rule.
+
+Fix being shipped:
+
+- File: `scripts/content_creator/carousel_builder.py`
+- Function: `enforce_opc_comparison_parity(content, topic, brief="")`
+- Section: immediately after `_comparison_pair` is attached and before media-query enforcement.
+- Behavior: if a comparison topic has a non-empty `slide4_body` and the sentence count is not exactly 2, replace it with:
+  - `Go with {left} when long-term durability and lower maintenance matter. Go with {right} when the floor plan is complex and interior finish flexibility is the priority.`
+
+Verification before rerun:
+
+- `python3 -m py_compile scripts/content_creator/carousel_builder.py scripts/content_creator/carousel_reviewer.py` passed.
+- Direct function test passed:
+  - input: the 4-sentence Slide 4 body from run `25980560036`
+  - output: exactly 2 sentences
+  - pair: `{"left": "concrete block", "right": "wood framing"}`
+- Original Prompt A grep gate passed: `16/16`.
+
+Next:
+
+- Commit + push this one-file fix.
+- Re-run Prompt A workflow with the exact original topic and template.
+- Inspect logs for `SH-028`, `[ethics]`, `[layout]`, `closing_callback`, and reviewer summary.
+- Open the latest preview email and confirm:
+  - subject includes the carousel topic
+  - `Closing callback found: "..."`
+  - no ethics issue
+  - no layout warning
+  - storytelling score is at least 80
+- Open all 5 PNGs in Drive and approve only if:
+  - Slide 3 sub-text is readable
+  - Slide 4 is fully visible and exactly 2 sentences
+  - Slide 4 uses climate/code/structural criteria, not resale intent
+  - Slide 5 CTA is not `SCREENSHOT BEFORE SIGNING ANYTHING`
+- If all pass, reply `APPROVE` to the preview email and confirm Buffer scheduling.
