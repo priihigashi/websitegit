@@ -670,6 +670,9 @@ def tier_giphy(slide_cfg: dict, dest_path: Path) -> bool:
     Skips silently if GIPHY_API_KEY is unset. Good for reaction/UGC slides."""
     if not GIPHY_KEY:
         return False
+    if str(slide_cfg.get("allow_giphy", "1")).strip().lower() in ("0", "false", "no"):
+        print("  motion_sources: GIPHY disabled for this slot — using real clips or static fallback")
+        return False
     query = (
         slide_cfg.get("giphy_query")
         or slide_cfg.get("gif_query")

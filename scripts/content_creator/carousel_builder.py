@@ -4296,6 +4296,18 @@ def fetch_clips(content, work_dir):
                                           "pexels_query", "pixabay_query",
                                           "archive_query", "wikimedia_query", "query")):
             continue
+        sugg = dict(sugg)
+        # Cover D Phase 1 should not accept generic GIPHY as "motion." Priscila
+        # approved the cover layout/photo but rejected random-feeling motion. Use
+        # real clips first; if they miss, the HTML falls back to the static cover.
+        if (
+            phase1_cover_only
+            and slide_idx == 1
+            and os.environ.get("MOTION_COVER_LAYOUT", "A").strip().upper() == "D"
+            and os.environ.get("MANUAL_NICHE", "").strip().lower() == "opc"
+            and os.environ.get("MOTION_COVER_D_ALLOW_GIPHY", "0").strip() != "1"
+        ):
+            sugg["allow_giphy"] = "0"
         visual_hint = sugg.get("visual_hint", "context-image")
         fname = f"{slot_name}.mp4"
         path = fetch_clip_with_fallback(sugg, work_dir, fname, visual_hint=visual_hint)
