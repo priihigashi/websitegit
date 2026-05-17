@@ -563,7 +563,28 @@ def _resource_story_id(topic_entry: dict) -> str:
         val = str(topic_entry.get(key, "") or "").strip()
         if val:
             return val
-    return os.environ.get("CAPTURE_STORY_ID", "").strip()
+    if topic_entry.get("_allow_env_story_id"):
+        return os.environ.get("CAPTURE_STORY_ID", "").strip()
+    return ""
+
+
+def _manifest_target_slide(raw_slide, fallback_slides, staged_by_slide) -> int | None:
+    """Resolve where a staged resource should enter the carousel.
+
+    Explicit note/parser slide hints win. When the manifest has no target slide,
+    attach the clip to the first generated clip suggestion that is still open.
+    This keeps Flow A/Flow B usable even when Priscila says "use this video" or
+    "find videos" without naming a slide.
+    """
+    if raw_slide is not None:
+        try:
+            return int(raw_slide)
+        except (TypeError, ValueError):
+            return None
+    for slide in fallback_slides:
+        if slide and slide not in staged_by_slide:
+            return slide
+    return 1
 
 
 def _caption_fallback(topic, niche):
@@ -1739,6 +1760,13 @@ def process_one_topic(topic_entry, run_date, drive):
     # indices are excluded from the Apify/Pexels fetch chain (saves API credits).
     _pre_staged: dict[int, str] = {}
     _clips_json = work / "resources" / "clips" / "clips.json"
+    _orig_suggestions = content.get("clip_suggestions", [])
+    _suggestion_slides = []
+    for _sugg in _orig_suggestions:
+        try:
+            _suggestion_slides.append(int(_sugg.get("slide")))
+        except (TypeError, ValueError):
+            continue
 
     # Cross-runner bridge: if local clips.json missing AND a story_id is
     # available (from topic_entry or CAPTURE_STORY_ID env), fetch clips.json
@@ -1763,6 +1791,7 @@ def process_one_topic(topic_entry, run_date, drive):
             _manifest = _json.loads(_clips_json.read_text(encoding="utf-8"))
             if isinstance(_manifest, dict) and "clips" in _manifest:
                 _manifest = _manifest["clips"]
+            _fallback_slides = [s for s in _suggestion_slides if s]
             for _entry in (_manifest if isinstance(_manifest, list) else []):
                 if _entry.get("status") not in ("STAGED", "APPROVED"):
                     continue
@@ -1788,11 +1817,10 @@ def process_one_topic(topic_entry, run_date, drive):
                         _path = str(_local)
                     except Exception as _dl_e:
                         print(f"  clips.json bridge: Drive download skipped — {_dl_e}")
-                if _slide is None or not _path or not Path(_path).exists():
+                if not _path or not Path(_path).exists():
                     continue
-                try:
-                    _slide_idx = int(_slide)
-                except (TypeError, ValueError):
+                _slide_idx = _manifest_target_slide(_slide, _fallback_slides, _pre_staged)
+                if _slide_idx is None:
                     continue
                 _pre_staged[_slide_idx] = _path
         except Exception as _e:
@@ -1801,7 +1829,6 @@ def process_one_topic(topic_entry, run_date, drive):
     # Fetch video clips for motion version (Clip Collections → Apify → Pexels → ...)
     # Inject topic into each suggestion so tier_clip_collections can match by topic name.
     # Skip slides already covered by pre-staged clips so we don't burn Apify credits.
-    _orig_suggestions = content.get("clip_suggestions", [])
     for sugg in _orig_suggestions:
         sugg.setdefault("topic", topic)
     if _pre_staged:
@@ -2602,6 +2629,7 @@ def main():
                 "fake_news_route": "B",
                 "fake_news_confidence": 1.0,
                 "queue_row_idx": None,
+                "_allow_env_story_id": True,
             }
             if t not in ("", "auto"):
                 entry["template_key"] = t

@@ -1504,6 +1504,36 @@ def parse_resource_router_reply(reply_text: str) -> dict:
     return {"action": "unknown", "indices": []}
 
 
+def _apply_rr_candidate_action(manifest, action: str, indices) -> tuple[object, int]:
+    """Apply a ResourceRouter approval/rejection to a clips manifest in memory.
+
+    Keeps the Drive updater thin and gives Flow B a deterministic unit-test seam.
+    """
+    if isinstance(manifest, dict) and "clips" in manifest:
+        clips_list = manifest["clips"]
+        output = manifest
+    elif isinstance(manifest, list):
+        clips_list = manifest
+        output = manifest
+    else:
+        return manifest, 0
+
+    updated = 0
+    for i, entry in enumerate(clips_list):
+        if not isinstance(entry, dict) or entry.get("status") != "CANDIDATE":
+            continue
+        pos = i + 1  # 1-based reply positions
+        should_update = (
+            indices == "all"
+            or (isinstance(indices, list) and pos in indices)
+        )
+        if not should_update:
+            continue
+        entry["status"] = "APPROVED" if action == "approve" else "REJECTED"
+        updated += 1
+    return output, updated
+
+
 def _update_clip_candidates_on_drive(story_id: str, action: str, indices) -> int:
     """Find clips.json on Drive for story_id, update CANDIDATE status.
 
@@ -1562,22 +1592,7 @@ def _update_clip_candidates_on_drive(story_id: str, action: str, indices) -> int
             i + 1 for i, e in enumerate(clips_list)
             if e.get("status") == "CANDIDATE"
         ]
-        updated = 0
-        for i, entry in enumerate(clips_list):
-            if entry.get("status") != "CANDIDATE":
-                continue
-            pos = i + 1  # 1-based
-            should_update = (
-                indices == "all"
-                or (isinstance(indices, list) and pos in indices)
-            )
-            if not should_update:
-                continue
-            if action == "approve":
-                entry["status"] = "APPROVED"
-            else:
-                entry["status"] = "REJECTED"
-            updated += 1
+        updated_manifest, updated = _apply_rr_candidate_action(manifest, action, indices)
 
         if not updated:
             print(f"  [rr_approve] no CANDIDATE entries matched (candidates at positions {candidate_positions})")
@@ -1585,7 +1600,7 @@ def _update_clip_candidates_on_drive(story_id: str, action: str, indices) -> int
 
         # Re-upload updated clips.json
         updated_bytes = json.dumps(
-            clips_list if isinstance(manifest, list) else {**manifest, "clips": clips_list},
+            updated_manifest,
             indent=2, ensure_ascii=False,
         ).encode("utf-8")
         from googleapiclient.http import MediaInMemoryUpload

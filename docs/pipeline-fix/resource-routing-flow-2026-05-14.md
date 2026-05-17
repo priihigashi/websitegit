@@ -417,6 +417,39 @@ Current remaining proof:
   research request → candidates → email → approval reply → Drive `clips.json`
   status flips to `APPROVED` → content creator uses approved clips.
 
+## Bridge Safety Patch — 2026-05-17
+
+Audit correction after the first cross-runner proof:
+- `content_creator.yml` manual `capture_story_id` successfully reached the run
+  as `CAPTURE_STORY_ID`.
+- `main.py` successfully fetched `clips.json` and `story_resources.json` from
+  Drive and injected the clip-intelligence summary into the brief.
+- Gap found: the manual env fallback was global, so a queue-driven run could
+  fetch one proof story's resources into unrelated approved queue rows.
+- Gap found: a valid staged clip with `target_slide: null` was fetched but not
+  merged into render.
+
+Patched:
+- `CAPTURE_STORY_ID` fallback is now allowed only for manual/direct builds.
+  Queue-driven builds must use the row's `story_id` column.
+- Staged/approved clips with no `target_slide` now attach to the first available
+  generated clip slot, so notes like "use this video" and Flow B research
+  candidates can still enter the carousel without Priscila naming a slide.
+- Flow B approval status mutation now has a pure helper with unit coverage.
+
+Verified locally:
+- `python3.12 -m py_compile scripts/content_creator/main.py scripts/content_creator/approval_handler.py`
+- `python3.12 -m pytest scripts/tests/test_resource_router_approval_bridge.py tests/test_note_parser.py tests/test_resource_router.py tests/test_clips_manifest.py tests/test_video_downloader.py -q`
+  → 44 passed.
+
+Current remaining proof:
+- Run the real normal capture path, not only standalone `resource_downloader.yml`:
+  Capture Queue / capture workflow → Inspiration `story_id` → Content Queue
+  `story_id` → content creator `[drive_fetch]` → `clips.json bridge: merged`.
+- Run one Flow B approval proof end to end:
+  research request → CANDIDATE clips → approval reply → Drive `clips.json`
+  status flips → next content run uses `APPROVED` clips.
+
 Acceptance Criteria:
 - Test with a real capture note containing a URL.
 - Verify `clips.json` is created under the story resource folder.
