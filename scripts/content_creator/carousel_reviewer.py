@@ -911,6 +911,11 @@ _CREDIBLE_SOURCE_TOKENS = {
     "census", "bls", "cdc", "usda", "energy star", "ashrae",
     "national association", "department of",
 }
+_OPC_BANNED_SOURCE_PATTERNS = (
+    ("aci 314.1r", "ACI 314.1R is not an OPC masonry-maintenance source; use TMS 402/602 or ACI 530/ASCE 5 only for structural/code criteria."),
+    ("angi", "Angi/HomeAdvisor consumer quote guides cannot be primary proof for OPC numeric claims."),
+    ("homeadvisor", "Angi/HomeAdvisor consumer quote guides cannot be primary proof for OPC numeric claims."),
+)
 
 
 def _flatten_text_from_content(content: dict) -> str:
@@ -952,8 +957,12 @@ def check_sources_match_claims(content: dict) -> list[str]:
     if isinstance(sources, str):
         sources = [sources]
     src_blob = " ".join(s.lower() for s in sources if isinstance(s, str))
+    issues = []
+    for token, msg in _OPC_BANNED_SOURCE_PATTERNS:
+        if token in src_blob:
+            issues.append(f"[content] banned OPC source: {msg}")
     if not src_blob.strip():
-        return [
+        return issues + [
             "[content] slides contain numeric claims ($/%/years) but sources "
             "list is empty — every cost/stat needs a cited source."
         ]
@@ -963,18 +972,18 @@ def check_sources_match_claims(content: dict) -> list[str]:
         for s in sources if isinstance(s, str) and s.strip()
     )
     if only_opc and not has_credible:
-        return [
+        return issues + [
             "[content] numeric claims appear but the only source is OPC self-data — "
             "add at least one external authority (FBC, ACI, NAHB, Houzz, etc.) "
             "or downgrade the claim to non-numeric wording."
         ]
     if not has_credible:
-        return [
+        return issues + [
             "[content] numeric claims present but no credible external source "
             f"in the sources slide ({len(sources)} entries, none cite FBC/ACI/"
             "NAHB/etc.). Either add a real source or remove the number."
         ]
-    return []
+    return issues
 
 
 _OPC_RESALE_INTENT_PHRASES = [
