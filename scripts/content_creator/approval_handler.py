@@ -21,7 +21,38 @@ class BufferAuthError(RuntimeError):
 
 
 def _call_claude_json(prompt: str, model: str = "claude-sonnet-4-6", max_tokens: int = 512) -> str:
-    """Raw Anthropic API call. Returns response text or empty string on failure."""
+    """LLM call for reply-intent parsing. Returns response text or '' on failure.
+
+    Plan v3 § P1.1 — uses shared Claude → OpenAI → Gemini cascade first
+    (scripts/capture/_llm_fallback.py). Falls back to direct Anthropic POST
+    if the cascade module can't be imported. Mirrors the pattern Codex
+    introduced in resource_router._analyze_clip_with_haiku (commit fd646b3).
+    """
+    # Cascade path — only attempt if cascade module is available
+    try:
+        import sys as _sys
+        from pathlib import Path as _Path
+        _capture_dir = _Path(__file__).resolve().parent.parent / "capture"
+        if str(_capture_dir) not in _sys.path:
+            _sys.path.insert(0, str(_capture_dir))
+        from _llm_fallback import llm_text as _llm_text_cascade  # noqa: E402
+
+        # Model name 'claude-sonnet-4-6' → cascade tier 'sonnet'.
+        # 'claude-haiku-*' → 'haiku'. Anything else → default 'sonnet'.
+        _tier = "haiku" if "haiku" in (model or "").lower() else "sonnet"
+        try:
+            return _llm_text_cascade(
+                prompt,
+                model_tier=_tier,
+                max_tokens=max_tokens,
+                context="approval_handler._call_claude_json",
+            ).strip()
+        except Exception as cascade_exc:
+            print(f"  _call_claude_json cascade failed: {cascade_exc!r} — trying direct Anthropic")
+    except Exception as import_exc:
+        print(f"  _call_claude_json cascade unavailable: {import_exc!r} — using direct Anthropic")
+
+    # Direct Anthropic fallback — preserved verbatim from prior implementation
     key = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
     if not key:
         return ""
