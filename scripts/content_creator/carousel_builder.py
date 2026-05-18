@@ -5677,8 +5677,16 @@ def build_opc_from_slide_plan(content, slug, work_dir, media_paths=None):
     """
     plan = (content or {}).get("_slide_plan") or {}
     slides = plan.get("slides") or []
-    if plan.get("status") != "passed" or len(slides) != 5:
+    bundle_id = plan.get("bundle_id")
+    if plan.get("status") != "passed":
         # Defensive: planner returned no usable plan — fall back to legacy tip.
+        return _build_opc_html(content, slug, work_dir, media_paths=media_paths)
+    # D (2026-05-18): variable slide count — bundle plans accept 4-8 slides;
+    # legacy (no bundle_id) plans still require exactly 5 for back-compat.
+    if bundle_id:
+        if not (4 <= len(slides) <= 8):
+            return _build_opc_html(content, slug, work_dir, media_paths=media_paths)
+    elif len(slides) != 5:
         return _build_opc_html(content, slug, work_dir, media_paths=media_paths)
 
     # Hard-fail if any banned legacy key sneaks in (cutout/illustrated).
@@ -5721,12 +5729,17 @@ def build_opc_from_slide_plan(content, slug, work_dir, media_paths=None):
         f'<div class="bg-photo" style="background-image:url(\'{cover_img}\');"></div>'
         if cover_img else '<div class="bg-photo"></div>'
     )
-    last_img = (
-        ((media_paths or {}).get("slides", {}) or {}).get(5)
-        or ((media_paths or {}).get("slides", {}) or {}).get(4)
-        or ((media_paths or {}).get("slides", {}) or {}).get(2)
-        or cover_img
-    )
+    # D (2026-05-18): last-slide image lookup must scale with plan length.
+    # Bundle plans can have 4-8 slides — pick the highest available middle slide.
+    _slide_imgs = (media_paths or {}).get("slides", {}) or {}
+    _n_slides = len(slides)
+    last_img = ""
+    for _idx in range(_n_slides, 1, -1):
+        if _slide_imgs.get(_idx):
+            last_img = _slide_imgs[_idx]
+            break
+    if not last_img:
+        last_img = cover_img
     sources_bg_el = (
         f'<div class="bg-photo" style="background-image:url(\'{last_img}\');"></div>'
         if last_img else '<div class="bg-photo"></div>'
@@ -5777,16 +5790,19 @@ def build_opc_from_slide_plan(content, slug, work_dir, media_paths=None):
             renderer = OPC_STANDALONE_COMPONENT_RENDERERS[eff_key]
             return renderer(content, v_class, slide_num=slide_num, media_paths=media_paths)
         # Tip components — kwargs differ per slide.
+        # D (2026-05-18): use slide_num from the resolved slide (rs["slide"])
+        # instead of hardcoded slot numbers. In bundle mode a tip_stat can land
+        # at slide 4 instead of slide 2, and it must fetch ITS OWN context image.
         if eff_key == "opc_tip_cover":
             return render_opc_tip_cover(content, v_class, hl_html=hl_html, bg_photo_el=bg_photo_el)
         if eff_key == "opc_tip_stat":
-            ctx = _opc_tip_context_slot(2, "STAT CONTEXT IMAGE", opc_slides_meta, media_paths)
+            ctx = _opc_tip_context_slot(slide_num, "STAT CONTEXT IMAGE", opc_slides_meta, media_paths)
             return render_opc_tip_stat(content, v_class, context_slot=ctx)
         if eff_key == "opc_tip_list":
-            ctx = _opc_tip_context_slot(3, "PROCESS IMAGE", opc_slides_meta, media_paths)
+            ctx = _opc_tip_context_slot(slide_num, "PROCESS IMAGE", opc_slides_meta, media_paths)
             return render_opc_tip_list(content, v_class, items_html=items_html, context_slot=ctx)
         if eff_key == "opc_tip_explainer":
-            ctx = _opc_tip_context_slot(4, "TIP IN ACTION IMAGE", opc_slides_meta, media_paths)
+            ctx = _opc_tip_context_slot(slide_num, "TIP IN ACTION IMAGE", opc_slides_meta, media_paths)
             return render_opc_tip_explainer(
                 content, v_class, s4_hl=s4_hl, s4_accent=s4_accent,
                 s4_accent_style=s4_accent_style, context_slot=ctx,
