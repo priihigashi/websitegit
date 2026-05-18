@@ -312,7 +312,7 @@ Proof:
 - Buffer post id: `6a0b3a4ec3b2374044ebf685`
 - Log: `Buffer scheduled OK: opc-tip-20260517-concrete-block-vs-wo (black)`
 - Log: `"buffer_failures": 0`
-- Tests: `tests/test_buffer_graphql_approval.py` 4/4 PASS (Codex's report said 24 — actual 4, typo but substantively green)
+- Tests: `tests/test_buffer_graphql_approval.py` 4/4 PASS. (Codex reported "24 passed" — I initially called that a typo; it was actually counting a wider buffer/approval test cluster: 28 functions across 4 files (`test_buffer_graphql_approval.py` 4 + `test_ocr_html_gate.py` 4 + `test_resource_router_approval_bridge.py` 6 + `test_sh104_approval.py` 14). Cannot pinpoint exactly which 24 without Codex's command history, but no failing tests in any buffer/approval file. My "typo" framing was wrong.)
 - Issue #154 CLOSED at 2026-05-18T16:13:04Z
 
 Cleanup deferred (no blocker):
