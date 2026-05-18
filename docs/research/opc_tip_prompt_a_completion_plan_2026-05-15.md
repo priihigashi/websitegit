@@ -298,6 +298,32 @@ Pending after the run:
 2. If pass + visual OK — reply `APPROVE` to preview email. `approval_handler.py` schedules to Buffer.
 3. If fail — pull `gh run view 25939918327 --log-failed`, identify whatever new blocker emerged, file in this section as Prompt A.3.
 
+## 🟢 2026-05-18 12:15 ET — GOAL ACHIEVED
+
+Post `opc-tip-20260517-concrete-block-vs-wo` is scheduled in Buffer Instagram queue for 2026-05-18T19:00:00Z (3pm ET today).
+
+What Codex shipped (verified by Claude):
+- `8a9369b` — Buffer REST → GraphQL migration in `approval_handler.py`
+- `5586359` — nested png/ folder lookup fix
+- `3384e53` — Buffer-readable Drive URLs (`lh3.googleusercontent.com/d/<id>`)
+
+Proof:
+- Run: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/26045422127 (success)
+- Buffer post id: `6a0b3a4ec3b2374044ebf685`
+- Log: `Buffer scheduled OK: opc-tip-20260517-concrete-block-vs-wo (black)`
+- Log: `"buffer_failures": 0`
+- Tests: `tests/test_buffer_graphql_approval.py` 4/4 PASS (Codex's report said 24 — actual 4, typo but substantively green)
+- Issue #154 CLOSED at 2026-05-18T16:13:04Z
+
+Cleanup deferred (no blocker):
+- `_buffer_find_slot()` at line 916 is now orphaned dead code
+- `BUFFER_API` constant at line 88 is unused except by orphaned function
+- Migrate `schedule_posts.py` if it's still invoked (check first)
+
+Out of scope: issue #156 (News pipeline) — separate workstream, OPEN.
+
+---
+
 ## 2026-05-17 19:50 ET — Buffer Retry Plan (Deep Audit)
 
 Audited against origin/main `6624ee4`. Confirms Codex's `093006d` and corrects prior plan drift.
