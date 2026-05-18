@@ -323,3 +323,32 @@ Rows P1-D-01..P1-D-05 (154-158) all marked **Done** with proof links.
 
 ### Phase 2 deferred (do not implement until spec approved)
 Middle-slide motion · Option B full-bleed slow ambient · Kling · Remotion · Layout C · GIPHY for OPC Cover D
+
+## 2026-05-18 Follow-up Audit — black side / cropped-bottom concern
+
+Status: no new code patch needed from this audit.
+
+Priscila re-raised the older visual concern about black edges / bottom crop on Cover D. Repo and tracker evidence show that issue belongs to the pre-signoff Cover D proof cycle and was closed by the final approved proof:
+
+- Final approved run: `26052378925`
+- Final visual fix commit: `53d70fe` — warmup trim increased from 1s to 2s, eliminating the black-bar flicker on the recorded MP4.
+- Sign-off commit: `295acff`
+- Current active motion rule: Cover D only, manual-only, real curated clip only; no GIPHY, Ken Burns, Kling, Remotion, or middle-slide motion in Phase 1.
+
+If black edges or cropped text reappear in a new artifact, treat it as a Phase 1 regression and patch the narrow Cover D surfaces only:
+
+```css
+.clip-layout-d .clip-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+```
+
+```python
+# record_motion_slides(): keep the first loaded/black frames out of the final MP4
+# by recording warmup frames and trimming the warmup from the finished motion file.
+```
+
+Do not reopen Phase 1 or move to Phase 2 from this note alone. Phase 2 remains the separate approved-spec-needed track for middle-slide motion, News motion parity, Remotion, Kling, Layout C, and full-bleed slow ambient variations.
