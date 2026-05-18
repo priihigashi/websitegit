@@ -358,23 +358,7 @@ MCP `create_file` is ONLY for: empty folders (`mimeType: application/vnd.google-
 
 Works from Claude Code (Bash tool) and from phone/web Claude (via `proxy_execute` / remote Python). Same pattern, same result.
 
-```python
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload  # or MediaInMemoryUpload for bytes
-
-creds = Credentials.from_authorized_user_file(
-    '/Users/priscilahigashi/ClaudeWorkspace/Credentials/sheets_token.json'
-)
-drive = build('drive', 'v3', credentials=creds)
-
-drive.files().create(
-    body={'name': '<filename>', 'parents': ['<SHARED_DRIVE_FOLDER_ID>']},
-    media_body=MediaFileUpload('<local_path>', mimetype='<mime/type>'),
-    supportsAllDrives=True,   # ← REQUIRED. Missing = 404 on any shared drive
-    fields='id,name,webViewLink',
-).execute()
-```
+→ See `~/.agents/skills/drive-upload/SKILL.md` for the Python implementation (3 routes, all anti-bug rules, verification step). Step B migration 2026-05-18.
 
 Non-negotiable rules (apply to EVERY Drive call — create, list, update, delete):
 - `supportsAllDrives=True` on every call. Missing = 404 on shared drives.
