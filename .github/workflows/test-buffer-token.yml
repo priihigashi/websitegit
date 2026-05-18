@@ -106,6 +106,22 @@ jobs:
           else:
               print("  (no fields found — type may be named differently)")
 
+          print("\n=== Instagram metadata + asset input fields ===")
+          for type_to_probe in (
+              "InstagramPostMetadataInput",
+              "InstagramPostType",
+              "InstagramPostMetadataType",
+              "PostType",
+              "AssetInput",
+              "ImageAssetInput",
+          ):
+              show(
+                  type_to_probe,
+                  gql('query($name:String!){ __type(name:$name) { kind enumValues { name } inputFields { name type { name kind ofType { name kind ofType { name } } } } } }',
+                      {"name": type_to_probe}),
+                  max_chars=2500,
+              )
+
           # 7. Instagram channel lookup (the channelId we need for CreatePost)
           channel_fields = """
             id
@@ -181,29 +197,43 @@ jobs:
                 }
               }
               """
-              test_input = {
-                  "text": "TEST — automation dry-run, will be deleted",
+              base_input = {
+                  "text": "TEST — automation dry-run, saveToDraft=true",
                   "channelId": ig_channel["id"],
                   "schedulingType": "automatic",
                   "mode": "addToQueue",
                   "saveToDraft": True,
-                  "assets": {"images": [{"url": "https://picsum.photos/seed/buffertest/1080/1350"}]},
               }
-              print(f"  Input: {json.dumps(test_input, indent=2)}")
-              resp = gql(mutation, {"input": test_input})
-              print(f"  Response: {json.dumps(resp, indent=2)}")
-              if resp.get("error"):
-                  print("  ⚠️ Mutation rejected — see error body above")
-              elif "errors" in resp:
-                  print(f"  ⚠️ GraphQL errors: {resp['errors']}")
-              else:
-                  result = resp.get("data", {}).get("createPost", {}) or {}
-                  tn = result.get("__typename", "?")
-                  if tn == "PostActionSuccess":
-                      print(f"  ✅ SUCCESS — post id={result.get('post', {}).get('id')}")
-                      print(f"  ⚠️ Delete the test draft from Buffer dashboard after verifying")
-                  elif tn == "MutationError":
-                      print(f"  ❌ MutationError: {result.get('message')}")
+              attempts = {
+                  "legacy_assets_metadata_type_post": {
+                      **base_input,
+                      "metadata": {"instagram": {"type": "post"}},
+                      "assets": {"images": [{"url": "https://picsum.photos/seed/buffertest/1080/1350"}]},
+                  },
+                  "asset_list_metadata_type_post": {
+                      **base_input,
+                      "metadata": {"instagram": {"type": "post"}},
+                      "assets": [{"image": {"url": "https://picsum.photos/seed/buffertest2/1080/1350"}}],
+                  },
+              }
+              for label, test_input in attempts.items():
+                  print(f"\n--- Dry-run attempt: {label} ---")
+                  print(f"  Input: {json.dumps(test_input, indent=2)}")
+                  resp = gql(mutation, {"input": test_input})
+                  print(f"  Response: {json.dumps(resp, indent=2)}")
+                  if resp.get("error"):
+                      print("  ⚠️ Mutation rejected — see error body above")
+                  elif "errors" in resp:
+                      print(f"  ⚠️ GraphQL errors: {resp['errors']}")
                   else:
-                      print(f"  ⚠️ Unknown typename: {tn}")
+                      result = resp.get("data", {}).get("createPost", {}) or {}
+                      tn = result.get("__typename", "?")
+                      if tn == "PostActionSuccess":
+                          print(f"  ✅ SUCCESS — post id={result.get('post', {}).get('id')}")
+                          print(f"  ⚠️ Delete the test draft from Buffer dashboard after verifying")
+                          break
+                      elif tn == "MutationError":
+                          print(f"  ❌ MutationError: {result.get('message')}")
+                      else:
+                          print(f"  ⚠️ Unknown typename: {tn}")
           EOF
