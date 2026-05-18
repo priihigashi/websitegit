@@ -646,6 +646,14 @@ def _extract_target_from_subject(subject: str) -> dict:
 
 
 def _pick_target_posts(reply: dict, pending: list[dict]) -> list[dict]:
+    # When an explicit retry is in flight, honor it FIRST so the legacy
+    # pending[:1] fallback can't silently route the retry to a fresh
+    # pending_approval row that entered the catalog after approval.
+    retry_pid = os.environ.get("RETRY_BUFFER_POST_ID", "").strip()
+    if retry_pid:
+        scoped = [p for p in pending if p.get("post_id", "") == retry_pid]
+        if scoped:
+            return scoped
     tgt = _extract_target_from_subject(reply.get("subject", ""))
     fid = tgt.get("folder_id", "")
     if fid:
