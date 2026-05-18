@@ -231,3 +231,58 @@ Next safest action:
 1. Do not rerun the full content workflow just to test motion; the current topic fails content/source gates unrelated to motion.
 2. Decide whether Phase 1 can close with static fallback accepted for no-clip cases.
 3. If actual Cover D motion is required, add a curated real clip source first, then rerun a narrow Cover D proof.
+
+## 2026-05-18 Real Drive MP4 Proof Candidate
+
+Status: READY FOR PRISCILA VISUAL REVIEW — not signed off yet.
+
+What changed:
+- Added a real OPC shared-drive clip to `Ideas & Inbox` → `📋 Clip Collections`, row 21:
+  - Topic: `concrete slab pouring during construction`
+  - Niche: `OPC`
+  - Link: `https://drive.google.com/file/d/1rjSQeMhjbwriy1095qm8IVCrOAQ1Q5S2/view?usp=drivesdk`
+  - Source clip: `IMG_7268.MOV`, 15.75s, 2160x3840, 44.1MB, concrete truck pouring slab/rebar.
+- `9dbcf25` — fixed black/glitch first frame by recording one warm-up second and trimming it from the final MP4 in `record_motion_slides()`.
+- `52545ec` — added regression test proving `allow_giphy=0` makes `tier_giphy()` return `False`.
+
+Proof run before warm-up fix:
+- Run `26038692318` — SUCCESS on commit `ef8d991`.
+- Version: https://drive.google.com/drive/folders/1sXyZJWsPKtJz_eLMddbuWWN9-bGlpTBu
+- Motion: https://drive.google.com/drive/folders/1Kl4E5ZjoB6oqdGi8K3oZ4B4uYwD8iew6
+- Result: real Drive clip path worked, but visual audit found a black first frame. Not the final candidate.
+
+Fresh proof evidence after warm-up fix:
+- Run `26039101745` — SUCCESS on commit `9dbcf25`.
+- Version: https://drive.google.com/drive/folders/1OPb27ORTVlh3QmNwUCXys_inVOhhA7PG
+- Motion: https://drive.google.com/drive/folders/1ggequFvuAVKKh67Y13sWwzXzgHRDo1AM
+- MP4: https://drive.google.com/file/d/1t6n5snyw4YyaCOB-xfpanMzV7qnP77Ms/view?usp=drivesdk
+- Story doc: https://docs.google.com/document/d/1K8iC-aqoBCT5H811NAc6TOZNrPU-pGGsl6uq4O0yOTs/edit?usp=drivesdk
+
+Log proof:
+- `MOTION_ENABLED=1`
+- `MOTION_PHASE1_TEST=1`
+- `MOTION_COVER_LAYOUT=D`
+- `MOTION_FORCE_NO_CLIP=0`
+- `KLING_APPROVE=0`
+- `motion_sources: Clip Collections candidates=1`
+- `motion_sources: Clip Collections → cover.mp4 (45109KB)`
+- `build_motion_html: Phase 1 proof mode — cover motion HTML only`
+- `Motion HTML: motion_slide_1.html (clip: cover.mp4)`
+- `Remotion/Kling/Ken Burns: skipped by Phase 1 guard`
+- `Motion recorded: cream_01_cover_motion.mp4 (2154KB)`
+
+Drive inventory:
+- Motion folder includes one motion MP4: `cream_01_cover_motion.mp4`.
+- Motion folder also includes `cream_01_cover_motion.gif` and static PNGs for slides 2-5.
+- No `cream_02_*_motion.mp4`, `cream_03_*_motion.mp4`, or middle-slide motion MP4 exists.
+
+Local visual audit:
+- Downloaded final MP4 and extracted frames.
+- Final MP4 is exactly 5.0s, 1080x1350, 25fps.
+- Black/glitch first frame is gone after `9dbcf25`.
+- Text remains static; real concrete clip appears in the framed right-side motion window.
+
+Remaining gate:
+- Priscila must visually approve or request adjustment.
+- Do not update NN-M5 as signed off until Priscila approves the fresh proof.
+- Do not enable cron/prod motion.
