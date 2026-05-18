@@ -4308,12 +4308,19 @@ def fetch_clips(content, work_dir):
 
     # Fetch each slot through the unified 7-tier chain
     for slot_name, slide_idx, sugg in clip_slots:
+        sugg = dict(sugg)
+        # Clip Collections matches against the real post topic/niche. The LLM
+        # clip suggestion can omit those fields, so preserve the workflow topic
+        # before deciding whether the slot has enough information to fetch.
+        if not sugg.get("topic"):
+            sugg["topic"] = content.get("topic") or os.environ.get("MANUAL_TOPIC", "") or content.get("headline", "")
+        if not sugg.get("niche"):
+            sugg["niche"] = content.get("niche") or os.environ.get("MANUAL_NICHE", "")
         # Require at least one query string
         if not any(sugg.get(k) for k in ("youtube_query", "instagram_query",
                                           "pexels_query", "pixabay_query",
-                                          "archive_query", "wikimedia_query", "query")):
+                                          "archive_query", "wikimedia_query", "query", "topic")):
             continue
-        sugg = dict(sugg)
         # Cover D Phase 1 should not accept generic GIPHY as "motion." Priscila
         # approved the cover layout/photo but rejected random-feeling motion. Use
         # real clips first; if they miss, the HTML falls back to the static cover.
