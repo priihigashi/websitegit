@@ -954,8 +954,13 @@ def record_motion_slides(clip_html_files, output_dir, duration=5):
         mp4_path  = Path(output_dir) / f"cream_{nn}_{base}_motion.mp4"
         gif_path  = Path(output_dir) / f"cream_{nn}_{base}_motion.gif"
         try:
+            # Playwright starts video capture when the browser context is
+            # created, before the HTML/video has fully painted. Record one
+            # warm-up second and trim it out so Cover D never starts on a black
+            # browser/video-loading frame.
+            warmup_s = 1
             r = subprocess.run(
-                ["node", str(record_script), html_path, str(webm_path), str(duration)],
+                ["node", str(record_script), html_path, str(webm_path), str(duration + warmup_s)],
                 capture_output=True, timeout=120
             )
             if r.returncode != 0 or not webm_path.exists():
@@ -964,7 +969,7 @@ def record_motion_slides(clip_html_files, output_dir, duration=5):
                 continue
             # Convert webm → mp4
             subprocess.run([
-                "ffmpeg", "-y", "-i", str(webm_path),
+                "ffmpeg", "-y", "-ss", str(warmup_s), "-i", str(webm_path), "-t", str(duration),
                 "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "18",
                 str(mp4_path)
             ], capture_output=True, timeout=60)
