@@ -205,15 +205,23 @@ jobs:
                   "saveToDraft": True,
               }
               attempts = {
-                  "legacy_assets_metadata_type_post": {
+                  "legacy_assets_metadata_type_post_share_feed": {
                       **base_input,
-                      "metadata": {"instagram": {"type": "post"}},
+                      "metadata": {"instagram": {"type": "post", "shouldShareToFeed": True}},
                       "assets": {"images": [{"url": "https://picsum.photos/seed/buffertest/1080/1350"}]},
                   },
-                  "asset_list_metadata_type_post": {
+                  "asset_list_metadata_type_post_share_feed": {
                       **base_input,
-                      "metadata": {"instagram": {"type": "post"}},
+                      "metadata": {"instagram": {"type": "post", "shouldShareToFeed": True}},
                       "assets": [{"image": {"url": "https://picsum.photos/seed/buffertest2/1080/1350"}}],
+                  },
+                  "asset_list_metadata_type_carousel_share_feed": {
+                      **base_input,
+                      "metadata": {"instagram": {"type": "carousel", "shouldShareToFeed": True}},
+                      "assets": [
+                          {"image": {"url": "https://picsum.photos/seed/buffertest3a/1080/1350"}},
+                          {"image": {"url": "https://picsum.photos/seed/buffertest3b/1080/1350"}},
+                      ],
                   },
               }
               for label, test_input in attempts.items():
