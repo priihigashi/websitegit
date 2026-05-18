@@ -286,3 +286,40 @@ Remaining gate:
 - Priscila must visually approve or request adjustment.
 - Do not update NN-M5 as signed off until Priscila approves the fresh proof.
 - Do not enable cron/prod motion.
+
+---
+
+## PHASE 1 CLOSED — 2026-05-18
+
+**Visual approval granted by Priscila.**
+
+Cover D motion proof from run `26052378925` approved after the 2-second warmup trim (commit `53d70fe`) eliminated the black-bar flicker.
+
+### Final artifacts
+- Version folder: https://drive.google.com/drive/folders/1IuI7ilWcKAQWNX96GgGbz5uDZ97nd4M5
+- Motion folder: https://drive.google.com/drive/folders/1ILcte4M-q3iV4lqZErqHhuVCYgzlJAKI
+- Source clip: `drive.google.com/file/d/1rjSQeMhjbwriy1095qm8IVCrOAQ1Q5S2` (📋 Clip Collections row 21 — concrete slab pouring)
+- Final MP4: `cream_01_cover_motion.mp4` (2209KB)
+
+### Sign-off commit
+`295acff` — NN-M5 PHASE 1 SIGNED OFF block in `NONNEGOTIABLES.md`
+
+### Pipeline Fix Master Checklist
+Rows P1-D-01..P1-D-05 (154-158) all marked **Done** with proof links.
+
+### Final fix lineage
+- `ef8d991` — Drive-hosted MP4 support (OAuth + supportsAllDrives)
+- `9dbcf25` — initial 1s Playwright warmup trim (insufficient)
+- `91eb831` — wait for bg-image + img tags before recording
+- `53d70fe` — **bump warmup trim 1s → 2s (FINAL — flicker eliminated)**
+
+### Phase 1 behavior confirmed in production
+- Real curated clip in Clip Collections → Cover D motion built from real Drive MP4
+- No curated clip → static PNG only, no MP4, no fake motion
+- GIPHY disabled for OPC Cover D
+- No middle-slide motion
+- No Ken Burns / Kling / Remotion
+- Cron `MOTION_ENABLED` stays `0`
+
+### Phase 2 deferred (do not implement until spec approved)
+Middle-slide motion · Option B full-bleed slow ambient · Kling · Remotion · Layout C · GIPHY for OPC Cover D
