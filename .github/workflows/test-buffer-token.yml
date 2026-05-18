@@ -13,7 +13,7 @@ jobs:
       - name: Introspect Buffer schema — SchedulingType enum + Channel query
         run: |
           python3 - <<'EOF'
-          import os, urllib.request, json
+          import os, urllib.request, urllib.error, json
 
           key = os.environ.get("BUFFER_API_KEY", "")
 
@@ -28,7 +28,22 @@ jobs:
               try:
                   return json.loads(urllib.request.urlopen(req, timeout=15).read())
               except urllib.error.HTTPError as e:
-                  return {"error": e.read().decode()[:500]}
+                  return {"http_error": e.code, "error": e.read().decode()[:1000]}
+
+          def type_name(t):
+              if not t:
+                  return "None"
+              if t.get("name"):
+                  return t["name"]
+              inner = t.get("ofType")
+              return type_name(inner) if inner else "None"
+
+          def show(title, payload, max_chars=4000):
+              print(f"\n=== {title} ===")
+              text = json.dumps(payload, indent=2)
+              print(text[:max_chars])
+              if len(text) > max_chars:
+                  print(f"... truncated ({len(text)} chars total)")
 
           # 1. SchedulingType enum values
           print("=== SchedulingType enum ===")
@@ -41,8 +56,8 @@ jobs:
           fields = r.get("data", {}).get("__type", {}).get("inputFields", [])
           for f in fields:
               t = f["type"]
-              type_name = t.get("name") or (t.get("ofType") or {}).get("name")
-              print(f"  {f['name']:25} {type_name}")
+              t_name = t.get("name") or (t.get("ofType") or {}).get("name")
+              print(f"  {f['name']:25} {t_name}")
 
           # 3. Channel query structure
           print("\n=== Query.channel args ===")
@@ -53,6 +68,13 @@ jobs:
                   args = [(a["name"], (a["type"].get("name") or (a["type"].get("ofType") or {}).get("name"))) for a in f.get("args", [])]
                   print(f"  {f['name']}: {args}")
 
+          print("\n=== Query fields containing account/org/channel/user/viewer ===")
+          for f in fields:
+              name = f["name"].lower()
+              if any(k in name for k in ("account", "org", "channel", "user", "viewer")):
+                  args = [(a["name"], type_name(a.get("type"))) for a in f.get("args", [])]
+                  print(f"  {f['name']}: {args} -> {type_name(f.get('type'))}")
+
           # 4. ShareMode enum values
           print("\n=== ShareMode enum ===")
           r = gql('{ __type(name: "ShareMode") { enumValues { name } } }')
@@ -60,12 +82,17 @@ jobs:
 
           # 5. ChannelInput fields
           print("\n=== ChannelInput fields ===")
-          r = gql('{ __type(name: "ChannelInput") { inputFields { name type { name kind ofType { name } } } } }')
-          fields = r.get("data", {}).get("__type", {}).get("inputFields", [])
-          for f in fields:
-              t = f["type"]
-              type_name = t.get("name") or (t.get("ofType") or {}).get("name")
-              print(f"  {f['name']:25} {type_name}")
+          for type_to_probe in ("Account", "Organization", "Channel", "ChannelInput", "ChannelsInput", "ChannelsResponse", "ChannelConnection"):
+              print(f"\n--- {type_to_probe} fields ---")
+              r = gql('query($name:String!){ __type(name:$name) { kind fields { name type { name kind ofType { name kind ofType { name } } } args { name type { name kind ofType { name } } } } inputFields { name type { name kind ofType { name kind ofType { name } } } } } }', {"name": type_to_probe})
+              typ = (r.get("data") or {}).get("__type")
+              if not typ:
+                  print(json.dumps(r, indent=2)[:2000])
+                  continue
+              entries = typ.get("fields") or typ.get("inputFields") or []
+              for f in entries:
+                  args = [(a["name"], type_name(a.get("type"))) for a in f.get("args", [])]
+                  print(f"  {f['name']:30} {type_name(f.get('type'))} args={args}")
 
           # 6. PostInputMetaData fields — find Instagram post type field
           print("\n=== PostInputMetaData fields ===")
@@ -74,16 +101,18 @@ jobs:
           if fields:
               for f in fields:
                   t = f["type"]
-                  type_name = t.get("name") or (t.get("ofType") or {}).get("name")
-                  print(f"  {f['name']:25} {type_name}")
+                  t_name = t.get("name") or (t.get("ofType") or {}).get("name")
+                  print(f"  {f['name']:25} {t_name}")
           else:
               print("  (no fields found — type may be named differently)")
 
           # 7. Instagram channel lookup (the channelId we need for CreatePost)
           print("\n=== Instagram channel lookup ===")
           r = gql('{ account { organizations { id name channels { id service serviceUsername name } } } }')
+          show("Raw account.organizations.channels response", r)
           ig_channel = None
           orgs = (r.get("data", {}) or {}).get("account", {}).get("organizations", []) or []
+          print(f"  Organization count: {len(orgs)}")
           for org in orgs:
               for ch in org.get("channels", []) or []:
                   if "instagram" in (ch.get("service") or "").lower():
@@ -99,6 +128,27 @@ jobs:
               for org in orgs:
                   for ch in org.get("channels", []) or []:
                       print(f"    {ch}")
+
+          print("\n=== Alternate channel queries ===")
+          alternate_queries = {
+              "account_only": "{ account { id email } }",
+              "account_orgs_only": "{ account { organizations { id name } } }",
+              "channels_empty_input": "{ channels(input: {}) { id service serviceUsername name } }",
+              "channels_no_input": "{ channels { id service serviceUsername name } }",
+          }
+          for label, query in alternate_queries.items():
+              show(label, gql(query), max_chars=2500)
+
+          print("\n=== Channel query by discovered org ids ===")
+          for org in orgs:
+              org_id = org.get("id")
+              if not org_id:
+                  continue
+              for query in (
+                  'query($id: OrganizationId!){ channels(input:{ organizationId:$id }) { id service serviceUsername name } }',
+                  'query($id: ID!){ channels(input:{ organizationId:$id }) { id service serviceUsername name } }',
+              ):
+                  show(f"channels for org {org_id}", gql(query, {"id": org_id}), max_chars=2500)
 
           # 8. DRY-RUN: CreatePost mutation as draft (won't go to live queue)
           if ig_channel:
