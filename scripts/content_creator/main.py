@@ -18,7 +18,7 @@ Flow:
 from __future__ import annotations
 
 import json, os, re, sys, time, subprocess, shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import pytz
 try:
@@ -72,6 +72,17 @@ TEMPLATE_ROTATION_ENABLED = os.environ.get("TEMPLATE_ROTATION_ENABLED", "1").str
 # planner + standalone Python builders (Phase 6) have side-by-side parity with
 # the band-aid. See SH-OPC-SMART-SLIDE-PICKER detail doc for rollout plan.
 OPC_SLIDE_PLANNER_ENABLED = os.environ.get("OPC_SLIDE_PLANNER_ENABLED", "0").strip().lower() in ("1", "true", "yes")
+# Phase E (2026-05-18) — OPC bundle picker mode: off|shadow|on.
+#   off    = legacy 5-tip path only (production default, unchanged behavior)
+#   shadow = bundle picker runs and logs its decision to 'Picker Decisions' tab,
+#            but legacy 5-tip path still renders + ships
+#   on     = bundle picker drives content gen + render (variable 4-8 slides)
+# Validation runs use shadow before flipping to on. See OPC bundle plan rows 130-132.
+OPC_BUNDLE_PICKER = os.environ.get("OPC_BUNDLE_PICKER", "off").strip().lower()
+if OPC_BUNDLE_PICKER not in ("off", "shadow", "on"):
+    print(f"  [E] OPC_BUNDLE_PICKER={OPC_BUNDLE_PICKER!r} not in (off|shadow|on) — defaulting to off")
+    OPC_BUNDLE_PICKER = "off"
+OPC_BUNDLE_DEFAULT_ID = os.environ.get("OPC_BUNDLE_DEFAULT_ID", "cream_base_v1").strip() or "cream_base_v1"
 MANUAL_MODE = os.environ.get("MANUAL_MODE", "0").strip().lower() in ("1", "true", "yes")
 MANUAL_TOPIC = os.environ.get("MANUAL_TOPIC", "").strip()
 if MANUAL_TOPIC:
@@ -1223,6 +1234,47 @@ def add_catalog_row(post_id, niche, series, topic, static_link, motion_link, tok
     print(f"  Catalog row added: {post_id}")
 
 
+def log_picker_decision(post_id: str, topic: str, niche: str, mode: str,
+                         bundle_id: str, target_count: int, plan: dict,
+                         validator_pass: bool, fallback_triggered: bool,
+                         storytelling_score: str = "", notes: str = ""):
+    """Phase E (2026-05-18) — append one row to 'Picker Decisions' tab.
+    Non-fatal — failure here must never fail the overall build.
+
+    Schema: TIMESTAMP_UTC | POST_ID | TOPIC | NICHE | MODE | BUNDLE_ID |
+            TARGET_SLIDE_COUNT | SEQUENCE_JSON | VALIDATOR_PASS |
+            FALLBACK_TRIGGERED | STORYTELLING_SCORE | NOTES
+    """
+    import urllib.request, urllib.parse
+    try:
+        token = get_oauth_token()
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        seq_summary = " → ".join(
+            (s.get("template_id") or "?") for s in (plan or {}).get("slides", [])
+        )
+        row = [[
+            ts, post_id[:60], topic[:100], niche, mode, bundle_id or "",
+            str(target_count or ""), seq_summary[:300],
+            "TRUE" if validator_pass else "FALSE",
+            "TRUE" if fallback_triggered else "FALSE",
+            str(storytelling_score), notes[:200],
+        ]]
+        enc = urllib.parse.quote("Picker Decisions!A:L", safe="!:")
+        url = (
+            f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}"
+            f":append?valueInputOption=RAW&insertDataOption=INSERT_ROWS"
+        )
+        payload = json.dumps({"values": row}).encode()
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        )
+        urllib.request.urlopen(req, timeout=10)
+        print(f"  [picker-decisions] logged: {mode} | {bundle_id or 'none'} | {seq_summary[:80]}")
+    except Exception as e:
+        print(f"  [picker-decisions] log failed (non-fatal): {e}")
+
+
 def write_build_history(slug: str, topic: str, niche: str, series: str, drive_url: str, token: str):
     """Append one row to the Build History tab after a successful build.
 
@@ -1571,13 +1623,38 @@ def process_one_topic(topic_entry, run_date, drive):
     if niche == "opc" and OPC_SLIDE_PLANNER_ENABLED:
         try:
             from opc_template_chooser import plan_carousel_slides
-            _early_plan = plan_carousel_slides(topic, brief or "")
-            if _early_plan.get("status") != "passed" or len(_early_plan.get("slides", [])) != 5:
-                print(f"  smart-plan (early): skipped ({_early_plan.get('status')}) — using legacy tip path")
-                _early_plan = None
-            else:
-                slide_summary = " → ".join(s["template_id"] for s in _early_plan["slides"])
-                print(f"  smart-plan (early): {slide_summary}")
+            # Phase E (2026-05-18) — bundle picker shadow/on mode
+            _bundle_mode = OPC_BUNDLE_PICKER
+            if _bundle_mode in ("shadow", "on"):
+                try:
+                    _bundle_plan = plan_carousel_slides(topic, brief or "", bundle_id=OPC_BUNDLE_DEFAULT_ID)
+                except TypeError:
+                    # plan_carousel_slides may not accept bundle_id yet (older revision)
+                    _bundle_plan = {"status": "error", "slides": [], "reason": "bundle_id_arg_missing"}
+                _bundle_slides = _bundle_plan.get("slides", []) or []
+                _bundle_valid = (
+                    _bundle_plan.get("status") == "passed"
+                    and 4 <= len(_bundle_slides) <= 8
+                )
+                log_picker_decision(
+                    post_id, topic, niche, _bundle_mode, OPC_BUNDLE_DEFAULT_ID,
+                    len(_bundle_slides), _bundle_plan, _bundle_valid,
+                    fallback_triggered=(_bundle_mode == "on" and not _bundle_valid),
+                    notes="" if _bundle_valid else (_bundle_plan.get("reason") or "invalid_plan")[:200],
+                )
+                if _bundle_mode == "on" and _bundle_valid:
+                    _early_plan = _bundle_plan
+                    slide_summary = " → ".join(s["template_id"] for s in _early_plan["slides"])
+                    print(f"  smart-plan (bundle ON, {OPC_BUNDLE_DEFAULT_ID}): {slide_summary}")
+            # Shadow mode + on-mode-fallback + off mode → use legacy 5-tip planner
+            if _early_plan is None:
+                _early_plan = plan_carousel_slides(topic, brief or "")
+                if _early_plan.get("status") != "passed" or len(_early_plan.get("slides", [])) != 5:
+                    print(f"  smart-plan (early): skipped ({_early_plan.get('status')}) — using legacy tip path")
+                    _early_plan = None
+                else:
+                    slide_summary = " → ".join(s["template_id"] for s in _early_plan["slides"])
+                    print(f"  smart-plan (early): {slide_summary}")
         except Exception as exc:
             print(f"  smart-plan (early): error {exc!r} — using legacy tip path")
             _early_plan = None

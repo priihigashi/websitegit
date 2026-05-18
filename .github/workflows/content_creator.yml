@@ -95,6 +95,16 @@ on:
         required: false
         default: ''
         type: string
+      opc_bundle_picker:
+        description: 'Phase E (2026-05-18) — OPC bundle picker mode. off=legacy only (default). shadow=picker logs decision, legacy renders. on=picker drives 4-8 slide rendering.'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - 'off'
+          - 'shadow'
+          - 'on'
       note_parser_gate:
         description: 'Cycle A1 (2026-05-18) — hold builds when notes say "find videos" / "research clips" / etc. Default ON (1) now that Anthropic credits are restored. Override to "0" to skip.'
         required: false
@@ -168,6 +178,10 @@ jobs:
       # PR0 (2026-05-15) — per-template allowlist for SH-158 standalone rollback. Default empty = full rollback (back-compat).
       # Each ID added must clear its media-relevance gate first. See docs/research/opc_standalone_failure_mode.md.
       OPC_STANDALONE_ALLOWLIST: ${{ github.event.inputs.opc_standalone_allowlist || '' }}
+      # Phase E (2026-05-18) — OPC bundle picker mode. Default off = current production
+      # behavior (legacy 5-tip path). Set to 'shadow' to start collecting picker decisions
+      # without changing render output. Set to 'on' after 5 validation runs pass.
+      OPC_BUNDLE_PICKER: ${{ github.event.inputs.opc_bundle_picker || 'off' }}
       # Cycle A1 (2026-05-18) — note-parser gate. Holds builds when notes contain 'find videos' /
       # 'research clips' / etc. Default ON (1) now that Anthropic credits are restored (PROOF-003).
       # Originally disabled by commit 31ce521 pending credit restore. Plan v3 § P2.1.
@@ -362,6 +376,10 @@ jobs:
       # PR0 (2026-05-15) — per-template allowlist for SH-158 standalone rollback. Default empty = full rollback (back-compat).
       # Each ID added must clear its media-relevance gate first. See docs/research/opc_standalone_failure_mode.md.
       OPC_STANDALONE_ALLOWLIST: ${{ github.event.inputs.opc_standalone_allowlist || '' }}
+      # Phase E (2026-05-18) — OPC bundle picker mode. Default off = current production
+      # behavior (legacy 5-tip path). Set to 'shadow' to start collecting picker decisions
+      # without changing render output. Set to 'on' after 5 validation runs pass.
+      OPC_BUNDLE_PICKER: ${{ github.event.inputs.opc_bundle_picker || 'off' }}
       # Cycle A1 (2026-05-18) — note-parser gate. Holds builds when notes contain 'find videos' /
       # 'research clips' / etc. Default ON (1) now that Anthropic credits are restored (PROOF-003).
       # Originally disabled by commit 31ce521 pending credit restore. Plan v3 § P2.1.
