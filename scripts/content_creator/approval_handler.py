@@ -86,6 +86,7 @@ SHEET_ID = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1
 CATALOG_TAB = "📸 Project Content Catalog"
 BUFFER_KEY = os.environ.get("BUFFER_API_KEY", "")
 BUFFER_API = "https://api.bufferapp.com/1"
+BUFFER_GRAPHQL_API = "https://api.buffer.com"
 
 # Drive folder IDs
 READY_TO_POST_OPC = ""  # Created on first use
@@ -730,6 +731,142 @@ def _buffer_expiry_check():
             print(f"  Buffer expiry check failed: {exc}")
 
 
+def _buffer_graphql(query, variables=None):
+    """Call Buffer's GraphQL API. Raises BufferAuthError on token rejection."""
+    payload = json.dumps({"query": query, "variables": variables or {}}).encode()
+    req = urllib.request.Request(
+        BUFFER_GRAPHQL_API,
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {BUFFER_KEY}",
+            "Content-Type": "application/json",
+            "User-Agent": "approval_handler/1.0",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        return json.loads(urllib.request.urlopen(req, timeout=30).read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:500]
+        if e.code == 401:
+            raise BufferAuthError(
+                "Buffer API token rejected with HTTP 401 on GraphQL. "
+                "Renew BUFFER_API_KEY_EXP04092027."
+            ) from e
+        raise RuntimeError(f"Buffer GraphQL HTTP {e.code}: {body}") from e
+
+
+def _buffer_channel_text(channel):
+    return " ".join(str(channel.get(k) or "") for k in (
+        "service", "serviceId", "name", "displayName", "descriptor", "type", "externalLink"
+    )).lower()
+
+
+def _buffer_find_channel(platform="instagram"):
+    """Return a healthy Buffer channel dict for the requested platform."""
+    explicit_id = os.environ.get(f"BUFFER_OPC_{platform.upper()}_PROFILE_ID", "").strip()
+    if explicit_id:
+        print(f"  Using explicit Buffer channel id from BUFFER_OPC_{platform.upper()}_PROFILE_ID")
+        return {"id": explicit_id, "service": platform, "displayName": explicit_id}
+
+    query = """
+    {
+      account {
+        organizations {
+          id
+          name
+          channels {
+            id
+            service
+            serviceId
+            name
+            displayName
+            descriptor
+            isDisconnected
+            isLocked
+            isQueuePaused
+            type
+            externalLink
+          }
+        }
+      }
+    }
+    """
+    resp = _buffer_graphql(query)
+    if resp.get("errors"):
+        raise RuntimeError(f"Buffer GraphQL channel lookup errors: {resp['errors']}")
+
+    orgs = (((resp.get("data") or {}).get("account") or {}).get("organizations") or [])
+    candidates = []
+    for org in orgs:
+        for channel in org.get("channels", []) or []:
+            if platform.lower() in _buffer_channel_text(channel):
+                channel["_org_name"] = org.get("name", "")
+                candidates.append(channel)
+
+    healthy = [
+        ch for ch in candidates
+        if not ch.get("isDisconnected") and not ch.get("isLocked")
+    ]
+    if not healthy:
+        print(f"  No healthy Buffer channel for {platform}. Candidates: {candidates}")
+        return None
+    channel = healthy[0]
+    print(
+        f"  Buffer channel: {channel.get('displayName') or channel.get('name')} "
+        f"({channel.get('service')}, {channel.get('id')})"
+    )
+    return channel
+
+
+def _buffer_create_graphql_post(channel_id, caption, image_urls, mode="addToQueue",
+                                due_at=None, save_to_draft=False):
+    """Create an Instagram feed post through Buffer GraphQL."""
+    mutation = """
+    mutation CreatePost($input: CreatePostInput!) {
+      createPost(input: $input) {
+        __typename
+        ... on PostActionSuccess {
+          post { id dueAt status text }
+        }
+        ... on MutationError {
+          message
+        }
+        ... on UnexpectedError {
+          message
+        }
+      }
+    }
+    """
+    post_input = {
+        "text": caption or "",
+        "channelId": channel_id,
+        "schedulingType": "automatic",
+        "mode": mode,
+        "saveToDraft": save_to_draft,
+        "source": "approval_handler.py",
+        "metadata": {
+            "instagram": {
+                "type": "post",
+                "shouldShareToFeed": True,
+            },
+        },
+        "assets": [{"image": {"url": url}} for url in image_urls[:10]],
+    }
+    if due_at:
+        post_input["dueAt"] = due_at
+
+    resp = _buffer_graphql(mutation, {"input": post_input})
+    if resp.get("errors"):
+        raise RuntimeError(f"Buffer GraphQL createPost errors: {resp['errors']}")
+    result = ((resp.get("data") or {}).get("createPost") or {})
+    typename = result.get("__typename")
+    if typename == "PostActionSuccess":
+        return result.get("post") or {}
+    message = result.get("message") or json.dumps(result)[:500]
+    raise RuntimeError(f"Buffer GraphQL createPost failed ({typename}): {message}")
+
+
 def _buffer_find_slot(profile_id, min_ts=None):
     """
     Return scheduled_at Unix timestamp for the next available slot (max 3/day).
@@ -771,42 +908,10 @@ def schedule_to_buffer(variant, drive_folder_id, caption="", platform="instagram
 
     _buffer_expiry_check()
 
-    # Niche-aware profile selection (added 2026-05-08).
-    # If BUFFER_OPC_<PLATFORM>_PROFILE_ID env var is set, use it directly —
-    # bypasses the "first matching profile" coin-toss when multiple accounts
-    # are connected to the same Buffer login.
-    # Env var name pattern: BUFFER_OPC_INSTAGRAM_PROFILE_ID, BUFFER_OPC_TIKTOK_PROFILE_ID, etc.
-    explicit_id = os.environ.get(f"BUFFER_OPC_{platform.upper()}_PROFILE_ID", "").strip()
-
-    profile_id = None
-    if explicit_id:
-        profile_id = explicit_id
-        print(f"  Using explicit Buffer profile_id from BUFFER_OPC_{platform.upper()}_PROFILE_ID env var")
-    else:
-        # Fallback: query Buffer profiles + pick first matching service
-        profiles_url = f"{BUFFER_API}/profiles.json?access_token={BUFFER_KEY}"
-        try:
-            profiles = json.loads(urllib.request.urlopen(profiles_url, timeout=15).read())
-        except urllib.error.HTTPError as e:
-            if e.code == 401:
-                raise BufferAuthError(
-                    "Buffer API token rejected with HTTP 401 on /profiles.json. "
-                    "Renew BUFFER_API_KEY_EXP04092027."
-                ) from e
-            print(f"  Buffer profiles error: {e}")
-            return False
-        except Exception as e:
-            print(f"  Buffer profiles error: {e}")
-            return False
-
-        for p in profiles:
-            if platform.lower() in p.get("service", "").lower():
-                profile_id = p["id"]
-                break
-
-        if not profile_id:
-            print(f"  No Buffer profile for {platform}")
-            return False
+    channel = _buffer_find_channel(platform)
+    if not channel:
+        print(f"  No Buffer channel for {platform}")
+        return False
 
     drive = _get_drive_service()
     image_urls = _get_variant_image_urls(drive, drive_folder_id, variant)
@@ -814,61 +919,25 @@ def schedule_to_buffer(variant, drive_folder_id, caption="", platform="instagram
         print(f"  No {variant} images found in Drive folder {drive_folder_id}")
         return False
 
-    slot_ts = _buffer_find_slot(profile_id, min_ts=_min_ts)
-
-    params = [
-        ("access_token", BUFFER_KEY),
-        ("text", caption),
-        ("now", "false"),
-    ]
-    params.append(("profile_ids[]", profile_id))
-    if slot_ts:
-        params.append(("scheduled_at", str(slot_ts)))
-
-    if len(image_urls) == 1:
-        params.append(("media[picture]", image_urls[0]))
-    else:
-        for url in image_urls[:10]:
-            params.append(("media[photos][]", url))
-
-    payload = urllib.parse.urlencode(params).encode()
-    req = urllib.request.Request(
-        f"{BUFFER_API}/updates/create.json",
-        data=payload,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-    )
+    due_at = None
+    if _min_ts:
+        due_at = datetime.fromtimestamp(_min_ts, pytz.UTC).isoformat()
+    mode = "customScheduled" if due_at else "addToQueue"
 
     last_error = None
     for attempt in range(3):
         try:
-            resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
-            if resp.get("success") or resp.get("id") or "updates" in resp:
-                slot_info = (datetime.fromtimestamp(slot_ts, ET).strftime("%Y-%m-%d %H:%M ET")
-                             if slot_ts else "queue")
-                print(f"  Buffer scheduled: {variant} ({len(image_urls)} slides) → {slot_info}")
-                if _repeat and slot_ts:
-                    repeat_min = slot_ts + 30 * 24 * 3600
-                    schedule_to_buffer(variant, drive_folder_id, caption=caption,
-                                       platform=platform, _repeat=False, _min_ts=repeat_min)
-                    rdt = datetime.fromtimestamp(repeat_min, ET).strftime("%Y-%m-%d")
-                    print(f"  Buffer 30-day repeat queued → earliest slot from {rdt}")
-                return True
-            print(f"  Buffer rejected: {resp}")
-            return False
-        except urllib.error.HTTPError as he:
-            last_error = he
-            if he.code == 401:
-                raise BufferAuthError(
-                    "Buffer API token rejected with HTTP 401 on /updates/create.json. "
-                    "Renew BUFFER_API_KEY_EXP04092027."
-                ) from he
-            if he.code in (429, 500, 502, 503, 504):
-                wait = 2 ** attempt
-                print(f"  Buffer attempt {attempt + 1} failed (HTTP {he.code}) — retry in {wait}s")
-                time.sleep(wait)
-            else:
-                print(f"  Buffer HTTP {he.code}: {he}")
-                return False
+            post = _buffer_create_graphql_post(
+                channel["id"], caption, image_urls, mode=mode, due_at=due_at
+            )
+            slot_info = post.get("dueAt") or ("custom schedule" if due_at else "queue")
+            print(
+                f"  Buffer scheduled: {variant} ({len(image_urls)} slides) "
+                f"→ {slot_info} (post {post.get('id')})"
+            )
+            return True
+        except BufferAuthError:
+            raise
         except Exception as exc:
             last_error = exc
             wait = 2 ** attempt
