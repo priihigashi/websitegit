@@ -1835,6 +1835,22 @@ def process_replies():
                         if not _buf_ok:
                             raise RuntimeError("schedule_to_buffer returned False")
                         print(f"  Buffer scheduled OK: {post_id} ({variant})")
+                    except BufferAuthError as _auth_exc:
+                        # Auth failure needs human action (renew token), not retry.
+                        # Distinct stage label so it's filterable in Pipeline Failures tab.
+                        _err_str = str(_auth_exc)
+                        stats["buffer_failures"] += 1
+                        _log_pipeline_failure_to_sheet("buffer_schedule.token_auth", _err_str)
+                        _send_failure_alert(
+                            f"🔑 Buffer token needs renewal — {post_id}",
+                            f"Buffer rejected the token while trying to schedule {post_id} ({variant}).\n"
+                            f"Action: renew BUFFER_API_KEY_EXP04092027 at buffer.com → Settings → Apps.\n"
+                            f"Then update the GitHub secret and re-run approval_check.yml with\n"
+                            f"RETRY_BUFFER_POST_ID={post_id} to replay this post.\n\n"
+                            f"Error: {_err_str}\n"
+                            f"Static folder: https://drive.google.com/drive/folders/{static_folder_id}\n"
+                            f"Run: https://github.com/priihigashi/oak-park-ai-hub/actions/runs/{_GHA_RUN_ID}",
+                        )
                     except Exception as _buf_exc:
                         _err_str = str(_buf_exc)
                         stats["buffer_failures"] += 1
