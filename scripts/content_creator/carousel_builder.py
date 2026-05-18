@@ -45,6 +45,81 @@ SLIDE_PURPOSE_NEWS_6SLIDE_BY_INDEX = {
     1: "claim", 2: "number", 3: "evidence", 4: "opposition", 5: "implication", 6: "sources",
 }
 
+_GENERIC_QUERY_WORDS = {
+    "construction", "house", "home", "building", "renovation",
+    "contractor", "kitchen", "bathroom", "outdoor", "indoor",
+    "work", "project", "site", "job", "tools", "repair",
+}
+_QUERY_STOPWORDS = {
+    "the", "and", "for", "with", "this", "that", "from", "into",
+    "your", "you", "are", "was", "have", "how", "what", "when",
+    "where", "why", "a", "an", "of", "to", "in", "on", "by", "or",
+    "at", "as", "is", "it",
+}
+
+
+def _query_words(q: str) -> list[str]:
+    return [
+        w for w in re.findall(r"[a-z0-9]+", (q or "").lower())
+        if len(w) > 2 and w not in _QUERY_STOPWORDS
+    ]
+
+
+def _is_query_too_generic(q: str) -> bool:
+    """True when a stock query is empty, one vague word, or only generic words."""
+    words = _query_words(q)
+    if not words:
+        return True
+    if len(words) <= 1:
+        return True
+    return all(w in _GENERIC_QUERY_WORDS for w in words)
+
+
+def _synthesize_specific_query(q: str, topic: str = "", slide_type: str = "", niche: str = "opc") -> str:
+    """Turn a vague image query into a stock-searchable construction/news query."""
+    topic_words = [
+        w for w in _query_words(topic)
+        if w not in _GENERIC_QUERY_WORDS and not w.isdigit()
+    ][:5]
+    seed_words = [
+        w for w in _query_words(q)
+        if w not in _GENERIC_QUERY_WORDS
+    ][:3]
+    base = " ".join(seed_words or topic_words)
+    if not base:
+        base = "residential construction"
+    if niche == "opc":
+        action = "installation" if slide_type in ("product-photo", "context-image") else "detail"
+        return f"{base} {action} residential south florida".strip()
+    if niche == "brazil":
+        return f"{base} Brasil governo instituicao fachada".strip()
+    if niche == "usa":
+        return f"{base} US government institution exterior".strip()
+    return f"{base} documentary photo".strip()
+
+
+def enforce_specific_context_queries(content: dict, topic: str = "", niche: str = "opc") -> dict:
+    """Rewrite generic slide context queries before media fetch spends provider calls."""
+    if not isinstance(content, dict):
+        return content
+    rewrites = []
+    for idx, slide in enumerate(content.get("slides", []) or [], start=2):
+        if not isinstance(slide, dict):
+            continue
+        slide_type = str(slide.get("visual_hint") or slide.get("type") or "")
+        for field in ("context_image_query", "context_image_query_alt"):
+            current = str(slide.get(field) or "").strip()
+            if not current or not _is_query_too_generic(current):
+                continue
+            replacement = _synthesize_specific_query(current, topic, slide_type, niche)
+            slide[field] = replacement
+            rewrites.append({"slide": idx, "field": field, "from": current, "to": replacement})
+            print(f"  [A1.2] slide{idx}: generic {field} rewritten -> {replacement!r}")
+    if rewrites:
+        content.setdefault("_query_policy", {})
+        content["_query_policy"]["generic_context_query_rewrites"] = rewrites
+    return content
+
 
 def _local_font_face_css() -> str:
     """Return @font-face declarations with base64-encoded WOFF2 fonts embedded inline.
@@ -3565,6 +3640,8 @@ def fetch_all_media(content, niche, work_dir, brief="", topic=""):
             # Phase 11/M1 — present only when known (e.g. opc_catalog matches).
             "service_type": service_type,
         }
+
+    enforce_specific_context_queries(content, topic=topic, niche=niche)
 
     # ── COVER IMAGE CASCADE ────────────────────────────────────────────────
     # Named-person covers: Wiki REST → Wikimedia Commons → bio-initials (NO AI).
