@@ -298,6 +298,82 @@ Pending after the run:
 2. If pass + visual OK — reply `APPROVE` to preview email. `approval_handler.py` schedules to Buffer.
 3. If fail — pull `gh run view 25939918327 --log-failed`, identify whatever new blocker emerged, file in this section as Prompt A.3.
 
+## 2026-05-17 19:50 ET — Buffer Retry Plan (Deep Audit)
+
+Audited against origin/main `6624ee4`. Confirms Codex's `093006d` and corrects prior plan drift.
+
+### Corrected facts (replacing prior drift)
+
+- Final approved version folder: `1LyGQowJU2x48MrOGc_zP82peV2t2zCU_` — `v8_concrete-block-vs-wood-framing--the-cos` (NOT `13qr-...` from earlier note; that was an earlier iteration).
+- Final PNG folder: `1aOCd3wY43g9KFsbDqMPXLyMiIk-vMesD`
+- Final motion folder: `13kUkaKDnBN4HzctqHbnjX4aVH4IdT16U`
+- All 3 folder IDs verified via Drive API 2026-05-17.
+- `bbea9ce` is NOT a Prompt A commit — it is a capture/resource bridge change (Codex correctly flagged this).
+- Prompt A scope is the SINGLE post `opc-tip-20260517-concrete-block-vs-wo`. Backlog scheduling is out of scope.
+
+### Codex commit `093006d` — verified end-to-end
+
+All claims real, file:line references:
+
+- `.github/workflows/approval_check.yml:8-13` — new `retry_post_id` workflow_dispatch input.
+- `.github/workflows/approval_check.yml:28` — wired into `RETRY_BUFFER_POST_ID` env var.
+- `scripts/content_creator/approval_handler.py:21-22` — `BufferAuthError` class added.
+- `scripts/content_creator/approval_handler.py:783-789` — 401 on `/profiles.json` raises BufferAuthError.
+- `scripts/content_creator/approval_handler.py:852-857` — 401 on `/updates/create.json` raises BufferAuthError.
+- `scripts/content_creator/approval_handler.py:1356,1370-1395` — `_get_pending_posts()` includes the `approved` row matching `RETRY_BUFFER_POST_ID`.
+- `scripts/content_creator/approval_handler.py:1395` — emits `RETRY_BUFFER_POST_ID matched approved row: <post_id>` (grep marker).
+- `scripts/content_creator/approval_handler.py:1657` — `buffer_failures` counter added to stats dict.
+- `scripts/content_creator/approval_handler.py:1829` — `sys.exit(1)` when `buffer_failures > 0` (fixes silent-success bug).
+
+### Pending — 3 steps, strictly ordered
+
+Step 1 — ONLY Priscila can do this:
+
+- Generate new Buffer API token at buffer.com → Settings → Apps.
+- Update secret: `~/bin/gh secret set BUFFER_API_KEY_EXP04092027 --repo priihigashi/oak-park-ai-hub`
+- Verify: `~/bin/gh secret list --repo priihigashi/oak-park-ai-hub | grep BUFFER` — timestamp should be 2026-05-17.
+
+Step 2 — trigger retry workflow:
+
+```bash
+~/bin/gh workflow run approval_check.yml \
+  --repo priihigashi/oak-park-ai-hub \
+  -f retry_post_id="opc-tip-20260517-concrete-block-vs-wo"
+```
+
+Execution path:
+
+1. Workflow `approval_check.yml:30` sets `RETRY_BUFFER_POST_ID` env.
+2. `approval_handler.py:1356` reads it.
+3. `_get_pending_posts()` includes the approved row.
+4. `process_replies()` re-runs approve path → calls `schedule_to_buffer(variant, static_folder_id, caption)`.
+5. Buffer `/profiles.json` succeeds with new token (no 401).
+6. Buffer `/updates/create.json` schedules.
+7. Logs print `Buffer scheduled OK: opc-tip-20260517-concrete-block-vs-wo (<variant>)`.
+8. Script exits 0.
+
+Step 3 — verify DONE (all 5 must be true):
+
+1. `~/bin/gh run list --repo priihigashi/oak-park-ai-hub --workflow approval_check.yml --limit 1` → conclusion=success
+2. Log grep: `RETRY_BUFFER_POST_ID matched approved row: opc-tip-20260517-concrete-block-vs-wo` (one match)
+3. Log grep: `Buffer scheduled OK: opc-tip-20260517-concrete-block-vs-wo` (one match)
+4. Buffer dashboard https://publish.buffer.com Instagram queue shows the carousel with 5 slides from folder `1aOCd3wY43g9KFsbDqMPXLyMiIk-vMesD` at a future scheduled time
+5. Issue #154 closed: `~/bin/gh issue close 154 --repo priihigashi/oak-park-ai-hub --comment "Resolved — Buffer token renewed, post scheduled. See run <id>."`
+
+### Known edge case (not a blocker for today)
+
+`approval_handler.py:663` `_pick_target_posts` legacy fallback is `return pending[:1]`. If a new OPC `pending_approval` row enters the catalog between now and the retry, that row would be processed instead of the retry row. Currently extremely unlikely. Mitigation: verify catalog has no OPC pending rows before triggering Step 2.
+
+### Out of scope for Prompt A
+
+- Issue #156 (News pipeline audit) — DEFERRED until Prompt A ships.
+- Catalog backlog scheduling (other approved-but-unscheduled posts) — separate cleanup, not Prompt A.
+- Tech debt: catalog never transitions to "scheduled" — stays at "approved" forever. Re-running retry on already-scheduled post would schedule again. Log a `_scheduled` status migration for a future commit.
+
+### Goal Done = post visible in Buffer Instagram queue with future scheduled time, AND issue #154 closed.
+
+---
+
 ## Prompt A.2 RESULT — 2026-05-15 16:38 ET
 
 Run 25939918327 (f5bd143 with my fix) completed in 6m55s — `conclusion: success`.
