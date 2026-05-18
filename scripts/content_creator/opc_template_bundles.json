@@ -1,0 +1,28 @@
+{
+  "cream_base_v1": {
+    "color_family": "cream",
+    "always_include": ["opc_tip_cover", "opc_tip_sources"],
+    "middle_pool": [
+      "opc_tip_stat",
+      "opc_tip_list",
+      "opc_tip_explainer",
+      "opc_four_card_grid",
+      "opc_statement",
+      "opc_item_spotlight"
+    ],
+    "min_slides": 4,
+    "max_slides": 8
+  },
+  "dark_base_v1": {
+    "color_family": "dark",
+    "always_include": ["opc_base", "opc_tip_sources"],
+    "middle_pool": [
+      "opc_duotone",
+      "opc_progress_media",
+      "opc_material_profile",
+      "opc_statement"
+    ],
+    "min_slides": 4,
+    "max_slides": 7
+  }
+}

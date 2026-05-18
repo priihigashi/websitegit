@@ -1,0 +1,110 @@
+{
+  "opc_tip_cover": {
+    "purpose": "hook",
+    "base": "cream",
+    "bundles": ["cream_base_v1"],
+    "text_capacity": {"primary": 80, "secondary": 120},
+    "image_slots": {"required": 1, "optional": 0, "type": "cover"},
+    "good_for": ["topic intro", "cost hook", "risk hook"],
+    "bad_for": ["comparison grid", "sources", "long explanation"]
+  },
+  "opc_tip_stat": {
+    "purpose": "quantify",
+    "base": "cream",
+    "bundles": ["cream_base_v1"],
+    "text_capacity": {"primary": 18, "secondary": 95},
+    "image_slots": {"required": 0, "optional": 1, "type": "context"},
+    "good_for": ["single big number", "cost range", "percentage"],
+    "bad_for": ["multi-item checklist", "before/after", "four-way comparison"]
+  },
+  "opc_tip_list": {
+    "purpose": "teach",
+    "base": "cream",
+    "bundles": ["cream_base_v1"],
+    "text_capacity": {"primary": 70, "items": 3, "chars_per_item": 90},
+    "image_slots": {"required": 0, "optional": 1, "type": "context"},
+    "good_for": ["3-item checklist", "why-it-happens", "warning signs"],
+    "bad_for": ["comparison", "single big number", "before/after"]
+  },
+  "opc_tip_explainer": {
+    "purpose": "apply",
+    "base": "cream",
+    "bundles": ["cream_base_v1"],
+    "text_capacity": {"primary": 70, "body": 260},
+    "image_slots": {"required": 0, "optional": 1, "type": "context"},
+    "good_for": ["one action", "contractor advice", "closing callback"],
+    "bad_for": ["source list", "four options", "long tutorial"]
+  },
+  "opc_tip_sources": {
+    "purpose": "sources",
+    "base": "cream",
+    "bundles": ["cream_base_v1", "dark_base_v1"],
+    "text_capacity": {"sources": 4, "chars_per_source": 120},
+    "image_slots": {"required": 0, "optional": 1, "type": "context"},
+    "good_for": ["receipts", "CTA", "source-backed close"],
+    "bad_for": ["new argument", "visual comparison"]
+  },
+  "opc_material_profile": {
+    "purpose": "educate",
+    "base": "dark",
+    "bundles": ["dark_base_v1"],
+    "text_capacity": {"fields": 6, "chars_per_field": 80, "decision_factors": 4},
+    "image_slots": {"required": 0, "optional": 0, "type": "none"},
+    "good_for": ["material education", "product profile", "decision factors"],
+    "bad_for": ["before/after", "single quote", "four photo comparison"]
+  },
+  "opc_four_card_grid": {
+    "purpose": "compare",
+    "base": "cream",
+    "bundles": ["cream_base_v1"],
+    "text_capacity": {"items": 4, "chars_per_item": 100},
+    "image_slots": {"required": 4, "optional": 0, "type": "thumbnail"},
+    "good_for": ["X vs Y comparisons", "4 dimensions of a topic", "material options"],
+    "bad_for": ["single insight", "long explanation"]
+  },
+  "opc_item_spotlight": {
+    "purpose": "spotlight",
+    "base": "cream",
+    "bundles": ["cream_base_v1"],
+    "text_capacity": {"facts": 4, "chars_per_fact": 90},
+    "image_slots": {"required": 1, "optional": 0, "type": "closeup"},
+    "good_for": ["one product", "one fixture", "one material choice"],
+    "bad_for": ["broad comparison", "source slide", "long process"]
+  },
+  "opc_statement": {
+    "purpose": "claim",
+    "base": "shared",
+    "bundles": ["cream_base_v1", "dark_base_v1"],
+    "text_capacity": {"primary": 140, "secondary": 160},
+    "image_slots": {"required": 0, "optional": 1, "type": "person"},
+    "good_for": ["quotes", "myths", "single insight", "rule of thumb"],
+    "bad_for": ["comparisons", "lists", "source receipts"]
+  },
+  "opc_base": {
+    "purpose": "hook",
+    "base": "dark",
+    "bundles": ["dark_base_v1"],
+    "text_capacity": {"primary": 85, "secondary": 140},
+    "image_slots": {"required": 1, "optional": 1, "type": "hero"},
+    "good_for": ["dark cover", "project intro", "high-contrast hook"],
+    "bad_for": ["sources", "four-card comparison"]
+  },
+  "opc_progress_media": {
+    "purpose": "proof",
+    "base": "dark",
+    "bundles": ["dark_base_v1"],
+    "text_capacity": {"primary": 80, "body": 180, "pills": 3},
+    "image_slots": {"required": 1, "optional": 0, "type": "jobsite"},
+    "good_for": ["before/after", "project showcase", "field update"],
+    "bad_for": ["abstract advice", "source list"]
+  },
+  "opc_duotone": {
+    "purpose": "myth",
+    "base": "dark",
+    "bundles": ["dark_base_v1"],
+    "text_capacity": {"primary": 90, "quote": 180},
+    "image_slots": {"required": 1, "optional": 0, "type": "hero"},
+    "good_for": ["contrarian claim", "warning", "myth debunk"],
+    "bad_for": ["4-item checklist", "source receipts"]
+  }
+}

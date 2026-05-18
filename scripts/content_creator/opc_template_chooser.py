@@ -29,6 +29,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REGISTRY = ROOT / "docs" / "templates" / "opc_template_intelligence.json"
+TEMPLATE_CATALOG_PATH = ROOT / "scripts" / "content_creator" / "opc_template_catalog.json"
+TEMPLATE_BUNDLES_PATH = ROOT / "scripts" / "content_creator" / "opc_template_bundles.json"
 
 
 SIGNALS = {
@@ -607,13 +609,193 @@ def _slide_goal(template_id: str, role: str, topic: str) -> str:
     return role_goals.get(role, f"Slide {role} for '{topic}'.")
 
 
+def load_template_catalog(path: Path = TEMPLATE_CATALOG_PATH) -> dict[str, Any]:
+    if not path.exists():
+        raise FileNotFoundError(f"OPC template catalog not found: {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_template_bundles(path: Path = TEMPLATE_BUNDLES_PATH) -> dict[str, Any]:
+    if not path.exists():
+        raise FileNotFoundError(f"OPC template bundles not found: {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _target_count_for_bundle(matches: dict[str, Any], bundle: dict[str, Any], requested: int | None) -> int:
+    if requested:
+        target = int(requested)
+    elif "comparison" in matches:
+        target = 6
+    elif "progress" in matches:
+        target = 6
+    elif "quote_statement" in matches or "single_item" in matches:
+        target = 4
+    elif "warning" in matches:
+        target = 5
+    else:
+        target = 5
+    return max(int(bundle["min_slides"]), min(int(bundle["max_slides"]), target))
+
+
+def _bundle_middle_preferences(matches: dict[str, Any], bundle_id: str) -> list[str]:
+    if bundle_id == "dark_base_v1":
+        if "progress" in matches:
+            return ["opc_progress_media", "opc_duotone", "opc_statement", "opc_material_profile"]
+        if "material" in matches:
+            return ["opc_material_profile", "opc_statement", "opc_duotone", "opc_progress_media"]
+        if "warning" in matches:
+            return ["opc_duotone", "opc_statement", "opc_material_profile", "opc_progress_media"]
+        return ["opc_statement", "opc_material_profile", "opc_duotone", "opc_progress_media"]
+
+    if "comparison" in matches:
+        return ["opc_four_card_grid", "opc_tip_stat", "opc_statement", "opc_tip_explainer", "opc_tip_list", "opc_item_spotlight"]
+    if "single_item" in matches:
+        return ["opc_statement", "opc_item_spotlight", "opc_tip_stat", "opc_tip_explainer", "opc_tip_list"]
+    if "quote_statement" in matches:
+        return ["opc_statement", "opc_tip_stat", "opc_tip_explainer", "opc_tip_list", "opc_item_spotlight"]
+    if "warning" in matches:
+        return ["opc_tip_list", "opc_statement", "opc_tip_stat", "opc_tip_explainer", "opc_four_card_grid"]
+    if "material" in matches:
+        return ["opc_item_spotlight", "opc_tip_stat", "opc_tip_list", "opc_tip_explainer", "opc_statement"]
+    return ["opc_tip_stat", "opc_tip_list", "opc_tip_explainer", "opc_statement", "opc_item_spotlight"]
+
+
+def _dedupe_keep_order(items: list[str]) -> list[str]:
+    seen = set()
+    out = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
+def _role_for_template(template_id: str, index: int, last_index: int) -> str:
+    if index == 1:
+        return "cover"
+    if index == last_index:
+        return "sources"
+    role_map = {
+        "opc_tip_stat": "quantify",
+        "opc_tip_list": "teach",
+        "opc_tip_explainer": "apply",
+        "opc_four_card_grid": "compare",
+        "opc_statement": "claim",
+        "opc_item_spotlight": "spotlight",
+        "opc_material_profile": "educate",
+        "opc_progress_media": "proof",
+        "opc_duotone": "myth",
+        "opc_base": "cover",
+    }
+    return role_map.get(template_id, "middle")
+
+
+def _make_plan_slide(slide_num: int, template_id: str, role: str, topic: str) -> dict[str, Any]:
+    return {
+        "slide": slide_num,
+        "role": role,
+        "template_id": template_id,
+        "content_goal": _slide_goal(template_id, role, topic),
+        "image_need": SLIDE_IMAGE_NEED.get(template_id, "1 image"),
+        "required_fields": SLIDE_REQUIRED_FIELDS.get(template_id, []),
+        "production_safe": template_id in PRODUCTION_SAFE_TEMPLATE_IDS,
+        "fallback_template_id": (
+            STANDALONE_TO_TIP_FALLBACK.get(template_id)
+            if template_id not in PRODUCTION_SAFE_TEMPLATE_IDS else None
+        ),
+    }
+
+
+def _plan_from_bundle(
+    topic: str,
+    brief: str,
+    bundle_id: str,
+    target_slide_count: int | None,
+    registry_path: Path,
+) -> dict[str, Any]:
+    catalog = load_template_catalog()
+    bundles = load_template_bundles()
+    bundle = bundles.get(bundle_id)
+    if not bundle:
+        return {
+            "topic": topic,
+            "status": "blocked",
+            "reason": f"unknown bundle_id: {bundle_id}",
+            "bundle_id": bundle_id,
+            "slides": [],
+            "safety_notes": ["Unknown OPC template bundle."],
+        }
+
+    rec = build_recommendation(topic, brief, registry_path)
+    if rec.get("status") != "passed":
+        return {
+            "topic": topic,
+            "status": rec.get("status", "blocked"),
+            "reason": rec.get("opc_content_fit", {}).get("reason", "blocked"),
+            "bundle_id": bundle_id,
+            "slides": [],
+            "safety_notes": ["Plan blocked at OPC content-fit gate."],
+        }
+
+    matches = rec["storytelling_read"]["matched_signals"]
+    target = _target_count_for_bundle(matches, bundle, target_slide_count)
+    middle_count = max(0, target - 2)
+    pool = list(bundle.get("middle_pool") or [])
+    prefs = [p for p in _bundle_middle_preferences(matches, bundle_id) if p in pool]
+    sequence = _dedupe_keep_order(prefs + pool)[:middle_count]
+    if len(sequence) < middle_count:
+        sequence.extend(pool[: middle_count - len(sequence)])
+
+    always = bundle.get("always_include") or []
+    cover = always[0]
+    sources = always[-1]
+    template_sequence = [cover] + sequence + [sources]
+
+    plan_slides = []
+    last = len(template_sequence)
+    for idx, template_id in enumerate(template_sequence, start=1):
+        if template_id not in catalog:
+            return {
+                "topic": topic,
+                "status": "blocked",
+                "reason": f"template {template_id!r} missing from catalog",
+                "bundle_id": bundle_id,
+                "slides": [],
+                "safety_notes": ["Catalog/bundle contract failed."],
+            }
+        role = _role_for_template(template_id, idx, last)
+        plan_slides.append(_make_plan_slide(idx, template_id, role, topic))
+
+    return {
+        "topic": topic,
+        "status": "passed",
+        "bundle_id": bundle_id,
+        "color_family": bundle.get("color_family"),
+        "target_slide_count": target,
+        "primary_recommendation": rec.get("primary_recommendation"),
+        "matched_signals": list(matches.keys()),
+        "comparison_pair": rec["storytelling_read"].get("comparison_pair"),
+        "slides": plan_slides,
+        "safety_notes": [
+            "Bundle mode only - legacy 5-slide path remains unchanged unless caller passes bundle_id.",
+            "Do not render bundle plans until bundle-aware validator and dynamic render loop are enabled.",
+        ],
+    }
+
+
 def plan_carousel_slides(
     topic: str,
     brief: str = "",
     registry_path: Path = DEFAULT_REGISTRY,
+    target_slide_count: int | None = 5,
+    bundle_id: str | None = None,
 ) -> dict[str, Any]:
-    """Return a 5-slide plan: each slide gets its own template_id chosen for the
-    slide ROLE and the topic's storytelling signals.
+    """Return a slide plan.
+
+    Back-compat default: without bundle_id this returns the same 5-slide plan
+    used by the current renderer. Bundle mode is opt-in and returns 4-8 slides
+    from one color-family bundle.
 
     Output schema:
       {
@@ -639,6 +821,9 @@ def plan_carousel_slides(
 
     The renderer uses fallback_template_id when production_safe=False so the
     plan can describe the IDEAL design even before standalones are wired."""
+    if bundle_id:
+        return _plan_from_bundle(topic, brief, bundle_id, target_slide_count, registry_path)
+
     rec = build_recommendation(topic, brief, registry_path)
     if rec.get("status") != "passed":
         return {
