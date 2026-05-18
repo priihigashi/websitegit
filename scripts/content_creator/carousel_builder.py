@@ -3607,35 +3607,33 @@ def fetch_all_media(content, niche, work_dir, brief="", topic=""):
                 _set_cover(c, "wikimedia", "cc", query=search_q)
 
         # Step 2 — non-person covers: AI cascade FIRST (prompt-specific, realistic)
-        # SH-049: OPC is real-photos-only — skip ALL AI providers here, fall through to Wikimedia/Pexels.
+        # SH-049 (corrected 2026-05-17): OPC blocks ONLY DALL-E + Seedream 5.0 + SDXL.
+        # NB2, Seedream 4.5, and Gemini are allowed — Priscila approved 2026-05-17.
+        # DALL-E remains blocked: cartoonish style not credible for real construction work.
+        _opc_ai_skip = ["dall-e-3", "seedream-5.0", "sdxl"]
         if not paths["cover"] and subject_type != "person":
-            if _IMAGE_PROVIDERS_AVAILABLE and niche != "opc":
+            if _IMAGE_PROVIDERS_AVAILABLE:
                 fresh_prompt = _build_img_prompt(
                     slide_text=search_q, context_image_query=search_q,
                     niche=niche, slide_num=1, subject_type=subject_type,
                     work_dir=work_dir, save=True, brief=brief,
                 ) or ai_prompt
                 cover_fname = _make_img_filename(search_q, "ai", 1)
-                c, used_prov = _gen_ai_image(fresh_prompt, work_dir, cover_fname)
+                _skip = _opc_ai_skip if niche == "opc" else None
+                c, used_prov = _gen_ai_image(fresh_prompt, work_dir, cover_fname, skip_providers=_skip)
                 if c and _vision_accept(c, search_q, f"cover/{used_prov}", work_dir=work_dir):
                     _set_cover(c, used_prov, "ai", query=search_q, prompt=fresh_prompt)
-            elif _IMAGE_PROVIDERS_AVAILABLE and niche == "opc":
-                print(
-                    f"  [OPC] cover: all AI tiers skipped (SH-049 real-photo-only). "
-                    f"Falling through to Wikimedia/Pexels for '{search_q[:50]}'"
-                )
             elif ai_prompt:
                 # Legacy fallback when image_providers not available.
-                # OPC: DALL-E is forbidden — real photos only (SH-039). Skip all AI tiers.
-                if not (niche == "opc"):
-                    c = _generate_gemini_image(ai_prompt, work_dir, cover_fname)
-                    if c and _vision_accept(c, search_q, "cover/gemini", work_dir=work_dir):
-                        _set_cover(c, "gemini", "ai", query=search_q, prompt=ai_prompt)
+                # OPC allowed: Gemini. OPC blocked: Seedream, DALL-E, SDXL.
+                c = _generate_gemini_image(ai_prompt, work_dir, cover_fname)
+                if c and _vision_accept(c, search_q, "cover/gemini", work_dir=work_dir):
+                    _set_cover(c, "gemini", "ai", query=search_q, prompt=ai_prompt)
                 if not paths["cover"] and not (niche == "opc"):
                     c = _generate_seedream_image(ai_prompt, work_dir, cover_fname)
                     if c and _vision_accept(c, search_q, "cover/seedream", work_dir=work_dir):
                         _set_cover(c, "seedream", "ai", query=search_q, prompt=ai_prompt)
-                # DALL-E: explicitly skipped for OPC (real-photo only — SH-039)
+                # DALL-E: explicitly skipped for OPC (cartoonish style — SH-039)
                 if not paths["cover"] and not (niche == "opc"):
                     c = _generate_ai_cover(ai_prompt, work_dir, cover_fname)
                     if c and _vision_accept(c, search_q, "cover/dall-e-3", work_dir=work_dir):
@@ -3646,7 +3644,7 @@ def fetch_all_media(content, niche, work_dir, brief="", topic=""):
                         _set_cover(c, "sdxl", "ai", query=search_q, prompt=ai_prompt)
                 if not paths["cover"] and niche == "opc":
                     print(
-                        f"  [OPC] cover: AI tiers skipped (real-photo only). "
+                        f"  [OPC] cover: Gemini missed + Seedream/DALL-E/SDXL blocked. "
                         f"Falling through to Wikimedia/Pexels/Pixabay for '{search_q[:50]}'"
                     )
 
@@ -3782,32 +3780,31 @@ def fetch_all_media(content, niche, work_dir, brief="", topic=""):
                 _log_failure("image_library/slide_lookup", _e)
 
         # Tier 1: AI cascade — NB2 → Seedream 4.5 → Seedream 5.0 → Gemini → SDXL → DALL-E
-        # SH-049: OPC is real-photos-only — skip ALL AI providers, fall through to Wikimedia/Pexels.
-        if not accepted and _IMAGE_PROVIDERS_AVAILABLE and niche != "opc":
+        # SH-049 (corrected 2026-05-17): OPC blocks ONLY DALL-E + Seedream 5.0 + SDXL.
+        # NB2, Seedream 4.5, and Gemini are allowed — Priscila approved 2026-05-17.
+        if not accepted and _IMAGE_PROVIDERS_AVAILABLE:
             fresh_prompt = _build_img_prompt(
                 slide_text=cq, context_image_query=cq,
                 niche=niche, slide_num=i, work_dir=work_dir, save=True, brief=brief,
             ) or ai_prompt
             fname = _make_img_filename(cq, "ai", i)
-            img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname)
+            _skip = ["dall-e-3", "seedream-5.0", "sdxl"] if niche == "opc" else None
+            img_path, used_prov = _gen_ai_image(fresh_prompt, work_dir, fname, skip_providers=_skip)
             if img_path and _vision_accept(img_path, cq, f"slide{i}/{used_prov}", work_dir=work_dir):
                 print(f"  Slide {i}: {used_prov} image for '{cq[:50]}'")
                 _set_slide(i, img_path, used_prov, "ai", query=cq, prompt=fresh_prompt)
                 accepted = True
             else:
                 img_path = ""
-        elif not accepted and _IMAGE_PROVIDERS_AVAILABLE and niche == "opc":
-            print(f"  [OPC] slide{i}: AI tiers skipped (SH-049). Falling through to Wikimedia/Pexels.")
-        else:
+        elif not accepted:
             # Legacy fallback when image_providers not available.
-            # OPC: skip DALL-E (AI-generated photos not allowed for OPC — real photos only).
-            if not (niche == "opc"):
-                img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
-                if img_path and _vision_accept(img_path, cq, f"slide{i}/gemini", work_dir=work_dir):
-                    _set_slide(i, img_path, "gemini", "ai", query=cq, prompt=ai_prompt)
-                    accepted = True
-                else:
-                    img_path = ""
+            # OPC allowed: Gemini. OPC blocked: Seedream, DALL-E, SDXL.
+            img_path = _generate_gemini_image(ai_prompt, work_dir, fname)
+            if img_path and _vision_accept(img_path, cq, f"slide{i}/gemini", work_dir=work_dir):
+                _set_slide(i, img_path, "gemini", "ai", query=cq, prompt=ai_prompt)
+                accepted = True
+            else:
+                img_path = ""
             if not accepted and not (niche == "opc"):
                 img_path = _generate_seedream_image(ai_prompt, work_dir, fname)
                 if img_path and _vision_accept(img_path, cq, f"slide{i}/seedream", work_dir=work_dir):
