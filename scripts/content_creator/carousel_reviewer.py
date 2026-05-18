@@ -1018,6 +1018,26 @@ def check_opc_professional_ethics(content: dict) -> list[str]:
     return issues
 
 
+def check_news_template_dispatch(content: dict, niche: str) -> list[str]:
+    """Ensure the news template selected upstream is the one build_html rendered."""
+    if niche not in ("brazil", "usa") or not isinstance(content, dict):
+        return []
+    trace = content.get("_template_trace") if isinstance(content.get("_template_trace"), dict) else {}
+    resolved = (content.get("_template_key_resolved") or trace.get("resolved") or "native").strip().lower()
+    rendered = (content.get("_template_key_rendered") or "").strip().lower()
+    if resolved in ("illustrated", "cutout") and not rendered:
+        return [
+            f"[template-dispatch] resolved={resolved!r} but renderer did not record a template. "
+            "Chosen news template may have fallen through to native."
+        ]
+    if rendered and resolved != rendered:
+        return [
+            f"[template-dispatch] resolved={resolved!r} but rendered={rendered!r} — "
+            "chosen news template fell through to the wrong renderer."
+        ]
+    return []
+
+
 def _check_provenance(prov: dict, topic: str = "") -> list[str]:
     """Read media_provenance.json dict and flag AI-sourced images +
     category mismatches (Phase 10 wrong-image gate).
@@ -2253,12 +2273,13 @@ def check_built_post(result: dict) -> dict:
     niche   = result.get("niche", "")
 
     all_issues = []
+    _content_dict = result.get("content", {}) or {}
+    all_issues.extend(check_news_template_dispatch(_content_dict, niche))
 
     # 0. Phase 5 — smart slide-plan gates (Phase 4 picker output validation).
     # Runs FIRST so a hallucinated/banned plan blocks the post before any
     # render/PNG/Drive cost. No-op for posts that don't use the planner.
     if niche == "opc":
-        _content_dict = result.get("content", {}) or {}
         all_issues.extend(check_slide_plan(_content_dict))
         # Phase 10 — sources-vs-claims gate. If $/%/years appear on any
         # slide, the sources list must cite a credible external authority.

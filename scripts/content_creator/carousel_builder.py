@@ -4843,15 +4843,20 @@ def build_html(content, niche, topic_slug, work_dir, handle="@HANDLE_PLACEHOLDER
     if niche in ("brazil", "usa"):
         template_key = content.get("_template_key")
         if template_key == "who-is":
+            content["_template_key_rendered"] = "who-is"
             return _build_who_is_html(content, topic_slug, work_dir, handle=handle, media_paths=media_paths)
         if template_key == "the-case":
+            content["_template_key_rendered"] = "the-case"
             return _build_the_case_html(content, topic_slug, work_dir, handle=handle, media_paths=media_paths)
         if template_key in ("illustrated", "cutout"):
+            content["_template_key_rendered"] = template_key
             return _build_news_shared_template_html(
                 content, topic_slug, work_dir, template_key, handle=handle, media_paths=media_paths, niche=niche
             )
         if template_key == "verdade-pela-metade":
+            content["_template_key_rendered"] = "verdade-pela-metade"
             return _build_verdade_html(content, topic_slug, work_dir, handle=handle, media_paths=media_paths)
+        content["_template_key_rendered"] = "native"
         return _build_brazil_html(content, topic_slug, work_dir, handle=handle, media_paths=media_paths)
     return None
 

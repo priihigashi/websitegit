@@ -1450,14 +1450,14 @@ def process_one_topic(topic_entry, run_date, drive):
         _opc_type = _resolve_opc_template(topic_entry, topic, run_date)
         post_id = f"opc-{_opc_type}-{run_date}-{slug[:20]}"
     elif niche == "usa":
-        _tmpl = (topic_entry.get("template_key") or "native").lower()
+        _tmpl = _resolve_news_template(topic_entry, niche) or "native"
         post_id = f"usa-{_tmpl}-{run_date}-{slug[:20]}"
     elif series_override == "VERIFICAMOS":
         post_id = f"verificamos-{run_date}-{slug[:20]}"
     elif series_override == "VERDADE PELA METADE":
         post_id = f"verdade-{run_date}-{slug[:20]}"
     else:
-        _tmpl = (topic_entry.get("template_key") or "native").lower()
+        _tmpl = _resolve_news_template(topic_entry, niche) or "native"
         post_id = f"brazil-{_tmpl}-{run_date}-{slug[:20]}"
 
     print(f"\n{'='*60}")
@@ -1554,6 +1554,14 @@ def process_one_topic(topic_entry, run_date, drive):
         template_key = _resolve_news_template(topic_entry, niche)
     else:
         template_key = None
+    if niche in ("brazil", "usa"):
+        _requested_template = (topic_entry.get("template_key") or "auto").strip().lower() or "auto"
+        _resolved_template = template_key or "native"
+        print(
+            f"  [template-resolve] niche={niche} requested={_requested_template!r} "
+            f"resolved={_resolved_template!r} rotation_enabled={TEMPLATE_ROTATION_ENABLED} "
+            f"mode={TEMPLATE_ROTATION_MODE}"
+        )
 
     # Phase 4 (SH-146 improvement): run planner BEFORE content generation so the
     # tip-shape prompt knows which template each slide will use. This lets the LLM
@@ -1626,6 +1634,15 @@ def process_one_topic(topic_entry, run_date, drive):
 
     if content and template_key:
         content["_template_key"] = template_key
+    if content and niche in ("brazil", "usa"):
+        content.setdefault("_template_trace", {})
+        content["_template_trace"].update({
+            "requested": (topic_entry.get("template_key") or "auto").strip().lower() or "auto",
+            "resolved": template_key or "native",
+            "rotation_enabled": TEMPLATE_ROTATION_ENABLED,
+            "rotation_mode": TEMPLATE_ROTATION_MODE,
+        })
+        content["_template_key_resolved"] = template_key or "native"
 
     # Attach plan + run Phase 8A per-template content generation.
     if niche == "opc" and _early_plan and content:
@@ -1699,6 +1716,17 @@ def process_one_topic(topic_entry, run_date, drive):
                         topic, niche, template_key, brief=_retry_brief, slide_plan=_early_plan
                     )
                     if _content2:
+                        if template_key:
+                            _content2["_template_key"] = template_key
+                        if niche in ("brazil", "usa"):
+                            _content2.setdefault("_template_trace", {})
+                            _content2["_template_trace"].update({
+                                "requested": (topic_entry.get("template_key") or "auto").strip().lower() or "auto",
+                                "resolved": template_key or "native",
+                                "rotation_enabled": TEMPLATE_ROTATION_ENABLED,
+                                "rotation_mode": TEMPLATE_ROTATION_MODE,
+                            })
+                            _content2["_template_key_resolved"] = template_key or "native"
                         # Re-run enforcement on retry content
                         if niche == "opc":
                             _content2 = enforce_opc_comparison_parity(_content2, topic, brief or "")
