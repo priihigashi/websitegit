@@ -698,7 +698,7 @@ def _get_variant_image_urls(drive, folder_id, variant):
             ).execute()
         except Exception:
             pass
-        urls.append(f"https://drive.google.com/uc?export=download&id={f['id']}")
+        urls.append(f"https://lh3.googleusercontent.com/d/{f['id']}")
     return urls
 
 

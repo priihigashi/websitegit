@@ -106,3 +106,33 @@ def test_list_variant_png_files_falls_back_to_only_available_nested_variant():
         "cream_01_cover_html.png",
         "cream_02_stat_html.png",
     ]
+
+
+def test_get_variant_image_urls_uses_inline_googleusercontent_urls():
+    class _Request:
+        def __init__(self, files=None):
+            self._files = files or []
+
+        def execute(self):
+            return {"files": self._files}
+
+    class _Permissions:
+        def create(self, **kwargs):
+            return _Request()
+
+    class _Files:
+        def list(self, q, **kwargs):
+            if "name contains 'cream_'" in q:
+                return _Request([{"id": "file_1", "name": "cream_01_cover_html.png"}])
+            return _Request([])
+
+    class _Drive:
+        def files(self):
+            return _Files()
+
+        def permissions(self):
+            return _Permissions()
+
+    urls = ah._get_variant_image_urls(_Drive(), "folder", "cream")
+
+    assert urls == ["https://lh3.googleusercontent.com/d/file_1"]
