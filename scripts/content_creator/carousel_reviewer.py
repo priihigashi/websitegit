@@ -30,6 +30,14 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from image_library import search_library
 try:
+    from opc_source_policy import OPC_BANNED_SOURCE_PATTERNS
+except Exception:
+    OPC_BANNED_SOURCE_PATTERNS = (
+        ("aci 314.1r", "ACI 314.1R is not an OPC masonry-maintenance source; use TMS 402/602 or ACI 530/ASCE 5 only for structural/code criteria."),
+        ("angi", "Angi/HomeAdvisor consumer quote guides cannot be primary proof for OPC numeric claims."),
+        ("homeadvisor", "Angi/HomeAdvisor consumer quote guides cannot be primary proof for OPC numeric claims."),
+    )
+try:
     from PIL import Image, ImageStat  # type: ignore
 except Exception:
     Image = None
@@ -913,11 +921,7 @@ _CREDIBLE_SOURCE_TOKENS = {
     "census", "bls", "cdc", "usda", "energy star", "ashrae",
     "national association", "department of",
 }
-_OPC_BANNED_SOURCE_PATTERNS = (
-    ("aci 314.1r", "ACI 314.1R is not an OPC masonry-maintenance source; use TMS 402/602 or ACI 530/ASCE 5 only for structural/code criteria."),
-    ("angi", "Angi/HomeAdvisor consumer quote guides cannot be primary proof for OPC numeric claims."),
-    ("homeadvisor", "Angi/HomeAdvisor consumer quote guides cannot be primary proof for OPC numeric claims."),
-)
+_OPC_BANNED_SOURCE_PATTERNS = OPC_BANNED_SOURCE_PATTERNS
 
 
 def _flatten_text_from_content(content: dict) -> str:

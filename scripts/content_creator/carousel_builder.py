@@ -980,8 +980,8 @@ MANDATORY SAFETY RULES — apply AFTER writing great content
    - The authority comes from the knowledge, not from claiming experience.
 
 5. Every cost range or statistic needs a qualified source.
-   - Industry data must cite the org (Houzz, NAHB, Remodeling Magazine,
-     ICC/IBC, ACI, ASCE, Florida Building Code/FBC, IRC).
+   - Industry data must cite the org (NAHB, Remodeling Magazine,
+     ICC/IBC, ACI, ASCE, Florida Building Code/FBC, IRC, manufacturer specs).
    - Use "according to [source]" or put the source on the slide itself.
    - DO NOT cite "Oak Park Construction — South Florida contractor data
      2023-2025" UNLESS that exact data point came from a real OPC job log.
@@ -1009,18 +1009,15 @@ MANDATORY SAFETY RULES — apply AFTER writing great content
    - CRITICAL: If proof_needed lists FBC, ACI, IRC, or IBC as the primary
      source, the headline and slide2_stat CANNOT contain a dollar amount.
      Code documents have no cost data. Dollar amounts in the headline require
-     Remodeling Magazine Cost vs Value, NAHB cost benchmarks, Houzz survey,
-     or a contractor range ("estimated $X–$Y depending on scope") — one of
-     these must be in proof_needed before using a dollar figure in the hook.
-   - CONTRACTOR RANGE — VALID SOURCES: HomeAdvisor, Angi, Fixr, Thumbtack
-     publish aggregate consumer quote data for maintenance and repair tasks
-     (concrete repair, driveway work, minor masonry, etc.) — these are
-     acceptable external sources for cost ranges. Use them instead of citing
-     OPC's own data when the topic is a standard maintenance cost.
-     RULE: If proof_needed = "contractor range," the sources slide MUST cite
-     HomeAdvisor, Angi, Fixr, Thumbtack, or Remodeling Magazine as the cost
-     anchor — NOT "Oak Park Construction" alone. OPC data = internal ops, not
-     a public benchmark. A brand cannot be its own external source for pricing.
+     Remodeling Magazine Cost vs Value, NAHB cost benchmarks, a manufacturer
+     technical report, or a clearly qualified "scope-dependent contractor
+     estimate" without pretending it is industry research.
+   - BANNED COST SOURCES: Angi, HomeAdvisor, Thumbtack, Fixr, Reddit, Quora,
+     WikiHow, and Houzz consumer reviews are NOT audit-grade proof for OPC
+     numeric claims. Do not cite them on the sources slide. If you cannot find
+     a public audit-grade source for a cost range, remove the number or write
+     "scope-dependent contractor estimate" without naming a consumer quote
+     aggregator.
 
 6. Tone: Direct, matter-of-fact, no jargon, no hype.
    - Write like a contractor explaining something to a homeowner over coffee.
@@ -1467,7 +1464,7 @@ Rules:
 - Keep it simple, direct, no jargon
 - Stats MUST use ranges (e.g. "$5K-$15K") not exact averages — safer and more honest
 - Every stat must name its source in slide2_label or on the sources slide
-- SOURCE DISCIPLINE: Do not cite Angi/HomeAdvisor as the primary proof for OPC numeric claims. Do not cite ACI 314.1R. For masonry, cite TMS 402/602 or ACI 530/ASCE 5 only for structural/code criteria; for termites cite UF IFAS; for Florida code cite FBC/IRC; for construction cost category share cite NAHB Cost of Constructing a Home. If no audit-grade source supports a dollar range, remove the dollar range.
+- SOURCE DISCIPLINE: Do not cite Angi, HomeAdvisor, Thumbtack, Fixr, Reddit, Quora, WikiHow, Houzz consumer reviews, or ACI 314.1R as proof for OPC numeric claims. For masonry, cite TMS 402/602 or ACI 530/ASCE 5 only for structural/code criteria; for termites cite UF IFAS; for Florida code cite FBC/IRC; for construction cost category share cite NAHB Cost of Constructing a Home. If no audit-grade source supports a dollar range, remove the dollar range or label it as a scope-dependent contractor estimate without citing a consumer quote aggregator.
 - Headlines in ALL CAPS
 - Slide 1 headline MUST include a number, dollar amount, timeframe, or named loss/risk. Never ship a neutral topic label like "CONCRETE OR PAVERS" as the cover headline.
 - Motion metadata is required but manual-only: choose layout_hint from the content, not variety rotation. Use A for a framed sticker/tool/person/product, B for a medium process/place window on middle slides, D only when the cover can be readable as full background video under dark overlay. If unsure, choose A.

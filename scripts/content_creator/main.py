@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))  # for routing.py
 from topic_picker import pick_topics, get_clip_count_for_topic
 from carousel_builder import generate_carousel_content, build_html, render_pngs, generate_image_suggestions, visual_audit, fetch_all_media, fetch_clips, build_motion_html, generate_caption, generate_opc_per_template_content, fetch_template_aware_media, enforce_opc_comparison_parity, validate_opc_template_contract, repair_opc_content, check_comparison_text_parity
+from opc_source_policy import enforce_opc_source_policy
 from routing import get_route
 import urllib.request, urllib.parse
 from email_preview import send_preview, update_catalog_status
@@ -1667,6 +1668,7 @@ def process_one_topic(topic_entry, run_date, drive):
 
     if niche == "opc" and content:
         content = enforce_opc_comparison_parity(content, topic, brief or "")
+        content = enforce_opc_source_policy(content, topic, brief or "")
 
     if niche in ("brazil", "usa"):
         content = _enforce_news_visual_targets(content, topic, niche)
@@ -1700,6 +1702,7 @@ def process_one_topic(topic_entry, run_date, drive):
                         # Re-run enforcement on retry content
                         if niche == "opc":
                             _content2 = enforce_opc_comparison_parity(_content2, topic, brief or "")
+                            _content2 = enforce_opc_source_policy(_content2, topic, brief or "")
                         elif niche in ("brazil", "usa"):
                             _content2 = _enforce_news_visual_targets(_content2, topic, niche)
                         _headlines2 = _extract_arc_headlines(_content2)
