@@ -29,3 +29,14 @@ def test_video_byte_guard_rejects_html_and_accepts_mp4_header():
 
     assert ms._looks_like_video_bytes(html) is False
     assert ms._looks_like_video_bytes(mp4) is True
+
+
+def test_drive_file_id_from_url_supports_view_and_query_urls():
+    assert (
+        ms._drive_file_id_from_url("https://drive.google.com/file/d/ABC_123-xyz/view?usp=drivesdk")
+        == "ABC_123-xyz"
+    )
+    assert (
+        ms._drive_file_id_from_url("https://drive.google.com/uc?id=FILE_456&export=download")
+        == "FILE_456"
+    )

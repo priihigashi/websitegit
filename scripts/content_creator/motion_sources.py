@@ -122,8 +122,50 @@ def _topic_tokens(text: str) -> set[str]:
     return {aliases.get(t, t) for t in tokens if t not in stop}
 
 
+def _drive_file_id_from_url(url: str) -> str:
+    m = re.search(r"/d/([A-Za-z0-9_-]+)", url or "")
+    if not m:
+        m = re.search(r"[?&]id=([A-Za-z0-9_-]+)", url or "")
+    return m.group(1) if m else ""
+
+
+def _download_drive_clip(clip_url: str, dest_path: Path) -> bool:
+    """Download a Drive-hosted MP4 from Clip Collections using SHEETS_TOKEN OAuth."""
+    file_id = _drive_file_id_from_url(clip_url)
+    if not file_id or not SHEETS_TOKEN_RAW:
+        return False
+    try:
+        import io
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaIoBaseDownload
+
+        data = json.loads(SHEETS_TOKEN_RAW)
+        creds = Credentials.from_authorized_user_info(data)
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        drive = build("drive", "v3", credentials=creds)
+        req = drive.files().get_media(fileId=file_id, supportsAllDrives=True)
+        buf = io.BytesIO()
+        dl = MediaIoBaseDownload(buf, req)
+        done = False
+        while not done:
+            _, done = dl.next_chunk()
+        raw = buf.getvalue()
+        if _looks_like_video_bytes(raw):
+            dest_path.write_bytes(raw)
+            return True
+    except Exception as e:
+        print(f"  motion_sources: Clip Collections Drive download miss (non-fatal): {type(e).__name__}")
+    return False
+
+
 def _download_collection_url(clip_url: str, dest_path: Path) -> bool:
     """Download one curated collection URL, preferring yt-dlp for video pages."""
+    if "drive.google.com" in (clip_url or "") and _download_drive_clip(clip_url, dest_path):
+        return True
+
     if shutil.which("yt-dlp"):
         tmp_out = dest_path.parent / (dest_path.stem + ".cc.%(ext)s")
         attempts = [
