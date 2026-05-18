@@ -1,5 +1,24 @@
 # Claude Global Rules — Oak Park Construction / Priscila
 # Every Claude session reads this first. These rules are non-negotiable.
+# Shared task skills live in ~/.agents/skills/<name>/SKILL.md (symlinked into ~/.claude/skills/ and ~/.codex/skills/).
+# Codex mirror: ~/AGENTS.md. Repo source of truth: priihigashi/oak-park-ai-hub.
+
+## PIPELINE REFERENCE DOC — END-TO-END SYSTEM MAP (added 2026-04-19)
+Single source of truth for the full content automation pipeline: URL drop → capture → 4AM agent → carousel build → approval → Buffer → posted.
+Doc: https://docs.google.com/document/d/1XGmbnvyS_WomKl3USVFz-pPg-3agTn5Bl0QpyMbeHs4/edit
+Doc ID: 1XGmbnvyS_WomKl3USVFz-pPg-3agTn5Bl0QpyMbeHs4
+USE THIS FOR:
+  — Cold-start orientation: what does this system do and how? (scannable in 2 min)
+  — Debugging: which script handles which stage? what triggers what?
+  — Finding any spreadsheet ID, Drive folder ID, or env var in the pipeline
+  — Understanding failure modes and recovery steps
+  — Identifying manual gaps (what still requires human action)
+COVERS: capture stage, 4AM agent flow, content creator, approval handler, Buffer scheduling,
+  credentials map, folder map, failure playbook, manual gaps, undocumented scripts, glossary.
+BUILT FROM: live script audit of capture_pipeline.py, main.py, carousel_builder.py,
+  approval_handler.py, 4am_agent/, and all .github/workflows/ YML files (2026-04-19).
+STATUS: ACTIVE. Replaces Content Automation Master Plan v1.0 (archived) and Content_Creation_Master_Plan (archived).
+Supplements: CAPTURE_MASTER_PLAN (keep + edits needed), CONTENT_FORMATS.md (keep).
 
 ## CONNECTIONS — always active, never ask for access
 
@@ -44,18 +63,28 @@ Google Ads:
   GitHub secrets: GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_MCC_ID
   priscila@oakpark-construction.com = sub-account admin. mcfollingproperties@gmail.com = MCC owner. No extra sharing needed.
 GitHub: ~/bin/gh authenticated as priihigashi, repo priihigashi/oak-park-ai-hub ✅
+Vercel: mcp__vercel__ tools ✅ (DEFERRED — load via ToolSearch; user-scope MCP at https://mcp.vercel.com, authed 2026-04-14)
+  Capabilities: list_projects, list_deployments, get_deployment_build_logs, get_runtime_logs, deploy_to_vercel, check_domain_availability_and_price, search_vercel_documentation, list_teams
+  Use for: OPC website deploy monitoring. Higashi site is GitHub Pages (not Vercel) unless migrated.
 Instagram: Composio MCP ✅ (only option — no Google Cloud equivalent)
 Canva: mcp__claude_ai_Canva__ tools ✅ (DEFERRED — load via ToolSearch)
 Full details: ~/.claude/projects/-Users-priscilahigashi/memory/reference_active_connections.md
 
+## PLAN-FIRST RULE (added 2026-05-18, from Anthropic Talks — Boris)
+Before any non-trivial or irreversible work, write a 3–5 line plan FIRST and show it to Priscila.
+Plan must include: (1) what I'm about to do, (2) which files/IDs/tools I'll touch, (3) what could break, (4) the success check.
+Proceed without waiting only for: read-only checks, reversible formatting, single-file dry-run edits, or clearly requested execution.
+NEVER skip plan-first for: production scripts, GitHub Actions, Drive writes, content rendering, spreadsheet structural changes, ad/account changes, sending emails, posting to social, schema changes.
+Boris's quote: "for any non-trivial change, prompt 'before you write code, make a plan' — single biggest accuracy lever."
+
 ## BEFORE TOUCHING ANY SCRIPT
-0. Read NONNEGOTIABLES.md (repo root) FIRST — verify your change does not break a locked rule
+0. Read NONNEGOTIABLES.md first (~/ClaudeWorkspace/oak-park-ai-hub/NONNEGOTIABLES.md) — verify change does not break a locked rule
 1. Read the full script first
 2. Extract and list every spreadsheet ID, folder ID, file path, and env var referenced
 3. Show what you are about to change and why BEFORE making any change
 4. Never assume a variable value — verify it from the source file
 → See memory: feedback_script_investigation_rule.md
-→ See NONNEGOTIABLES.md for locked features that must never be removed
+→ NONNEGOTIABLES.md updated nightly — locked rules that must never be removed
 
 ## REPORT FORMAT (every status update)
 ✅ Done — completed (specific)
@@ -109,8 +138,8 @@ Reels_Shorts parent folders (per niche — routing.py: reels_folder_id):
   OPC     → 1jW3WUQEPpfJNgje-4YGyFT4inKgzWrt7 (Marketing/Content/Reels_Shorts)
   Brazil  → 1IY4TJyv9Dk1qJPdhskyn4flj1g1jp0Kl (News/Brazil/Reels_Shorts)
   USA     → 1EN2HhPzmUnwjXhXpaaf1hO52REAo7wB0 (News/USA/Reels_Shorts)
-NOTE: content_creator/main.py hardcodes series-level _TEMPLATE_CAROUSEL IDs and does NOT yet read carousel_folder_id from routing.py. OPC ✅ aligns. Brazil/USA series live at <niche>/Content/Series/ not under <niche>/Carousel/ — pending Priscila decision to migrate or update routing.
-Content Creation (Drive): 1um7y2Yt8zi9KGxev6kfFJYgrkMYwrCNh — production workspace (Art/Caption/Reel + Claude brief). Created alongside Content Hub on every capture.
+NOTE: content_creator/main.py hardcodes series-level _TEMPLATE_CAROUSEL IDs (lines 37–41) and does NOT yet read carousel_folder_id from routing.py. OPC ✅ aligns. Brazil/USA series live at <niche>/Content/Series/, not under <niche>/Carousel/ — pending Priscila decision to migrate or update routing.
+Content Creation (Drive): 1um7y2Yt8zi9KGxev6kfFJYgrkMYwrCNh — OPC production workspace (Art/Caption/Reel + Claude brief).
 
 ## HIG NEGÓCIOS IMOBILIÁRIOS — ROUTING (mom's Brazil RE site)
 Any time she mentions: "Hig", "Higashi site", "mom's site", "Brazil website", "hig-negocios", "Alexandra's site" → use these locations ONLY:
@@ -293,21 +322,74 @@ Check these in order — if any apply, DO IT YOURSELF instead:
 
 ## DRIVE — SHARED DRIVE IS DEFAULT, NEVER MY DRIVE
 
-ROUTING BY PROJECT — always check which drive before creating anything:
-- Higashi / Hig Negócios / mom's site / Alexandra → Shared Drive "Higashi Imobiliária - Claude" (ID: 0AN7aea2IZzE0Uk9PVA) → Claude Flow → Website — Hig Negócios Imobiliários (ID: 1CKWTojSg2uQmXjNnKlAaSBCTfxtSQBvH)
-- OPC / Oak Park / McFolling / content / marketing → Shared Drive "Marketing" (ID: 0AIPzwsJD_qqzUk9PVA) → Claude Code Workspace
-- NEVER mix these. Higashi files must NEVER land in Marketing. Marketing files must NEVER land in Higashi.
+ROUTING BY TOPIC — each topic has its own shared drive (source of truth) + a shortcut in a working cross-ref folder:
 
-Default for non-Higashi tasks: Shared Drive "Marketing" → "Claude Code Workspace" → [project folder]
-NEVER upload to My Drive. If Priscila doesn't specify otherwise, always use the correct project drive above.
+| Topic | Source-of-truth drive | Drive ID | Shortcut goes to |
+|---|---|---|---|
+| Higashi / Hig Negócios / mom's site / Alexandra | Higashi Imobiliária - Claude | 0AN7aea2IZzE0Uk9PVA | Website folder 1CKWTojSg2uQmXjNnKlAaSBCTfxtSQBvH |
+| OPC / Oak Park Construction | Oak Park Construction | 0AJp3Phs0wIBOUk9PVA | TBD |
+| News (Brazil/USA news niche) | News | 0AH7_C87G0ZwgUk9PVA | TBD |
+| Stocks / investing / Robinhood | Stocks | 0AF6S_f8PH2_aUk9PVA | Originals - Stock (1JFndBkUh6Bac6MD7JKgIns2xgO188b1T) in Marketing |
+| Content / marketing / McFolling / general | Marketing | 0AIPzwsJD_qqzUk9PVA | n/a (self) |
+| AI Content / AI-generated assets / auto-captured content | AI Content | 0ACJVarTjgmFUUk9PVA | TBD (added 2026-04-14) |
+| UGC / user-generated content / creator clips | UGC | 0AEz0NlGr3tlLUk9PVA | TBD (added 2026-04-14) |
 
-Tool rules for Drive:
+RULE — TOPIC DRIVE + SHORTCUT (added + tested 2026-04-14):
+- The **file lives in the topic's shared drive** = single source of truth
+- A **shortcut** is placed in the working cross-ref folder for easy daily access
+- When Priscila mentions a topic (stocks, news, OPC, Higashi, content), route there — never mix topics
+- NEVER upload to My Drive as the final destination. My Drive = transient staging only (e.g. phone uploads before routing).
+
+Automation for phone uploads: `drive_route_file.yml` workflow in priihigashi/oak-park-ai-hub. Inputs: filename + topic → moves from My Drive to topic drive + creates shortcut. Triggered via `gh workflow run drive_route_file.yml -f filename=... -f topic=...` or from github.com/Actions UI on phone browser.
+
+### ⛔ DRIVE UPLOAD — BANNED METHODS (always creates empty files / fails silently)
+
+These methods are **banned** for uploading file bytes. They "succeed" but the file ends up empty. Every chat that has struggled with Drive uploads has been reaching for these:
+
+1. ❌ `GOOGLEDRIVE_CREATE_FILE` with `content=...` (Composio) — silently creates an empty file
+2. ❌ `mcp__claude_ai_Google_Drive__create_file` with `content=...` — same bug, silently creates empty file
+3. ❌ Any MCP `create_file` variant with file content embedded — there is no MCP tool that correctly uploads binary content
+
+MCP `create_file` is ONLY for: empty folders (`mimeType: application/vnd.google-apps.folder`) or empty Google Docs to be filled separately via GOOGLEDOCS_UPDATE_DOCUMENT_MARKDOWN. Never for file content.
+
+### ✅ DRIVE UPLOAD — CORRECT METHOD (the only one that works)
+
+**OAuth Python + googleapiclient + `supportsAllDrives=True` + SHARED drive folder ID.**
+
+Works from Claude Code (Bash tool) and from phone/web Claude (via `proxy_execute` / remote Python). Same pattern, same result.
+
+```python
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload  # or MediaInMemoryUpload for bytes
+
+creds = Credentials.from_authorized_user_file(
+    '/Users/priscilahigashi/ClaudeWorkspace/Credentials/sheets_token.json'
+)
+drive = build('drive', 'v3', credentials=creds)
+
+drive.files().create(
+    body={'name': '<filename>', 'parents': ['<SHARED_DRIVE_FOLDER_ID>']},
+    media_body=MediaFileUpload('<local_path>', mimetype='<mime/type>'),
+    supportsAllDrives=True,   # ← REQUIRED. Missing = 404 on any shared drive
+    fields='id,name,webViewLink',
+).execute()
+```
+
+Non-negotiable rules (apply to EVERY Drive call — create, list, update, delete):
+- `supportsAllDrives=True` on every call. Missing = 404 on shared drives.
+- `includeItemsFromAllDrives=True` on `files().list` when searching shared drives.
+- Use a SHARED DRIVE folder ID, never a My Drive folder ID (OAuth + My Drive folder = file silently lands in My Drive).
+- Files >5MB: use resumable upload → `POST /upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true`.
+- After upload, VERIFY the file appears in the correct shared drive path before reporting done.
+
+Tool rules for Drive (quick summary):
 - CREATE folders → `mcp__claude_ai_Google_Drive__create_file` (mimeType: folder) ✅
-- WRITE content to a doc → `GOOGLEDOCS_UPDATE_DOCUMENT_MARKDOWN` via Composio ✅
-- UPLOAD files (video/pdf/etc) → OAuth resumable upload with supportsAllDrives=true + SHARED DRIVE folder ID ✅
-- DO NOT use `mcp__claude_ai_Google_Drive__create_file` with content — it ALWAYS fails silently (creates empty file)
-- OAuth + My Drive folder ID → file goes to My Drive (wrong). OAuth + SHARED DRIVE folder ID + supportsAllDrives=true → file goes to correct shared drive folder ✅
-- Use resumable upload for files >5MB: POST to /upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true
+- WRITE content to a Google Doc → `GOOGLEDOCS_UPDATE_DOCUMENT_MARKDOWN` via Composio ✅
+- UPLOAD binary files (PNG, PDF, MP4, etc.) → OAuth Python googleapiclient as shown above ✅
+- Anything else with MCP `create_file` + `content=` → ❌ BANNED
+
+Full skill: `~/.agents/skills/drive-upload/SKILL.md`
 
 ## EMAIL SENDING — 3 ROUTES (added 2026-04-12 — prevents "Gmail blocked" from stopping work)
 Gmail MCP = DRAFT only (no send tool exists). For actual sending, use GitHub Actions.
@@ -331,6 +413,109 @@ Flow for creating a doc with content:
    - NEVER use markdown tables in the content — they cause 400 INVALID_ARGUMENT. Use plain text with labels instead.
 → See memory: feedback_drive_oauth_vs_mcp.md
 
+## NAMED-PERSON → FACE RULE, NON-NEGOTIABLE (added 2026-04-17)
+
+When content names a person (politician, business owner, accused, witness, victim, worker), their face MUST appear on that slide/frame. No exceptions.
+
+Pre-render checklist (run before exporting PNGs):
+1. Scan the HTML/script for every `<strong>FirstName LastName</strong>` or named subject in body copy
+2. For each named person, verify one of these exists on the same slide:
+   - a `.sticker-slot` with real photo (cover / hero slide — primary subject), OR
+   - a `.bio-card` with 3×4 `.bio-photo` (multi-person slide — 110×130px minimum), OR
+   - a `.bio-initials` fallback card (same size, 2-letter initials) — ONLY when no licensed photo exists
+3. If a name has NO face treatment → STOP. Source the photo (Wikimedia Commons CC, Agência Brasil CC BY 3.0, editorial fair-use) OR add initials card. Never render without.
+
+CSS reference — reuse these classes across carousels (locked from EP001 Rachadinha V2):
+`.bio-grid` (2-col grid) · `.bio-card` · `.bio-photo` · `.bio-initials` · `.bio-name` · `.bio-role` · `.bio-fact`
+Template: `Carousel/Brazil/Quem-Decidiu-Isso/_TEMPLATE_CAROUSEL/v2_rachadinha/cover.html`
+
+Source of directive: `~/.claude/projects/-Users-priscilahigashi/memory/project_visual_sticker_system.md`
+Quote: *"every time we're talking about someone I would like an image so people know their face and this is mandatory. I want this for all of the brands. This is mine."*
+
+## CAROUSEL FOLDER STANDARD — CROSS-NICHE, NON-NEGOTIABLE (added 2026-04-16)
+
+Every carousel build — OPC, Brazil News, USA News, UGC, any niche — lands in the SAME Drive shape:
+
+```
+<Niche Drive>/.../<Series>/_TEMPLATE_CAROUSEL/
+   v1_<slug>/          ← static PNGs + cover.html + resources/
+   v1_<slug>_motion/   ← sibling (mp4 + gif + preview frame)
+   v2_<slug>/          ← next version after review (auto-incremented)
+   v2_<slug>_motion/
+```
+
+LOCKED ANCHORS (do NOT invent new parents):
+- OPC Tip of the Week → `_TEMPLATE_CAROUSEL` ID `1PWrZfuOvyHUbTRlFNqYxdhtg-Zvv_bXb` (Marketing drive)
+- Brazil Quem decidiu isso → `_TEMPLATE_CAROUSEL` ID `1Ts4OlXT_KxtYNziGmHUcsjHVh8Z7D1ds` (News drive)
+- Brazil Verificamos → series `1IPLdQeTzGnWwN9MZKvfJSOXvSyK4xI5p` / `_TEMPLATE_CAROUSEL` `1QhILiMiIM9WrpHhIqXXrPs6JqoAdDijA` (News drive, confidence gate 0.70, approval required)
+- Brazil A Conta que Ninguém Pagou → series `1gaLG4ObKuMx1qOb-8r63XqaKXmfRdtLI` / `_TEMPLATE_CAROUSEL` `1AwdqHecqyjGAOwPsjrYuO_NajMxLUkWH` (News drive)
+- Brazil Arquivo Aberto → series `1lvDlx4jn0fNbdJJQx9NAKG56I05ePqR2` / `_TEMPLATE_CAROUSEL` `163TWpEIGxkPuh86eCBKMIraz83YHHEzR` (News drive)
+- USA The History They Left Out → series `1ZDuaLyvFYLLGoOVQlOBRsOxa-WVGwJ5g` / `_TEMPLATE_CAROUSEL` `15GxuxNyZco9W9GL2CZXoeiArIp1l4I9d` (News drive — Remotion renders here; GitHub secret: SOVEREIGN_TEMPLATE_FOLDER)
+- USA The Chain → series `15hYZoMVFA0u9vZR0SvZQ3z7SkSbqBEYf` / `_TEMPLATE_CAROUSEL` `1sDMyPHVYcOqZ3NK9ch4e48AaJ7KVvxL3` (News drive — bilingual carousel, same builder as Brazil; EP001 folder `1CjaNjewnNUKd3NvMmcVpET7IKF6Mk3_Z`)
+- Brazil Verdade Pela Metade (FORMAT-024 — weekly debunk) → series `1r6NJ6uoKezptnolgeSfPOeKl2dccEjPd` / `_TEMPLATE_CAROUSEL` `1Tspx9SsfFxJjzh_ZdIC_exQBHe4-p-1K` (News drive — source: @marceloem23, never name in content)
+- Any new series → create its own `_TEMPLATE_CAROUSEL` subfolder + add IDs here + Templates Registry tab.
+
+RULES:
+- `<slug>` = topic slug only — no date, no post_id prefix. `rachadinha`, `walnut-kitchen`, etc.
+- Version auto-increments on re-build: existing v1 → next run writes v2. Never overwrites.
+- Static + motion are SIBLINGS inside `_TEMPLATE_CAROUSEL`, never nested.
+- Per-post editorial log Google Doc lives one level up (series folder), not inside version folder.
+- NEVER save PNG/MP4/GIF to the local computer as the final destination. Work-dir is /tmp only, ephemeral. Drive is the source of truth.
+
+ENFORCEMENT: `scripts/content_creator/main.py` uses `next_version_number()` + locked parent IDs. All skills (/content-chief, /design-carousel, /html-to-image) must emit into this structure. If a script writes elsewhere, fix the script — not the folder.
+
+See: memory `project_carousel_folder_standard.md`.
+
+## MOTION IS DEFAULT ON — NON-NEGOTIABLE (added 2026-04-17)
+
+Every carousel build ships BOTH static PNGs AND motion (MP4 + GIF + preview frame). Motion = default ON. Off only when Priscila explicitly says "static only" for that specific post.
+
+Applies to ALL paths — scripts, email preview, manual chat, any skill (/content-chief, /design-carousel, /html-to-image):
+- Script (content_creator.yml): `main.py::process_one_topic` must render `motion/` subfolder with cover MP4/GIF + duplicated non-cover PNGs. Already wired — verify before emailing.
+- Email preview: EVERY preview row shows BOTH `Static: folder` and `Motion: folder` links. Motion link deep-links into `/motion/` subfolder, not the parent.
+- Manual chat: when I build a carousel directly in conversation (no script), default output = static + motion. Do not wait to be asked.
+- Flow docs + skills: every content-producing skill states motion is ON by default.
+
+Pre-ship audit before reporting any build done:
+1. ✅ version folder exists with `v<N>_<slug>` naming
+2. ✅ `png/` has all slides × variants
+3. ✅ `motion/` has cover MP4 + GIF + preview_frame.jpg + non-cover PNGs duplicated (full sequence)
+4. ✅ story Google Doc inside version folder
+5. ✅ `resources/` folder inside version folder
+
+If motion is empty → build is incomplete. Do NOT email preview. Fix motion, then ship.
+
+Why this rule exists: Priscila (2026-04-17): *"we always create a motion one as well unless I say to you to not do it."* See memory: `feedback_both_versions_always.md` (updated 2026-04-17 with enforcement section).
+
+## VISUAL-EVERY-OTHER-SLIDE RULE (added 2026-04-17)
+
+Carousels must never ship with 3+ consecutive text-only slides between cover and sources. At least every-other middle slide carries a visual anchor.
+
+- **News** (Quem Decidiu / O Que É / History Time / Ground News): face for every named person (see NAMED-PERSON → FACE RULE). If no person is named on that slide → contextual image: Congresso Nacional, STF, prefeitura, event photo, receipt crop, logo of the institution.
+- **OPC** (Tip / Progress / Before-After): product shot, tool, material sample, detail photo, before-after crop, icon, diagram.
+- **UGC**: body movement still, product shot, reaction sticker.
+
+Script implication: `carousel_builder.py` prompts should emit a `visual_hint` per slide (`bio-card` / `product-photo` / `context-image` / `icon-row` / `none`). HTML builder uses the hint to render the visual layer. Never ship with `none` on >1 consecutive slide.
+
+Source: Priscila (2026-04-17): *"hooks you don't wanna just have text and text... every other slide we think about how could we have an image here."* See memory: `feedback_visual_every_other_slide.md`.
+
+## HTML → IMAGE (deterministic export) — DEFAULT FLOW, NEVER SUBSTITUTE
+
+When Priscila says "turn this HTML into image", "convert to png", "export slides", "save the carousel", or approves an HTML design and asks for the final images:
+
+1. USE THE SKILL: `/html-to-image` (~/.agents/skills/html-to-image/SKILL.md)
+2. Script: `node "/Users/priscilahigashi/ClaudeWorkspace/Content Templates/_Scripts/export_slides.js" "<input.html>" "<output_dir>"`
+3. Default Drive destination: **Marketing > Image Creation > html to image** — folder ID `1tE-2Ps8V8ZKQ4etyvzk47ZWyzeHAD2nk` (shared drive `0AIPzwsJD_qqzUk9PVA`)
+4. If the carousel belongs to a specific series (News > Templates > Carousel, OPC Templates, Higashi), upload a COPY there too — but master set ALWAYS mirrors to `html to image`.
+
+**Non-substitution rule — enforced:**
+- NEVER dispatch OpenAI / Ideogram / Recraft / Seedream / Canva AI / Nano Banana to "convert HTML to image". Those are text-to-image AI — they hallucinate a new design, text drifts, layout drifts. They are ONLY valid when Priscila explicitly says "test tools" or "explore styles".
+- Remotion is a sibling deterministic path for React-source templates. HTML-source = `/html-to-image`. Same-design guarantee.
+- If the HTML structure is broken, FIX the HTML or adapt export_slides.js minimally — never regenerate the design in another tool.
+
+Verification before reporting done: file count = `.slide` element count; every PNG ≥ 15KB; slide sizes differ (blank-slide bug check).
+Full doc: `~/.agents/skills/html-to-image/SKILL.md` + memory `project_html_to_image_flow.md` + Flow Plans Tracker row `FLOW_html_to_image`.
+
 ## CONTENT FORMATS — living registry of approved post formats
 File: ~/ClaudeWorkspace/_Master Plans & Docs/CONTENT_FORMATS.md
 Drive: https://docs.google.com/document/d/1XqXSyJC_iHMTrmMxpM5ZR7S-WQxz19HhDJO1HomdncM/edit
@@ -348,6 +533,27 @@ Current approved formats:
 - FORMAT-002: Carousel: Quem realmente decidiu isso? — Brazil News political breakdown
 
 When she says "format", "same style", "like the X one", "series", "split screen" → check file first.
+
+## PER-POST EDITORIAL LOG — every post gets a Google Doc (added 2026-04-16)
+Every series episode or standalone post gets a dedicated Google Doc editorial log in the same Drive folder as its templates.
+
+RULE — CREATE on new post: Name format `EP001 — [Title] — Editorial Log` or `[POST_ID] — Editorial Log`
+RULE — APPEND on feedback: Any time Priscila gives feedback, direction, or a change request about a specific post → append a dated note immediately, same session. Format: `## NOTE — YYYY-MM-DD` with full details.
+RULE — READ before touching: Before editing any carousel/post → read that post's editorial log doc first.
+RULE — INBOX for research: If feedback generates a research task → ALSO add a row to `📥 Inbox` tab (Ideas & Inbox 1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU) so it shows up as pending.
+
+Doc structure: Header (post info + Drive link) → HOW TO USE section → Notes in reverse-append order.
+Example: EP001 Rachadinha — `https://docs.google.com/document/d/1SgVAxHCARMuFcd3xvAJs0fsBwGU9wS3ZdlcC6QgtHcU/edit`
+Located: News drive > Brazil > Carousel > Quem-Decidiu-Isso > v1_rachadinha (static folder)
+
+This rule applies to ALL skills that produce or edit content (carousel, reel, hooks, copy, html-to-image).
+
+## CAPTURE — RUNNER-SIDE AUTO-DETECT, CHAT NEVER PICKS (added 2026-04-27)
+Chat does NOT pick the project for `/capture`. Always pass `project=auto` to Capture Pipeline v2 unless Priscila explicitly named the niche. The runner classifies via transcript + caption + her notes:
+- Tier 1: notes-keyword override (zero tokens)
+- Tier 2: Claude Haiku JSON classify (`book|brazil|opc|ugc|usa|stocks|higashi`)
+- Tier 3: confidence < 0.70 → `unrouted` (lands in Marketing/Captures - Unrouted, status "Not Identified" in Inspiration Library, weekly digest email Sundays 13:00 UTC)
+Default fallback is NEVER `book` and NEVER `opc` — it is `unrouted`. See `scripts/routing.py::get_route()` and `scripts/capture/capture_pipeline.py::detect_project()`. Memory: `feedback_post_compaction_execute_pending.md`.
 
 ## CAPTURE — CONTENT IDEA GENERATION (added 2026-04-12)
 Every /capture of a video MUST auto-produce content ideas from the TOPICS, even if the clip itself is not used.
@@ -408,12 +614,21 @@ Never rewrite a working script from scratch. Only change what is strictly necess
 Before any edit: read the full file, list what you're changing and why.
 Good things already in the script must be preserved. When in doubt — don't touch it.
 
+## CODE FIX AUDIT — NON-NEGOTIABLE (added 2026-05-05)
+Before committing ANY fix to validation, checking, or reviewer logic, run this checklist:
+1. Trace BOTH execution paths — local build path (check_built_post / CONTENT_CREATOR_RUN) AND Drive/manual path (check_drive_folder / REVIEW_DRIVE_FOLDERS). Fix must fire on both, or explicitly document why one is exempt.
+2. Every issue detected must also be auto-fixed (when FIX_MODE=analyze_and_fix) — not just reported. Trace the issue token all the way to auto_fix_drive_folder().
+3. Every dependency (Pillow, API key, folder path, env var) must have a warning or fallback — never silently skip.
+4. If the fix touches a path assumption (folder name, subfolder structure), add a fallback for legacy/edge layouts.
+Skipping this checklist = the next audit will find the same gaps. Discovered 2026-05-05 after missing all 4 on carousel_reviewer.py image validation.
+
 ## SKILLS & AGENTS DIRECTORY
-Full index of all available skills (/command) and agents (@name) lives in the main spreadsheet:
-- Spreadsheet: Ideas & Inbox (1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU)
-- Tab: 🤖 Skills & Agents
-- Columns: CATEGORY | SUB-CATEGORY | TYPE | COMMAND | DESCRIPTION | BEST FOR
-- ~150 entries. Filter by CATEGORY column to find the right tool fast.
+Full index of all available skills (/command) and agents (@name) lives in Drive Map — ALL DRIVES:
+- Spreadsheet: Drive Map — ALL DRIVES (10qxtM_s22Z9HNVXsnBJa1WjTYCsraPa8O2uI0VEa1Zo)
+- Tab: 🤖 Skills & Agents (sheetId=806704177)
+- Columns: CATEGORY | SUB-CATEGORY | TYPE | COMMAND | DESCRIPTION | GOOD FOR
+- 62 entries. Filter by CATEGORY column to find the right tool fast.
+NOTE: Drive Map — ALL DRIVES is the master resource map. Tabs: Folders, Docs, Sheets, GitHub & Scripts, Local Scripts, Flows, Series, Skills & Agents. NOT Ideas & Inbox. NOT Spreadsheet Hub.
 
 15 CATEGORIES:
 - YOUR SYSTEM — /content-chief (Vera), /capture, /daily-planner, 4AM agent, Capture Pipeline
@@ -436,6 +651,24 @@ RULE: Before starting any task, check this tab — a specialized skill/agent may
 RULE: 4AM agent invokes /content-chief (Vera) for Talking Head script generation — see 4AM AGENT section.
 When she says "do we have a skill for X" → check this tab first before saying no.
 
+## AI ANALYSIS — EVIDENCE-DRIVEN RULE (global, added 2026-04-29)
+
+Applies to: ads dashboard MoM, weekly reports, keyword alerts, warnings, content insights — any surface where Claude outputs an analysis or recommendation.
+
+**Rule:** Investigate first. Surface only concrete findings. Generic possibilities are an internal checklist — never print them.
+
+4-step flow (mandatory):
+1. List generic possibilities internally (seasonal, competitor, tracking, budget). Do NOT output this list.
+2. Investigate each against available data: change_log (last 45d), keyword set comparison (spend ≥ $15), ad group shifts (> $100), live config.
+3. Surface strongest concrete finding as WHY — name + date + number. 1–2 max.
+4. Recommendation tied to the finding:
+   - Change ≤ 14 days old → Wait. Smart Bidding stabilization window. Re-evaluate at +14d.
+   - Change > 14 days + still degrading → specific named action.
+   - No internal cause found → state explicitly what was checked + external fallback as last resort only.
+
+Banned phrases: "Could be seasonal", "Maybe a competitor change", any (a)(b)(c) list of possibilities.
+Full pattern + implementation: `~/.claude/projects/-Users-priscilahigashi/memory/feedback_evidence_driven_ai_insights.md`
+
 ## KNOWN REPEAT MISTAKES — read and prevent
 1. Said "I may not have access" when connection was already active → CHECK connections file first
 2. Listed completed tasks as "next steps" instead of doing them → do it now or explain why blocked
@@ -452,130 +685,16 @@ When she says "do we have a skill for X" → check this tab first before saying 
 15. Gmail filter creation blocked with "missing gmail.settings.basic scope" → Composio Gmail connection was authorized without the settings scope. Labels/read/write work fine. Filter creation requires a one-time reconnect by Priscila at app.composio.dev → Connections → Gmail → Reconnect → check "Manage your email settings". This is NOT a Google Cloud API issue — the API is enabled. It is a Composio OAuth scope issue. After reconnect, filter creation works immediately.
 14. Calendar MCP reported as "doesn't load in VSCode IDE extension" or "OAuth token has no Calendar scope" → BOTH WRONG. Calendar MCP tools are DEFERRED — load schema via ToolSearch first: ToolSearch("select:mcp__claude_ai_Google_Calendar__gcal_create_event"). Then call normally. Confirmed working 2026-04-12. OAuth scope is irrelevant — MCP uses its own auth, not sheets_token.json.
 13. Gmail MCP used when task required SENDING email → Gmail MCP CANNOT send, only creates drafts. For actual sending: trigger GitHub Actions `send_email.yml` via `~/bin/gh workflow run send_email.yml --repo priihigashi/oak-park-ai-hub -f to=... -f subject=... -f body=...`. This uses PRI_OP_GMAIL_APP_PASSWORD (already set) and actually delivers the email. Same pattern as 4am_agent.yml. → this is a server-side failure from the gdrive MCP server, NOT a query formatting issue. Do NOT retry it. Immediately switch to `mcp__claude_ai_Google_Drive__search_files` (Route A). If that also fails, use OAuth Python Drive API (Route C). Never report Drive search as blocked without trying all 3 routes. See: reference_active_connections.md → "Drive Search & Access — 3 Routes"
+16. Invented or assumed a GitHub secret name → SILENT FAILURE. Scripts receive empty string and fail with no error. MANDATORY: Before referencing, adding, renaming, or auditing ANY secret/API key in any script or workflow, run `~/bin/gh secret list --repo priihigashi/oak-park-ai-hub` FIRST. The list is the ONLY source of truth. Never write a key name from memory. See: memory/feedback_always_check_github_secrets_first.md
+17. Trusted GitHub Actions `conclusion: success` as proof a pipeline worked. WRONG. Many scripts catch exceptions, print "failed", and exit 0 → run is marked ✅ even when Drive uploads, API calls, or whole rounds were skipped. **MANDATORY before reporting any workflow run as successful**: (a) `~/bin/gh run view <ID> --log` and grep for `failed|error|401|403|skipped|unauthorized|exception`, (b) check the `🚨 Pipeline Failures` tab in Ideas & Inbox filtered by RUN_ID. GitHub status ≠ actual success. Discovered 2026-04-27 — video-research.yml had been silently 401-ing on Drive uploads + skipping Rounds 2/3 since first deploy. See: memory/feedback_check_logs_for_silent_failures.md
+18. GOOGLEDOCS_UPDATE_DOCUMENT_MARKDOWN overwrites the ENTIRE document — it does NOT append. Writing to an existing doc without reading it first = all prior history is permanently destroyed. Happened 2026-05-01 on the Feedback Log (1zonzZNmW5wdDmtJxzozyqaBpf1i6KX068vEyhJ2qb_4). **MANDATORY 3-step rule for ANY write to an existing Google Doc**: (1) Read current content first via GOOGLEDOCS_GET_DOCUMENT. (2) If GET fails → STOP. Do NOT write. Do NOT assume the doc is empty. Create a NEW doc instead. (3) If GET succeeds → combine existing + new content, write the full combined result. This applies to: feedback logs, session logs, editorial logs, handoff docs, productivity docs, any doc that accumulates history. See: memory/feedback_googledocs_never_overwrite.md
 
-
-## MOTION CHAIN — RENDERERS + SOURCES (added 2026-04-20)
-
-Every motion render (carousel cover, reel, any animated slide) goes through TWO cascading chains. Ken Burns is always the floor so rendering never fails silently.
-
-### Renderer cascade (order matters)
-1. **Remotion** — `scripts/remotion/src/CarouselMotion.tsx`, composition id `CarouselMotion`, 1080×1350 @ 30fps. Used when `cover_renderer_pref == "remotion"` or the series is template-driven. Writes MP4 + GIF + preview frame.
-2. **Playwright** — `scripts/remotion/record_motion.js` or equivalent HTML recorder. Used for slides whose motion lives in the HTML itself.
-3. **ffmpeg Ken Burns zoompan** — always-succeeds floor. Animates the poster PNG. Never skipped.
-
-Never substitute AI-video tools (Kling / Runway / Pika) unless Priscila explicitly says so per post.
-
-### Video source cascade — 8 tiers
-Module: `scripts/content_creator/motion_sources.py` → `fetch_clip_with_fallback(slide_cfg, work_dir, filename, visual_hint)`.
-
-Order: YouTube (Apify) → Instagram (Apify) → Pexels → Pixabay → Archive.org → Wikimedia Commons → stock scrapers → Ken Burns poster animation.
-
-Rules:
-- Every tier gets its OWN query string (`youtube_query`, `instagram_query`, `pexels_query`, `pixabay_query`, `archive_query`, `wikimedia_query`). Haiku emits them in `clip_suggestions[*]`.
-- Every fetched clip writes a `<clip>.source.txt` sidecar with tier, url, license, attribution, query, fetched_at.
-- Stock tiers (Pexels/Pixabay/Archive/Wikimedia) are gated — they skip automatically when `visual_hint == "bio-card"` so faces never come from generic stock.
-- Clips live in `<work_dir>/resources/clips/` alongside `png/` and `motion/`.
-- Silent-fail per tier with one-line log. Never raise until every tier exhausted.
-
-### Env / secret requirements
-- `APIFY_API_KEY` — YouTube + Instagram scraping (GitHub secret ✅)
-- `PEXELS_API_KEY` — stock video (GitHub secret ✅)
-- `PIXABAY_API_KEY` — stock video (optional; skips tier if missing)
-- `CLAUDE_KEY_4_CONTENT` — Haiku content generation (separate billing from blog)
-
-### Per-slide JSON schema (extension in `clip_suggestions`)
-```
-{
-  "slide": 3, "duration_hint": "5-8 seconds",
-  "youtube_query": "proper names OK — speeches, press",
-  "instagram_query": "lowercase hashtag-friendly phrasing",
-  "pexels_query": "place/event/institution — NO proper names",
-  "pixabay_query": "different wording than pexels_query",
-  "archive_query": "archival / public-domain phrasing",
-  "wikimedia_query": "CC-licensed institutional/historical",
-  "motion_prompt": "5s direction: camera move + mood + framing",
-  "motion_renderer": "remotion|playwright|kenburns",
-  "visual_hint": "bio-card|context-image|place|event|product-photo|none"
-}
-```
-
-### When to read this
-- Any edit to `scripts/content_creator/carousel_builder.py`, `main.py`, `motion_sources.py`, or `scripts/remotion/src/`.
-- Any new niche pipeline. Motion chain rules apply cross-niche: Brazil News, USA News, OPC, UGC, Higashi.
-- Any new Haiku prompt — it MUST populate all 6 tier queries + motion_prompt + motion_renderer.
-
-Full research + schema + testing matrix: `scripts/content_creator/MOTION_SOURCES_RESEARCH.md`.
-
----
-
-## CAPTURE PIPELINE — PROJECT ROUTING (updated 2026-04-17)
-
-When triggering capture_pipeline.yml, always use the correct `project` input:
-
-- `brazil` → Brazil civic content (default for Brazilian reels)
-- `usa` → USA news/content  
-- `book` → RECEIPTS fact-check book
-
-RULE: Never default to `book` for Brazil reels. Always ask "brazil, usa, or book?" if not specified before triggering.
-
----
-
-## 2026-04-18 — CAPTURE PIPELINE AUDIT & FIXES
-
-### What We Found (Problems)
-
-**Dual Pipeline Confusion**
-- There were two email types: "News capture done" and "OPC capture done" — appeared to be different scripts but is actually ONE script (`capture_pipeline.py`) with two project modes
-- The naming was inconsistent: queue used `brazil`/`usa`, pipeline used legacy `sovereign`/`content` aliases — caused confusion and would crash if `brazil` was typed in the manual trigger
-
-**Capture Queue Failures (Root Causes)**
-- `instaloader` was never installed in the GitHub Actions runner — the fallback that bypasses Instagram's shared_data block was silently skipped every time
-- Apify actor_id format was wrong: `apify/instagram-scraper` should be `apify~instagram-scraper` — Apify REST API returns 404 with slash format
-- Manual captures never marked their queue row as done → 6AM queue processor would retry the same URL, hit Instagram rate limits, and fail
-- 10 rows stuck with ⚠️ failures as a result
-
-**YouTube captures**: GitHub runner IPs are blocked by YouTube — not fixable in pipeline code, needs residential proxy or non-cloud runner
-
-### What We Fixed
-
-- **Renamed**: SOVEREIGN → "brazil"/"usa" canonical projects (news alias = brazil), content → "opc" project (legacy names still work via alias)
-- **Email subjects**: "News capture done — NWS-..." and "OPC capture done — niche | ..."
-- **Installed instaloader** in capture_queue.yml pip install step
-- **Fixed Apify actor_id**: `apify/instagram-scraper` → `apify~instagram-scraper`
-- **Added `_mark_queue_processed(url)`**: called at end of all 3 run_*() functions — marks queue row TRUE so 6AM run skips it
-- **Added `retry_failed` input**: triggers retry of all ⚠️ rows in one run
-- **Added `bulk_urls` input**: paste newline-separated URLs, adds + processes immediately
-
-### Features Ported Between Pipelines
-
-**OPC → News (things News was missing):**
-- Bilingual content brief (EN + PT-BR doc in Drive folder)
-- Inspiration Library row written on every capture
-- Topic cluster scraper triggered on capture
-
-**News → OPC (things OPC was missing):**
-- SRT captions generated for non-YouTube captures
-
-### Side-by-Side Pipeline Comparison
-
-| Feature | News Pipeline (run_news) | OPC Pipeline (run_opc) |
-|---|---|---|
-| Story ID prefix | NWS- | CNT- |
-| Drive destination | routing.py capture_folder_id (Brazil/USA Captures) | routing.py capture_folder_id (OPC Content Hub) |
-| Sheet written | Calendar + Inspiration Library | Inspiration Library + Ideas Queue |
-| Bilingual brief | ✅ EN + PT-BR docs | ✅ EN + PT-BR docs (added) |
-| SRT captions | ✅ | ✅ (added) |
-| Topic cluster scraper | ✅ | ✅ |
-| Inspiration Library row | ✅ (added) | ✅ |
-| Image concept | Person/event photo (politician, location) | Property/lifestyle photo |
-| Queue dedup | ✅ (added) | ✅ (added) |
-
-### Commits
-- `12ad1c1` — Capture Queue fix (instaloader, Apify actor_id, retry_failed, bulk_urls)
-- `fc557dd` — Pipeline rename + feature sync + dedup fix
-- `eabf921` — PT translation wired into capture pipeline
-
-### Pending
-- Run retry: Actions → Capture Queue Processor → retry_failed=true → max_per_run=10
-- YouTube failures still need residential proxy / non-cloud runner solution
-- Monitor if instaloader fix holds for the 10 stuck rows
+## PIPELINE FAILURE LOG — 🚨 Pipeline Failures tab (added 2026-04-27)
+Every pipeline writes silent + loud failures to ONE place: `Ideas & Inbox` → `🚨 Pipeline Failures` tab (sheetId 448272280).
+Columns: TIMESTAMP_UTC | WORKFLOW | RUN_ID | STAGE | ERROR | RUN_URL | RESOLVED | NOTE
+- Every workflow that catches an exception MUST also call a `log_pipeline_failure(stage, error, sheet)` helper that appends a row.
+- Workflow YML MUST emit `if: failure()` SMTP alert to priscila@oakpark-construction.com via PRI_OP_GMAIL_APP_PASSWORD.
+- Script MUST exit non-zero when any failure was recorded → GitHub run flips ❌ → email fires.
+- Session-start: scan `🚨 Pipeline Failures` for unresolved rows (RESOLVED column blank) and report them as part of the status report.
+- First implementation: `scripts/youtube_research.py` + `.github/workflows/video-research.yml` (commit d7c1bbb).
+- Wire this into every other pipeline: capture_pipeline.yml, content_creator.yml, ads_pulse.yml, drive_route_file.yml, etc. — same helper, same tab.
