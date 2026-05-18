@@ -73,3 +73,36 @@ def test_buffer_create_graphql_post_uses_instagram_feed_metadata(monkeypatch):
     }
     assert post_input["assets"] == [{"image": {"url": "https://example.com/a.png"}}]
     assert post_input["mode"] == "addToQueue"
+
+
+def test_list_variant_png_files_falls_back_to_only_available_nested_variant():
+    class _Request:
+        def __init__(self, files):
+            self._files = files
+
+        def execute(self):
+            return {"files": self._files}
+
+    class _Files:
+        def list(self, q, **kwargs):
+            if "name='png'" in q:
+                return _Request([{"id": "png_folder", "name": "png"}])
+            if "name contains 'black_'" in q:
+                return _Request([])
+            if "mimeType='image/png'" in q:
+                return _Request([
+                    {"id": "1", "name": "cream_01_cover_html.png"},
+                    {"id": "2", "name": "cream_02_stat_html.png"},
+                ])
+            return _Request([])
+
+    class _Drive:
+        def files(self):
+            return _Files()
+
+    files = ah._list_variant_png_files(_Drive(), "folder", "black")
+
+    assert [f["name"] for f in files] == [
+        "cream_01_cover_html.png",
+        "cream_02_stat_html.png",
+    ]

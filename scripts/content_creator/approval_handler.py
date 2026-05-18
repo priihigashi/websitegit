@@ -687,16 +687,10 @@ def _get_drive_service():
 
 
 def _get_variant_image_urls(drive, folder_id, variant):
-    files = drive.files().list(
-        q=f"'{folder_id}' in parents and name contains '{variant}_' and trashed=false",
-        supportsAllDrives=True, includeItemsFromAllDrives=True,
-        fields="files(id,name)", orderBy="name",
-    ).execute().get("files", [])
+    files = _list_variant_png_files(drive, folder_id, variant)
 
     urls = []
     for f in files:
-        if not f["name"].lower().endswith(".png"):
-            continue
         try:
             drive.permissions().create(
                 fileId=f["id"], supportsAllDrives=True,
@@ -706,6 +700,58 @@ def _get_variant_image_urls(drive, folder_id, variant):
             pass
         urls.append(f"https://drive.google.com/uc?export=download&id={f['id']}")
     return urls
+
+
+def _list_variant_png_files(drive, folder_id, variant):
+    """Find PNGs at version root or inside the standard png/ subfolder."""
+    files = drive.files().list(
+        q=f"'{folder_id}' in parents and name contains '{variant}_' and trashed=false",
+        supportsAllDrives=True, includeItemsFromAllDrives=True,
+        fields="files(id,name)", orderBy="name",
+    ).execute().get("files", [])
+    files = [f for f in files if f["name"].lower().endswith(".png")]
+
+    png_folders = drive.files().list(
+        q=(f"'{folder_id}' in parents and name='png' "
+           f"and mimeType='application/vnd.google-apps.folder' and trashed=false"),
+        supportsAllDrives=True, includeItemsFromAllDrives=True,
+        fields="files(id,name)",
+        pageSize=5,
+    ).execute().get("files", [])
+    for folder in png_folders:
+        nested = drive.files().list(
+            q=f"'{folder['id']}' in parents and name contains '{variant}_' and trashed=false",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+            fields="files(id,name)", orderBy="name",
+        ).execute().get("files", [])
+        files.extend(f for f in nested if f["name"].lower().endswith(".png"))
+
+    if files:
+        return sorted(files, key=lambda f: f["name"])
+
+    all_pngs = []
+    for folder in png_folders:
+        nested = drive.files().list(
+            q=f"'{folder['id']}' in parents and mimeType='image/png' and trashed=false",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+            fields="files(id,name)", orderBy="name",
+        ).execute().get("files", [])
+        all_pngs.extend(nested)
+
+    groups = {}
+    for f in all_pngs:
+        m = re.match(r"([A-Za-z]+)_\d+_", f.get("name", ""))
+        if m:
+            groups.setdefault(m.group(1).lower(), []).append(f)
+    if len(groups) == 1:
+        fallback_variant, fallback_files = next(iter(groups.items()))
+        print(
+            f"  No {variant} PNGs found; using only available variant "
+            f"{fallback_variant} ({len(fallback_files)} slides)"
+        )
+        return sorted(fallback_files, key=lambda f: f["name"])
+
+    return []
 
 
 # Buffer expiry: BUFFER_API_KEY_EXP04092027 expires 2027-04-09
@@ -1020,11 +1066,7 @@ def copy_to_ready_folder(variant, source_folder_id, niche):
     )
     drive = build("drive", "v3", credentials=creds)
 
-    files = drive.files().list(
-        q=f"'{source_folder_id}' in parents and name contains '{variant}_' and trashed=false",
-        supportsAllDrives=True, includeItemsFromAllDrives=True,
-        fields="files(id,name)",
-    ).execute().get("files", [])
+    files = _list_variant_png_files(drive, source_folder_id, variant)
 
     ready_folder = _ensure_ready_folder(drive, niche)
     copied = 0
