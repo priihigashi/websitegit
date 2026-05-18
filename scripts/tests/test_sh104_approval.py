@@ -7,11 +7,22 @@ any live Gmail polling.
 
 from __future__ import annotations
 import sys
+import types
 import unittest
+from datetime import timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 _REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_REPO / "scripts" / "content_creator"))
+
+try:
+    import pytz  # noqa: F401
+except ModuleNotFoundError:
+    sys.modules["pytz"] = types.SimpleNamespace(
+        timezone=lambda name: ZoneInfo(name),
+        UTC=timezone.utc,
+    )
 
 import approval_handler as ah  # noqa: E402
 
@@ -25,6 +36,17 @@ class Sh104DetectionTests(unittest.TestCase):
     def test_non_sh104_subject_passes_through(self):
         self.assertFalse(ah.is_sh104_reply("Re: [REVIEW] OPC — daily content"))
         self.assertFalse(ah.is_sh104_reply("Re: DAILY CONTENT — 2026-05-06"))
+        self.assertFalse(ah.is_sh104_reply(
+            "Re: [ResourceRouter] NWS-001 — 3 clip candidates need approval"))
+
+    def test_resource_router_subject_does_not_match_sh104_and_vice_versa(self):
+        rr_subject = "Re: [ResourceRouter] NWS-001 — 3 clip candidates need approval"
+        sh_subject = "Re: [SH-104] Evidence manifest ready — Frei Gilson — brazil"
+
+        self.assertTrue(ah.is_resource_router_reply(rr_subject))
+        self.assertFalse(ah.is_resource_router_reply(sh_subject))
+        self.assertTrue(ah.is_sh104_reply(sh_subject))
+        self.assertFalse(ah.is_sh104_reply(rr_subject))
 
 
 class Sh104ReplyParserTests(unittest.TestCase):
