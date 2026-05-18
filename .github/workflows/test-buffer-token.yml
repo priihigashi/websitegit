@@ -107,19 +107,38 @@ jobs:
               print("  (no fields found — type may be named differently)")
 
           # 7. Instagram channel lookup (the channelId we need for CreatePost)
+          channel_fields = """
+            id
+            service
+            serviceId
+            name
+            displayName
+            descriptor
+            isDisconnected
+            isLocked
+            isQueuePaused
+            type
+            externalLink
+          """
+          def channel_text(ch):
+              return " ".join(str(ch.get(k) or "") for k in (
+                  "service", "serviceId", "name", "displayName", "descriptor", "type", "externalLink"
+              )).lower()
+
           print("\n=== Instagram channel lookup ===")
-          r = gql('{ account { organizations { id name channels { id service serviceUsername name } } } }')
+          r = gql(f'{{ account {{ organizations {{ id name channels {{ {channel_fields} }} }} }} }}')
           show("Raw account.organizations.channels response", r)
           ig_channel = None
           orgs = (r.get("data", {}) or {}).get("account", {}).get("organizations", []) or []
           print(f"  Organization count: {len(orgs)}")
           for org in orgs:
               for ch in org.get("channels", []) or []:
-                  if "instagram" in (ch.get("service") or "").lower():
+                  if "instagram" in channel_text(ch):
                       ig_channel = ch
                       print(f"  Org: {org.get('name')} ({org.get('id')})")
                       print(f"  Channel: id={ch.get('id')} service={ch.get('service')} "
-                            f"username={ch.get('serviceUsername')} name={ch.get('name')}")
+                            f"displayName={ch.get('displayName')} name={ch.get('name')} "
+                            f"disconnected={ch.get('isDisconnected')}")
                       break
               if ig_channel:
                   break
@@ -133,8 +152,8 @@ jobs:
           alternate_queries = {
               "account_only": "{ account { id email } }",
               "account_orgs_only": "{ account { organizations { id name } } }",
-              "channels_empty_input": "{ channels(input: {}) { id service serviceUsername name } }",
-              "channels_no_input": "{ channels { id service serviceUsername name } }",
+              "channels_empty_input": f"{{ channels(input: {{}}) {{ {channel_fields} }} }}",
+              "channels_no_input": f"{{ channels {{ {channel_fields} }} }}",
           }
           for label, query in alternate_queries.items():
               show(label, gql(query), max_chars=2500)
@@ -145,8 +164,8 @@ jobs:
               if not org_id:
                   continue
               for query in (
-                  'query($id: OrganizationId!){ channels(input:{ organizationId:$id }) { id service serviceUsername name } }',
-                  'query($id: ID!){ channels(input:{ organizationId:$id }) { id service serviceUsername name } }',
+                  f'query($id: OrganizationId!){{ channels(input:{{ organizationId:$id }}) {{ {channel_fields} }} }}',
+                  f'query($id: ID!){{ channels(input:{{ organizationId:$id }}) {{ {channel_fields} }} }}',
               ):
                   show(f"channels for org {org_id}", gql(query, {"id": org_id}), max_chars=2500)
 
