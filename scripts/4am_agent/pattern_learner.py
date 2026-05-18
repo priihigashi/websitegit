@@ -36,10 +36,20 @@ FLOW_PLANS_TRACKER_ID = "1fggy918FgPfnMQ-dzGQk2zx9uhi2_-uWXMKGW4MA47k"
 LAST_SEEN_PATH        = ".github/agent_state/last_seen.json"
 GITHUB_REPO           = "priihigashi/oak-park-ai-hub"
 GITHUB_TOKEN          = os.environ.get("GITHUB_TOKEN", "")
-ANTHROPIC_KEY         = os.environ["CLAUDE_KEY_4_CONTENT"]
+ANTHROPIC_KEY         = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
 et                    = pytz.timezone("America/New_York")
 
-client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+client = None
+
+
+def _anthropic_client():
+    global client
+    if client is None:
+        key = ANTHROPIC_KEY or os.environ.get("CLAUDE_KEY_4_CONTENT", "")
+        if not key:
+            raise RuntimeError("CLAUDE_KEY_4_CONTENT missing and _llm_fallback unavailable")
+        client = anthropic.Anthropic(api_key=key)
+    return client
 
 
 def _llm(prompt: str, *, tier: str = "sonnet", max_tokens: int = 2000, context: str = "") -> str:
@@ -47,8 +57,10 @@ def _llm(prompt: str, *, tier: str = "sonnet", max_tokens: int = 2000, context: 
     if llm_text is not None:
         return llm_text(prompt, model_tier=tier, max_tokens=max_tokens, context=context)
     model = "claude-sonnet-4-6" if tier == "sonnet" else "claude-haiku-4-5-20251001"
-    resp = client.messages.create(model=model, max_tokens=max_tokens,
-                                  messages=[{"role": "user", "content": prompt}])
+    resp = _anthropic_client().messages.create(
+        model=model, max_tokens=max_tokens,
+        messages=[{"role": "user", "content": prompt}],
+    )
     return resp.content[0].text
 
 

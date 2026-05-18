@@ -12,7 +12,17 @@ try:
 except Exception:
     _llm_text_cascade = None
 
-client = anthropic.Anthropic(api_key=os.environ["CLAUDE_KEY_4_CONTENT"], timeout=120.0)
+client = None
+
+
+def _anthropic_client():
+    global client
+    if client is None:
+        key = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
+        if not key:
+            raise RuntimeError("CLAUDE_KEY_4_CONTENT missing and _llm_fallback unavailable")
+        client = anthropic.Anthropic(api_key=key, timeout=120.0)
+    return client
 
 
 def _llm(prompt, *, tier, max_tokens, system=None, context=""):
@@ -23,7 +33,7 @@ def _llm(prompt, *, tier, max_tokens, system=None, context=""):
     kwargs = {"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]}
     if system:
         kwargs["system"] = system
-    resp = client.messages.create(**kwargs)
+    resp = _anthropic_client().messages.create(**kwargs)
     return resp.content[0].text
 
 SYSTEM = """You are a content strategist for Oak Park Construction, a licensed general contractor

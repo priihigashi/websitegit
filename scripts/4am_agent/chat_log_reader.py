@@ -30,7 +30,17 @@ CARRIES_FILE     = ".github/agent_state/carry_forwards.json"
 GITHUB_REPO      = "priihigashi/oak-park-ai-hub"
 GITHUB_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
 et               = pytz.timezone("America/New_York")
-client           = anthropic.Anthropic(api_key=os.environ["CLAUDE_KEY_4_CONTENT"])
+client           = None
+
+
+def _anthropic_client():
+    global client
+    if client is None:
+        key = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
+        if not key:
+            raise RuntimeError("CLAUDE_KEY_4_CONTENT missing and _llm_fallback unavailable")
+        client = anthropic.Anthropic(api_key=key)
+    return client
 
 
 def _llm(prompt, *, tier, max_tokens, context):
@@ -38,7 +48,7 @@ def _llm(prompt, *, tier, max_tokens, context):
     if _llm_text_cascade:
         return _llm_text_cascade(prompt, model_tier=tier, max_tokens=max_tokens, context=context)
     model = "claude-sonnet-4-6" if tier == "sonnet" else "claude-haiku-4-5-20251001"
-    resp = client.messages.create(
+    resp = _anthropic_client().messages.create(
         model=model, max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],
     )
