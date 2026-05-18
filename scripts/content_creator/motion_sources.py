@@ -126,28 +126,33 @@ def _download_collection_url(clip_url: str, dest_path: Path) -> bool:
     """Download one curated collection URL, preferring yt-dlp for video pages."""
     if shutil.which("yt-dlp"):
         tmp_out = dest_path.parent / (dest_path.stem + ".cc.%(ext)s")
-        try:
-            subprocess.run(
-                ["yt-dlp", "--no-warnings", "--no-playlist",
-                 "--format", "mp4[height<=720]/best[height<=720]/best",
-                 "--max-downloads", "1",
-                 "--match-filter", f"duration < {MAX_CLIP_DURATION_S}",
-                 "--output", str(tmp_out), clip_url],
-                capture_output=True, timeout=90
-            )
-            produced = sorted(dest_path.parent.glob(dest_path.stem + ".cc.*"))
-            for src in produced:
-                try:
-                    raw = src.read_bytes()
-                    if _looks_like_video_bytes(raw):
-                        dest_path.write_bytes(raw)
-                        for other in produced:
-                            other.unlink(missing_ok=True)
-                        return True
-                finally:
-                    src.unlink(missing_ok=True)
-        except Exception:
-            pass
+        attempts = [
+            [],
+            ["--extractor-args", "generic:impersonate"],
+        ]
+        for extra_args in attempts:
+            try:
+                cmd = [
+                    "yt-dlp", "--no-warnings", "--no-playlist",
+                    "--format", "mp4[height<=720]/best[height<=720]/best",
+                    "--max-downloads", "1",
+                    "--match-filter", f"duration < {MAX_CLIP_DURATION_S}",
+                    "--output", str(tmp_out),
+                ] + extra_args + [clip_url]
+                subprocess.run(cmd, capture_output=True, timeout=90)
+                produced = sorted(dest_path.parent.glob(dest_path.stem + ".cc.*"))
+                for src in produced:
+                    try:
+                        raw = src.read_bytes()
+                        if _looks_like_video_bytes(raw):
+                            dest_path.write_bytes(raw)
+                            for other in produced:
+                                other.unlink(missing_ok=True)
+                            return True
+                    finally:
+                        src.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     raw = _http_get_bytes(clip_url, timeout=60)
     if _looks_like_video_bytes(raw):
