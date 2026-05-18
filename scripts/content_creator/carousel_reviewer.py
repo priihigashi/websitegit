@@ -1961,6 +1961,15 @@ KNOWN_OPC_TEMPLATE_IDS = {
     "opc_duotone", "opc_base", "opc_statement", "opc_material_profile",
     "opc_item_spotlight", "opc_four_card_grid", "opc_progress_media",
 }
+OPC_TEMPLATE_CATALOG_PATH = Path(__file__).with_name("opc_template_catalog.json")
+OPC_TEMPLATE_BUNDLES_PATH = Path(__file__).with_name("opc_template_bundles.json")
+
+
+def _load_opc_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
 
 # Phase 6 — these standalones now have production Python builders. If the
 # planner picks any of these AND the renderer falls back to a tip equivalent,
@@ -2125,6 +2134,56 @@ EXPECTED_ROLE_FOR_SLIDE = {
 }
 
 
+def _check_bundle_slide_plan(plan: dict, slides: list[dict]) -> list[str]:
+    issues = []
+    bundle_id = str(plan.get("bundle_id") or "").strip()
+    catalog = _load_opc_json(OPC_TEMPLATE_CATALOG_PATH)
+    bundles = _load_opc_json(OPC_TEMPLATE_BUNDLES_PATH)
+    bundle = bundles.get(bundle_id)
+    if not bundle:
+        return [f"[slide-plan] unknown bundle_id {bundle_id!r}"]
+
+    min_slides = int(bundle.get("min_slides", 0))
+    max_slides = int(bundle.get("max_slides", 99))
+    if not (min_slides <= len(slides) <= max_slides):
+        issues.append(
+            f"[slide-plan] {len(slides)} slides outside bundle '{bundle_id}' range "
+            f"{min_slides}-{max_slides}"
+        )
+
+    always = bundle.get("always_include") or []
+    allowed = set(always + (bundle.get("middle_pool") or []))
+    if slides:
+        first_id = slides[0].get("template_id", "")
+        last_id = slides[-1].get("template_id", "")
+        if always and first_id != always[0]:
+            issues.append(f"[slide-plan] slide 1 must be {always[0]} for bundle '{bundle_id}' (got {first_id!r})")
+        if len(always) > 1 and last_id != always[-1]:
+            issues.append(
+                f"[slide-plan] slide {len(slides)} must be {always[-1]} for bundle '{bundle_id}' "
+                f"(got {last_id!r})"
+            )
+
+    for idx, slide in enumerate(slides, start=1):
+        n = slide.get("slide")
+        tid = slide.get("template_id", "")
+        if n != idx:
+            issues.append(f"[slide-plan] slide index mismatch: position {idx} has slide={n!r}")
+        if tid not in KNOWN_OPC_TEMPLATE_IDS:
+            issues.append(f"[slide-plan] slide {n}: unknown template_id '{tid}' (not in KNOWN_OPC_TEMPLATE_IDS)")
+            continue
+        if tid not in allowed:
+            issues.append(f"[slide-plan] slide {n}: template_id '{tid}' is not allowed in bundle '{bundle_id}'")
+        meta = catalog.get(tid) or {}
+        if bundle_id not in (meta.get("bundles") or []):
+            issues.append(
+                f"[slide-plan] cross-bundle bleed: slide {n} template '{tid}' "
+                f"does not belong to bundle '{bundle_id}'"
+            )
+
+    return issues
+
+
 def check_slide_plan(content: dict) -> list[str]:
     """Phase 5 — validate content['_slide_plan'] before render/upload.
     Returns a list of issue strings (empty list = passed).
@@ -2139,7 +2198,10 @@ def check_slide_plan(content: dict) -> list[str]:
         return issues  # no point checking individual slides if plan blocked
 
     slides = plan.get("slides") or []
-    if len(slides) != 5:
+    bundle_id = str(plan.get("bundle_id") or "").strip()
+    if bundle_id:
+        issues.extend(_check_bundle_slide_plan(plan, slides))
+    elif len(slides) != 5:
         issues.append(f"[slide-plan] {len(slides)} slides; expected 5")
 
     seen_template_ids = []
@@ -2160,7 +2222,7 @@ def check_slide_plan(content: dict) -> list[str]:
                 f"(not in KNOWN_OPC_TEMPLATE_IDS)"
             )
 
-        expected_role = EXPECTED_ROLE_FOR_SLIDE.get(n)
+        expected_role = EXPECTED_ROLE_FOR_SLIDE.get(n) if not bundle_id else None
         if expected_role and role != expected_role:
             issues.append(
                 f"[slide-plan] slide {n}: role '{role}' does not match "
@@ -2176,7 +2238,7 @@ def check_slide_plan(content: dict) -> list[str]:
                 )
 
     # Sources-slide special rule: there's only one renderer for it today.
-    if seen_template_ids and seen_template_ids[-1] != "opc_tip_sources":
+    if not bundle_id and seen_template_ids and seen_template_ids[-1] != "opc_tip_sources":
         issues.append(
             f"[slide-plan] slide 5: must be opc_tip_sources today "
             f"(got '{seen_template_ids[-1]}'). Only sources renderer wired."
