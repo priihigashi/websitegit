@@ -1033,7 +1033,66 @@ NN-M5 — PHASE 1 SCOPE: COVER A + COVER D, PLAYWRIGHT ONLY, MANUAL ONLY
   Any PR touching CarouselMotion.tsx during Phase 1 is rejected.
 
 ═══════════════════════════════════════════════════════════════════════
-END OF MOTION SYSTEM V2 SPEC — updated 2026-05-14
+PHASE 1 SIGNED OFF — 2026-05-18
+═══════════════════════════════════════════════════════════════════════
+Decision: Cover D motion approved with real Drive-hosted curated clip.
+Approved by: Priscila Higashi.
+
+Proof artifacts:
+  Workflow run:        26052378925 (motion built successfully; reviewer
+                       flagged unrelated content-source issue, motion
+                       artifact itself passed all gates)
+  Drive version folder: https://drive.google.com/drive/folders/1IuI7ilWcKAQWNX96GgGbz5uDZ97nd4M5
+  Drive motion folder:  https://drive.google.com/drive/folders/1ILcte4M-q3iV4lqZErqHhuVCYgzlJAKI
+  Source clip:          drive.google.com/file/d/1rjSQeMhjbwriy1095qm8IVCrOAQ1Q5S2
+                        (📋 Clip Collections row 21 — concrete slab pouring)
+  Final MP4:            cream_01_cover_motion.mp4 (2209KB)
+
+Phase 1 rule confirmed in production behavior:
+  - Real curated clip if available → Cover D motion built.
+  - No curated clip → static PNG only, no MP4, no fake motion.
+  - GIPHY disabled for OPC Cover D.
+  - No middle-slide motion.
+  - No Ken Burns. No Kling. No Remotion path used.
+  - Active layout: D.
+
+Key commits in this Phase 1 work:
+  190003c — NN-M1..M5 spec locked (2026-05-14)
+  ef9c28e — NONNEG cleanup + retry job env vars
+  55aaa8b — Cover D layout overhaul + photo matcher + GIPHY quality
+  00c8d9c — topic-first photo query (fixed repeated-kitchen bug)
+  6cb4192 — workflow crash fix (work dir)
+  7387bc0 — title clipping + GIPHY relevance filter
+  709d5e0 — SWIPE + tag readability
+  ff1e16b — GIPHY disabled by default for OPC Cover D
+  d977f4f / 153893a — static fallback when no clip
+  8e5f150 — Clip Collections reads Links column
+  a4ab42a — pass topic into clip lookup
+  ef8d991 — Drive-hosted MP4 support (OAuth + supportsAllDrives)
+  9dbcf25 — initial Playwright warmup trim (1s)
+  91eb831 — wait for bg-image + img tags before recording
+  53d70fe — bump warmup trim to 2s (FINAL — eliminated black-bar flicker)
+
+Phase 2 deferred (do not implement):
+  - Middle-slide motion
+  - Option B full-bleed slow ambient
+  - Kling integration
+  - Remotion / CarouselMotion.tsx
+  - Layout C (multi-face / network grid)
+  - GIPHY for OPC Cover D (stays off)
+
+Cron / prod safety:
+  MOTION_ENABLED defaults to 0 in both create-content and retry-on-failure
+  workflow jobs. Cron runs static-only. Motion only fires when manually
+  triggered with motion_test=1.
+
+Reference docs:
+  - FLOW_motion_system_v2_phase1_cover_d_signoff
+    https://docs.google.com/document/d/13XWUeosZgaNwJpzlk4fXQMM_QygoSFks5Zh2T6dI9-E
+  - docs/pipeline-fix/motion-phase1-status-2026-05-14.md
+  - Pipeline Fix Master Checklist rows P1-D-01..P1-D-05 (rows 154-158)
+═══════════════════════════════════════════════════════════════════════
+END OF MOTION SYSTEM V2 SPEC — Phase 1 closed 2026-05-18
 ═══════════════════════════════════════════════════════════════════════
 
 
