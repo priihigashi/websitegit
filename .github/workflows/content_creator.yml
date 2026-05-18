@@ -185,7 +185,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install google-auth google-api-python-client pytz requests yt-dlp pytubefix pillow anthropic openai google-generativeai
+          pip install google-auth google-api-python-client pytz requests yt-dlp curl_cffi pytubefix pillow anthropic openai google-generativeai
           npm install playwright
           npx playwright install chromium --with-deps
           cd scripts/remotion && npm install
@@ -375,7 +375,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install google-auth google-api-python-client pytz requests yt-dlp pytubefix pillow anthropic openai google-generativeai
+          pip install google-auth google-api-python-client pytz requests yt-dlp curl_cffi pytubefix pillow anthropic openai google-generativeai
           npm install playwright
           npx playwright install chromium --with-deps
           cd scripts/remotion && npm install
