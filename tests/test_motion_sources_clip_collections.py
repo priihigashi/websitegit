@@ -40,3 +40,12 @@ def test_drive_file_id_from_url_supports_view_and_query_urls():
         ms._drive_file_id_from_url("https://drive.google.com/uc?id=FILE_456&export=download")
         == "FILE_456"
     )
+
+
+def test_giphy_respects_allow_giphy_zero(tmp_path, monkeypatch):
+    monkeypatch.setattr(ms, "GIPHY_KEY", "fake-key")
+
+    assert ms.tier_giphy(
+        {"allow_giphy": "0", "giphy_query": "concrete slab pouring"},
+        tmp_path / "cover.mp4",
+    ) is False
