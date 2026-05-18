@@ -360,9 +360,11 @@ Step 3 — verify DONE (all 5 must be true):
 4. Buffer dashboard https://publish.buffer.com Instagram queue shows the carousel with 5 slides from folder `1aOCd3wY43g9KFsbDqMPXLyMiIk-vMesD` at a future scheduled time
 5. Issue #154 closed: `~/bin/gh issue close 154 --repo priihigashi/oak-park-ai-hub --comment "Resolved — Buffer token renewed, post scheduled. See run <id>."`
 
-### Known edge case (not a blocker for today)
+### Known edge case (not a blocker for today) — RESOLVED 2026-05-17 20:25 ET
 
-`approval_handler.py:663` `_pick_target_posts` legacy fallback is `return pending[:1]`. If a new OPC `pending_approval` row enters the catalog between now and the retry, that row would be processed instead of the retry row. Currently extremely unlikely. Mitigation: verify catalog has no OPC pending rows before triggering Step 2.
+`approval_handler.py:663` `_pick_target_posts` legacy fallback was `return pending[:1]`. If a new OPC `pending_approval` row enters the catalog between now and the retry, that row would be processed instead of the retry row.
+
+FIXED in commit `654db41` — `_pick_target_posts` (now at `approval_handler.py:648-657`) honors `RETRY_BUFFER_POST_ID` FIRST. Retry routing is now deterministic regardless of other pending rows. Normal approval flow unchanged.
 
 ### Out of scope for Prompt A
 
