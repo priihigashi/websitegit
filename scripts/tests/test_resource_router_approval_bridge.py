@@ -34,6 +34,7 @@ if "googleapiclient.http" not in sys.modules:
     http_mod = types.ModuleType("googleapiclient.http")
     http_mod.MediaIoBaseDownload = object
     http_mod.MediaInMemoryUpload = object
+    http_mod.MediaFileUpload = object
     sys.modules.setdefault("googleapiclient", google_mod)
     sys.modules["googleapiclient.http"] = http_mod
 

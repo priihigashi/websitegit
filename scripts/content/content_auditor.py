@@ -18,8 +18,9 @@ Usage:
 """
 
 import json, os, re, subprocess, sys, time
+import urllib.parse
 import urllib.request, urllib.error
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 ANTHROPIC_KEY    = os.environ.get("CLAUDE_KEY_4_CONTENT", "")
@@ -27,6 +28,9 @@ ALERT_EMAIL      = os.environ.get("ALERT_EMAIL", "priscila@oakpark-construction.
 RUN_RESULTS_JSON = os.environ.get("CONTENT_CREATOR_RUN", "[]")
 WORK_DIR         = Path(os.environ.get("WORK_DIR", "/tmp/content_creator_run"))
 DRY_RUN          = "--dry-run" in sys.argv
+SHEET_ID         = os.environ.get("CONTENT_SHEET_ID", "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU")
+CATALOG_TAB      = "📸 Project Content Catalog"
+QUEUE_TAB        = "📋 Content Queue"
 
 # SH-OPC-SMART-SLIDE-PICKER Phase 10: Sonnet primary for content audit.
 # Haiku consistently produced low scores on schema-strict OPC content + missed
@@ -492,6 +496,143 @@ def _audit_failure_reason(agent_result: dict) -> str:
     return "no reason captured"
 
 
+# ─── Sheets requeue helpers ──────────────────────────────────────────────────
+
+def _get_token() -> str:
+    raw = os.environ.get("SHEETS_TOKEN", "")
+    if not raw:
+        raise RuntimeError("No SHEETS_TOKEN set")
+    td = json.loads(raw)
+    data = urllib.parse.urlencode({
+        "client_id": td["client_id"],
+        "client_secret": td["client_secret"],
+        "refresh_token": td["refresh_token"],
+        "grant_type": "refresh_token",
+    }).encode()
+    resp = json.loads(urllib.request.urlopen(
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+        timeout=30,
+    ).read())
+    return resp["access_token"]
+
+
+def _col_letter(n: int) -> str:
+    out = ""
+    while n > 0:
+        n, rem = divmod(n - 1, 26)
+        out = chr(65 + rem) + out
+    return out
+
+
+def _sheet_values(tab: str, range_a1: str) -> list[list[str]]:
+    token = _get_token()
+    enc = urllib.parse.quote(f"'{tab}'!{range_a1}", safe="!:")
+    req = urllib.request.Request(
+        f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{enc}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    return json.loads(urllib.request.urlopen(req, timeout=30).read()).get("values", [])
+
+
+def _batch_update(updates: list[dict]) -> None:
+    if not updates:
+        return
+    token = _get_token()
+    payload = json.dumps({"valueInputOption": "USER_ENTERED", "data": updates}).encode()
+    req = urllib.request.Request(
+        f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values:batchUpdate",
+        data=payload,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    urllib.request.urlopen(req, timeout=30)
+
+
+def _failure_note(audit: dict) -> str:
+    parts = []
+    for agent in audit.get("agents", []):
+        verdict = agent.get("verdict", "?")
+        score = agent.get("score")
+        score_s = f"{score}/10" if score is not None else "?"
+        parts.append(f"{agent.get('agent', agent.get('name', 'agent'))}: {verdict} {score_s}")
+    run_url = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+    repo = os.environ.get("GITHUB_REPOSITORY", "priihigashi/oak-park-ai-hub")
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    link = f"{run_url}/{repo}/actions/runs/{run_id}" if run_id else "content_creator.yml"
+    return (
+        f"REQUEUED {datetime.now(timezone.utc).strftime('%Y-%m-%d')} "
+        f"(audit failed before preview; RR-AUDIT-ORDER): "
+        + "; ".join(parts)
+        + f" | Run: {link}"
+    )
+
+
+def mark_audit_failed_requeue(results: list[dict], failed_audits: list[dict]) -> int:
+    """Mark failed catalog/queue rows for rebuild while preserving research."""
+    if not failed_audits:
+        return 0
+    failed_by_post = {a.get("post_id", ""): a for a in failed_audits if a.get("post_id")}
+    if not failed_by_post:
+        return 0
+
+    updates = []
+
+    try:
+        catalog_rows = _sheet_values(CATALOG_TAB, "A:N")
+        for row_num, row in enumerate(catalog_rows, start=1):
+            post_id = row[0].strip() if row else ""
+            audit = failed_by_post.get(post_id)
+            if not audit:
+                continue
+            note = _failure_note(audit)
+            old_note = row[13] if len(row) > 13 else ""
+            merged_note = (old_note + " | " + note).strip(" |")
+            updates.extend([
+                {"range": f"'{CATALOG_TAB}'!M{row_num}", "values": [["audit_failed_requeue"]]},
+                {"range": f"'{CATALOG_TAB}'!N{row_num}", "values": [[merged_note]]},
+            ])
+    except Exception as exc:
+        print(f"  audit_failed_requeue catalog update skipped: {exc}")
+
+    try:
+        queue_rows = _sheet_values(QUEUE_TAB, "A:AZ")
+        hmap = {h.strip().lower(): i for i, h in enumerate(queue_rows[0])} if queue_rows else {}
+        for result in results:
+            post_id = result.get("post_id", "")
+            if post_id not in failed_by_post or not result.get("queue_row_idx"):
+                continue
+            row_num = int(result["queue_row_idx"])
+            note = _failure_note(failed_by_post[post_id])
+            if "status" in hmap:
+                updates.append({
+                    "range": f"'{QUEUE_TAB}'!{_col_letter(hmap['status'] + 1)}{row_num}",
+                    "values": [["Awaiting Rebuild"]],
+                })
+            if "date status changed" in hmap:
+                updates.append({
+                    "range": f"'{QUEUE_TAB}'!{_col_letter(hmap['date status changed'] + 1)}{row_num}",
+                    "values": [[datetime.now(timezone.utc).strftime("%Y-%m-%d")]],
+                })
+            if "notes" in hmap:
+                row_values = queue_rows[row_num - 1] if row_num - 1 < len(queue_rows) else []
+                note_idx = hmap["notes"]
+                old_note = row_values[note_idx] if note_idx < len(row_values) else ""
+                merged_note = (old_note + " | " + note).strip(" |")
+                updates.append({
+                    "range": f"'{QUEUE_TAB}'!{_col_letter(note_idx + 1)}{row_num}",
+                    "values": [[merged_note]],
+                })
+    except Exception as exc:
+        print(f"  audit_failed_requeue queue update skipped: {exc}")
+
+    try:
+        _batch_update(updates)
+        print(f"  audit_failed_requeue: updated {len(failed_by_post)} failed post(s)")
+    except Exception as exc:
+        print(f"  audit_failed_requeue sheet write skipped: {exc}")
+        return 0
+    return len(failed_by_post)
+
+
 # ─── Audit one post (3 sequential agent calls) ────────────────────────────────
 
 def audit_post(result: dict) -> dict:
@@ -538,11 +679,14 @@ def audit_post(result: dict) -> dict:
 
 def send_audit_email(failed_posts: list, all_audits: list):
     """Send audit report via send_email.yml workflow (same pattern as carousel_reviewer)."""
-    now    = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    now    = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     n_fail = len(failed_posts)
     n_pass = len(all_audits) - n_fail
 
-    subject = f"[content-audit] {n_pass}/{len(all_audits)} PASS — {n_fail} FAIL — {now}"
+    if n_fail:
+        subject = f"BUILD FAILED AUDIT — {n_fail}/{len(all_audits)} need rebuild — {now}"
+    else:
+        subject = f"[content-audit] {n_pass}/{len(all_audits)} PASS — {now}"
 
     lines = [
         f"AI CONTENT AUDIT REPORT — {now}",
@@ -550,6 +694,12 @@ def send_audit_email(failed_posts: list, all_audits: list):
         f"Agents: Fact Checker · Brand & Tone · Structure & Format",
         "",
     ]
+    if n_fail:
+        lines += [
+            "Preview email is blocked for failed posts.",
+            "Failed posts were marked audit_failed_requeue / Awaiting Rebuild so the next content_creator run can retry them.",
+            "",
+        ]
 
     for a in all_audits:
         status    = "✅ ALL PASS" if a["passed"] else "❌ FAIL"
@@ -651,6 +801,10 @@ def main():
         print("  audit_result appended to results.json")
     except Exception as e:
         print(f"  Could not update results.json (non-fatal): {e}")
+
+    # Failed posts should not disappear after audit.  Mark them for rebuild so the
+    # next cron can retry using the preserved queue/research rows.
+    mark_audit_failed_requeue(results, failed)
 
     # Always send report (confirms audit ran; full detail included for any FAILs)
     send_audit_email(failed, all_audits)

@@ -298,6 +298,9 @@ jobs:
         if: ${{ always() && github.event.inputs.review_only != 'true' && github.event.inputs.review_only_folder_id == '' }}
         env:
           CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
           ALERT_EMAIL: priscila@oakpark-construction.com
           WORK_DIR: /tmp/content_creator_run
         run: |
@@ -308,6 +311,16 @@ jobs:
             export CONTENT_CREATOR_RUN='[]'
           fi
           python scripts/content/content_auditor.py
+
+      - name: Send Preview Emails (audit-passing only)
+        if: ${{ github.event.inputs.review_only != 'true' && github.event.inputs.review_only_folder_id == '' }}
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
+          WORK_DIR: /tmp/content_creator_run
+        run: python scripts/content_creator/send_preview_emails.py
 
       - name: Upload artifacts
         if: always()
@@ -464,6 +477,9 @@ jobs:
         if: ${{ always() && github.event.inputs.review_only != 'true' && github.event.inputs.review_only_folder_id == '' }}
         env:
           CLAUDE_KEY_4_CONTENT: ${{ secrets.CLAUDE_KEY_4_CONTENT }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
           ALERT_EMAIL: priscila@oakpark-construction.com
           WORK_DIR: /tmp/content_creator_run
         run: |
@@ -474,6 +490,16 @@ jobs:
             export CONTENT_CREATOR_RUN='[]'
           fi
           python scripts/content/content_auditor.py
+
+      - name: Send Preview Emails (audit-passing only)
+        if: ${{ github.event.inputs.review_only != 'true' && github.event.inputs.review_only_folder_id == '' }}
+        env:
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          PRI_OP_GMAIL_APP_PASSWORD: ${{ secrets.PRI_OP_GMAIL_APP_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CONTENT_SHEET_ID: '1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU'
+          WORK_DIR: /tmp/content_creator_run
+        run: python scripts/content_creator/send_preview_emails.py
 
       - name: Upload retry artifacts
         if: always()

@@ -35,7 +35,6 @@ from carousel_builder import generate_carousel_content, build_html, render_pngs,
 from opc_source_policy import enforce_opc_source_policy
 from routing import get_route
 import urllib.request, urllib.parse
-from email_preview import send_preview, update_catalog_status
 
 WORK_DIR = Path(os.environ.get("WORK_DIR", "/tmp/content_creator_run"))
 EXPORT_SCRIPT = os.environ.get("EXPORT_SCRIPT", str(Path(__file__).parent / "export_variants.js"))
@@ -522,7 +521,12 @@ def write_queue_status(row_idx, status=None, drive_folder_path=None, extra=None)
 
 
 def get_approved_queue_rows():
-    """Read Content Queue rows with Status='Approved' AND Content Type='Carousel' AND no Drive path yet."""
+    """Read buildable Content Queue carousel rows.
+
+    Normal rows build from Status='Approved' and no Drive path. Rows marked
+    'Awaiting Rebuild' are audit-failed retries, so they may already have a Drive
+    path and must bypass the normal "already built" skip.
+    """
     token = get_oauth_token()
     tab_enc = urllib.parse.quote(f"'{QUEUE_TAB}'", safe="!:'")
     rows = json.loads(urllib.request.urlopen(
@@ -546,15 +550,19 @@ def get_approved_queue_rows():
 
     approved = []
     for idx, row in enumerate(rows[1:], start=2):
-        if v(row, "status").lower() != "approved":
+        status_val = v(row, "status").lower()
+        force_rebuild = status_val == "awaiting rebuild"
+        if status_val not in ("approved", "awaiting rebuild"):
             continue
         if v(row, "content type").lower() != "carousel":
             continue
-        if v(row, "drive folder path"):
+        if v(row, "drive folder path") and not force_rebuild:
             continue  # already built
         niche = _normalize_niche(v(row, "source"), v(row, "format"))
         approved.append({
             "queue_row_idx": idx,
+            "force_rebuild": force_rebuild,
+            "rebuild_reason": status_val if force_rebuild else "",
             "topic": v(row, "project name"),
             "niche": niche,
             "brief": v(row, "brief / angle"),
@@ -2794,22 +2802,13 @@ def main():
             )
             return
 
-        # SH-157: pre-email reviewer gate — block bad previews BEFORE send_preview
-        results_to_email, failed_review = _filter_results_for_email(results, label="manual")
-        if not results_to_email:
-            print("  [SH-157] No results passed pre-email reviewer — skipping send_preview")
-        else:
-            try:
-                send_preview(results_to_email, now_et.strftime("%Y-%m-%d"))
-            except Exception as e:
-                print(f"  Manual preview email send failed: {e}")
-
-        print(f"\n[content_creator] Manual mode done — {len(results)} posts")
         results_file = WORK_DIR / "results.json"
         try:
             results_file.write_text(json.dumps(results, default=str))
         except Exception as e:
             print(f"  Could not write results.json: {e}")
+        print("  Preview email deferred until carousel_reviewer + content_auditor pass")
+        print(f"\n[content_creator] Manual mode done — {len(results)} posts")
         return
 
     # Phase A: Promote fresh topics from Inspiration → Content Queue
@@ -2882,6 +2881,10 @@ def main():
     _deduped_approved = []
     for _t in approved:
         _ts = _topic_to_slug(_t.get("topic", ""))
+        if _t.get("force_rebuild"):
+            print(f"  REBUILD: '{_t['topic'][:50]}' bypasses Build History dedup after audit requeue")
+            _deduped_approved.append(_t)
+            continue
         if _ts in _recent_slugs:
             print(f"  DEDUP SKIP: '{_t['topic'][:50]}' built within last {HISTORY_DEDUP_DAYS}d — skipping")
         else:
@@ -2920,30 +2923,18 @@ def main():
             fatal=True,
         )
 
-    # Phase C: Send preview email → mark each row 'Email Sent'
-    print(f"\n--- Phase C: Sending preview email ({len(results)} posts) ---")
-    # SH-157: pre-email reviewer gate — block bad previews BEFORE send_preview
-    results_to_email, failed_review = _filter_results_for_email(results, label="phase-c")
-    if not results_to_email:
-        print("  [SH-157] No results passed pre-email reviewer — skipping send_preview")
-    else:
-        try:
-            send_preview(results_to_email, now_et.strftime("%Y-%m-%d"))
-            for r in results_to_email:
-                if r.get("queue_row_idx"):
-                    write_queue_status(r["queue_row_idx"], status="Email Sent")
-        except Exception as e:
-            print(f"  Email send failed: {e}")
-
-    elapsed = time.time() - start
-    print(f"\n[content_creator] Done — {len(results)} posts rendered in {elapsed:.0f}s")
-
     # Write results for downstream carousel reviewer
     results_file = WORK_DIR / "results.json"
     try:
         results_file.write_text(json.dumps(results, default=str))
     except Exception as e:
         print(f"  Could not write results.json: {e}")
+
+    print(f"\n--- Phase C: Preview email deferred ({len(results)} posts) ---")
+    print("  send_preview_emails.py will run after carousel_reviewer + content_auditor")
+
+    elapsed = time.time() - start
+    print(f"\n[content_creator] Done — {len(results)} posts rendered in {elapsed:.0f}s")
 
     # Log each rendered post to Content Creation Log
     try:
