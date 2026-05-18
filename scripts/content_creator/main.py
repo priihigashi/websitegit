@@ -967,10 +967,12 @@ def record_motion_slides(clip_html_files, output_dir, duration=5):
         gif_path  = Path(output_dir) / f"cream_{nn}_{base}_motion.gif"
         try:
             # Playwright starts video capture when the browser context is
-            # created, before the HTML/video has fully painted. Record one
-            # warm-up second and trim it out so Cover D never starts on a black
-            # browser/video-loading frame.
-            warmup_s = 1
+            # created, before the HTML/video has fully painted. Record a
+            # warm-up window and trim it out so Cover D never starts on a
+            # black browser/video-loading frame or a font-fallback flash.
+            # 1s was not enough (Priscila 2026-05-18): font swap + bg-image
+            # decode + first composite reflow needs ~1.5-2s in CI. 2s covers it.
+            warmup_s = 2
             r = subprocess.run(
                 ["node", str(record_script), html_path, str(webm_path), str(duration + warmup_s)],
                 capture_output=True, timeout=120
