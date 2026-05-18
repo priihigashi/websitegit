@@ -1624,10 +1624,24 @@ def process_one_topic(topic_entry, run_date, drive):
         try:
             from opc_template_chooser import plan_carousel_slides
             # Phase E (2026-05-18) — bundle picker shadow/on mode
+            # Phase F.5 (2026-05-18) — topic-aware bundle selection + variable length.
+            # Use the chooser's recommend_bundle_id() so the picker decides which
+            # bundle fits the topic's signals (progress/material → dark, else cream).
+            # target_slide_count=None lets _target_count_for_bundle() pick the right
+            # count per shape (4 single-insight, 5 warning, 6 comparison/progress).
             _bundle_mode = OPC_BUNDLE_PICKER
             if _bundle_mode in ("shadow", "on"):
                 try:
-                    _bundle_plan = plan_carousel_slides(topic, brief or "", bundle_id=OPC_BUNDLE_DEFAULT_ID)
+                    from opc_template_chooser import recommend_bundle_id
+                    _picked_bundle = recommend_bundle_id(topic, brief or "")
+                except Exception:
+                    _picked_bundle = OPC_BUNDLE_DEFAULT_ID
+                try:
+                    _bundle_plan = plan_carousel_slides(
+                        topic, brief or "",
+                        bundle_id=_picked_bundle,
+                        target_slide_count=None,
+                    )
                 except TypeError:
                     # plan_carousel_slides may not accept bundle_id yet (older revision)
                     _bundle_plan = {"status": "error", "slides": [], "reason": "bundle_id_arg_missing"}
@@ -1637,7 +1651,7 @@ def process_one_topic(topic_entry, run_date, drive):
                     and 4 <= len(_bundle_slides) <= 8
                 )
                 log_picker_decision(
-                    post_id, topic, niche, _bundle_mode, OPC_BUNDLE_DEFAULT_ID,
+                    post_id, topic, niche, _bundle_mode, _picked_bundle,
                     len(_bundle_slides), _bundle_plan, _bundle_valid,
                     fallback_triggered=(_bundle_mode == "on" and not _bundle_valid),
                     notes="" if _bundle_valid else (_bundle_plan.get("reason") or "invalid_plan")[:200],
@@ -1645,7 +1659,7 @@ def process_one_topic(topic_entry, run_date, drive):
                 if _bundle_mode == "on" and _bundle_valid:
                     _early_plan = _bundle_plan
                     slide_summary = " → ".join(s["template_id"] for s in _early_plan["slides"])
-                    print(f"  smart-plan (bundle ON, {OPC_BUNDLE_DEFAULT_ID}): {slide_summary}")
+                    print(f"  smart-plan (bundle ON, {_picked_bundle}, {len(_bundle_slides)} slides): {slide_summary}")
             # Shadow mode + on-mode-fallback + off mode → use legacy 5-tip planner
             if _early_plan is None:
                 _early_plan = plan_carousel_slides(topic, brief or "")

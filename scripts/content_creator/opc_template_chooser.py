@@ -637,6 +637,38 @@ def _target_count_for_bundle(matches: dict[str, Any], bundle: dict[str, Any], re
     return max(int(bundle["min_slides"]), min(int(bundle["max_slides"]), target))
 
 
+def recommend_bundle_id(topic: str, brief: str = "", registry_path: Path = DEFAULT_REGISTRY) -> str:
+    """F.5 (2026-05-18) — pick the bundle that best fits the topic's story signals.
+
+    dark_base_v1 contains opc_progress_media + opc_duotone + opc_material_profile —
+    use it for showcase (before/after, jobsite, install) and material-education
+    topics. Everything else defaults to cream_base_v1.
+
+    Safe by design: returns a string that is always a valid bundle in
+    opc_template_bundles.json. Callers do not need to handle errors here.
+    """
+    try:
+        rec = build_recommendation(topic, brief, registry_path)
+        if rec.get("status") != "passed":
+            return "cream_base_v1"
+        matches = rec.get("storytelling_read", {}).get("matched_signals") or {}
+        # F.5 (2026-05-18) — bundle routing rules:
+        # The signal word lists overlap heavily (e.g. "framing" is both progress
+        # and material), so dark routing requires the topic to be PRIMARILY
+        # progress or material — i.e. NOT also a comparison or warning, because
+        # those shapes are better served by cream's wider middle pool.
+        if ("progress" in matches and "comparison" not in matches
+                and "warning" not in matches):
+            return "dark_base_v1"
+        if ("material" in matches and "comparison" not in matches
+                and "warning" not in matches and "progress" not in matches):
+            return "dark_base_v1"
+        return "cream_base_v1"
+    except Exception:
+        # Never block the caller — fall back to safe default.
+        return "cream_base_v1"
+
+
 def _bundle_middle_preferences(matches: dict[str, Any], bundle_id: str) -> list[str]:
     if bundle_id == "dark_base_v1":
         if "progress" in matches:
@@ -647,14 +679,18 @@ def _bundle_middle_preferences(matches: dict[str, Any], bundle_id: str) -> list[
             return ["opc_duotone", "opc_statement", "opc_material_profile", "opc_progress_media"]
         return ["opc_statement", "opc_material_profile", "opc_duotone", "opc_progress_media"]
 
+    # F.5 (2026-05-18) — warning signal must outrank comparison when both match.
+    # "3 mistakes on roof permits" hits both ("3 " is a comparison word and
+    # "mistake/permit" are warning words) — for these the user wants a list,
+    # not a 4-card comparison grid. Warning gets first dibs.
+    if "warning" in matches:
+        return ["opc_tip_list", "opc_statement", "opc_tip_stat", "opc_tip_explainer", "opc_four_card_grid"]
     if "comparison" in matches:
         return ["opc_four_card_grid", "opc_tip_stat", "opc_statement", "opc_tip_explainer", "opc_tip_list", "opc_item_spotlight"]
     if "single_item" in matches:
         return ["opc_statement", "opc_item_spotlight", "opc_tip_stat", "opc_tip_explainer", "opc_tip_list"]
     if "quote_statement" in matches:
         return ["opc_statement", "opc_tip_stat", "opc_tip_explainer", "opc_tip_list", "opc_item_spotlight"]
-    if "warning" in matches:
-        return ["opc_tip_list", "opc_statement", "opc_tip_stat", "opc_tip_explainer", "opc_four_card_grid"]
     if "material" in matches:
         return ["opc_item_spotlight", "opc_tip_stat", "opc_tip_list", "opc_tip_explainer", "opc_statement"]
     return ["opc_tip_stat", "opc_tip_list", "opc_tip_explainer", "opc_statement", "opc_item_spotlight"]
