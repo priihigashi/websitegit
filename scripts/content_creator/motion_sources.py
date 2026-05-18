@@ -86,6 +86,75 @@ def _http_get_bytes(url: str, timeout: int = 60, max_bytes: int = MAX_CLIP_BYTES
 
 # ─── TIER 0 — Pre-loaded Clip Collections (video-research URLs) ──────────────
 
+def _looks_like_video_bytes(raw: bytes) -> bool:
+    """Cheap guard against saving HTML landing pages as .mp4 clips."""
+    if len(raw) < MIN_CLIP_BYTES:
+        return False
+    head = raw[:512].lower()
+    if b"<html" in head or b"<!doctype html" in head:
+        return False
+    return b"ftyp" in raw[:64] or head.startswith((b"\x00\x00", b"\x1a\x45\xdf\xa3"))
+
+
+def _extract_urls(text: str) -> list[str]:
+    """Extract URLs from Clip Collections cells that use `url | url [note]` format."""
+    if not text:
+        return []
+    urls = re.findall(r"https?://[^\s|\]]+", text)
+    return [u.rstrip(".,);") for u in urls]
+
+
+def _topic_tokens(text: str) -> set[str]:
+    stop = {
+        "the", "and", "for", "with", "that", "this", "your", "you", "are",
+        "how", "why", "when", "what", "tips", "tip", "home", "homes",
+        "homeowner", "homeowners", "planning", "plan", "explained",
+    }
+    tokens = set(re.findall(r"[a-z0-9]{3,}", (text or "").lower()))
+    aliases = {
+        "renovation": "remodel",
+        "renovate": "remodel",
+        "remodeling": "remodel",
+        "bathrooms": "bathroom",
+        "tiles": "tile",
+        "contractors": "contractor",
+    }
+    return {aliases.get(t, t) for t in tokens if t not in stop}
+
+
+def _download_collection_url(clip_url: str, dest_path: Path) -> bool:
+    """Download one curated collection URL, preferring yt-dlp for video pages."""
+    if shutil.which("yt-dlp"):
+        tmp_out = dest_path.parent / (dest_path.stem + ".cc.%(ext)s")
+        try:
+            subprocess.run(
+                ["yt-dlp", "--no-warnings", "--no-playlist",
+                 "--format", "mp4[height<=720]/best[height<=720]/best",
+                 "--max-downloads", "1",
+                 "--match-filter", f"duration < {MAX_CLIP_DURATION_S}",
+                 "--output", str(tmp_out), clip_url],
+                capture_output=True, timeout=90
+            )
+            produced = sorted(dest_path.parent.glob(dest_path.stem + ".cc.*"))
+            for src in produced:
+                try:
+                    raw = src.read_bytes()
+                    if _looks_like_video_bytes(raw):
+                        dest_path.write_bytes(raw)
+                        for other in produced:
+                            other.unlink(missing_ok=True)
+                        return True
+                finally:
+                    src.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    raw = _http_get_bytes(clip_url, timeout=60)
+    if _looks_like_video_bytes(raw):
+        dest_path.write_bytes(raw)
+        return True
+    return False
+
 def _get_oauth_token() -> str:
     """Refresh SHEETS_TOKEN to get a short-lived access token."""
     if not SHEETS_TOKEN_RAW:
@@ -106,7 +175,7 @@ def _get_oauth_token() -> str:
 
 def tier_clip_collections(slide_cfg: dict, dest_path: Path) -> bool:
     """Tier 0 — Read pre-loaded clip URLs from Clip Collections tab (written by video-research.yml).
-    Tries to download each URL via yt-dlp (Apify residential proxy bypass) or direct HTTP.
+    Tries to download each URL via yt-dlp (for video pages) or direct HTTP.
     Highest priority: these clips were already validated as high-relevance by Claude analysis."""
     topic = slide_cfg.get("topic") or slide_cfg.get("youtube_query") or ""
     if not topic or not SHEETS_TOKEN_RAW:
@@ -123,54 +192,52 @@ def tier_clip_collections(slide_cfg: dict, dest_path: Path) -> bool:
             return False
         header = [h.strip().lower() for h in rows[0]]
         topic_col = next((i for i, h in enumerate(header) if h in ("topic", "topic / title", "title")), None)
+        niche_col = next((i for i, h in enumerate(header) if h == "niche"), None)
+        links_col = next((i for i, h in enumerate(header) if h == "links"), None)
+        notes_col = next((i for i, h in enumerate(header) if h == "notes"), None)
+        goal_col = next((i for i, h in enumerate(header) if h == "content goal"), None)
         url_col = next((i for i, h in enumerate(header) if h == "url"), None)
-        if topic_col is None or url_col is None:
+        if topic_col is None:
             return False
         topic_lower = topic.strip().lower()
+        topic_terms = _topic_tokens(topic)
+        niche = (slide_cfg.get("niche") or os.environ.get("MANUAL_NICHE", "")).strip().lower()
         candidates = []
         for row in rows[1:]:
             cell = row[topic_col].strip().lower() if topic_col < len(row) else ""
-            clip_url = row[url_col].strip() if url_col < len(row) else ""
-            if cell and clip_url and (cell in topic_lower or topic_lower in cell):
-                candidates.append(clip_url)
+            row_niche = row[niche_col].strip().lower() if niche_col is not None and niche_col < len(row) else ""
+            links_text = row[links_col] if links_col is not None and links_col < len(row) else ""
+            url_text = row[url_col] if url_col is not None and url_col < len(row) else ""
+            notes = row[notes_col] if notes_col is not None and notes_col < len(row) else ""
+            goal = row[goal_col] if goal_col is not None and goal_col < len(row) else ""
+            row_text = " ".join([cell, row_niche, notes.lower(), goal.lower()])
+            row_terms = _topic_tokens(row_text)
+            overlap = len(topic_terms & row_terms)
+            exact = bool(cell and (cell in topic_lower or topic_lower in cell))
+            same_niche = bool(niche and row_niche and (niche in row_niche or row_niche in niche or (niche == "opc" and "oak park" in row_niche)))
+            if not exact and overlap == 0:
+                continue
+            score = (100 if exact else 0) + (overlap * 10) + (5 if same_niche else 0)
+            for clip_url in _extract_urls(url_text) + _extract_urls(links_text):
+                url_score = score
+                if "pexels.com/video" in clip_url:
+                    url_score += 15
+                elif "youtube.com" in clip_url or "youtu.be" in clip_url:
+                    url_score += 8
+                candidates.append((url_score, clip_url, cell or topic_lower))
         if not candidates:
             return False
-        for clip_url in candidates[:3]:
+        candidates.sort(reverse=True)
+        for _, clip_url, matched_topic in candidates[:5]:
             if not clip_url:
                 continue
-            # Try yt-dlp download of the specific URL (works for YouTube when Apify is active)
-            if "youtube.com" in clip_url or "youtu.be" in clip_url:
-                if shutil.which("yt-dlp"):
-                    tmp_out = dest_path.parent / (dest_path.stem + ".cc.%(ext)s")
-                    r = subprocess.run(
-                        ["yt-dlp", "--no-warnings", "--no-playlist",
-                         "--format", "mp4[height<=720]/best[height<=720]/best",
-                         "--max-downloads", "1",
-                         "--match-filter", f"duration < {MAX_CLIP_DURATION_S}",
-                         "--output", str(tmp_out), clip_url],
-                        capture_output=True, timeout=90
-                    )
-                    produced = sorted(dest_path.parent.glob(dest_path.stem + ".cc.*"))
-                    if produced and produced[0].stat().st_size > MIN_CLIP_BYTES:
-                        dest_path.write_bytes(produced[0].read_bytes())
-                        produced[0].unlink(missing_ok=True)
-                        _write_sidecar(dest_path, "clip_collections", clip_url,
-                                       license_str="YouTube ToS (fair use editorial)",
-                                       attribution=f"Pre-loaded via video-research — {clip_url}",
-                                       query=topic)
-                        print(f"  motion_sources: Clip Collections → {dest_path.name} ({dest_path.stat().st_size//1024}KB)")
-                        return True
-            else:
-                # Direct download (Pexels/Pixabay/Archive direct MP4 links)
-                raw = _http_get_bytes(clip_url, timeout=60)
-                if len(raw) > MIN_CLIP_BYTES:
-                    dest_path.write_bytes(raw)
-                    _write_sidecar(dest_path, "clip_collections", clip_url,
-                                   license_str="See source",
-                                   attribution=f"Pre-loaded via video-research — {clip_url}",
-                                   query=topic)
-                    print(f"  motion_sources: Clip Collections (direct) → {dest_path.name} ({len(raw)//1024}KB)")
-                    return True
+            if _download_collection_url(clip_url, dest_path):
+                _write_sidecar(dest_path, "clip_collections", clip_url,
+                               license_str="See source",
+                               attribution=f"Pre-loaded via Clip Collections — matched '{matched_topic}'",
+                               query=topic)
+                print(f"  motion_sources: Clip Collections → {dest_path.name} ({dest_path.stat().st_size//1024}KB) from '{matched_topic[:40]}'")
+                return True
         return False
     except Exception as e:
         print(f"  motion_sources: Clip Collections tier error (non-fatal): {e}")
