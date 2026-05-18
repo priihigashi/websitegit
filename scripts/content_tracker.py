@@ -42,6 +42,8 @@ Non-fatal: if Sheets API fails, prints a warning and continues. Never crashes th
 
 import os
 import json
+import time
+import urllib.error
 import urllib.request
 import urllib.parse
 from datetime import datetime
@@ -50,6 +52,34 @@ import pytz
 SHEET_ID  = "1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU"
 TAB_NAME  = "📊 Content Creation Log"
 ET        = pytz.timezone("America/New_York")
+
+# Transient HTTP codes that should retry with backoff (Sheets API occasionally
+# returns these — 503 was killing approval_check.yml until this was added).
+_RETRY_CODES = {429, 500, 502, 503, 504}
+
+
+def _urlopen_with_retry(req, *, timeout: int = 15, max_attempts: int = 3) -> bytes:
+    """Wrap urllib.request.urlopen with exponential backoff on transient 5XX/429.
+
+    Read AND write paths use this. Permanent errors (4XX other than 429) raise
+    immediately so the caller's existing except still logs and returns rows=[]
+    or False (non-fatal contract preserved).
+    """
+    last_err = None
+    for attempt in range(max_attempts):
+        try:
+            return urllib.request.urlopen(req, timeout=timeout).read()
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code in _RETRY_CODES and attempt < max_attempts - 1:
+                wait = 2 ** attempt
+                print(f"  [content_tracker] HTTP {e.code} attempt {attempt + 1}/{max_attempts} — retry in {wait}s")
+                time.sleep(wait)
+                continue
+            raise
+    if last_err:
+        raise last_err
+    raise RuntimeError("urlopen retry loop exited without response")
 
 
 def _access_token() -> str:
@@ -185,9 +215,9 @@ def update_in_production(
     enc = urllib.parse.quote(f"'{_IN_PROD_TAB}'!A:K", safe="!:'")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{_CC_SHEET_ID}/values/{enc}"
     try:
-        rows = json.loads(urllib.request.urlopen(
+        rows = json.loads(_urlopen_with_retry(
             urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-        ).read()).get("values", [])
+        )).get("values", [])
     except Exception as e:
         print(f"[content_tracker] WARNING update_in_production read: {e}")
         rows = []
@@ -217,11 +247,11 @@ def update_in_production(
             if fmt:
                 batch.append({"range": f"'{_IN_PROD_TAB}'!D{existing_row_num}", "values": [[fmt]]})
             payload = json.dumps({"valueInputOption": "USER_ENTERED", "data": batch}).encode()
-            urllib.request.urlopen(urllib.request.Request(
+            _urlopen_with_retry(urllib.request.Request(
                 f"https://sheets.googleapis.com/v4/spreadsheets/{_CC_SHEET_ID}/values:batchUpdate",
                 data=payload,
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            )).read()
+            ))
             print(f"[content_tracker] ✓ In Production updated — {title[:40]} → {status} (reviews: {existing_reviews+1})")
         else:
             # New row: #Reviews=1 | Title | PostType | Format | ContentType | Status | DriveLink | Caption | Hashtags | OutputLink | Date
@@ -230,10 +260,10 @@ def update_in_production(
             url2 = (f"https://sheets.googleapis.com/v4/spreadsheets/{_CC_SHEET_ID}/values/{enc2}"
                     f":append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS")
             payload = json.dumps({"values": [new_row]}).encode()
-            urllib.request.urlopen(urllib.request.Request(
+            _urlopen_with_retry(urllib.request.Request(
                 url2, data=payload,
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            )).read()
+            ))
             print(f"[content_tracker] ✓ In Production added — {title[:40]} → {status}")
         return True
     except Exception as e:
@@ -280,9 +310,9 @@ def update_news_in_production(
     enc = urllib.parse.quote(f"'{tab}'!A:K", safe="!:'")
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{_NEWS_CC_SHEET_ID}/values/{enc}"
     try:
-        rows = json.loads(urllib.request.urlopen(
+        rows = json.loads(_urlopen_with_retry(
             urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-        ).read()).get("values", [])
+        )).get("values", [])
     except Exception as e:
         print(f"[content_tracker] WARNING update_news_in_production read: {e}")
         rows = []
@@ -312,11 +342,11 @@ def update_news_in_production(
             if fmt:
                 batch.append({"range": f"'{tab}'!D{existing_row_num}", "values": [[fmt]]})
             payload = json.dumps({"valueInputOption": "USER_ENTERED", "data": batch}).encode()
-            urllib.request.urlopen(urllib.request.Request(
+            _urlopen_with_retry(urllib.request.Request(
                 f"https://sheets.googleapis.com/v4/spreadsheets/{_NEWS_CC_SHEET_ID}/values:batchUpdate",
                 data=payload,
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            )).read()
+            ))
             print(f"[content_tracker] ✓ News In Production updated — {title[:40]} → {status} (reviews: {existing_reviews+1})")
         else:
             # New row: same column order as OPC
@@ -326,10 +356,10 @@ def update_news_in_production(
             url2 = (f"https://sheets.googleapis.com/v4/spreadsheets/{_NEWS_CC_SHEET_ID}/values/{enc2}"
                     f":append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS")
             payload = json.dumps({"values": [new_row]}).encode()
-            urllib.request.urlopen(urllib.request.Request(
+            _urlopen_with_retry(urllib.request.Request(
                 url2, data=payload,
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            )).read()
+            ))
             print(f"[content_tracker] ✓ News In Production added — {title[:40]} ({tab}) → {status}")
         return True
     except Exception as e:
