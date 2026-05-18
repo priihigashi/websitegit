@@ -158,6 +158,7 @@ def _download_collection_url(clip_url: str, dest_path: Path) -> bool:
 def _get_oauth_token() -> str:
     """Refresh SHEETS_TOKEN to get a short-lived access token."""
     if not SHEETS_TOKEN_RAW:
+        print("  motion_sources: Clip Collections skipped — SHEETS_TOKEN missing")
         return ""
     try:
         import urllib.parse as _up
@@ -169,7 +170,8 @@ def _get_oauth_token() -> str:
         resp = json.loads(urllib.request.urlopen(
             urllib.request.Request("https://oauth2.googleapis.com/token", data=data)).read())
         return resp.get("access_token", "")
-    except Exception:
+    except Exception as e:
+        print(f"  motion_sources: Clip Collections auth miss (non-fatal): {type(e).__name__}")
         return ""
 
 
@@ -183,12 +185,14 @@ def tier_clip_collections(slide_cfg: dict, dest_path: Path) -> bool:
     try:
         token = _get_oauth_token()
         if not token:
+            print("  motion_sources: Clip Collections skipped — no OAuth access token")
             return False
         enc = urllib.parse.quote("'📋 Clip Collections'", safe="!:'")
         url = f"https://sheets.googleapis.com/v4/spreadsheets/{CLIP_COLLECTIONS_SHEET_ID}/values/{enc}"
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
         rows = json.loads(urllib.request.urlopen(req, timeout=15).read()).get("values", [])
         if len(rows) < 2:
+            print("  motion_sources: Clip Collections skipped — sheet has no rows")
             return False
         header = [h.strip().lower() for h in rows[0]]
         topic_col = next((i for i, h in enumerate(header) if h in ("topic", "topic / title", "title")), None)
@@ -198,6 +202,7 @@ def tier_clip_collections(slide_cfg: dict, dest_path: Path) -> bool:
         goal_col = next((i for i, h in enumerate(header) if h == "content goal"), None)
         url_col = next((i for i, h in enumerate(header) if h == "url"), None)
         if topic_col is None:
+            print("  motion_sources: Clip Collections skipped — Topic column missing")
             return False
         topic_lower = topic.strip().lower()
         topic_terms = _topic_tokens(topic)
@@ -226,8 +231,10 @@ def tier_clip_collections(slide_cfg: dict, dest_path: Path) -> bool:
                     url_score += 8
                 candidates.append((url_score, clip_url, cell or topic_lower))
         if not candidates:
+            print(f"  motion_sources: Clip Collections miss for '{topic_lower[:60]}' terms={sorted(topic_terms)}")
             return False
         candidates.sort(reverse=True)
+        print(f"  motion_sources: Clip Collections candidates={len(candidates)} for '{topic_lower[:60]}'")
         for _, clip_url, matched_topic in candidates[:5]:
             if not clip_url:
                 continue
@@ -238,6 +245,7 @@ def tier_clip_collections(slide_cfg: dict, dest_path: Path) -> bool:
                                query=topic)
                 print(f"  motion_sources: Clip Collections → {dest_path.name} ({dest_path.stat().st_size//1024}KB) from '{matched_topic[:40]}'")
                 return True
+            print(f"  motion_sources: Clip Collections download miss for {clip_url[:80]}")
         return False
     except Exception as e:
         print(f"  motion_sources: Clip Collections tier error (non-fatal): {e}")
