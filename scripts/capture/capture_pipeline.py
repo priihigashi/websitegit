@@ -2381,6 +2381,9 @@ def _auto_promote_capture_to_content_queue(url: str, classification: dict,
     elif raw_niche in ("usa", "us", "news-usa", "news-us", "united states", "america"):
         niche = "usa"
     else:
+        # Silent skip was killing visibility for ugc/stocks/higashi/book captures.
+        # Plan v3 § P2.2 — log explicitly so we can tell skipped from failed.
+        print(f"  Auto-promote skipped: niche={raw_niche or '(empty)'} not auto-promotable (only opc/brazil/usa)")
         return
 
     topic = (
