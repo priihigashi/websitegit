@@ -197,15 +197,8 @@ Flow Plans Tracker (all master/flow docs indexed): 1fggy918FgPfnMQ-dzGQk2zx9uhi2
 ## WHEN SHE DROPS A URL
 Save to Inspiration Library tab (Ideas & Inbox) immediately. Create calendar task with full URL, /capture instructions, purpose, Drive links.
 
-## CALENDAR TASKS must always include: source URLs, numbered action steps, tools, Drive links
-
-## CREATING CALENDAR EVENTS — try in order, never give up:
-ROUTE A: mcp__claude_ai_Google_Calendar__ tools (preferred)
-ROUTE B: Composio MCP — GOOGLECALENDAR_CREATE_EVENT action
-ROUTE C: Python OAuth — build('calendar','v3',credentials=creds).events().insert(calendarId='primary', body=event).execute()
-         NOTE: sheets_token.json does NOT have calendar scope. Need separate token or re-auth with calendar scope.
-         If Route C fails with 403 insufficient scope → skip and use Route A or B only.
-NEVER tell Priscila to add the calendar event herself unless all routes are tried and all fail.
+## CALENDAR — see `/calendar-create` SKILL.md
+Every calendar event MUST include: source URLs, numbered action steps, tools to use, Drive links. 3-route fallback (MCP deferred-load / Composio / Python OAuth). sheets_token.json HAS calendar scope (confirmed 2026-04-12 — see Known Mistake #14). NEVER tell Priscila to add the event herself unless all 3 routes fail. Step D migration 2026-05-18.
 
 ## WHEN SHE SAYS "add a column" or "fix the spreadsheet"
 Do it immediately. Confirm with cell reference. Do NOT create a task — execute now.
@@ -306,13 +299,8 @@ Tool rules for Drive (quick summary):
 
 Full skill: `~/.agents/skills/drive-upload/SKILL.md`
 
-## EMAIL SENDING — 3 ROUTES (added 2026-04-12 — prevents "Gmail blocked" from stopping work)
-Gmail MCP = DRAFT only (no send tool exists). For actual sending, use GitHub Actions.
-- ROUTE A (draft): Load ToolSearch first → mcp__claude_ai_Gmail__gmail_create_draft → Priscila clicks Send
-- ROUTE B (SEND — preferred): ~/bin/gh workflow run send_email.yml --repo priihigashi/oak-park-ai-hub -f to="..." -f subject="..." -f body="..."
-  Uses PRI_OP_GMAIL_APP_PASSWORD secret (already set). Actually delivers. Same as 4am_agent.yml.
-- ROUTE C (SEND — local): smtplib.SMTP_SSL smtp.gmail.com:465 with app password from .env (not set locally yet)
-DEFERRED TOOL RULE: Gmail MCP tools need ToolSearch schema load before calling — they are deferred, not absent.
+## EMAIL SENDING — see `/email-send` SKILL.md
+Gmail MCP = DRAFT only (no send tool exists). For actual delivery: GitHub Actions `send_email.yml` (Route B, preferred — uses PRI_OP_GMAIL_APP_PASSWORD) or SMTP fallback (Route C). DEFERRED TOOL RULE: load Gmail MCP schema via ToolSearch before calling — they are deferred, not absent. McFolling inbox has separate token (MCFOLLING_TOKEN). Step D migration 2026-05-18.
 
 ## DRIVE SEARCH — FALLBACK ORDER (added 2026-04-12 — prevents MCP error -32603 from blocking work)
 There are 2 MCP Drive servers + 1 OAuth route. Always try in this order:
