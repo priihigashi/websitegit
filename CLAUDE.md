@@ -186,33 +186,10 @@ After the status report, ask exactly:
   S = smart — I look at what you're doing today and recommend a level
 Reply Y / N / S"
 
-BYPASS LEVEL GUIDE (use when she says S or doesn't answer):
+→ Bypass level guide (Y/N/S recommendations + SAFE-TO-BYPASS list + DO-NOT-BYPASS list including Gmail / Instagram / destructive git ops / McFolling client data): see `/session-start` SKILL.md step 6. Step C migration 2026-05-18.
 
-SAFE TO BYPASS — recommend Y:
-- Building/editing HTML, carousels, websites, scripts
-- Reading Drive / Sheets / Calendar / GitHub
-- Writing to Drive docs, sheets, spreadsheets
-- Running GitHub Actions (read-only or non-destructive)
-- Content creation, planning tasks
-
-DO NOT BYPASS — recommend N:
-- Sending emails via Gmail
-- Deleting Drive files or folders permanently
-- Posting to Instagram or any social platform
-- GitHub force push or any destructive git op
-- Any financial, legal, or client-facing document
-- Any task touching McFolling Properties client data
-
-IF she says Y: proceed in current session — note that Claude Code's MCP tools still show prompts within the IDE (that's the IDE, not Claude asking). For full CLI bypass, restart with: claude --dangerously-skip-permissions
-IF she says N: ask before each action that modifies external state (Drive, GitHub, Gmail, Instagram)
-IF she says S: check today's calendar tasks, apply guide above, state the recommended level + one-line reason
-
-## SESSION START — DO THESE IN ORDER
-1. Check Google Calendar for today's tasks — report: X tasks pending, last session was [date]
-2. Check Inspiration Library tab (Ideas & Inbox) for pending /capture items
-3. Check Chat Logs folder in Drive (ID: 1qitnbz5_8tfZI2rnTogV1zLLLLOwFVCw) for yesterday's log
-4. Report status: "X tasks pending, Y items need /capture, last session was [date]"
-5. Ask bypass mode question (see SESSION PERMISSIONS above)
+## SESSION START — see `/session-start` SKILL.md
+TRIGGERS: first message of new chat, "morning", "let's start", "what's on today", "where did we leave off", after context compression. Skill steps: Calendar → Inspiration Library → Chat Logs → status report → bypass question (exact text above). Step C migration 2026-05-18.
 Key Drive docs: Content_Creation_Master_Plan.docx (_Master Plans & Docs), SKILL_daily_planner.md (Agents & Skills), AI_Content_Ideas_April2026.docx (Content-Creation), Ads_Strategy.docx (root of ClaudeWorkspace)
 Key spreadsheets: Ideas & Inbox 1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU (tabs: Inspiration Library, Content Queue, Scraping Targets, Clip Collections) | Content Control 1C1CAZ8lSgeVLSSCYIg-D9XPJcSLHyIOh1okKtvhZZQg
 Flow Plans Tracker (all master/flow docs indexed): 1fggy918FgPfnMQ-dzGQk2zx9uhi2_-uWXMKGW4MA47k
@@ -257,57 +234,11 @@ When she starts a thought and connects to another idea mid-sentence — capture 
 Save new idea to 📥 Inbox tab in Ideas & Inbox (1IrFrCNGVIF7cvAr9cIuAXvCtUR_-eQN1mdCpHXpfbcU) immediately before continuing.
 If she says "I had another idea" — ask what it was before moving on. Never let an idea get lost.
 
-## CONTEXT FULL / NEW CHAT HANDOFF RULE (added 2026-04-13)
-When the context window is running out OR before starting a new chat on an ongoing task:
-1. Create a doc named HANDOFF_YYYY-MM-DD in Drive folder: Productivity & Routine (ID: 1b8Cfc8lJhu5unDaxDQIdo4xdN6X7n1nS)
-2. Write full content via GOOGLEDOCS_UPDATE_DOCUMENT_MARKDOWN — include:
-   - What was done (files, commits, runs, IDs)
-   - What is pending (priority ordered)
-   - Errors that happened + fixes applied
-   - All key IDs (Drive folders, docs, spreadsheets)
-   - Which skill to invoke in next chat
-3. Write standard chat log to Chat Logs folder (ID: 1qitnbz5_8tfZI2rnTogV1zLLLLOwFVCw)
-4. Never leave a new chat cold — always write the handoff BEFORE context is fully exhausted
-TRIGGER: If Priscila says "start new chat", "context is full", "I'm gonna start a new chat", or session summary is generated automatically — execute this immediately.
+## CONTEXT FULL / NEW CHAT HANDOFF — see `/session-exit` SKILL.md STEP 3
+TRIGGER (stays global so the assistant catches it): "start new chat", "context is full", "I'm gonna start a new chat", or session summary auto-generated → invoke `/session-exit` immediately. The skill creates HANDOFF_YYYY-MM-DD doc (folder 1b8Cfc8lJhu5unDaxDQIdo4xdN6X7n1nS) + chat log + Productivity & Routine update. Never leave a new chat cold. Step C migration 2026-05-18.
 
-## SESSION EXIT LOG
-When she says "exit" or "closing" or "done for today":
-
-Do these THREE things in order:
-
-STEP 1 — CHAT LOG
-Log must include: date + session duration estimate, what was discussed, what was actually implemented (files/cells/runs), what was promised but NOT done (carry-forward), Drive links to anything touched.
-
-STEP 2 — PRODUCTIVITY & ROUTINE DOC (ID: 1wVBuNOuOufT8WP4KCrrlVbKWRmQZjKvqmia1soUEBZE)
-Read the current doc. Then:
-- Mark any tasks completed this session as DONE (or remove them)
-- Add any NEW ongoing tasks that came up this session
-- This doc = source of truth for what's actively in-progress across all projects
-
-STEP 3 — HANDOFF (if context is near limit or session was long)
-Write a full handoff summary to the same doc above so the next chat can pick up immediately.
-See: CONTEXT FULL / NEW CHAT HANDOFF RULE section for full format.
-
-ROUTE A — try first (Composio):
-1. Create empty Google Doc via Drive MCP in Chat Logs folder (Drive ID: 1qitnbz5_8tfZI2rnTogV1zLLLLOwFVCw), name: LOG_YYYY-MM-DD_HHMM
-2. Write content via GOOGLEDOCS_UPDATE_DOCUMENT_MARKDOWN (Composio — if googledocs not active, call COMPOSIO_MANAGE_CONNECTIONS toolkit:googledocs → wait → retry)
-
-ROUTE B — fallback if Composio fails (OAuth + Docs API):
-1. Create empty Google Doc via Drive MCP (same folder, same name)
-2. Write content via Python google-auth:
-   from googleapiclient.discovery import build
-   creds = Credentials.from_authorized_user_file('/Users/priscilahigashi/ClaudeWorkspace/Credentials/sheets_token.json')
-   docs = build('docs', 'v1', credentials=creds)
-   docs.documents().batchUpdate(documentId=DOC_ID, body={'requests': [{'insertText': {'location': {'index': 1}, 'text': CONTENT}}]}).execute()
-   Google Docs API is ENABLED on project 334842470868 as of 2026-04-11 — this works.
-
-ROUTE C — last resort if both fail:
-   Upload plain text file via Drive OAuth (drive.files().update with text/plain mimetype).
-   Still saves everything, just no formatting.
-
-Never give up and tell Priscila to add it manually. Always try all 3 routes before saying blocked.
-Keep only last 7 days — delete older logs.
-Confirm: "Session log saved to Chat Logs/LOG_[date]" with Drive link.
+## SESSION EXIT LOG — see `/session-exit` SKILL.md
+TRIGGER (stays global): "exit", "closing", "done for today", "bye", "I'm closing", "see you later". Skill runs 3 steps in order: (1) chat log to Drive Chat Logs folder (1qitnbz5_8tfZI2rnTogV1zLLLLOwFVCw), (2) Productivity & Routine update (doc 1wVBuNOuOufT8WP4KCrrlVbKWRmQZjKvqmia1soUEBZE — source of truth for in-progress across all projects), (3) handoff if context near limit. All 3 routes (Composio / OAuth Docs API / plain text upload) covered. Never give up — try all 3 before saying blocked. Keep 7 days, delete older. Step C migration 2026-05-18.
 
 ## TASKS STAY IN FLOW UNTIL DONE
 A task is only removed from the pending list when it is confirmed complete with evidence (cell ref, file path, run success). Never mark done by assumption.
